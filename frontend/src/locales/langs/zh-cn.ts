@@ -225,7 +225,12 @@ const local: App.I18n.Schema = {
     404: '页面不存在',
     500: '服务器错误',
     'iframe-page': '外链页面',
-    home: '首页'
+    home: '首页',
+    dashboard: '仪表盘',
+    dashboard_analysis: '分析页',
+    dashboard_workbench: '工作台',
+    manage: '系统管理',
+    manage_user: '用户管理'
   },
   page: {
     login: {

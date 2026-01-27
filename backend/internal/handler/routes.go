@@ -58,13 +58,32 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
 		rest.WithPrefix("/api"),
 	)
-
 	server.AddRoutes(
 		[]rest.Route{
 			{
 				Method:  http.MethodGet,
 				Path:    "/user/info",
 				Handler: user.GetUserInfoHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/user/list",
+				Handler: user.GetUserListHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/user",
+				Handler: user.AddUserHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPut,
+				Path:    "/user/:id",
+				Handler: user.UpdateUserHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodDelete,
+				Path:    "/user/:id",
+				Handler: user.DeleteUserHandler(serverCtx),
 			},
 		},
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
@@ -80,6 +99,22 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 			},
 		},
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
+		rest.WithPrefix("/api"),
+	)
+
+	server.AddRoutes(
+		[]rest.Route{
+			{
+				Method:  http.MethodGet,
+				Path:    "/route/getConstantRoutes",
+				Handler: route.GetConstantRoutesHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/route/isRouteExist",
+				Handler: route.IsRouteExistHandler(serverCtx),
+			},
+		},
 		rest.WithPrefix("/api"),
 	)
 }

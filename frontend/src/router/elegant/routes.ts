@@ -40,6 +40,35 @@ export const generatedRoutes: GeneratedRoute[] = [
     }
   },
   {
+    name: 'dashboard',
+    path: '/dashboard',
+    component: 'layout.base',
+    meta: {
+      title: 'dashboard',
+      i18nKey: 'route.dashboard'
+    },
+    children: [
+      {
+        name: 'dashboard_analysis',
+        path: '/dashboard/analysis',
+        component: 'view.dashboard_analysis',
+        meta: {
+          title: 'dashboard_analysis',
+          i18nKey: 'route.dashboard_analysis'
+        }
+      },
+      {
+        name: 'dashboard_workbench',
+        path: '/dashboard/workbench',
+        component: 'view.dashboard_workbench',
+        meta: {
+          title: 'dashboard_workbench',
+          i18nKey: 'route.dashboard_workbench'
+        }
+      }
+    ]
+  },
+  {
     name: 'home',
     path: '/home',
     component: 'layout.base$view.home',
@@ -74,5 +103,25 @@ export const generatedRoutes: GeneratedRoute[] = [
       constant: true,
       hideInMenu: true
     }
+  },
+  {
+    name: 'manage',
+    path: '/manage',
+    component: 'layout.base',
+    meta: {
+      title: 'manage',
+      i18nKey: 'route.manage'
+    },
+    children: [
+      {
+        name: 'manage_user',
+        path: '/manage/user',
+        component: 'view.manage_user',
+        meta: {
+          title: 'manage_user',
+          i18nKey: 'route.manage_user'
+        }
+      }
+    ]
   }
 ];

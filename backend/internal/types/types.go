@@ -89,6 +89,36 @@ type UserInfoResp struct {
 	Roles    []string `json:"roles"`
 }
 
+type UserListReq struct {
+	Page     int    `form:"page,default=1"`
+	PageSize int    `form:"pageSize,default=20"`
+	Username string `form:"username,optional"`
+}
+
+type UserItem struct {
+	ID        uint     `json:"id"`
+	Username  string   `json:"username"`
+	Roles     []string `json:"roles"`
+	CreatedAt string   `json:"createdAt"`
+}
+
+type UserListResp struct {
+	List  []UserItem `json:"list"`
+	Total int64      `json:"total"`
+}
+
+type AddUserReq struct {
+	Username string   `json:"username"`
+	Password string   `json:"password"`
+	Roles    []string `json:"roles"`
+}
+
+type UpdateUserReq struct {
+	ID       uint     `path:"id"`
+	Password string   `json:"password,optional"`
+	Roles    []string `json:"roles,optional"`
+}
+
 type MenuRoute struct {
 	Name      string      `json:"name"`
 	Path      string      `json:"path"`
@@ -109,4 +139,8 @@ type RouteMeta struct {
 type UserRouteResp struct {
 	Home   string      `json:"home"`
 	Routes []MenuRoute `json:"routes"`
+}
+
+type IsRouteExistReq struct {
+	RouteName string `form:"routeName"`
 }

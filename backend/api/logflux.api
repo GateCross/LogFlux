@@ -24,6 +24,31 @@ type (
 		Username string   `json:"username"`
 		Roles    []string `json:"roles"`
 	}
+	UserListReq {
+		Page     int    `form:"page,default=1"`
+		PageSize int    `form:"pageSize,default=20"`
+		Username string `form:"username,optional"`
+	}
+	UserItem {
+		ID        uint     `json:"id"`
+		Username  string   `json:"username"`
+		Roles     []string `json:"roles"`
+		CreatedAt string   `json:"createdAt"`
+	}
+	UserListResp {
+		List  []UserItem `json:"list"`
+		Total int64      `json:"total"`
+	}
+	AddUserReq {
+		Username string   `json:"username"`
+		Password string   `json:"password"`
+		Roles    []string `json:"roles"`
+	}
+	UpdateUserReq {
+		ID       uint     `path:"id"`
+		Password string   `json:"password,optional"`
+		Roles    []string `json:"roles,optional"`
+	}
 	// Log Query
 	CaddyLogReq {
 		Page     int    `form:"page,default=1"`
@@ -117,6 +142,18 @@ service logflux-api {
 
 @server (
 	prefix: /api
+	group:  route
+)
+service logflux-api {
+	@handler GetConstantRoutes
+	get /route/getConstantRoutes returns ([]MenuRoute)
+
+	@handler IsRouteExist
+	get /route/isRouteExist (IsRouteExistReq) returns (bool)
+}
+
+@server (
+	prefix: /api
 	group:  auth
 )
 service logflux-api {
@@ -132,6 +169,18 @@ service logflux-api {
 service logflux-api {
 	@handler GetUserInfo
 	get /user/info (UserInfoReq) returns (UserInfoResp)
+
+	@handler GetUserList
+	get /user/list (UserListReq) returns (UserListResp)
+
+	@handler AddUser
+	post /user (AddUserReq) returns (BaseResp)
+
+	@handler UpdateUser
+	put /user/:id (UpdateUserReq) returns (BaseResp)
+
+	@handler DeleteUser
+	delete /user/:id (IDReq) returns (BaseResp)
 }
 
 @server (
