@@ -167,12 +167,13 @@ const routeMap: RouteMap = {
   "404": "/404",
   "500": "/500",
   "dashboard": "/dashboard",
-  "dashboard_analysis": "/dashboard/analysis",
-  "dashboard_workbench": "/dashboard/workbench",
   "home": "/home",
   "iframe-page": "/iframe-page/:url",
   "login": "/login/:module(pwd-login|code-login|register|reset-pwd|bind-wechat)?",
+  "logs": "/logs",
+  "logs_caddy": "/logs/caddy",
   "manage": "/manage",
+  "manage_role": "/manage/role",
   "manage_user": "/manage/user"
 };
 

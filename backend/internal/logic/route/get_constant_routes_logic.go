@@ -30,8 +30,9 @@ func (l *GetConstantRoutesLogic) GetConstantRoutes() (resp []types.MenuRoute, er
 			Path:      "/403",
 			Component: "layout.blank$view.403",
 			Meta: types.RouteMeta{
-				Title: "403",
-				Hide:  true,
+				Title:      "403",
+				I18nKey:    "route.403",
+				HideInMenu: true,
 			},
 		},
 		{
@@ -39,8 +40,9 @@ func (l *GetConstantRoutesLogic) GetConstantRoutes() (resp []types.MenuRoute, er
 			Path:      "/404",
 			Component: "layout.blank$view.404",
 			Meta: types.RouteMeta{
-				Title: "404",
-				Hide:  true,
+				Title:      "404",
+				I18nKey:    "route.404",
+				HideInMenu: true,
 			},
 		},
 		{
@@ -48,8 +50,9 @@ func (l *GetConstantRoutesLogic) GetConstantRoutes() (resp []types.MenuRoute, er
 			Path:      "/500",
 			Component: "layout.blank$view.500",
 			Meta: types.RouteMeta{
-				Title: "500",
-				Hide:  true,
+				Title:      "500",
+				I18nKey:    "route.500",
+				HideInMenu: true,
 			},
 		},
 		// login is usually handled separately or via static import in some versions,

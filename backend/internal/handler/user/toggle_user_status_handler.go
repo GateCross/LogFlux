@@ -1,26 +1,26 @@
-package log
+package user
 
 import (
 	"net/http"
 
 	"logflux/common/result"
-	"logflux/internal/logic/log"
+	"logflux/internal/logic/user"
 	"logflux/internal/svc"
 	"logflux/internal/types"
 
 	"github.com/zeromicro/go-zero/rest/httpx"
 )
 
-func GetCaddyLogsHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
+func ToggleUserStatusHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req types.CaddyLogReq
+		var req types.ToggleUserStatusReq
 		if err := httpx.Parse(r, &req); err != nil {
 			httpx.ErrorCtx(r.Context(), w, err)
 			return
 		}
 
-		l := log.NewGetCaddyLogsLogic(r.Context(), svcCtx)
-		resp, err := l.GetCaddyLogs(&req)
+		l := user.NewToggleUserStatusLogic(r.Context(), svcCtx)
+		resp, err := l.ToggleUserStatus(&req)
 		result.HttpResult(r, w, resp, err)
 	}
 }

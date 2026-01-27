@@ -75,6 +75,7 @@ interface User {
   id: number;
   username: string;
   roles: string[];
+  status: number; // 1=启用, 0=禁用
   createdAt: string;
 }
 
@@ -107,6 +108,11 @@ const columns: DataTableColumns<User> = [
     title: '角色',
     key: 'roles',
     render(row) {
+      const roleMap: Record<string, string> = {
+        admin: '管理员',
+        analyst: '分析师',
+        viewer: '访客'
+      };
       return row.roles.map(role => {
         return h(
           NTag,
@@ -116,16 +122,32 @@ const columns: DataTableColumns<User> = [
             bordered: false,
             size: 'small'
           },
-          { default: () => role }
+          { default: () => roleMap[role] || role }
         );
       });
+    }
+  },
+  {
+    title: '状态',
+    key: 'status',
+    width: 100,
+    render(row) {
+      return h(
+        NTag,
+        {
+          type: row.status === 1 ? 'success' : 'error',
+          bordered: false,
+          size: 'small'
+        },
+        { default: () => (row.status === 1 ? '启用' : '禁用') }
+      );
     }
   },
   { title: '创建时间', key: 'createdAt', width: 180 },
   {
     title: '操作',
     key: 'actions',
-    width: 150,
+    width: 200,
     render(row) {
       return h(
         'div',
@@ -142,12 +164,22 @@ const columns: DataTableColumns<User> = [
             { default: () => '编辑' }
           ),
           h(
+            NButton,
+            {
+              size: 'small',
+              type: row.status === 1 ? 'warning' : 'success',
+              secondary: true,
+              onClick: () => handleToggleStatus(row)
+            },
+            { default: () => (row.status === 1 ? '冻结' : '解冻') }
+          ),
+          h(
             NPopconfirm,
             {
               onPositiveClick: () => handleDelete(row.id)
             },
             {
-              default: () => '确认删除该用户吗？',
+              default: () => '确认永久删除该用户吗？此操作无法恢复！',
               trigger: () =>
                 h(
                   NButton,
@@ -184,10 +216,22 @@ const rules = {
   // password required check is manual based on mode
 };
 
-const roleOptions = [
-  { label: '管理员', value: 'admin' },
-  { label: '普通用户', value: 'user' }
-];
+const roleOptions = ref<Array<{ label: string; value: string }>>([]);
+
+// Fetch role options from API
+async function fetchRoleOptions() {
+  try {
+    const { data } = await request<any>({ url: '/api/role/list' });
+    if (data?.list) {
+      roleOptions.value = data.list.map((role: any) => ({
+        label: role.displayName,
+        value: role.name
+      }));
+    }
+  } catch (error) {
+    console.error('Failed to fetch role options:', error);
+  }
+}
 
 async function fetchData() {
   loading.value = true;
@@ -234,7 +278,7 @@ function handleAdd() {
   formModel.id = 0;
   formModel.username = '';
   formModel.password = '';
-  formModel.roles = ['user'];
+  formModel.roles = ['viewer'];
   showModal.value = true;
 }
 
@@ -257,6 +301,21 @@ async function handleDelete(id: number) {
   }
 }
 
+async function handleToggleStatus(row: User) {
+  try {
+    const { error } = await request({
+      url: `/api/user/${row.id}/status`,
+      method: 'put'
+    });
+    if (!error) {
+      message.success(row.status === 1 ? '用户已冻结' : '用户已解冻');
+      fetchData();
+    }
+  } catch (error) {
+    // Error handled by interceptor
+  }
+}
+
 function closeModal() {
   showModal.value = false;
 }
@@ -271,8 +330,9 @@ async function handleSubmit() {
       
       submitLoading.value = true;
       try {
+        let resp;
         if (modalType.value === 'add') {
-          await request({
+          resp = await request({
             url: '/api/user',
             method: 'post',
             data: {
@@ -281,9 +341,8 @@ async function handleSubmit() {
               roles: formModel.roles
             }
           });
-          message.success('新增成功');
         } else {
-          await request({
+          resp = await request({
             url: `/api/user/${formModel.id}`,
             method: 'put',
             data: {
@@ -291,10 +350,18 @@ async function handleSubmit() {
               roles: formModel.roles
             }
           });
-          message.success('编辑成功');
         }
-        closeModal();
-        fetchData();
+        
+        // Check if request was successful
+        if (resp && !resp.error) {
+          message.success(modalType.value === 'add' ? '新增成功' : '编辑成功');
+          closeModal();
+          fetchData();
+        } else if (resp && resp.error) {
+          message.error(resp.error.msg || '操作失败');
+        }
+      } catch (error: any) {
+        message.error(error.message || '操作失败');
       } finally {
         submitLoading.value = false;
       }
@@ -303,6 +370,7 @@ async function handleSubmit() {
 }
 
 onMounted(() => {
+  fetchRoleOptions();
   fetchData();
 });
 </script>

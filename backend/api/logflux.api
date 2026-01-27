@@ -117,16 +117,36 @@ type (
 		Children  []MenuRoute `json:"children,omitempty"`
 	}
 	RouteMeta {
-		Title     string   `json:"title"`
-		Icon      string   `json:"icon,omitempty"`
-		LocalIcon string   `json:"localIcon,omitempty"`
-		Order     int      `json:"order,omitempty"`
-		Hide      bool     `json:"hide,omitempty"`
-		Roles     []string `json:"roles,omitempty"`
+		Title      string   `json:"title"`
+		I18nKey    string   `json:"i18nKey,omitempty"`
+		Icon       string   `json:"icon,omitempty"`
+		LocalIcon  string   `json:"localIcon,omitempty"`
+		Order      int      `json:"order,omitempty"`
+		HideInMenu bool     `json:"hideInMenu,omitempty"`
+		Roles      []string `json:"roles,omitempty"`
 	}
 	UserRouteResp {
 		Home   string      `json:"home"`
 		Routes []MenuRoute `json:"routes"`
+	}
+	// Role Management
+	RoleItem {
+		ID          uint     `json:"id"`
+		Name        string   `json:"name"`
+		DisplayName string   `json:"displayName"`
+		Description string   `json:\"description\"`
+		Permissions []string `json:\"permissions\"`
+		CreatedAt   string   `json:\"createdAt\"`
+	}
+	RoleListResp {
+		List []RoleItem `json:"list"`
+	}
+	UpdateRolePermissionsReq {
+		ID          uint     `path:"id"`
+		Permissions []string `json:"permissions"`
+	}
+	IsRouteExistReq {
+		RouteName string `form:"routeName"`
 	}
 )
 
@@ -203,5 +223,18 @@ service logflux-api {
 
 	@handler DeleteLogSource
 	delete /source/:id (IDReq) returns (BaseResp)
+}
+
+@server (
+	prefix: /api
+	group:  role
+	jwt:    Auth
+)
+service logflux-api {
+	@handler GetRoleList
+	get /role/list returns (RoleListResp)
+
+	@handler UpdateRolePermissions
+	put /role/:id/permissions (UpdateRolePermissionsReq) returns (BaseResp)
 }
 

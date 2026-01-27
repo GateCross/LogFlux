@@ -9,64 +9,41 @@ export const generatedRoutes: GeneratedRoute[] = [
   {
     name: '403',
     path: '/403',
-    component: 'layout.blank$view.403',
+    component: 'layout.base$view.403',
     meta: {
       title: '403',
       i18nKey: 'route.403',
-      constant: true,
-      hideInMenu: true
+      constant: true
     }
   },
   {
     name: '404',
     path: '/404',
-    component: 'layout.blank$view.404',
+    component: 'layout.base$view.404',
     meta: {
       title: '404',
       i18nKey: 'route.404',
-      constant: true,
-      hideInMenu: true
+      constant: true
     }
   },
   {
     name: '500',
     path: '/500',
-    component: 'layout.blank$view.500',
+    component: 'layout.base$view.500',
     meta: {
       title: '500',
       i18nKey: 'route.500',
-      constant: true,
-      hideInMenu: true
+      constant: true
     }
   },
   {
     name: 'dashboard',
     path: '/dashboard',
-    component: 'layout.base',
+    component: 'layout.base$view.dashboard',
     meta: {
       title: 'dashboard',
       i18nKey: 'route.dashboard'
-    },
-    children: [
-      {
-        name: 'dashboard_analysis',
-        path: '/dashboard/analysis',
-        component: 'view.dashboard_analysis',
-        meta: {
-          title: 'dashboard_analysis',
-          i18nKey: 'route.dashboard_analysis'
-        }
-      },
-      {
-        name: 'dashboard_workbench',
-        path: '/dashboard/workbench',
-        component: 'view.dashboard_workbench',
-        meta: {
-          title: 'dashboard_workbench',
-          i18nKey: 'route.dashboard_workbench'
-        }
-      }
-    ]
+    }
   },
   {
     name: 'home',
@@ -74,9 +51,7 @@ export const generatedRoutes: GeneratedRoute[] = [
     component: 'layout.base$view.home',
     meta: {
       title: 'home',
-      i18nKey: 'route.home',
-      icon: 'mdi:monitor-dashboard',
-      order: 1
+      i18nKey: 'route.home'
     }
   },
   {
@@ -86,23 +61,39 @@ export const generatedRoutes: GeneratedRoute[] = [
     props: true,
     meta: {
       title: 'iframe-page',
-      i18nKey: 'route.iframe-page',
-      constant: true,
-      hideInMenu: true,
-      keepAlive: true
+      i18nKey: 'route.iframe-page'
     }
   },
   {
     name: 'login',
     path: '/login/:module(pwd-login|code-login|register|reset-pwd|bind-wechat)?',
-    component: 'layout.blank$view.login',
+    component: 'layout.base$view.login',
     props: true,
     meta: {
       title: 'login',
       i18nKey: 'route.login',
-      constant: true,
-      hideInMenu: true
+      constant: true
     }
+  },
+  {
+    name: 'logs',
+    path: '/logs',
+    component: 'layout.base',
+    meta: {
+      title: 'logs',
+      i18nKey: 'route.logs'
+    },
+    children: [
+      {
+        name: 'logs_caddy',
+        path: '/logs/caddy',
+        component: 'view.logs_caddy',
+        meta: {
+          title: 'logs_caddy',
+          i18nKey: 'route.logs_caddy'
+        }
+      }
+    ]
   },
   {
     name: 'manage',
@@ -113,6 +104,15 @@ export const generatedRoutes: GeneratedRoute[] = [
       i18nKey: 'route.manage'
     },
     children: [
+      {
+        name: 'manage_role',
+        path: '/manage/role',
+        component: 'view.manage_role',
+        meta: {
+          title: 'manage_role',
+          i18nKey: 'route.manage_role'
+        }
+      },
       {
         name: 'manage_user',
         path: '/manage/user',

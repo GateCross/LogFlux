@@ -1,6 +1,6 @@
 const local: App.I18n.Schema = {
   system: {
-    title: 'SoybeanAdmin',
+    title: 'LogFlux',
     updateTitle: 'System Version Update Notification',
     updateContent: 'A new version of the system has been detected. Do you want to refresh the page immediately?',
     updateConfirm: 'Refresh immediately',
@@ -95,7 +95,7 @@ const local: App.I18n.Schema = {
         applySuccess: 'Preset applied successfully',
         default: {
           name: 'Default Preset',
-          desc: 'Default theme preset with balanced settings'
+          desc: 'LogFlux default theme preset'
         },
         dark: {
           name: 'Dark Preset',
@@ -229,7 +229,13 @@ const local: App.I18n.Schema = {
     404: 'Page Not Found',
     500: 'Server Error',
     'iframe-page': 'Iframe',
-    home: 'Home'
+    home: 'Home',
+    dashboard: 'Dashboard',
+    logs: 'Logs',
+    logs_caddy: 'Caddy Logs',
+    manage: 'System Manage',
+    manage_user: 'User Manage',
+    manage_role: 'Role Manage'
   },
   page: {
     login: {
@@ -299,11 +305,11 @@ const local: App.I18n.Schema = {
       projectNews: {
         title: 'Project News',
         moreNews: 'More News',
-        desc1: 'Soybean created the open source project soybean-admin on May 28, 2021!',
-        desc2: 'Yanbowe submitted a bug to soybean-admin, the multi-tab bar will not adapt.',
-        desc3: 'Soybean is ready to do sufficient preparation for the release of soybean-admin!',
-        desc4: 'Soybean is busy writing project documentation for soybean-admin!',
-        desc5: 'Soybean just wrote some of the workbench pages casually, and it was enough to see!'
+        desc1: 'LogFlux created the log flow analysis management system in January 2026!',
+        desc2: 'Team members submitted new feature modules to LogFlux.',
+        desc3: 'LogFlux is preparing for the system release!',
+        desc4: 'LogFlux is busy writing project documentation!',
+        desc5: 'LogFlux just optimized the workbench page!'
       },
       creativity: 'Creativity'
     }

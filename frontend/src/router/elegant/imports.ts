@@ -20,8 +20,9 @@ export const views: Record<LastLevelRouteKey, RouteComponent | (() => Promise<Ro
   500: () => import("@/views/_builtin/500/index.vue"),
   "iframe-page": () => import("@/views/_builtin/iframe-page/[url].vue"),
   login: () => import("@/views/_builtin/login/index.vue"),
-  dashboard_analysis: () => import("@/views/dashboard/analysis/index.vue"),
-  dashboard_workbench: () => import("@/views/dashboard/workbench/index.vue"),
+  dashboard: () => import("@/views/dashboard/index.vue"),
   home: () => import("@/views/home/index.vue"),
+  logs_caddy: () => import("@/views/logs/caddy/index.vue"),
+  manage_role: () => import("@/views/manage/role/index.vue"),
   manage_user: () => import("@/views/manage/user/index.vue"),
 };

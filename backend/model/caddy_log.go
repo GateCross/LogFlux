@@ -2,15 +2,12 @@ package model
 
 import (
 	"time"
-
-	"gorm.io/gorm"
 )
 
 type CaddyLog struct {
 	ID        uint      `gorm:"primarykey"`
 	CreatedAt time.Time `gorm:"index"` // Index for time-range queries
 	UpdatedAt time.Time
-	DeletedAt gorm.DeletedAt `gorm:"index"`
 
 	// Parsed from [{ts}]
 	LogTime time.Time `gorm:"index;not null"`
@@ -32,6 +29,10 @@ type CaddyLog struct {
 	UserAgent string `gorm:"type:text"`
 	RemoteIP  string `gorm:"size:50;index"`
 	ClientIP  string `gorm:"size:50"`
+
+	// 混合存储 - JSON 字段
+	RawLog    string `gorm:"type:jsonb;comment:原始完整日志"`
+	ExtraData string `gorm:"type:jsonb;comment:扩展元数据"`
 }
 
 func (CaddyLog) TableName() string {

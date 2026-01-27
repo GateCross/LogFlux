@@ -1,4 +1,5 @@
-import type { CustomRoute } from '@elegant-router/types';
+import type { CustomRoute, ElegantRoute } from '@elegant-router/types';
+import { generatedRoutes } from '../elegant/routes';
 import { layouts, views } from '../elegant/imports';
 import { getRoutePath, transformElegantRoutesToVueRoutes } from '../elegant/transform';
 
@@ -22,8 +23,13 @@ const NOT_FOUND_ROUTE: CustomRoute = {
   }
 };
 
+/** get constant routes from generated routes */
+function getConstantRoutes() {
+  return generatedRoutes.filter(route => route.meta?.constant);
+}
+
 /** builtin routes, it must be constant and setup in vue-router */
-const builtinRoutes: CustomRoute[] = [ROOT_ROUTE, NOT_FOUND_ROUTE];
+const builtinRoutes: ElegantRoute[] = [ROOT_ROUTE, ...getConstantRoutes(), NOT_FOUND_ROUTE];
 
 /** create builtin vue routes */
 export function createBuiltinVueRoutes() {
