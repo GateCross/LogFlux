@@ -1,0 +1,19 @@
+# IDEs
+.vscode
+.idea
+.DS_Store
+
+# Frontend
+frontend/node_modules
+frontend/dist
+frontend/.env.local
+frontend/*.log
+
+# Backend
+backend/logflux
+backend/logs
+backend/etc/*.yaml
+!backend/etc/*.sample.yaml
+
+# System
+.gemini
