@@ -25,7 +25,7 @@ func NewAddCaddyServerLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Ad
 	}
 }
 
-func (l *AddCaddyServerLogic) AddCaddyServer(req *types.CaddyServerReq) (resp *types.BaseResp, err error) {
+func (l *AddCaddyServerLogic) AddCaddyServer(req *types.AddCaddyServerReq) (resp *types.BaseResp, err error) {
 	server := &model.CaddyServer{
 		Name:      req.Name,
 		Url:       req.Url,

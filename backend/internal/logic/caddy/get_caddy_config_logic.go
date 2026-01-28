@@ -3,8 +3,6 @@ package caddy
 import (
 	"context"
 	"fmt"
-	"io"
-	"net/http"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
@@ -33,36 +31,24 @@ func (l *GetCaddyConfigLogic) GetCaddyConfig(req *types.CaddyConfigReq) (resp *t
 		return nil, fmt.Errorf("server not found")
 	}
 
-	url := fmt.Sprintf("%s/config/", server.Url)
-
-	httpReq, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, err
+	// Read from Database (Source of Truth)
+	if server.Config != "" {
+		return &types.CaddyConfigResp{
+			Code:   200,
+			Msg:    "success",
+			Config: server.Config,
+		}, nil
 	}
 
-	if server.Token != "" {
-		httpReq.Header.Set("Authorization", "Bearer "+server.Token)
-	}
-
-	client := &http.Client{}
-	httpResp, err := client.Do(httpReq)
-	if err != nil {
-		return nil, err
-	}
-	defer httpResp.Body.Close()
-
-	body, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	if httpResp.StatusCode != 200 {
-		return nil, fmt.Errorf("caddy api error: %s", string(body))
-	}
-
+	// If DB is empty, return a template or guide
+	defaultConfig := `# No Caddyfile found in database.
+# Please paste your existing Caddyfile content here.
+# It will be saved to the database and pushed to Caddy.
+`
 	return &types.CaddyConfigResp{
 		Code:   200,
 		Msg:    "success",
-		Config: string(body),
+		Config: defaultConfig,
 	}, nil
+
 }

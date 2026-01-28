@@ -19,7 +19,7 @@ type ServiceContext struct {
 func NewServiceContext(c config.Config) *ServiceContext {
 	db := gorm.InitGorm(c.Database.DSN())
 	// Auto Migrate
-	db.AutoMigrate(&model.User{}, &model.CaddyLog{}, &model.LogSource{}, &model.Role{}, &model.Menu{})
+	db.AutoMigrate(&model.User{}, &model.CaddyLog{}, &model.LogSource{}, &model.Role{}, &model.Menu{}, &model.CaddyServer{})
 
 	// 初始化 RBAC 数据
 	initRBACData(db)

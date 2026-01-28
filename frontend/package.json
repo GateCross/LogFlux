@@ -48,6 +48,7 @@
   },
   "dependencies": {
     "@better-scroll/core": "2.5.1",
+    "@guolao/vue-monaco-editor": "^1.6.0",
     "@iconify/vue": "5.0.0",
     "@sa/axios": "workspace:*",
     "@sa/color": "workspace:*",

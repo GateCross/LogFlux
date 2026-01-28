@@ -156,7 +156,7 @@ type ToggleUserStatusReq struct {
 type UserListReq struct {
 	Page     int    `form:"page,default=1"`
 	PageSize int    `form:"pageSize,default=20"`
-	Username string `form:"username,omitempty"`
+	Username string `form:"username,optional"`
 }
 
 type UserListResp struct {
@@ -170,6 +170,15 @@ type UserRouteResp struct {
 }
 
 // Caddy Management Types
+
+type AddCaddyServerReq struct {
+	Name     string `json:"name"`
+	Url      string `json:"url"`
+	Token    string `json:"token,optional"`
+	Type     string `json:"type,default=local"`
+	Username string `json:"username,optional"`
+	Password string `json:"password,optional"`
+}
 
 type CaddyServerReq struct {
 	Name     string `json:"name"`

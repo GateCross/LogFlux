@@ -34,12 +34,19 @@ func (l *UpdateCaddyConfigLogic) UpdateCaddyConfig(req *types.CaddyConfigUpdateR
 		return nil, fmt.Errorf("server not found")
 	}
 
-	// Construct Caddy Admin API request
-	// Usually POST /load to replace config, or POST /config/ to update specific path
-	// Here we assume replacing the whole config or a part of it.
-	// For simplicity, let's assume we are updating the whole config via /load
-	// or adapting to the user requirement. The user said "modify caddy config".
-	// Let's use /load endpoint which replaces the config.
+	// 1. Save Caddyfile to Database (Source of Truth)
+	server.Config = req.Config
+	if err := l.svcCtx.DB.Save(&server).Error; err != nil {
+		l.Logger.Errorf("Failed to save config to DB: %v", err)
+		return nil, fmt.Errorf("failed to save config to database")
+	}
+
+	// 2. Push to Caddy API
+	// API currently expects JSON by default, but we want to send Caddyfile.
+	// We use /load endpoint with Content-Type: text/caddyfile
+	// Caddy will compile it to JSON on the fly.
+
+	l.Logger.Infof("Pushing Caddyfile to server %s (ID: %d)", server.Name, server.ID)
 
 	url := fmt.Sprintf("%s/load", server.Url)
 	reqBody := bytes.NewBufferString(req.Config)
@@ -48,7 +55,8 @@ func (l *UpdateCaddyConfigLogic) UpdateCaddyConfig(req *types.CaddyConfigUpdateR
 	if err != nil {
 		return nil, err
 	}
-	httpReq.Header.Set("Content-Type", "application/json")
+	// Critical: Tell Caddy this is a Caddyfile, not JSON
+	httpReq.Header.Set("Content-Type", "text/caddyfile")
 
 	// If remote auth is needed (not standard in default Caddy but possible via plugins or reverse proxy)
 	if server.Token != "" {
@@ -64,11 +72,20 @@ func (l *UpdateCaddyConfigLogic) UpdateCaddyConfig(req *types.CaddyConfigUpdateR
 
 	if httpResp.StatusCode != 200 {
 		body, _ := io.ReadAll(httpResp.Body)
+		l.Logger.Errorf("Caddy API Error: %d - %s", httpResp.StatusCode, string(body))
 		return nil, fmt.Errorf("caddy api error: %s", string(body))
 	}
 
+	l.Logger.Info("Caddy config updated successfully")
 	return &types.BaseResp{
 		Code: 200,
 		Msg:  "success",
 	}, nil
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

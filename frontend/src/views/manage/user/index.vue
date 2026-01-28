@@ -68,7 +68,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, h } from 'vue';
 import { NButton, NPopconfirm, NTag, useMessage } from 'naive-ui';
-import type { DataTableColumns, PaginationProps } from 'naive-ui';
+import type { DataTableColumns, PaginationProps, FormRules } from 'naive-ui';
 import { request } from '@/service/request';
 
 interface User {
@@ -210,7 +210,7 @@ const formModel = reactive({
   roles: [] as string[]
 });
 
-const rules = {
+const rules: FormRules = {
   username: { required: true, message: '请输入用户名', trigger: 'blur' },
   roles: { required: true, type: 'array', message: '请选择角色', trigger: 'change' }
   // password required check is manual based on mode
@@ -236,15 +236,19 @@ async function fetchRoleOptions() {
 async function fetchData() {
   loading.value = true;
   try {
+    const params: any = {
+      page: pagination.page,
+      pageSize: pagination.pageSize
+    };
+    if (searchParams.username) {
+      params.username = searchParams.username;
+    }
+
     const { data, error } = await request<any>({
       url: '/api/user/list',
-      params: {
-        page: pagination.page,
-        pageSize: pagination.pageSize,
-        username: searchParams.username
-      }
+      params
     });
-    console.log('User List Response:', data, error);
+    
     if (data) {
       tableData.value = data.list || [];
       pagination.itemCount = data.total || 0;
@@ -358,7 +362,8 @@ async function handleSubmit() {
           closeModal();
           fetchData();
         } else if (resp && resp.error) {
-          message.error(resp.error.msg || '操作失败');
+          const errorMsg = resp.error.response?.data?.msg || resp.error.message || '操作失败';
+          message.error(errorMsg);
         }
       } catch (error: any) {
         message.error(error.message || '操作失败');
