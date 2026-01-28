@@ -1,0 +1,16 @@
+:9527 {
+    # 1. 前端静态资源 (构建后的文件)
+    # 请确保您已执行 cd frontend && pnpm build
+    root * ./frontend/dist
+    file_server
+
+    # 2. API 反向代理 (转发给 LogFlux 后端)
+    reverse_proxy /api/* 127.0.0.1:8888
+
+    # 3. SPA 单页应用路由支持
+    # 如果请求的文件不存在，则返回 index.html，交给前端路由处理
+    try_files {path} /index.html
+
+    # 4. Gzip 压缩 (可选，提高加载速度)
+    encode gzip
+}
