@@ -23,3 +23,7 @@ export function fetchCaddyConfig(serverId: number) {
 export function updateCaddyConfig(serverId: number, config: string) {
     return request<any>({ url: `/api/caddy/server/${serverId}/config`, method: 'post', data: { config } });
 }
+
+export function fetchCaddyLogs(params: { page: number; pageSize: number; keyword?: string }) {
+    return request<any>({ url: '/api/logs/caddy', params });
+}

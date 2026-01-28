@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
@@ -76,16 +77,68 @@ func (l *UpdateCaddyConfigLogic) UpdateCaddyConfig(req *types.CaddyConfigUpdateR
 		return nil, fmt.Errorf("caddy api error: %s", string(body))
 	}
 
+	// 3. 同步日志路径 (自动发现)
+	// 更新成功后，我们从 Caddy 获取编译后的完整 JSON 配置
+	// 这样可以解析出所有实际的日志文件路径（包括那些使用了变量的动态路径）
+	go func() {
+		// 等待 Caddy 加载完成
+		// 简单的延时，或者直接查询
+		syncUrl := fmt.Sprintf("%s/config/", server.Url)
+		syncReq, _ := http.NewRequest("GET", syncUrl, nil)
+		if server.Token != "" {
+			syncReq.Header.Set("Authorization", "Bearer "+server.Token)
+		}
+
+		syncClient := &http.Client{}
+		syncResp, err := syncClient.Do(syncReq)
+		if err != nil {
+			l.Logger.Errorf("同步日志配置失败: %v", err)
+			return
+		}
+		defer syncResp.Body.Close()
+
+		if syncResp.StatusCode == 200 {
+			bodyBytes, _ := io.ReadAll(syncResp.Body)
+			configStr := string(bodyBytes)
+
+			// 使用正则提取所有的 "filename": "/path/..."
+			// Caddy JSON 日志配置通常包含 "output": "file", "filename": "..."
+			re := regexp.MustCompile(`"filename"\s*:\s*"([^"]+)"`)
+			matches := re.FindAllStringSubmatch(configStr, -1)
+
+			for _, match := range matches {
+				if len(match) > 1 {
+					path := match[1]
+					l.Logger.Infof("发现日志文件: %s", path)
+
+					// 检查数据库是否存在
+					var count int64
+					l.svcCtx.DB.Model(&model.LogSource{}).Where("path = ?", path).Count(&count)
+					if count == 0 {
+						// 创建新的日志源
+						newSource := model.LogSource{
+							Name:    fmt.Sprintf("Caddy Auto: %s", path),
+							Path:    path,
+							Type:    "caddy",
+							Enabled: true,
+						}
+						if err := l.svcCtx.DB.Create(&newSource).Error; err == nil {
+							l.Logger.Infof("自动添加日志源: %s", path)
+							// 立即启动监控
+							l.svcCtx.Ingestor.Start(path)
+						}
+					} else {
+						// 确保它是启动状态
+						l.svcCtx.Ingestor.Start(path)
+					}
+				}
+			}
+		}
+	}()
+
 	l.Logger.Info("Caddy config updated successfully")
 	return &types.BaseResp{
 		Code: 200,
 		Msg:  "success",
 	}, nil
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

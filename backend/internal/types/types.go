@@ -32,7 +32,7 @@ type CaddyLogItem struct {
 type CaddyLogReq struct {
 	Page     int    `form:"page,default=1"`
 	PageSize int    `form:"pageSize,default=20"`
-	Keyword  string `form:"keyword,omitempty"` // Search in host, uri, ip
+	Keyword  string `form:"keyword,optional"` // Search in host, uri, ip
 }
 
 type CaddyLogResp struct {

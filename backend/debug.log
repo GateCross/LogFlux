@@ -614,3 +614,24 @@ User Permissions Map: map[dashboard:true logs:true logs_caddy:true manage:true m
 Built Routes: 3
 Fetched Roles Dump: [{ID:1 CreatedAt:2026-01-27 21:17:20.051775 +0800 CST UpdatedAt:2026-01-28 14:45:42.374885 +0800 CST Name:admin DisplayName:管理员 Description:系统管理员，拥有所有权限 Permissions:[dashboard manage manage_user manage_role logs logs_caddy]}]
 
+Time: 2026-01-28T15:05:47+08:00
+User ID: 1
+Roles: [admin]
+User Permissions Map: map[dashboard:true logs:true logs_caddy:true manage:true manage_role:true manage_user:true]
+Built Routes: 3
+Fetched Roles Dump: [{ID:1 CreatedAt:2026-01-27 21:17:20.051775 +0800 CST UpdatedAt:2026-01-28 15:05:39.568591 +0800 CST Name:admin DisplayName:管理员 Description:系统管理员，拥有所有权限 Permissions:[dashboard manage manage_user manage_role logs logs_caddy]}]
+
+Time: 2026-01-28T15:06:10+08:00
+User ID: 1
+Roles: [admin]
+User Permissions Map: map[dashboard:true logs:true logs_caddy:true manage:true manage_role:true manage_user:true]
+Built Routes: 3
+Fetched Roles Dump: [{ID:1 CreatedAt:2026-01-27 21:17:20.051775 +0800 CST UpdatedAt:2026-01-28 15:05:39.568591 +0800 CST Name:admin DisplayName:管理员 Description:系统管理员，拥有所有权限 Permissions:[dashboard manage manage_user manage_role logs logs_caddy]}]
+
+Time: 2026-01-28T15:07:44+08:00
+User ID: 1
+Roles: [admin]
+User Permissions Map: map[dashboard:true logs:true logs_caddy:true manage:true manage_role:true manage_user:true]
+Built Routes: 3
+Fetched Roles Dump: [{ID:1 CreatedAt:2026-01-27 21:17:20.051775 +0800 CST UpdatedAt:2026-01-28 15:07:31.119932 +0800 CST Name:admin DisplayName:管理员 Description:系统管理员，拥有所有权限 Permissions:[dashboard manage manage_user manage_role logs logs_caddy]}]
+
