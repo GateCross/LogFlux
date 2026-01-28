@@ -1,5 +1,4 @@
-import { addIcon, disableCache } from '@iconify/vue/dist/offline';
-import { addAPIProvider } from '@iconify/vue';
+import { addIcon, addAPIProvider } from '@iconify/vue';
 
 // MDI
 import MonitorDashboard from '@iconify/icons-mdi/monitor-dashboard';
@@ -59,14 +58,12 @@ import Sunny from '@iconify/icons-material-symbols/sunny';
 import NightlightRounded from '@iconify/icons-material-symbols/nightlight-rounded';
 import HdrAuto from '@iconify/icons-material-symbols/hdr-auto';
 
-/** Setup the iconify offline */
 export function setupIconifyOffline() {
   const { VITE_ICONIFY_URL } = import.meta.env;
 
+
   if (VITE_ICONIFY_URL) {
     addAPIProvider('', { resources: [VITE_ICONIFY_URL] });
-  } else {
-    disableCache('all');
   }
 
   // MDI
@@ -87,7 +84,7 @@ export function setupIconifyOffline() {
   addIcon('carbon:http', Http);
   addIcon('carbon:view', View);
   addIcon('carbon:user', User);
-  addIcon('carbon:nacl', Nacl);
+  addIcon('carbon:network-public', NetworkPublic);
   addIcon('carbon:security', Security);
   addIcon('carbon:warning-alt', WarningAlt);
   addIcon('carbon:document-download', DocumentDownload);
