@@ -3,9 +3,6 @@ package route
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"os"
-	"time"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
@@ -56,14 +53,6 @@ func (l *GetUserRoutesLogic) GetUserRoutes() (resp *types.UserRouteResp, err err
 
 	// 构建基于权限的路由
 	routes := l.buildRoutes(userPermissions)
-
-	// DEBUG: Write to file
-	debugMsg := fmt.Sprintf("Time: %s\nUser ID: %v\nRoles: %v\nUser Permissions Map: %v\nBuilt Routes: %d\nFetched Roles Dump: %+v\n\n", time.Now().Format(time.RFC3339), userId, user.Roles, userPermissions, len(routes), roles)
-	f, _ := os.OpenFile("debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if f != nil {
-		f.WriteString(debugMsg)
-		f.Close()
-	}
 
 	return &types.UserRouteResp{
 		Home:   "dashboard",
