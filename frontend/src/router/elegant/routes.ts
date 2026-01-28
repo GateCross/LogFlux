@@ -76,26 +76,6 @@ export const generatedRoutes: GeneratedRoute[] = [
     }
   },
   {
-    name: 'logs',
-    path: '/logs',
-    component: 'layout.base',
-    meta: {
-      title: 'logs',
-      i18nKey: 'route.logs'
-    },
-    children: [
-      {
-        name: 'logs_caddy',
-        path: '/logs/caddy',
-        component: 'view.logs_caddy',
-        meta: {
-          title: 'logs_caddy',
-          i18nKey: 'route.logs_caddy'
-        }
-      }
-    ]
-  },
-  {
     name: 'manage',
     path: '/manage',
     component: 'layout.base',

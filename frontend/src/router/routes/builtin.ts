@@ -25,7 +25,12 @@ const NOT_FOUND_ROUTE: CustomRoute = {
 
 /** get constant routes from generated routes */
 function getConstantRoutes() {
-  return generatedRoutes.filter(route => route.meta?.constant);
+  return generatedRoutes.map(route => {
+    if (route.name === 'login') {
+      route.component = 'layout.blank$view.login';
+    }
+    return route;
+  }).filter(route => route.meta?.constant);
 }
 
 /** builtin routes, it must be constant and setup in vue-router */
