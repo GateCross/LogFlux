@@ -145,6 +145,33 @@ type (
 		ID          uint     `path:"id"`
 		Permissions []string `json:"permissions"`
 	}
+	// Caddy Management
+	CaddyServerReq {
+		Name     string `json:"name"`
+		Url      string `json:"url"` // http://localhost:2019 or remote IP
+		Token    string `json:"token,optional"` // For remote auth if needed
+		Type     string `json:"type,default=local"` // local | remote
+		Username string `json:"username,optional"`
+		Password string `json:"password,optional"`
+	}
+	CaddyServerItem {
+		ID        uint   `json:"id"`
+		Name      string `json:"name"`
+		Url       string `json:"url"`
+		Type      string `json:"type"`
+		CreatedAt string `json:"createdAt"`
+	}
+	CaddyServerListResp {
+		List []CaddyServerItem `json:"list"`
+	}
+	// Proxy Config
+	CaddyConfigReq {
+		ServerId uint `path:"serverId"`
+	}
+	CaddyConfigUpdateReq {
+		ServerId uint   `path:"serverId"`
+		Config   string `json:"config"` // JSON string
+	}
 	IsRouteExistReq {
 		RouteName string `form:"routeName"`
 	}
@@ -236,5 +263,30 @@ service logflux-api {
 
 	@handler UpdateRolePermissions
 	put /role/:id/permissions (UpdateRolePermissionsReq) returns (BaseResp)
+}
+
+@server (
+	prefix: /api
+	group:  caddy
+	jwt:    Auth
+)
+service logflux-api {
+	@handler GetCaddyServers
+	get /caddy/server returns (CaddyServerListResp)
+
+	@handler AddCaddyServer
+	post /caddy/server (CaddyServerReq) returns (BaseResp)
+
+	@handler UpdateCaddyServer
+	put /caddy/server/:id (CaddyServerReq) returns (BaseResp)
+
+	@handler DeleteCaddyServer
+	delete /caddy/server/:id (IDReq) returns (BaseResp)
+
+	@handler GetCaddyConfig
+	get /caddy/server/:serverId/config (CaddyConfigReq) returns (BaseResp)
+
+	@handler UpdateCaddyConfig
+	post /caddy/server/:serverId/config (CaddyConfigUpdateReq) returns (BaseResp)
 }
 

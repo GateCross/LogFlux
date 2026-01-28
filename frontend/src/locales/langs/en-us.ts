@@ -231,8 +231,9 @@ const local: App.I18n.Schema = {
     'iframe-page': 'Iframe',
     home: 'Home',
     dashboard: 'Dashboard',
-    logs: 'Logs',
-    logs_caddy: 'Caddy Logs',
+    caddy: 'Caddy Management',
+    caddy_config: 'Caddy Config',
+    caddy_log: 'Caddy Logs',
     manage: 'System Manage',
     manage_user: 'User Manage',
     manage_role: 'Role Manage'

@@ -32,7 +32,7 @@ type CaddyLogItem struct {
 type CaddyLogReq struct {
 	Page     int    `form:"page,default=1"`
 	PageSize int    `form:"pageSize,default=20"`
-	Keyword  string `form:"keyword,optional"` // Search in host, uri, ip
+	Keyword  string `form:"keyword,omitempty"` // Search in host, uri, ip
 }
 
 type CaddyLogResp struct {
@@ -70,14 +70,14 @@ type LogSourceListResp struct {
 type LogSourceReq struct {
 	Name string `json:"name"`
 	Path string `json:"path"`
-	Type string `json:"type,default=caddy"`
+	Type string `json:"type,omitempty"`
 }
 
 type LogSourceUpdateReq struct {
 	ID      uint   `path:"id"`
-	Name    string `json:"name,optional"`
-	Path    string `json:"path,optional"`
-	Enabled bool   `json:"enabled,optional"`
+	Name    string `json:"name,omitempty"`
+	Path    string `json:"path,omitempty"`
+	Enabled bool   `json:"enabled,omitempty"`
 }
 
 type LoginReq struct {
@@ -128,8 +128,8 @@ type UpdateRolePermissionsReq struct {
 
 type UpdateUserReq struct {
 	ID       uint     `path:"id"`
-	Password string   `json:"password,optional"`
-	Roles    []string `json:"roles,optional"`
+	Password string   `json:"password,omitempty"`
+	Roles    []string `json:"roles,omitempty"`
 }
 
 type UserInfoReq struct {
@@ -137,7 +137,7 @@ type UserInfoReq struct {
 
 type UserInfoResp struct {
 	UserId   int64    `json:"userId"`
-	Username string   `json:"username"`
+	Username string   `json:"userName"`
 	Roles    []string `json:"roles"`
 }
 
@@ -156,7 +156,7 @@ type ToggleUserStatusReq struct {
 type UserListReq struct {
 	Page     int    `form:"page,default=1"`
 	PageSize int    `form:"pageSize,default=20"`
-	Username string `form:"username,optional"`
+	Username string `form:"username,omitempty"`
 }
 
 type UserListResp struct {
@@ -167,4 +167,43 @@ type UserListResp struct {
 type UserRouteResp struct {
 	Home   string      `json:"home"`
 	Routes []MenuRoute `json:"routes"`
+}
+
+// Caddy Management Types
+
+type CaddyServerReq struct {
+	Name     string `json:"name"`
+	Url      string `json:"url"`
+	Token    string `json:"token,omitempty"`
+	Type     string `json:"type,omitempty"`
+	Username string `json:"username,omitempty"`
+	Password string `json:"password,omitempty"`
+	ID       uint   `path:"id,omitempty"`
+}
+
+type CaddyServerItem struct {
+	ID        uint   `json:"id"`
+	Name      string `json:"name"`
+	Url       string `json:"url"`
+	Type      string `json:"type"`
+	CreatedAt string `json:"createdAt"`
+}
+
+type CaddyServerListResp struct {
+	List []CaddyServerItem `json:"list"`
+}
+
+type CaddyConfigReq struct {
+	ServerId uint `path:"serverId"`
+}
+
+type CaddyConfigUpdateReq struct {
+	ServerId uint   `path:"serverId"`
+	Config   string `json:"config"`
+}
+
+type CaddyConfigResp struct {
+	Code   int    `json:"code"`
+	Msg    string `json:"msg"`
+	Config string `json:"config"`
 }

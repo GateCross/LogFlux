@@ -227,8 +227,9 @@ const local: App.I18n.Schema = {
     'iframe-page': '外链页面',
     home: '首页',
     dashboard: '仪表盘',
-    logs: '日志管理',
-    logs_caddy: 'Caddy日志',
+    caddy: 'Caddy管理',
+    caddy_config: 'Caddy配置',
+    caddy_log: 'Caddy日志',
     manage: '系统管理',
     manage_user: '用户管理',
     manage_role: '角色管理'

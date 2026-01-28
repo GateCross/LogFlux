@@ -98,37 +98,41 @@ func (l *GetUserRoutesLogic) buildRoutes(permissions map[string]bool) []types.Me
 		})
 	}
 
-	// Logs 路由（仅 admin 和 analyst）
-	if permissions["logs"] {
-		logsChildren := []types.MenuRoute{}
-
-		if permissions["logs_caddy"] {
-			logsChildren = append(logsChildren, types.MenuRoute{
-				Name:      "logs_caddy",
-				Path:      "/logs/caddy",
-				Component: "view.logs_caddy",
-				Meta: types.RouteMeta{
-					Title:   "logs_caddy",
-					I18nKey: "route.logs_caddy",
-					Icon:    "mdi:file-document",
+	// Caddy 路由 (原 Logs 模块)
+	if permissions["logs_caddy"] {
+		routes = append(routes, types.MenuRoute{
+			Name:      "caddy",
+			Path:      "/caddy",
+			Component: "layout.base",
+			Meta: types.RouteMeta{
+				Title:   "caddy",
+				I18nKey: "route.caddy",
+				Icon:    "carbon:cloud-monitoring",
+				Order:   2,
+			},
+			Children: []types.MenuRoute{
+				{
+					Name:      "caddy_config",
+					Path:      "/caddy/config",
+					Component: "view.caddy_config",
+					Meta: types.RouteMeta{
+						Title:   "caddy_config",
+						I18nKey: "route.caddy_config",
+						Icon:    "carbon:settings",
+					},
 				},
-			})
-		}
-
-		if len(logsChildren) > 0 {
-			routes = append(routes, types.MenuRoute{
-				Name:      "logs",
-				Path:      "/logs",
-				Component: "layout.base",
-				Meta: types.RouteMeta{
-					Title:   "logs",
-					I18nKey: "route.logs",
-					Icon:    "mdi:file-document-multiple",
-					Order:   5,
+				{
+					Name:      "caddy_log",
+					Path:      "/caddy/log",
+					Component: "view.caddy_log",
+					Meta: types.RouteMeta{
+						Title:   "caddy_log",
+						I18nKey: "route.caddy_log",
+						Icon:    "carbon:catalog",
+					},
 				},
-				Children: logsChildren,
-			})
-		}
+			},
+		})
 	}
 
 	// Manage 路由（仅 admin）

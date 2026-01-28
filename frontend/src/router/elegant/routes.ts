@@ -37,6 +37,35 @@ export const generatedRoutes: GeneratedRoute[] = [
     }
   },
   {
+    name: 'caddy',
+    path: '/caddy',
+    component: 'layout.base',
+    meta: {
+      title: 'caddy',
+      i18nKey: 'route.caddy'
+    },
+    children: [
+      {
+        name: 'caddy_config',
+        path: '/caddy/config',
+        component: 'view.caddy_config',
+        meta: {
+          title: 'caddy_config',
+          i18nKey: 'route.caddy_config'
+        }
+      },
+      {
+        name: 'caddy_log',
+        path: '/caddy/log',
+        component: 'view.caddy_log',
+        meta: {
+          title: 'caddy_log',
+          i18nKey: 'route.caddy_log'
+        }
+      }
+    ]
+  },
+  {
     name: 'dashboard',
     path: '/dashboard',
     component: 'layout.base$view.dashboard',

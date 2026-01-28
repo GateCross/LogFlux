@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	auth "logflux/internal/handler/auth"
+	caddy "logflux/internal/handler/caddy"
 	log "logflux/internal/handler/log"
 	role "logflux/internal/handler/role"
 	route "logflux/internal/handler/route"
@@ -136,6 +137,43 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Method:  http.MethodGet,
 				Path:    "/user/list",
 				Handler: user.GetUserListHandler(serverCtx),
+			},
+		},
+		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
+		rest.WithPrefix("/api"),
+	)
+
+	server.AddRoutes(
+		[]rest.Route{
+			{
+				Method:  http.MethodGet,
+				Path:    "/caddy/server",
+				Handler: caddy.GetCaddyServersHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/caddy/server",
+				Handler: caddy.AddCaddyServerHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPut,
+				Path:    "/caddy/server/:id",
+				Handler: caddy.UpdateCaddyServerHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodDelete,
+				Path:    "/caddy/server/:id",
+				Handler: caddy.DeleteCaddyServerHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/caddy/server/:serverId/config",
+				Handler: caddy.GetCaddyConfigHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/caddy/server/:serverId/config",
+				Handler: caddy.UpdateCaddyConfigHandler(serverCtx),
 			},
 		},
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
