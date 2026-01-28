@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  # LogFlux Application (Frontend + Backend + Caddy)
+  logflux:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: logflux-app
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy_data:/data/caddy
+      - caddy_config:/config/caddy
+      - caddy_logs:/var/log/caddy
+      - ../backend/etc/config.yaml:/app/etc/config.yaml:ro
+    environment:
+      - TZ=Asia/Shanghai
+    networks:
+      - logflux-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  logflux-network:
+    driver: bridge
+
+volumes:
+  caddy_data:
+    driver: local
+  caddy_config:
+    driver: local
+  caddy_logs:
+    driver: local

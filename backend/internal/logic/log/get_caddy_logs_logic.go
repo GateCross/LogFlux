@@ -2,6 +2,9 @@ package log
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"time"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
@@ -25,6 +28,19 @@ func NewGetCaddyLogsLogic(ctx context.Context, svcCtx *svc.ServiceContext) *GetC
 }
 
 func (l *GetCaddyLogsLogic) GetCaddyLogs(req *types.CaddyLogReq) (resp *types.CaddyLogResp, err error) {
+	// 尝试从 Redis 缓存获取（如果启用）
+	if l.svcCtx.Redis != nil {
+		cacheKey := fmt.Sprintf("caddy_logs:page:%d:size:%d:keyword:%s", req.Page, req.PageSize, req.Keyword)
+		cached, err := l.svcCtx.Redis.Get(l.ctx, cacheKey).Result()
+		if err == nil && cached != "" {
+			var cachedResp types.CaddyLogResp
+			if json.Unmarshal([]byte(cached), &cachedResp) == nil {
+				l.Logger.Info("Cache hit for caddy logs")
+				return &cachedResp, nil
+			}
+		}
+	}
+
 	var logs []model.CaddyLog
 	var total int64
 
@@ -42,8 +58,9 @@ func (l *GetCaddyLogsLogic) GetCaddyLogs(req *types.CaddyLogReq) (resp *types.Ca
 		return nil, err
 	}
 
-	// Pagination
+	// Pagination - 使用优化的查询
 	offset := (req.Page - 1) * req.PageSize
+	// 使用索引优化的排序字段
 	if err := db.Order("log_time DESC").Offset(offset).Limit(req.PageSize).Find(&logs).Error; err != nil {
 		return nil, err
 	}
@@ -67,8 +84,18 @@ func (l *GetCaddyLogsLogic) GetCaddyLogs(req *types.CaddyLogReq) (resp *types.Ca
 		})
 	}
 
-	return &types.CaddyLogResp{
+	result := &types.CaddyLogResp{
 		List:  list,
 		Total: total,
-	}, nil
+	}
+
+	// 存入 Redis 缓存（如果启用），缓存 5 分钟
+	if l.svcCtx.Redis != nil {
+		cacheKey := fmt.Sprintf("caddy_logs:page:%d:size:%d:keyword:%s", req.Page, req.PageSize, req.Keyword)
+		if data, err := json.Marshal(result); err == nil {
+			l.svcCtx.Redis.Set(l.ctx, cacheKey, string(data), 5*time.Minute)
+		}
+	}
+
+	return result, nil
 }

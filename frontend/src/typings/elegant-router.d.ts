@@ -27,6 +27,8 @@ declare module "@elegant-router/types" {
     "home": "/home";
     "iframe-page": "/iframe-page/:url";
     "login": "/login/:module(pwd-login|code-login|register|reset-pwd|bind-wechat)?";
+    "logs": "/logs";
+    "logs_caddy": "/logs/caddy";
     "manage": "/manage";
     "manage_role": "/manage/role";
     "manage_user": "/manage/user";
@@ -69,6 +71,7 @@ declare module "@elegant-router/types" {
     | "home"
     | "iframe-page"
     | "login"
+    | "logs"
     | "manage"
   >;
 
@@ -95,6 +98,7 @@ declare module "@elegant-router/types" {
     | "caddy_log"
     | "dashboard"
     | "home"
+    | "logs_caddy"
     | "manage_role"
     | "manage_user"
   >;

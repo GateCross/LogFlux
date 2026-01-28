@@ -1,0 +1,67 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+LICENSE
+docs/
+
+# Frontend
+frontend/node_modules
+frontend/.next
+frontend/.nuxt
+frontend/dist
+frontend/.cache
+frontend/coverage
+frontend/.vscode
+frontend/.idea
+
+# Backend
+backend/bin
+backend/pkg
+backend/vendor
+backend/*.exe
+backend/*.dll
+backend/*.so
+backend/*.dylib
+backend/tmp
+backend/.vscode
+backend/.idea
+
+# Environment files
+.env
+.env.local
+.env.*.local
+*.local.yaml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+nul
+
+# Testing
+coverage/
+*.test
+
+# Build artifacts
+dist/
+build/
+out/
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore

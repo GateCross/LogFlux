@@ -1,0 +1,23 @@
+Name: logflux-api
+Host: 0.0.0.0
+Port: 8888
+Auth:
+  AccessSecret: "change-this-secret-key-in-production"
+  AccessExpire: 86400
+Database:
+  Host: "host.docker.internal"  # 使用 host.docker.internal 访问主机上的数据库
+  Port: 5432
+  User: "postgres"
+  Password: "postgres"
+  DBName: "logflux"
+  SSLMode: "disable"
+Redis:
+  Host: "host.docker.internal"  # 使用 host.docker.internal 访问主机上的 Redis
+  Port: 6379
+  Password: ""
+  DB: 0
+CaddyLogPath: "/var/log/caddy/access.log"
+Archive:
+  Enabled: true
+  RetentionDay: 90
+  ArchiveTable: "caddy_logs_archive"
