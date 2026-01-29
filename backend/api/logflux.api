@@ -164,6 +164,15 @@ type (
 	CaddyServerListResp {
 		List []CaddyServerItem `json:"list"`
 	}
+	UpdateCaddyServerReq {
+		ID       uint   `path:"id"`
+		Name     string `json:"name,optional"`
+		Url      string `json:"url,optional"`
+		Token    string `json:"token,optional"`
+		Type     string `json:"type,optional"`
+		Username string `json:"username,optional"`
+		Password string `json:"password,optional"`
+	}
 	// Proxy Config
 	CaddyConfigReq {
 		ServerId uint `path:"serverId"`
@@ -174,6 +183,146 @@ type (
 	}
 	IsRouteExistReq {
 		RouteName string `form:"routeName"`
+	}
+	CaddyConfigResp {
+		Config string `json:"config"`
+	}
+	// Notification Channel
+	ChannelReq {
+		Name        string `json:"name"`
+		Type        string `json:"type"` // email, webhook, telegram
+		Enabled     bool   `json:"enabled"`
+		Config      string `json:"config"` // JSON string
+		Events      string `json:"events"` // JSON string array ["*"]
+		Description string `json:"description,optional"`
+	}
+	ChannelUpdateReq {
+		ID          uint   `path:"id"`
+		Name        string `json:"name,optional"`
+		Type        string `json:"type,optional"`
+		Enabled     bool   `json:"enabled,optional"`
+		Config      string `json:"config,optional"`
+		Events      string `json:"events,optional"`
+		Description string `json:"description,optional"`
+	}
+	ChannelListResp {
+		List []ChannelItem `json:"list"`
+	}
+	ChannelItem {
+		ID          uint   `json:"id"`
+		Name        string `json:"name"`
+		Type        string `json:"type"`
+		Enabled     bool   `json:"enabled"`
+		Config      string `json:"config"`
+		Events      string `json:"events"`
+		Description string `json:"description"`
+		CreatedAt   string `json:"createdAt"`
+		UpdatedAt   string `json:"updatedAt"`
+	}
+	TestChannelReq {
+		ID uint `json:"id"`
+	}
+	// Notification Rule
+	RuleReq {
+		Name            string  `json:"name"`
+		Enabled         bool    `json:"enabled"`
+		RuleType        string  `json:"ruleType"` // threshold, frequency, pattern
+		EventType       string  `json:"eventType"`
+		Condition       string  `json:"condition"` // JSON string
+		ChannelIDs      []int64 `json:"channelIds"`
+		Template        string  `json:"template,optional"`
+		SilenceDuration int     `json:"silenceDuration"` // seconds
+		Description     string  `json:"description,optional"`
+	}
+	RuleUpdateReq {
+		ID              uint    `path:"id"`
+		Name            string  `json:"name,optional"`
+		Enabled         bool    `json:"enabled,optional"`
+		RuleType        string  `json:"ruleType,optional"`
+		EventType       string  `json:"eventType,optional"`
+		Condition       string  `json:"condition,optional"`
+		ChannelIDs      []int64 `json:"channelIds,optional"`
+		Template        string  `json:"template,optional"`
+		SilenceDuration int     `json:"silenceDuration,optional"`
+		Description     string  `json:"description,optional"`
+	}
+	RuleListResp {
+		List []RuleItem `json:"list"`
+	}
+	RuleItem {
+		ID              uint    `json:"id"`
+		Name            string  `json:"name"`
+		Enabled         bool    `json:"enabled"`
+		RuleType        string  `json:"ruleType"`
+		EventType       string  `json:"eventType"`
+		Condition       string  `json:"condition"`
+		ChannelIDs      []int64 `json:"channelIds"`
+		Template        string  `json:"template"`
+		SilenceDuration int     `json:"silenceDuration"`
+		Description     string  `json:"description"`
+		CreatedAt       string  `json:"createdAt"`
+		UpdatedAt       string  `json:"updatedAt"`
+	}
+	// Notification Template
+	TemplateReq {
+		Name    string `json:"name"`
+		Format  string `json:"format"` // text, html, markdown, json
+		Content string `json:"content"`
+		Type    string `json:"type,default=user"` // system, user
+	}
+	TemplateUpdateReq {
+		ID      uint   `path:"id"`
+		Name    string `json:"name,optional"`
+		Format  string `json:"format,optional"`
+		Content string `json:"content,optional"`
+		Type    string `json:"type,optional"`
+	}
+	TemplateListResp {
+		List []TemplateItem `json:"list"`
+	}
+	TemplateItem {
+		ID        uint   `json:"id"`
+		Name      string `json:"name"`
+		Format    string `json:"format"`
+		Content   string `json:"content"`
+		Type      string `json:"type"`
+		CreatedAt string `json:"createdAt"`
+		UpdatedAt string `json:"updatedAt"`
+	}
+	PreviewTemplateReq {
+		Format  string `json:"format"`
+		Content string `json:"content"`
+		Data    string `json:"data,optional"` // JSON string of mock data
+	}
+	PreviewTemplateResp {
+		Content string `json:"content"`
+	}
+	// Notification Log
+	LogListReq {
+		Page      int  `form:"page,default=1"`
+		PageSize  int  `form:"pageSize,default=20"`
+		Status    int  `form:"status,optional"` // 0:pending, 1:sending, 2:success, 3:failed
+		ChannelID uint `form:"channelId,optional"`
+		RuleID    uint `form:"ruleId,optional"`
+	}
+	LogListResp {
+		List  []LogItem `json:"list"`
+		Total int64     `json:"total"`
+	}
+	LogItem {
+		ID         uint   `json:"id"`
+		EventID    string `json:"eventId"`
+		EventType  string `json:"eventType"`
+		Title      string `json:"title"`
+		Message    string `json:"message"`
+		Level      string `json:"level"`
+		ChannelID  uint   `json:"channelId"`
+		RuleID     uint   `json:"ruleId"`
+		Status     int    `json:"status"`
+		Error      string `json:"error"`
+		RetryCount int    `json:"retryCount"`
+		SentAt     string `json:"sentAt"`
+		CreatedAt  string `json:"createdAt"`
 	}
 )
 
@@ -278,15 +427,71 @@ service logflux-api {
 	post /caddy/server (CaddyServerReq) returns (BaseResp)
 
 	@handler UpdateCaddyServer
-	put /caddy/server/:id (CaddyServerReq) returns (BaseResp)
+	put /caddy/server/:id (UpdateCaddyServerReq) returns (BaseResp)
 
 	@handler DeleteCaddyServer
 	delete /caddy/server/:id (IDReq) returns (BaseResp)
 
 	@handler GetCaddyConfig
-	get /caddy/server/:serverId/config (CaddyConfigReq) returns (BaseResp)
+	get /caddy/server/:serverId/config (CaddyConfigReq) returns (CaddyConfigResp)
 
 	@handler UpdateCaddyConfig
 	post /caddy/server/:serverId/config (CaddyConfigUpdateReq) returns (BaseResp)
+}
+
+@server (
+	prefix: /api
+	group:  notification
+	jwt:    Auth
+)
+service logflux-api {
+	// Channel
+	@handler GetChannelList
+	get /notification/channel returns (ChannelListResp)
+
+	@handler CreateChannel
+	post /notification/channel (ChannelReq) returns (BaseResp)
+
+	@handler UpdateChannel
+	put /notification/channel/:id (ChannelUpdateReq) returns (BaseResp)
+
+	@handler DeleteChannel
+	delete /notification/channel/:id (IDReq) returns (BaseResp)
+
+	@handler TestChannel
+	post /notification/channel/test (TestChannelReq) returns (BaseResp)
+
+	// Rule
+	@handler GetRuleList
+	get /notification/rule returns (RuleListResp)
+
+	@handler CreateRule
+	post /notification/rule (RuleReq) returns (BaseResp)
+
+	@handler UpdateRule
+	put /notification/rule/:id (RuleUpdateReq) returns (BaseResp)
+
+	@handler DeleteRule
+	delete /notification/rule/:id (IDReq) returns (BaseResp)
+
+	// Template
+	@handler GetTemplateList
+	get /notification/template returns (TemplateListResp)
+
+	@handler CreateTemplate
+	post /notification/template (TemplateReq) returns (BaseResp)
+
+	@handler UpdateTemplate
+	put /notification/template/:id (TemplateUpdateReq) returns (BaseResp)
+
+	@handler DeleteTemplate
+	delete /notification/template/:id (IDReq) returns (BaseResp)
+
+	@handler PreviewTemplate
+	post /notification/template/preview (PreviewTemplateReq) returns (PreviewTemplateResp)
+
+	// Log
+	@handler GetNotificationLogs
+	get /notification/log (LogListReq) returns (LogListResp)
 }
 

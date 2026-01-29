@@ -2,8 +2,10 @@ package caddy
 
 import (
 	"context"
+	"fmt"
 	"time"
 
+	"logflux/internal/notification"
 	"logflux/internal/svc"
 	"logflux/internal/types"
 	"logflux/model"
@@ -25,7 +27,7 @@ func NewUpdateCaddyServerLogic(ctx context.Context, svcCtx *svc.ServiceContext) 
 	}
 }
 
-func (l *UpdateCaddyServerLogic) UpdateCaddyServer(req *types.CaddyServerReq) (resp *types.BaseResp, err error) {
+func (l *UpdateCaddyServerLogic) UpdateCaddyServer(req *types.UpdateCaddyServerReq) (resp *types.BaseResp, err error) {
 	var server model.CaddyServer
 	if err := l.svcCtx.DB.First(&server, req.ID).Error; err != nil {
 		return nil, err
@@ -41,6 +43,16 @@ func (l *UpdateCaddyServerLogic) UpdateCaddyServer(req *types.CaddyServerReq) (r
 
 	if err := l.svcCtx.DB.Save(&server).Error; err != nil {
 		return nil, err
+	}
+
+	// 发送配置更新通知
+	if l.svcCtx.NotificationMgr != nil {
+		go l.svcCtx.NotificationMgr.Notify(context.Background(), notification.NewEvent(
+			"caddy.server.updated",
+			notification.LevelInfo,
+			"Caddy Server Updated",
+			fmt.Sprintf("Server '%s' (%s) configuration was updated.", server.Name, server.Url),
+		))
 	}
 
 	return &types.BaseResp{

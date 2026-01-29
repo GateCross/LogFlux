@@ -105,26 +105,6 @@ export const generatedRoutes: GeneratedRoute[] = [
     }
   },
   {
-    name: 'logs',
-    path: '/logs',
-    component: 'layout.base',
-    meta: {
-      title: 'logs',
-      i18nKey: 'route.logs'
-    },
-    children: [
-      {
-        name: 'logs_caddy',
-        path: '/logs/caddy',
-        component: 'view.logs_caddy',
-        meta: {
-          title: 'logs_caddy',
-          i18nKey: 'route.logs_caddy'
-        }
-      }
-    ]
-  },
-  {
     name: 'manage',
     path: '/manage',
     component: 'layout.base',
@@ -149,6 +129,53 @@ export const generatedRoutes: GeneratedRoute[] = [
         meta: {
           title: 'manage_user',
           i18nKey: 'route.manage_user'
+        }
+      }
+    ]
+  },
+  {
+    name: 'notification',
+    path: '/notification',
+    component: 'layout.base',
+    meta: {
+      title: 'notification',
+      i18nKey: 'route.notification'
+    },
+    children: [
+      {
+        name: 'notification_channel',
+        path: '/notification/channel',
+        component: 'view.notification_channel',
+        meta: {
+          title: 'notification_channel',
+          i18nKey: 'route.notification_channel'
+        }
+      },
+      {
+        name: 'notification_log',
+        path: '/notification/log',
+        component: 'view.notification_log',
+        meta: {
+          title: 'notification_log',
+          i18nKey: 'route.notification_log'
+        }
+      },
+      {
+        name: 'notification_rule',
+        path: '/notification/rule',
+        component: 'view.notification_rule',
+        meta: {
+          title: 'notification_rule',
+          i18nKey: 'route.notification_rule'
+        }
+      },
+      {
+        name: 'notification_template',
+        path: '/notification/template',
+        component: 'view.notification_template',
+        meta: {
+          title: 'notification_template',
+          i18nKey: 'route.notification_template'
         }
       }
     ]

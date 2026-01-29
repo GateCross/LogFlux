@@ -40,7 +40,16 @@ func (t *TelegramProvider) Send(ctx context.Context, config map[string]interface
 	}
 
 	// 构建 Markdown 格式消息
-	message := formatTelegramMessage(event)
+	var message string
+	if content, ok := event.Data["rendered_content"]; ok && content != nil {
+		if contentStr, ok := content.(string); ok {
+			message = contentStr
+		}
+	}
+
+	if message == "" {
+		message = formatTelegramMessage(event)
+	}
 
 	// 创建消息
 	msg := tgbotapi.NewMessage(chatID, message)

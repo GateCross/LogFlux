@@ -13,10 +13,6 @@ type NotificationManager interface {
 	// RegisterProvider 注册通知提供者
 	RegisterProvider(provider NotificationProvider) error
 
-	// EvaluateRules 评估规则并触发通知
-	// 根据数据评估所有规则,触发符合条件的告警
-	EvaluateRules(ctx context.Context, data map[string]interface{}) error
-
 	// Start 启动通知管理器
 	// 加载配置、初始化提供者等
 	Start(ctx context.Context) error
@@ -30,4 +26,7 @@ type NotificationManager interface {
 
 	// ReloadRules 重新加载告警规则
 	ReloadRules() error
+
+	// ReloadTemplates 重新加载通知模板
+	ReloadTemplates() error
 }
