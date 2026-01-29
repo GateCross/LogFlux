@@ -43,7 +43,7 @@ const statisticData: StatisticData[] = [
           </div>
           <div class="pl-12px">
             <h3 class="text-18px font-semibold">
-              早安，{{ authStore.userInfo.userName }}，今天又是充满活力的一天！
+              早安，{{ authStore.userInfo.username }}，今天又是充满活力的一天！
             </h3>
             <p class="leading-30px text-[#999]">今日多云转晴，20℃ - 25℃！</p>
           </div>

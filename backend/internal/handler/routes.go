@@ -281,6 +281,11 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Path:    "/user/list",
 				Handler: user.GetUserListHandler(serverCtx),
 			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/user/change_password",
+				Handler: user.ChangePasswordHandler(serverCtx),
+			},
 		},
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
 		rest.WithPrefix("/api"),

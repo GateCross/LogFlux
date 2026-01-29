@@ -10,6 +10,7 @@ import { $t } from '@/locales';
 import { useRouteStore } from '../route';
 import { useTabStore } from '../tab';
 import { clearAuthStorage, getToken } from './shared';
+import { encrypt } from '@/utils/crypto';
 
 export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
   const route = useRoute();
@@ -20,7 +21,7 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
 
   const userInfo: Api.Auth.UserInfo = reactive({
     userId: '',
-    userName: '',
+    username: '',
     roles: [],
     buttons: []
   });
@@ -45,7 +46,7 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
     token.value = '';
     Object.assign(userInfo, {
       userId: '',
-      userName: '',
+      username: '',
       roles: [],
       buttons: []
     });
@@ -77,6 +78,8 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
    * @returns {boolean} Whether to clear all tabs
    */
   function checkTabClear(): boolean {
+    const tabStore = useTabStore();
+
     if (!userInfo.userId) {
       return false;
     }
@@ -106,7 +109,7 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
   async function login(userName: string, password: string, redirect = true) {
     startLoading();
 
-    const { data: loginToken, error } = await fetchLogin(userName, password);
+    const { data: loginToken, error } = await fetchLogin(userName, encrypt(password));
 
     if (!error) {
       const pass = await loginByToken(loginToken);
@@ -124,7 +127,7 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
 
         window.$notification?.success({
           title: $t('page.login.common.loginSuccess'),
-          content: $t('page.login.common.welcomeBack', { userName: userInfo.userName }),
+          content: $t('page.login.common.welcomeBack', { userName: userInfo.username }),
           duration: 4500
         });
       }
