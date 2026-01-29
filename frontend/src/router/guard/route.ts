@@ -18,12 +18,9 @@ import { getRouteName } from '@/router/elegant/transform';
  */
 export function createRouteGuard(router: Router) {
   router.beforeEach(async (to, from, next) => {
-    console.log('Route guard - navigating to:', to.name, to.path);
-
     const location = await initRoute(to);
 
     if (location) {
-      console.log('Route guard - redirecting to:', location);
       next(location);
       return;
     }
@@ -40,28 +37,23 @@ export function createRouteGuard(router: Router) {
     const needLogin = !to.meta.constant && !isLoginRoute;
     const routeRoles = to.meta.roles || [];
 
-    console.log('Route guard - isLogin:', isLogin, 'isLoginRoute:', isLoginRoute, 'needLogin:', needLogin);
-
     const hasRole = authStore.userInfo.roles.some(role => routeRoles.includes(role));
     const hasAuth = authStore.isStaticSuper || !routeRoles.length || hasRole;
 
     // if it is login route when logged in, then switch to the root page
     if (isLoginRoute && isLogin) {
-      console.log('Route guard - already logged in, redirecting to root');
       next({ name: rootRoute });
       return;
     }
 
     // if the route does not need login, then it is allowed to access directly
     if (!needLogin) {
-      console.log('Route guard - route does not need login, allowing access');
       handleRouteSwitch(to, from, next);
       return;
     }
 
     // the route need login but the user is not logged in, then switch to the login page
     if (!isLogin) {
-      console.log('Route guard - not logged in, redirecting to login');
       const query = getRouteQueryOfLoginRoute(to, routeStore.routeHome);
       next({ name: loginRoute, query });
       return;

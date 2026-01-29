@@ -63,6 +63,9 @@
         <n-form-item label="本地图标" path="meta.localIcon">
           <n-input v-model:value="formModel.meta.localIcon" placeholder="请输入本地图标名称" />
         </n-form-item>
+        <n-form-item label="隐藏菜单" path="meta.hideInMenu">
+          <n-switch v-model:value="formModel.meta.hideInMenu" />
+        </n-form-item>
         <n-form-item label="所需角色" path="roles">
           <n-select v-model:value="formModel.roles" multiple :options="roleOptions" placeholder="请选择可见角色（留空为公开）" />
         </n-form-item>
@@ -96,6 +99,7 @@ interface MenuItem {
     i18nKey?: App.I18n.I18nKey | null;
     icon?: string;
     localIcon?: string;
+    hideInMenu?: boolean;
   };
   roles: string[];
   children?: MenuItem[];
@@ -186,7 +190,8 @@ const formModel = reactive({
     title: '',
     i18nKey: '' as App.I18n.I18nKey,
     icon: '',
-    localIcon: ''
+    localIcon: '',
+    hideInMenu: false
   },
   roles: [] as string[]
 });
@@ -261,7 +266,8 @@ function handleEdit(row: MenuItem) {
     title: row.meta.title || '',
     i18nKey: (row.meta.i18nKey || '') as App.I18n.I18nKey,
     icon: row.meta.icon || '',
-    localIcon: row.meta.localIcon || ''
+    localIcon: row.meta.localIcon || '',
+    hideInMenu: row.meta.hideInMenu || false
   };
   formModel.roles = [...(row.roles || [])];
   showModal.value = true;
@@ -289,7 +295,15 @@ async function handleSubmit() {
           path: formModel.path,
           component: formModel.component,
           order: formModel.order,
-          meta: formModel.meta,
+          meta: {
+            title: formModel.meta.title || '',
+            i18nKey: formModel.meta.i18nKey || '', // Send empty string instead of undefined to satisfy backend strictness
+            icon: formModel.meta.icon || '',
+            localIcon: formModel.meta.localIcon || '',
+            order: formModel.order, // Sync order
+            hideInMenu: formModel.meta.hideInMenu,
+            roles: formModel.roles // Sync roles
+          },
           roles: formModel.roles,
           parentId: formModel.parentId || 0 
         };
