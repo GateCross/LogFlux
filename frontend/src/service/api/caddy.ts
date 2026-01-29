@@ -25,5 +25,5 @@ export function updateCaddyConfig(serverId: number, config: string) {
 }
 
 export function fetchCaddyLogs(params: { page: number; pageSize: number; keyword?: string }) {
-    return request<any>({ url: '/api/logs/caddy', params });
+    return request<any>({ url: '/api/caddy/logs', params });
 }
