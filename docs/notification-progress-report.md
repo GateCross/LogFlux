@@ -10,9 +10,9 @@
 
 - **阶段 1 (基础设施)**: 100% ✅
   - 7/7 任务完成
-- **阶段 2 (核心功能)**: 20% 🔄
-  - 1/5 模块完成 (Email)
-- **整体进度**: 15% (9/60 任务)
+- **阶段 2 (核心功能)**: 40% 🔄
+  - 2/5 模块完成 (Email, Telegram)
+- **整体进度**: 20% (12/60 任务)
 - **预计时间**: 按计划进行 (阶段 2: 第 3-4 周)
 
 ---
@@ -114,7 +114,19 @@
 - ✅ 支持 HTML 邮件内容
 - ✅ 单元测试 `email_test.go`
 
-### Task 9: 重构通知接口 (动态配置) ✅
+### Task 10: 实现 Telegram 提供者 ✅
+**文件**: `backend/internal/notification/providers/telegram.go`
+
+实现了:
+- ✅ 基于 `telegram-bot-api/v5` 的消息发送
+- ✅ 支持 Markdown V2 格式
+- ✅ 级别图标映射 (info→ℹ️, error→❌, etc.)
+- ✅ 特殊字符自动转义
+- ✅ 单元测试 `telegram_test.go`
+- ✅ 配置验证
+- ✅ 集成到 ServiceContext
+
+**配置文档**: `docs/telegram-setup-guide.md`
 **文件**:
 - `backend/internal/notification/provider.go`
 - `backend/internal/notification/manager.go`
@@ -142,21 +154,25 @@
 7. `backend/internal/notification/notification.go`
 8. `backend/internal/notification/manager.go`
 
-### 提供者 (2 个)
+### 提供者 (3 个)
 9. `backend/internal/notification/providers/webhook.go`
-10. `backend/internal/notification/providers/email.go` 🆕
-11. `backend/internal/notification/providers/email_test.go` 🆕
+10. `backend/internal/notification/providers/email.go`
+11. `backend/internal/notification/providers/email_test.go`
+12. `backend/internal/notification/providers/telegram.go` 🆕
+13. `backend/internal/notification/providers/telegram_test.go` 🆕
 
-### 更新的文件 (4 个)
-12. `backend/internal/config/config.go` ✏️
-13. `backend/etc/config.yaml` ✏️
-14. `backend/internal/svc/service_context.go` ✏️
-15. `backend/internal/notification/manager.go` ✏️
+### 更新的文件 (5 个)
+14. `backend/internal/config/config.go` ✏️
+15. `backend/etc/config.yaml` ✏️
+16. `backend/internal/svc/service_context.go` ✏️
+17. `backend/internal/notification/manager.go` ✏️
+18. `backend/go.mod` ✏️ (添加 telegram-bot-api 依赖)
 
-### 文档 (1 个)
-16. `docs/notification-phase1-testing.md`
+### 文档 (2 个)
+19. `docs/notification-phase1-testing.md`
+20. `docs/telegram-setup-guide.md` 🆕
 
-**总计**: 16 个文件 (11 个新增, 4 个更新, 1 个文档)
+**总计**: 20 个文件 (13 个新增, 5 个更新, 2 个文档)
 
 ---
 
@@ -174,7 +190,12 @@
 - ✅ 通配符事件匹配 (`system.*`, `*`)
 - ✅ 发送状态跟踪
 
-### Webhook 支持
+### Telegram 支持 🆕
+- ✅ Markdown V2 格式消息
+- ✅ 级别图标 (info, warning, error, critical, success)
+- ✅ 自动转义特殊字符
+- ✅ Bot Token + Chat ID 配置
+- ✅ 配置验证
 - ✅ HTTP POST/GET/PUT
 - ✅ 自定义 Headers
 - ✅ JSON 格式
@@ -195,9 +216,9 @@
 | SQL | 1 | 150 |
 | 模型 | 3 | 300 |
 | 核心代码 | 4 | 450 |
-| 提供者 | 1 | 120 |
-| 配置/集成 | 3 | 200 |
-| **总计** | **12** | **~1220** |
+| 提供者 | 5 | 400 |
+| 配置/集成 | 5 | 250 |
+| **总计** | **18** | **~1550** |
 
 ---
 
@@ -234,11 +255,12 @@
 
 ## 📝 下一步计划 (阶段 2)
 
-### Task 14-18: Telegram 提供者
-- [ ] 添加 telegram-bot-api 依赖
-- [ ] 实现 TelegramProvider
-- [ ] 支持 Markdown 格式
-- [ ] 单元测试
+### Task 14-18: Telegram 提供者 ✅
+- [x] 添加 telegram-bot-api 依赖
+- [x] 实现 TelegramProvider
+- [x] 支持 Markdown V2 格式
+- [x] 单元测试
+- [x] 配置文档
 
 ### Task 19-24: 规则引擎基础
 - [ ] 添加 expr 依赖
@@ -309,5 +331,5 @@
 
 ---
 
-**最后更新**: 2026-01-29
-**下次更新**: Telegram 提供者完成后
+**最后更新**: 2026-01-29 (Task 14-18 完成)
+**下次更新**: 规则引擎完成后
