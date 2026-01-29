@@ -14,9 +14,9 @@ export function useRouterPush(inSetup = true) {
   const router = inSetup ? useRouter() : globalRouter;
   const route = globalRouter.currentRoute;
 
-  const routerPush = router.push;
+  const routerPush = router.push.bind(router);
 
-  const routerBack = router.back;
+  const routerBack = router.back.bind(router);
 
   async function routerPushByKey(key: RouteKey, options?: App.Global.RouterPushOptions) {
     const { query, params } = options || {};

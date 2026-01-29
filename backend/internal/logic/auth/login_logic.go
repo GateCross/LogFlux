@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"logflux/common/cryptx"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
@@ -41,8 +42,16 @@ func (l *LoginLogic) Login(req *types.LoginReq) (resp *types.LoginResp, err erro
 		return nil, errors.New("查询用户失败")
 	}
 
+	// 密码解密
+	password, err := cryptx.Decrypt(req.Password, l.svcCtx.Config.Auth.AESKey)
+	if err != nil {
+		// l.Logger.Errorf("Decrypt error: %v, password: %s", err, req.Password)
+		return nil, errors.New("用户名或密码错误")
+	}
+	l.Logger.Infof("Decrypted password: %s", password)
+
 	// 密码验证
-	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password))
+	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
 	if err != nil {
 		return nil, errors.New("用户名或密码错误")
 	}

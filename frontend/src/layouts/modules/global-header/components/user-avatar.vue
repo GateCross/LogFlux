@@ -7,6 +7,7 @@ import { useRouterPush } from '@/hooks/common/router';
 import { useSvgIcon } from '@/hooks/common/icon';
 import { $t } from '@/locales';
 import { request } from '@/service/request';
+import { encrypt } from '@/utils/crypto';
 
 defineOptions({
   name: 'UserAvatar'
@@ -101,8 +102,8 @@ async function handlePasswordSubmit() {
           url: '/api/user/change_password',
           method: 'post',
           data: {
-            oldPassword: formModel.oldPassword,
-            newPassword: formModel.newPassword
+            oldPassword: encrypt(formModel.oldPassword),
+            newPassword: encrypt(formModel.newPassword)
           }
         });
         if (!error) {
@@ -143,7 +144,7 @@ function handleDropdown(key: DropdownKey) {
     <div>
       <ButtonIcon>
         <SvgIcon icon="ph:user-circle" class="text-icon-large" />
-        <span class="text-16px font-medium">{{ authStore.userInfo.userName }}</span>
+        <span class="text-16px font-medium">{{ authStore.userInfo.username }}</span>
       </ButtonIcon>
     </div>
   </NDropdown>

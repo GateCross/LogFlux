@@ -49,6 +49,10 @@ type (
 		Password string   `json:"password,optional"`
 		Roles    []string `json:"roles,optional"`
 	}
+	ChangePasswordReq {
+		OldPassword string `json:"oldPassword"`
+		NewPassword string `json:"newPassword"`
+	}
 	// Log Query
 	CaddyLogReq {
 		Page     int    `form:"page,default=1"`
@@ -377,6 +381,9 @@ service logflux-api {
 
 	@handler DeleteUser
 	delete /user/:id (IDReq) returns (BaseResp)
+
+	@handler ChangePassword
+	post /user/change_password (ChangePasswordReq) returns (BaseResp)
 }
 
 @server (

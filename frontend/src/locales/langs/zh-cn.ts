@@ -32,7 +32,7 @@ const local: App.I18n.Schema = {
     logoutConfirm: '确认退出登录吗？',
     changePassword: '修改密码',
     oldPassword: '旧密码',
-    newPassword: '新Password',
+    newPassword: '新密码',
     confirmPassword: '确认密码',
     passwordNoMatch: '两次输入的密码不一致',
     changePasswordSuccess: '修改成功，请重新登录',
