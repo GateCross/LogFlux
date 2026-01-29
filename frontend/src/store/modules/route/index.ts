@@ -24,7 +24,6 @@ import {
 } from './shared';
 
 export const useRouteStore = defineStore(SetupStoreId.Route, () => {
-  const tabStore = useTabStore();
   const { bool: isInitConstantRoute, setBool: setIsInitConstantRoute } = useBoolean();
   const { bool: isInitAuthRoute, setBool: setIsInitAuthRoute } = useBoolean();
 
@@ -149,6 +148,7 @@ export const useRouteStore = defineStore(SetupStoreId.Route, () => {
 
   /** init constant route */
   async function initConstantRoute() {
+    const tabStore = useTabStore();
     if (isInitConstantRoute.value) return;
 
     try {
@@ -199,6 +199,7 @@ export const useRouteStore = defineStore(SetupStoreId.Route, () => {
   /** Init auth route */
   async function initAuthRoute() {
     const authStore = useAuthStore();
+    const tabStore = useTabStore();
 
     try {
       // check if user info is initialized
