@@ -160,6 +160,7 @@ export const useRouteStore = defineStore(SetupStoreId.Route, () => {
         const { data, error } = await fetchGetConstantRoutes();
 
         if (!error) {
+          console.log('initConstantRoute data:', data, typeof data, Array.isArray(data));
           // Filter out builtin routes to prevent duplicate registration
           const BUILTIN_ROUTES = ['login', '403', '404', '500'];
 
@@ -247,6 +248,7 @@ export const useRouteStore = defineStore(SetupStoreId.Route, () => {
     const { data, error } = await fetchGetUserRoutes();
 
     if (!error) {
+      console.log('initDynamicAuthRoute data:', data);
       const { routes, home } = data;
 
       addAuthRoutes(routes);

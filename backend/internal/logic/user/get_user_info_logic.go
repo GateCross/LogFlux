@@ -2,6 +2,7 @@ package user
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"logflux/internal/svc"
@@ -30,12 +31,25 @@ func NewGetUserInfoLogic(ctx context.Context, svcCtx *svc.ServiceContext) *GetUs
 func (l *GetUserInfoLogic) GetUserInfo(req *types.UserInfoReq) (resp *types.UserInfoResp, err error) {
 	// 从 context 中获取 userId (由 JWT 中间件注入)
 	userId := l.ctx.Value("userId")
-	// userId from jwt is json.Number or float64 depending on parser, safe cast needed
-	// Here assuming standard jwt parser which might return float64 or string
-	// For simplicity in this demo, we'll try to cast. In production use robust casting.
+
+	// Parse userId
+	var uid int64
+	if jsonUid, ok := userId.(json.Number); ok {
+		if id, err := jsonUid.Int64(); err == nil {
+			uid = id
+		} else {
+			return nil, errors.New("invalid userId format")
+		}
+	} else if floatUid, ok := userId.(float64); ok {
+		uid = int64(floatUid)
+	} else if intUid, ok := userId.(int); ok {
+		uid = int64(intUid)
+	} else {
+		return nil, errors.New("invalid userId type")
+	}
 
 	var user model.User
-	result := l.svcCtx.DB.First(&user, userId)
+	result := l.svcCtx.DB.First(&user, uid)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
 			return nil, errors.New("用户不存在")

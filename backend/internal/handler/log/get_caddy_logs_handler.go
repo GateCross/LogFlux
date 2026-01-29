@@ -3,12 +3,10 @@ package log
 import (
 	"net/http"
 
-	"logflux/common/result"
+	"github.com/zeromicro/go-zero/rest/httpx"
 	"logflux/internal/logic/log"
 	"logflux/internal/svc"
 	"logflux/internal/types"
-
-	"github.com/zeromicro/go-zero/rest/httpx"
 )
 
 func GetCaddyLogsHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
@@ -21,6 +19,10 @@ func GetCaddyLogsHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 
 		l := log.NewGetCaddyLogsLogic(r.Context(), svcCtx)
 		resp, err := l.GetCaddyLogs(&req)
-		result.HttpResult(r, w, resp, err)
+		if err != nil {
+			httpx.ErrorCtx(r.Context(), w, err)
+		} else {
+			httpx.OkJsonCtx(r.Context(), w, resp)
+		}
 	}
 }

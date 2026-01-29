@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 // NotificationChannel 通知渠道模型
@@ -139,6 +141,14 @@ func splitStringArray(str string) []string {
 		result = append(result, current)
 	}
 	return result
+}
+
+// BeforeSave GORM hook to ensure Config is valid JSON before saving
+func (c *NotificationChannel) BeforeSave(tx *gorm.DB) error {
+	if c.Config == nil {
+		c.Config = make(JSONMap)
+	}
+	return nil
 }
 
 // ChannelType 渠道类型常量

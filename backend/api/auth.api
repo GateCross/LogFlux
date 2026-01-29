@@ -1,0 +1,22 @@
+syntax = "v1"
+
+type (
+	// Auth
+	LoginReq {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	LoginResp {
+		Token        string `json:"token"`
+		RefreshToken string `json:"refreshToken"`
+	}
+)
+
+@server (
+	prefix: /api
+	group:  auth
+)
+service logflux-api {
+	@handler Login
+	post /login (LoginReq) returns (LoginResp)
+}

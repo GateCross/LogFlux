@@ -2,7 +2,6 @@ package menu
 
 import (
 	"context"
-	"encoding/json"
 
 	"logflux/common/result"
 	"logflux/internal/svc"
@@ -33,16 +32,24 @@ func (l *UpdateMenuLogic) UpdateMenu(req *types.UpdateMenuReq) (resp *types.Base
 		return nil, result.NewErrMsg("菜单不存在")
 	}
 
-	// 序列化 Meta
-	metaJSON, _ := json.Marshal(req.Meta)
-
-	updates := map[string]interface{}{
-		"name":           req.Name,
-		"path":           req.Path,
-		"component":      req.Component,
-		"order":          req.Order,
-		"meta":           string(metaJSON),
-		"required_roles": pq.StringArray(req.RequiredRoles),
+	updates := map[string]interface{}{}
+	if req.Name != "" {
+		updates["name"] = req.Name
+	}
+	if req.Path != "" {
+		updates["path"] = req.Path
+	}
+	if req.Component != "" {
+		updates["component"] = req.Component
+	}
+	if req.Order != 0 {
+		updates["order"] = req.Order
+	}
+	if req.Meta != "" {
+		updates["meta"] = req.Meta
+	}
+	if req.RequiredRoles != nil {
+		updates["required_roles"] = pq.StringArray(req.RequiredRoles)
 	}
 
 	if req.ParentID > 0 {

@@ -484,7 +484,7 @@ declare namespace App {
           resetSuccessMsg: string;
         };
       };
-      route: Record<I18nRouteKey, string>;
+      route: Record<I18nRouteKey | 'home', string>;
       page: {
         login: {
           common: {
@@ -559,6 +559,116 @@ declare namespace App {
             desc5: string;
           };
           creativity: string;
+        };
+        notification: {
+          channel: {
+            title: string;
+            add: string;
+            edit: string;
+            name: string;
+            type: string;
+            status: string;
+            config: string;
+            events: string;
+            description: string;
+            enabled: string;
+            disabled: string;
+            test: string;
+            delete: string;
+            deleteConfirmTitle: string;
+            deleteConfirmContent: string;
+            testSuccess: string;
+            testFailed: string;
+            placeholder: {
+              name: string;
+              type: string;
+              config: string;
+              events: string;
+              description: string;
+            };
+          };
+          rule: {
+            title: string;
+            add: string;
+            edit: string;
+            name: string;
+            ruleType: string;
+            eventType: string;
+            status: string;
+            condition: string;
+            channels: string;
+            template: string;
+            silence: string;
+            description: string;
+            enabled: string;
+            disabled: string;
+            deleteConfirmTitle: string;
+            deleteConfirmContent: string;
+            placeholder: {
+              name: string;
+              type: string;
+              eventType: string;
+              condition: string;
+              channels: string;
+              template: string;
+              silence: string;
+              description: string;
+            };
+            types: {
+              threshold: string;
+              frequency: string;
+              pattern: string;
+            };
+          };
+          template: {
+            title: string;
+            add: string;
+            edit: string;
+            name: string;
+            format: string;
+            type: string;
+            content: string;
+            preview: string;
+            mockData: string;
+            refreshPreview: string;
+            deleteConfirmTitle: string;
+            deleteConfirmContent: string;
+            types: {
+              user: string;
+              system: string;
+            };
+            formats: {
+              html: string;
+              text: string;
+              markdown: string;
+              json: string;
+            };
+            placeholder: {
+              name: string;
+              format: string;
+              type: string;
+              mockData: string;
+            };
+          };
+          log: {
+            title: string;
+            status: string;
+            channel: string;
+            refresh: string;
+            id: string;
+            eventTitle: string;
+            eventType: string;
+            level: string;
+            sentAt: string;
+            message: string;
+            error: string;
+            statuses: {
+              pending: string;
+              sending: string;
+              success: string;
+              failed: string;
+            };
+          };
         };
       };
       form: {

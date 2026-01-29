@@ -26,11 +26,11 @@ func NewDeleteMenuLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Delete
 }
 
 func (l *DeleteMenuLogic) DeleteMenu(req *types.IDReq) (resp *types.BaseResp, err error) {
-	// 检查是否有子菜单
+	// 检查是否存在子菜单
 	var count int64
 	l.svcCtx.DB.Model(&model.Menu{}).Where("parent_id = ?", req.ID).Count(&count)
 	if count > 0 {
-		return nil, result.NewErrMsg("请先删除子菜单")
+		return nil, result.NewErrMsg("存在子菜单，无法删除")
 	}
 
 	if err := l.svcCtx.DB.Delete(&model.Menu{}, req.ID).Error; err != nil {

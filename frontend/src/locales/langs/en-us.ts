@@ -230,12 +230,13 @@ const local: App.I18n.Schema = {
     }
   },
   route: {
+    home: 'Home',
     login: 'Login',
     403: 'No Permission',
     404: 'Page Not Found',
     500: 'Server Error',
     'iframe-page': 'Iframe',
-    home: 'Home',
+
     dashboard: 'Dashboard',
     caddy: 'Caddy Management',
     caddy_config: 'Caddy Config',
@@ -325,6 +326,116 @@ const local: App.I18n.Schema = {
         desc5: 'LogFlux just optimized the workbench page!'
       },
       creativity: 'Creativity'
+    },
+    notification: {
+      channel: {
+        title: 'Notification Channels',
+        add: 'Add Channel',
+        edit: 'Edit Channel',
+        name: 'Name',
+        type: 'Type',
+        status: 'Status',
+        config: 'Config',
+        events: 'Events',
+        description: 'Description',
+        enabled: 'Enabled',
+        disabled: 'Disabled',
+        test: 'Test',
+        delete: 'Delete',
+        deleteConfirmTitle: 'Confirm Delete',
+        deleteConfirmContent: 'Are you sure to delete channel "{name}"?',
+        testSuccess: 'Test notification sent',
+        testFailed: 'Test failed',
+        placeholder: {
+          name: 'Channel Name',
+          type: 'Select Type',
+          config: 'JSON Configuration (e.g., { "webhook_url": "..." })',
+          events: '["*"] or ["error", "caddy"]',
+          description: 'Description'
+        }
+      },
+      rule: {
+        title: 'Notification Rules',
+        add: 'Add Rule',
+        edit: 'Edit Rule',
+        name: 'Name',
+        ruleType: 'Rule Type',
+        eventType: 'Event Type',
+        status: 'Status',
+        condition: 'Condition',
+        channels: 'Channels',
+        template: 'Template',
+        silence: 'Silence (sec)',
+        description: 'Description',
+        enabled: 'Enabled',
+        disabled: 'Disabled',
+        deleteConfirmTitle: 'Confirm Delete',
+        deleteConfirmContent: 'Are you sure to delete rule "{name}"?',
+        placeholder: {
+          name: 'Rule Name',
+          type: 'Select Type',
+          eventType: 'Event Type (e.g., error)',
+          condition: 'JSON Condition (e.g., { "level": "error" })',
+          channels: 'Select Channels',
+          template: 'Select Template (Optional)',
+          silence: '0',
+          description: 'Description'
+        },
+        types: {
+          threshold: 'Threshold',
+          frequency: 'Frequency',
+          pattern: 'Pattern'
+        }
+      },
+      template: {
+        title: 'Notification Templates',
+        add: 'Add Template',
+        edit: 'Edit Template',
+        name: 'Name',
+        format: 'Format',
+        type: 'Type',
+        content: 'Content Template',
+        preview: 'Preview',
+        mockData: 'Mock Data',
+        refreshPreview: 'Refresh Preview',
+        deleteConfirmTitle: 'Confirm Delete',
+        deleteConfirmContent: 'Are you sure to delete template "{name}"?',
+        types: {
+          user: 'User',
+          system: 'System'
+        },
+        formats: {
+          html: 'HTML',
+          text: 'Text',
+          markdown: 'Markdown',
+          json: 'JSON'
+        },
+        placeholder: {
+          name: 'Template Name',
+          format: 'Format',
+          type: 'Type',
+          mockData: 'Mock Data (JSON)'
+        }
+      },
+      log: {
+        title: 'Notification Logs',
+        status: 'Status',
+        channel: 'Channel',
+        refresh: 'Refresh',
+        id: 'ID',
+        eventTitle: 'Title',
+        eventType: 'Type',
+        level: 'Level',
+        sentAt: 'Sent At',
+        message: 'Message',
+        error: 'Error',
+        statuses: {
+          pending: 'Pending',
+          sending: 'Sending',
+          success: 'Success',
+          failed: 'Failed'
+        }
+      }
     }
   },
   form: {

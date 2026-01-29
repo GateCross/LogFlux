@@ -1,0 +1,12 @@
+syntax = "v1"
+
+type (
+	// Common
+	IDReq {
+		ID uint `path:"id"`
+	}
+	BaseResp {
+		Code int    `json:"code"`
+		Msg  string `json:"msg"`
+	}
+)

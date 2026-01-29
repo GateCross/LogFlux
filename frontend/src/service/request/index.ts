@@ -35,7 +35,19 @@ export const request = createFlatRequest(
     isBackendSuccess(response) {
       // when the backend response code is "0000"(default), it means the request is success
       // to change this logic by yourself, you can modify the `VITE_SERVICE_SUCCESS_CODE` in `.env` file
-      return String(response.data.code) === import.meta.env.VITE_SERVICE_SUCCESS_CODE;
+      // console.log('isBackendSuccess check:', response.config.url, response.status, response.data.code, typeof response.data.code, import.meta.env.VITE_SERVICE_SUCCESS_CODE);
+      // if (response.data && typeof response.data === 'object' && !('code' in response.data)) {
+      //   console.log('Response data keys:', Object.keys(response.data));
+      // }
+
+      const successCode = import.meta.env.VITE_SERVICE_SUCCESS_CODE;
+      // Allow both string and number comparison
+      if (response.data && response.data.code !== undefined) {
+        return String(response.data.code) === successCode;
+      }
+      // If code is missing but status is 200, maybe consider success? Or is strict?
+      // For now let's stick to strict but if 'code' is missing, it will fail.
+      return false;
     },
     async onBackendFail(response, instance) {
       const authStore = useAuthStore();
@@ -107,8 +119,20 @@ export const request = createFlatRequest(
 
       // get backend error message and code
       if (error.code === BACKEND_ERROR_CODE) {
-        message = error.response?.data?.msg || error.response?.data?.error || message;
+        message = error.response?.data?.msg || (error.response?.data as any)?.error || message;
         backendErrorCode = String(error.response?.data?.code || '');
+      }
+
+      // Handle HTTP error codes directly
+      if (error.response?.status === 401) {
+        // Token expired or invalid, let's treat it same as expiredTokenCodes or logoutCodes
+        // Ideally call handleLogout() or rely on the auth store state listing.
+        // For now, suppress the default error message and perhaps trigger logout/refresh logic if not handled elsewhere.
+        // Note: If onBackendFail didn't catch it (because axios threw), we are here.
+
+        const authStore = useAuthStore();
+        authStore.resetStore();
+        return;
       }
 
       // the error message is displayed in the modal

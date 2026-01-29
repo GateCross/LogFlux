@@ -48,7 +48,6 @@ func (l *LoginLogic) Login(req *types.LoginReq) (resp *types.LoginResp, err erro
 		// l.Logger.Errorf("Decrypt error: %v, password: %s", err, req.Password)
 		return nil, errors.New("用户名或密码错误")
 	}
-	l.Logger.Infof("Decrypted password: %s", password)
 
 	// 密码验证
 	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))

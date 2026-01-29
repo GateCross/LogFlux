@@ -72,6 +72,8 @@ function createCommonRequest<
         response.request,
         response
       );
+      // Explicitly attach response to ensure it's available
+      backendError.response = response;
 
       await opts.onError(backendError);
 

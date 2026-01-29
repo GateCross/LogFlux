@@ -1,0 +1,38 @@
+syntax = "v1"
+
+type (
+	// Log Query
+	CaddyLogReq {
+		Page     int    `form:"page,default=1"`
+		PageSize int    `form:"pageSize,default=20"`
+		Keyword  string `form:"keyword,optional"` // Search in host, uri, ip
+	}
+	CaddyLogItem {
+		ID        uint   `json:"id"`
+		LogTime   string `json:"logTime"`
+		Country   string `json:"country"`
+		City      string `json:"city"`
+		Host      string `json:"host"`
+		Method    string `json:"method"`
+		Uri       string `json:"uri"`
+		Status    int    `json:"status"`
+		Size      int64  `json:"size"`
+		RemoteIP  string `json:"remoteIp"`
+		ClientIP  string `json:"clientIp"`
+		UserAgent string `json:"userAgent"`
+	}
+	CaddyLogResp {
+		List  []CaddyLogItem `json:"list"`
+		Total int64          `json:"total"`
+	}
+)
+
+@server (
+	prefix: /api
+	group:  log
+	jwt:    Auth
+)
+service logflux-api {
+	@handler GetCaddyLogs
+	get /caddy/logs (CaddyLogReq) returns (CaddyLogResp)
+}

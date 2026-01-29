@@ -14,12 +14,17 @@ version: 1.0.0
 LogFlux 使用 `go-zero` 框架。你不能手动直接添加路由，必须遵循代码生成的工作流。
 
 ### Workflow (工作流)
-1.  **定位 API 定义**: 在 `backend/api` (或根目录) 找到相关的 `.api` 文件。
-2.  **定义 Handler/Logic**: 确定所属的分组 (Group) (例如: `server`, `user`)。
+1.  **定位 API 定义**: API 定义已拆分为多个模块：
+    - `base.api`: 通用结构 (BaseResp, IDReq)
+    - `auth.api`: 认证相关
+    - `route.api`: 路由菜单
+    - `caddy_log.api`: 日志查询
+    - `manage.api`: 系统管理 (User, Role, Caddy, LogSource)
+    - `notification.api`: 通知管理 (Channel, Rule, Template, Log)
+    - `logflux.api`: 主入口，负责 import 所有模块。
+2.  **定义 Handler/Logic**: 确定所属的分组 (Group) 在哪个 API 文件定义。
 3.  **实现业务逻辑**:
-    - **不要** 手动修改 `handler/*` 下的文件。
-    - 专注于编辑 `internal/logic/<group>/<action>_logic.go`。
-    - 通过 `ServiceContext` (`svcCtx`) 注入依赖。
+    - **注意**: `goctl` 1.8.x + `-style go_zero` 会生成 snake_case 文件名。如果发现 logic/handler 目录下有同名但 lowercase 的文件，请删除 lowercase 版本，保留 snake_case 版本并确保逻辑迁移。
 
 ## 能力：数据库变更 (Database Changes)
 
