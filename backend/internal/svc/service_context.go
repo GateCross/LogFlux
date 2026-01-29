@@ -139,7 +139,11 @@ func initRBACData(db *gorm2.DB) {
 			Name:        "admin",
 			DisplayName: "管理员",
 			Description: "系统管理员，拥有所有权限",
-			Permissions: []string{"dashboard", "manage", "manage_user", "manage_role", "logs", "logs_caddy"},
+			Permissions: []string{
+				"dashboard", "manage", "manage_user", "manage_role", "manage_menu",
+				"logs", "logs_caddy",
+				"notification", "notification_channel", "notification_rule", "notification_template", "notification_log",
+			},
 		},
 		{
 			Name:        "analyst",
@@ -156,15 +160,11 @@ func initRBACData(db *gorm2.DB) {
 	}
 
 	for _, role := range roles {
-		var count int64
-		db.Model(&model.Role{}).Where("name = ?", role.Name).Count(&count)
-		if count == 0 {
+		var existingRole model.Role
+		if db.Where("name = ?", role.Name).First(&existingRole).Error == gorm2.ErrRecordNotFound {
 			db.Create(&role)
 		} else {
-			// 更新已存在角色的权限
-			db.Model(&model.Role{}).Where("name = ?", role.Name).Updates(map[string]interface{}{
-				"permissions": pq.StringArray(role.Permissions),
-			})
+			db.Model(&existingRole).Select("DisplayName", "Description", "Permissions").Updates(role)
 		}
 	}
 
@@ -173,25 +173,25 @@ func initRBACData(db *gorm2.DB) {
 		{
 			Name:          "home",
 			Path:          "/home",
-			Component:     "layout.base",
+			Component:     "layout.base$view.home",
 			Order:         0,
-			Meta:          `{"title":"home","i18nKey":"route.home","icon":"mdi:home"}`,
-			RequiredRoles: []string{"admin", "analyst", "viewer"},
+			Meta:          `{"title":"home","i18nKey":"route.home","icon":"mdi:home","order":0}`,
+			RequiredRoles: []string{}, // Public
 		},
 		{
 			Name:          "dashboard",
 			Path:          "/dashboard",
-			Component:     "layout.base",
+			Component:     "layout.base$view.dashboard",
 			Order:         1,
-			Meta:          `{"title":"dashboard","i18nKey":"route.dashboard","icon":"mdi:monitor-dashboard"}`,
-			RequiredRoles: []string{"admin", "analyst", "viewer"},
+			Meta:          `{"title":"dashboard","i18nKey":"route.dashboard","icon":"mdi:monitor-dashboard","order":1}`,
+			RequiredRoles: []string{}, // Public
 		},
 		{
-			Name:          "logs",
-			Path:          "/logs",
+			Name:          "caddy",
+			Path:          "/caddy",
 			Component:     "layout.base",
-			Order:         5,
-			Meta:          `{"title":"logs","i18nKey":"route.logs","icon":"mdi:file-document-multiple"}`,
+			Order:         2,
+			Meta:          `{"title":"caddy","i18nKey":"route.caddy","icon":"carbon:cloud-monitoring","order":2}`,
 			RequiredRoles: []string{"admin", "analyst"},
 		},
 		{
@@ -199,18 +199,113 @@ func initRBACData(db *gorm2.DB) {
 			Path:          "/manage",
 			Component:     "layout.base",
 			Order:         9,
-			Meta:          `{"title":"manage","i18nKey":"route.manage","icon":"carbon:cloud-service-management"}`,
+			Meta:          `{"title":"manage","i18nKey":"route.manage","icon":"carbon:cloud-service-management","order":9,"roles":["admin"]}`,
+			RequiredRoles: []string{"admin"},
+		},
+		{
+			Name:          "notification",
+			Path:          "/notification",
+			Component:     "layout.base",
+			Order:         10,
+			Meta:          `{"title":"notification","i18nKey":"route.notification","icon":"carbon:notification","order":10,"roles":["admin"]}`,
+			RequiredRoles: []string{"admin"},
+		},
+		// --- 子菜单 ---
+		{
+			Name:          "caddy_config",
+			Path:          "/caddy/config",
+			Component:     "view.caddy_config",
+			Meta:          `{"title":"caddy_config","i18nKey":"route.caddy_config","icon":"carbon:settings"}`,
+			RequiredRoles: []string{"admin", "analyst"},
+		},
+		{
+			Name:          "caddy_log",
+			Path:          "/caddy/log",
+			Component:     "view.caddy_log",
+			Meta:          `{"title":"caddy_log","i18nKey":"route.caddy_log","icon":"carbon:catalog"}`,
+			RequiredRoles: []string{"admin", "analyst"},
+		},
+		{
+			Name:          "manage_user",
+			Path:          "/manage/user",
+			Component:     "view.manage_user",
+			Meta:          `{"title":"manage_user","i18nKey":"route.manage_user","icon":"ic:round-manage-accounts","roles":["admin"]}`,
+			RequiredRoles: []string{"admin"},
+		},
+		{
+			Name:          "manage_role",
+			Path:          "/manage/role",
+			Component:     "view.manage_role",
+			Meta:          `{"title":"manage_role","i18nKey":"route.manage_role","icon":"carbon:user-role","roles":["admin"]}`,
+			RequiredRoles: []string{"admin"},
+		},
+		{
+			Name:          "manage_menu",
+			Path:          "/manage/menu",
+			Component:     "view.manage_menu",
+			Meta:          `{"title":"manage_menu","i18nKey":"route.manage_menu","icon":"material-symbols:menu-book","roles":["admin"]}`,
+			RequiredRoles: []string{"admin"},
+		},
+		{
+			Name:          "notification_channel",
+			Path:          "/notification/channel",
+			Component:     "view.notification_channel",
+			Meta:          `{"title":"notification_channel","i18nKey":"route.notification_channel","icon":"mdi:broadcast","roles":["admin"]}`,
+			RequiredRoles: []string{"admin"},
+		},
+		{
+			Name:          "notification_rule",
+			Path:          "/notification/rule",
+			Component:     "view.notification_rule",
+			Meta:          `{"title":"notification_rule","i18nKey":"route.notification_rule","icon":"carbon:rule","roles":["admin"]}`,
+			RequiredRoles: []string{"admin"},
+		},
+		{
+			Name:          "notification_template",
+			Path:          "/notification/template",
+			Component:     "view.notification_template",
+			Meta:          `{"title":"notification_template","i18nKey":"route.notification_template","icon":"carbon:template","roles":["admin"]}`,
+			RequiredRoles: []string{"admin"},
+		},
+		{
+			Name:          "notification_log",
+			Path:          "/notification/log",
+			Component:     "view.notification_log",
+			Meta:          `{"title":"notification_log","i18nKey":"route.notification_log","icon":"carbon:script","roles":["admin"]}`,
 			RequiredRoles: []string{"admin"},
 		},
 	}
 
-	for _, menu := range menus {
-		var count int64
-		db.Model(&model.Menu{}).Where("name = ?", menu.Name).Count(&count)
-		if count == 0 {
+	// 第一步：确保所有菜单存在
+	for i := range menus {
+		menu := menus[i]
+		var existingMenu model.Menu
+		if db.Where("name = ?", menu.Name).First(&existingMenu).Error == gorm2.ErrRecordNotFound {
 			db.Create(&menu)
+		} else {
+			// 更新基础信息（除了 ParentID，后面分步建立链接）
+			db.Model(&existingMenu).Select("Path", "Component", "Order", "Meta", "RequiredRoles").Updates(menu)
 		}
 	}
+
+	// 第二步：建立父子关系
+	setParent := func(childName, parentName string) {
+		var child, parent model.Menu
+		if db.Where("name = ?", childName).First(&child).Error == nil &&
+			db.Where("name = ?", parentName).First(&parent).Error == nil {
+			db.Model(&child).Update("parent_id", parent.ID)
+		}
+	}
+
+	setParent("caddy_config", "caddy")
+	setParent("caddy_log", "caddy")
+	setParent("manage_user", "manage")
+	setParent("manage_role", "manage")
+	setParent("manage_menu", "manage")
+	setParent("notification_channel", "notification")
+	setParent("notification_rule", "notification")
+	setParent("notification_template", "notification")
+	setParent("notification_log", "notification")
 }
 
 // createArchiveFunction 创建归档存储过程
@@ -314,14 +409,13 @@ func syncChannelsFromConfig(db *gorm2.DB, channels []config.ChannelConf) {
 			}
 		} else {
 			// 更新现有渠道
-			updates := map[string]interface{}{
-				"type":        ch.Type,
-				"enabled":     ch.Enabled,
-				"config":      model.JSONMap(ch.Config),
-				"events":      ch.Events,
-				"description": ch.Description,
-			}
-			if err := db.Model(&existing).Updates(updates).Error; err != nil {
+			if err := db.Model(&existing).Select("Type", "Enabled", "Config", "Events", "Description").Updates(model.NotificationChannel{
+				Type:        ch.Type,
+				Enabled:     ch.Enabled,
+				Config:      model.JSONMap(ch.Config),
+				Events:      ch.Events,
+				Description: ch.Description,
+			}).Error; err != nil {
 				println("Warning: Failed to update notification channel:", ch.Name, err.Error())
 			} else {
 				println("Updated notification channel:", ch.Name)
@@ -366,17 +460,16 @@ func syncRulesFromConfig(db *gorm2.DB, rules []config.RuleConf) {
 			}
 		} else {
 			// 更新现有规则
-			updates := map[string]interface{}{
-				"enabled":          r.Enabled,
-				"rule_type":        r.RuleType,
-				"event_type":       r.EventType,
-				"condition":        model.JSONMap(r.Condition),
-				"channel_ids":      channelIDs,
-				"template":         r.Template,
-				"silence_duration": r.SilenceDuration,
-				"description":      r.Description,
-			}
-			if err := db.Model(&existing).Updates(updates).Error; err != nil {
+			if err := db.Model(&existing).Select("Enabled", "RuleType", "EventType", "Condition", "ChannelIDs", "Template", "SilenceDuration", "Description").Updates(model.NotificationRule{
+				Enabled:         r.Enabled,
+				RuleType:        r.RuleType,
+				EventType:       r.EventType,
+				Condition:       model.JSONMap(r.Condition),
+				ChannelIDs:      channelIDs,
+				Template:        r.Template,
+				SilenceDuration: r.SilenceDuration,
+				Description:     r.Description,
+			}).Error; err != nil {
 				println("Warning: Failed to update notification rule:", r.Name, err.Error())
 			} else {
 				println("Updated notification rule:", r.Name)

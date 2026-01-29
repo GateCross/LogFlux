@@ -9,6 +9,7 @@ import (
 	auth "logflux/internal/handler/auth"
 	caddy "logflux/internal/handler/caddy"
 	log "logflux/internal/handler/log"
+	menu "logflux/internal/handler/menu"
 	notification "logflux/internal/handler/notification"
 	role "logflux/internal/handler/role"
 	route "logflux/internal/handler/route"
@@ -27,6 +28,33 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Handler: auth.LoginHandler(serverCtx),
 			},
 		},
+		rest.WithPrefix("/api"),
+	)
+
+	server.AddRoutes(
+		[]rest.Route{
+			{
+				Method:  http.MethodGet,
+				Path:    "/menu/list",
+				Handler: menu.GetMenuListHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/menu",
+				Handler: menu.CreateMenuHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPut,
+				Path:    "/menu/:id",
+				Handler: menu.UpdateMenuHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodDelete,
+				Path:    "/menu/:id",
+				Handler: menu.DeleteMenuHandler(serverCtx),
+			},
+		},
+		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
 		rest.WithPrefix("/api"),
 	)
 

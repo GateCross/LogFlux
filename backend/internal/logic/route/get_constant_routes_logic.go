@@ -58,7 +58,7 @@ func (l *GetConstantRoutesLogic) GetConstantRoutes() (resp []types.MenuRoute, er
 		{
 			Name:      "login",
 			Path:      "/login/:module(pwd-login|code-login|register|reset-pwd|bind-wechat)?",
-			Component: "layout.base$view.login",
+			Component: "layout.blank$view.login",
 			Meta: types.RouteMeta{
 				Title:      "login",
 				I18nKey:    "route.login",

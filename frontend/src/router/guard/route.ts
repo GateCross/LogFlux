@@ -18,41 +18,52 @@ import { getRouteName } from '@/router/elegant/transform';
  */
 export function createRouteGuard(router: Router) {
   router.beforeEach(async (to, from, next) => {
+    console.log('Route guard - navigating to:', to.name, to.path);
+
     const location = await initRoute(to);
 
     if (location) {
+      console.log('Route guard - redirecting to:', location);
       next(location);
       return;
     }
 
     const authStore = useAuthStore();
+    const routeStore = useRouteStore();
 
     const rootRoute: RouteKey = 'root';
     const loginRoute: RouteKey = 'login';
     const noAuthorizationRoute: RouteKey = '403';
 
     const isLogin = Boolean(localStg.get('token'));
-    const needLogin = !to.meta.constant;
+    const isLoginRoute = to.name === loginRoute;
+    const needLogin = !to.meta.constant && !isLoginRoute;
     const routeRoles = to.meta.roles || [];
+
+    console.log('Route guard - isLogin:', isLogin, 'isLoginRoute:', isLoginRoute, 'needLogin:', needLogin);
 
     const hasRole = authStore.userInfo.roles.some(role => routeRoles.includes(role));
     const hasAuth = authStore.isStaticSuper || !routeRoles.length || hasRole;
 
     // if it is login route when logged in, then switch to the root page
-    if (to.name === loginRoute && isLogin) {
+    if (isLoginRoute && isLogin) {
+      console.log('Route guard - already logged in, redirecting to root');
       next({ name: rootRoute });
       return;
     }
 
     // if the route does not need login, then it is allowed to access directly
     if (!needLogin) {
+      console.log('Route guard - route does not need login, allowing access');
       handleRouteSwitch(to, from, next);
       return;
     }
 
     // the route need login but the user is not logged in, then switch to the login page
     if (!isLogin) {
-      next({ name: loginRoute, query: { redirect: to.fullPath } });
+      console.log('Route guard - not logged in, redirecting to login');
+      const query = getRouteQueryOfLoginRoute(to, routeStore.routeHome);
+      next({ name: loginRoute, query });
       return;
     }
 
@@ -82,17 +93,18 @@ async function initRoute(to: RouteLocationNormalized): Promise<RouteLocationRaw 
   if (!routeStore.isInitConstantRoute) {
     await routeStore.initConstantRoute();
 
-    // the route is captured by the "not-found" route because the constant route is not initialized
-    // after the constant route is initialized, redirect to the original route
-    const path = to.fullPath;
-    const location: RouteLocationRaw = {
-      path,
+    // After constant route initialized, redirect to the original route to refresh the route match
+    return {
+      path: to.fullPath,
       replace: true,
       query: to.query,
       hash: to.hash
     };
+  }
 
-    return location;
+  const loginRoute: RouteKey = 'login';
+  if (to.name === loginRoute) {
+    return null;
   }
 
   const isLogin = Boolean(localStg.get('token'));
@@ -121,20 +133,17 @@ async function initRoute(to: RouteLocationNormalized): Promise<RouteLocationRaw 
     // initialize the auth route
     await routeStore.initAuthRoute();
 
-    // the route is captured by the "not-found" route because the auth route is not initialized
-    // after the auth route is initialized, redirect to the original route
+    // After auth route initialized, redirect to the original route to refresh the route match
     if (isNotFoundRoute) {
       const rootRoute: RouteKey = 'root';
       const path = to.redirectedFrom?.name === rootRoute ? '/' : to.fullPath;
 
-      const location: RouteLocationRaw = {
+      return {
         path,
         replace: true,
         query: to.query,
         hash: to.hash
       };
-
-      return location;
     }
   }
 

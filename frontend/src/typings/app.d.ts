@@ -356,6 +356,12 @@ declare namespace App {
         update: string;
         updateSuccess: string;
         userCenter: string;
+        changePassword: string;
+        oldPassword: string;
+        newPassword: string;
+        confirmPassword: string;
+        passwordNoMatch: string;
+        changePasswordSuccess: string;
         yesOrNo: {
           yes: string;
           no: string;
@@ -395,17 +401,17 @@ declare namespace App {
             apply: string;
             applySuccess: string;
             [key: string]:
-              | {
-                  name: string;
-                  desc: string;
-                }
-              | string;
+            | {
+              name: string;
+              desc: string;
+            }
+            | string;
           };
         };
         layout: {
           layoutMode: { title: string } & Record<UnionKey.ThemeLayoutMode, string> & {
-              [K in `${UnionKey.ThemeLayoutMode}_detail`]: string;
-            };
+            [K in `${UnionKey.ThemeLayoutMode}_detail`]: string;
+          };
           tab: {
             title: string;
             visible: string;
@@ -589,8 +595,8 @@ declare namespace App {
 
     type GetI18nKey<T extends Record<string, unknown>, K extends keyof T = keyof T> = K extends string
       ? T[K] extends Record<string, unknown>
-        ? `${K}.${GetI18nKey<T[K]>}`
-        : K
+      ? `${K}.${GetI18nKey<T[K]>}`
+      : K
       : never;
 
     type I18nKey = GetI18nKey<Schema>;

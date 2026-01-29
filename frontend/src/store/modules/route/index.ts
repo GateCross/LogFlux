@@ -24,7 +24,6 @@ import {
 } from './shared';
 
 export const useRouteStore = defineStore(SetupStoreId.Route, () => {
-  const authStore = useAuthStore();
   const tabStore = useTabStore();
   const { bool: isInitConstantRoute, setBool: setIsInitConstantRoute } = useBoolean();
   const { bool: isInitAuthRoute, setBool: setIsInitAuthRoute } = useBoolean();
@@ -152,39 +151,70 @@ export const useRouteStore = defineStore(SetupStoreId.Route, () => {
   async function initConstantRoute() {
     if (isInitConstantRoute.value) return;
 
-    const staticRoute = createStaticRoutes();
+    try {
+      const staticRoute = createStaticRoutes();
 
-    if (authRouteMode.value === 'static') {
-      addConstantRoutes(staticRoute.constantRoutes);
-    } else {
-      const { data, error } = await fetchGetConstantRoutes();
-
-      if (!error) {
-        addConstantRoutes(data);
-      } else {
-        // if fetch constant routes failed, use static constant routes
+      if (authRouteMode.value === 'static') {
         addConstantRoutes(staticRoute.constantRoutes);
+      } else {
+        const { data, error } = await fetchGetConstantRoutes();
+
+        if (!error) {
+          // Filter out builtin routes to prevent duplicate registration
+          const BUILTIN_ROUTES = ['login', '403', '404', '500'];
+
+          const processedRoutes = data
+            .filter(route => !BUILTIN_ROUTES.includes(route.name))
+            .map(route => {
+              // Although these should be filtered out, keep the mapping logic just in case the list changes
+              if (route.name === 'login') {
+                return { ...route, component: 'layout.blank$view.login' };
+              }
+              if (['403', '404', '500'].includes(route.name)) {
+                return { ...route, component: `layout.blank$view.${route.name}` };
+              }
+              return route;
+            });
+
+          addConstantRoutes(processedRoutes);
+        } else {
+          // if fetch constant routes failed, use static constant routes
+          addConstantRoutes(staticRoute.constantRoutes);
+        }
       }
+
+      handleConstantAndAuthRoutes();
+    } catch (error) {
+      console.error('initConstantRoute error:', error);
+      // Fallback to static routes on generic error to avoid blocking app
+      const staticRoute = createStaticRoutes();
+      addConstantRoutes(staticRoute.constantRoutes);
+    } finally {
+      setIsInitConstantRoute(true);
     }
-
-    handleConstantAndAuthRoutes();
-
-    setIsInitConstantRoute(true);
 
     tabStore.initHomeTab();
   }
 
   /** Init auth route */
   async function initAuthRoute() {
-    // check if user info is initialized
-    if (!authStore.userInfo.userId) {
-      await authStore.initUserInfo();
-    }
+    const authStore = useAuthStore();
 
-    if (authRouteMode.value === 'static') {
-      initStaticAuthRoute();
-    } else {
-      await initDynamicAuthRoute();
+    try {
+      // check if user info is initialized
+      if (!authStore.userInfo.userId) {
+        await authStore.initUserInfo();
+      }
+
+      if (authRouteMode.value === 'static') {
+        initStaticAuthRoute();
+      } else {
+        await initDynamicAuthRoute();
+      }
+    } catch (error) {
+      console.error('initAuthRoute error:', error);
+    } finally {
+      setIsInitAuthRoute(true);
     }
 
     tabStore.initHomeTab();
@@ -192,6 +222,8 @@ export const useRouteStore = defineStore(SetupStoreId.Route, () => {
 
   /** Init static auth route */
   function initStaticAuthRoute() {
+    const authStore = useAuthStore();
+
     const { authRoutes: staticAuthRoutes } = createStaticRoutes();
 
     if (authStore.isStaticSuper) {
@@ -209,6 +241,8 @@ export const useRouteStore = defineStore(SetupStoreId.Route, () => {
 
   /** Init dynamic auth route */
   async function initDynamicAuthRoute() {
+    const authStore = useAuthStore();
+
     const { data, error } = await fetchGetUserRoutes();
 
     if (!error) {
@@ -280,9 +314,19 @@ export const useRouteStore = defineStore(SetupStoreId.Route, () => {
 
       router.removeRoute(rootRoute.name);
 
-      const [rootVueRoute] = getAuthVueRoutes([rootRoute]);
+      const rootVueRoutes = getAuthVueRoutes([rootRoute]);
 
-      router.addRoute(rootVueRoute);
+      if (rootVueRoutes.length > 0) {
+        router.addRoute(rootVueRoutes[0]);
+      } else {
+        console.error('Failed to transform root route, using fallback redirect');
+        // Fallback: directly add a simple root route
+        router.addRoute({
+          name: 'root',
+          path: '/',
+          redirect
+        });
+      }
     }
   }
 
