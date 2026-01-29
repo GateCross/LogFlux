@@ -29,17 +29,21 @@ type Manager struct {
 
 	// 告警规则 (从数据库加载)
 	rules map[uint]*model.NotificationRule
+
+	// 规则引擎
+	ruleEngine RuleEngine
 }
 
 // NewManager 创建通知管理器
 func NewManager(db *gorm.DB, redis *redis.Client) *Manager {
 	return &Manager{
-		db:        db,
-		redis:     redis,
-		logger:    logx.WithContext(context.Background()),
-		providers: make(map[string]NotificationProvider),
-		channels:  make(map[uint]*model.NotificationChannel),
-		rules:     make(map[uint]*model.NotificationRule),
+		db:         db,
+		redis:      redis,
+		logger:     logx.WithContext(context.Background()),
+		providers:  make(map[string]NotificationProvider),
+		channels:   make(map[uint]*model.NotificationChannel),
+		rules:      make(map[uint]*model.NotificationRule),
+		ruleEngine: NewRuleEngine(redis),
 	}
 }
 
@@ -155,25 +159,100 @@ func (m *Manager) Notify(ctx context.Context, event *Event) error {
 		return fmt.Errorf("notification manager not started")
 	}
 
-	// 查找匹配的通知渠道
+	// 1. 评估告警规则
+	triggeredRules := m.evaluateRules(ctx, event)
+
+	// 2. 从规则中收集渠道 ID
+	ruleChannelIDs := make(map[uint]bool)
+	for _, rule := range triggeredRules {
+		for _, channelID := range rule.ChannelIDs {
+			ruleChannelIDs[uint(channelID)] = true
+		}
+		// 更新规则触发状态
+		m.updateRuleTriggerStatus(ctx, rule)
+	}
+
+	// 3. 查找直接匹配事件的通知渠道
 	matchedChannels := m.findMatchingChannels(event.Type)
-	if len(matchedChannels) == 0 {
+
+	// 4. 合并规则触发的渠道和直接匹配的渠道
+	channelsToNotify := make(map[uint]*model.NotificationChannel)
+	for _, channel := range matchedChannels {
+		channelsToNotify[channel.ID] = channel
+	}
+	for channelID := range ruleChannelIDs {
+		if channel, exists := m.channels[channelID]; exists {
+			channelsToNotify[channelID] = channel
+		}
+	}
+
+	if len(channelsToNotify) == 0 {
 		m.logger.Infof("No matching channels for event: %s", event.Type)
 		return nil
 	}
 
-	// 异步发送通知到所有匹配的渠道
+	// 5. 异步发送通知到所有匹配的渠道
 	var wg sync.WaitGroup
-	for _, channel := range matchedChannels {
+	for _, channel := range channelsToNotify {
 		wg.Add(1)
 		go func(ch *model.NotificationChannel) {
 			defer wg.Done()
-			m.sendToChannel(ctx, ch, event, nil)
+			// 查找对应的规则 (用于模板渲染)
+			var rule *model.NotificationRule
+			for _, r := range triggeredRules {
+				for _, cid := range r.ChannelIDs {
+					if uint(cid) == ch.ID {
+						rule = r
+						break
+					}
+				}
+			}
+			m.sendToChannel(ctx, ch, event, rule)
 		}(channel)
 	}
 
 	wg.Wait()
 	return nil
+}
+
+// evaluateRules 评估所有规则
+func (m *Manager) evaluateRules(ctx context.Context, event *Event) []*model.NotificationRule {
+	var triggered []*model.NotificationRule
+
+	for _, rule := range m.rules {
+		if !rule.Enabled {
+			continue
+		}
+
+		// 使用规则引擎评估
+		match, err := m.ruleEngine.Evaluate(ctx, rule, event)
+		if err != nil {
+			m.logger.Errorf("Failed to evaluate rule %s: %v", rule.Name, err)
+			continue
+		}
+
+		if match {
+			triggered = append(triggered, rule)
+			m.logger.Infof("Rule triggered: %s for event %s", rule.Name, event.Type)
+		}
+	}
+
+	return triggered
+}
+
+// updateRuleTriggerStatus 更新规则触发状态
+func (m *Manager) updateRuleTriggerStatus(ctx context.Context, rule *model.NotificationRule) {
+	now := time.Now()
+	updates := map[string]interface{}{
+		"last_triggered_at": now,
+		"trigger_count":     gorm.Expr("trigger_count + 1"),
+	}
+
+	if err := m.db.WithContext(ctx).Model(&model.NotificationRule{}).
+		Where("id = ?", rule.ID).
+		Updates(updates).Error; err != nil {
+		m.logger.Errorf("Failed to update rule trigger status: %v", err)
+	}
 }
 
 // findMatchingChannels 查找匹配的通知渠道

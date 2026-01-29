@@ -10,9 +10,9 @@
 
 - **阶段 1 (基础设施)**: 100% ✅
   - 7/7 任务完成
-- **阶段 2 (核心功能)**: 40% 🔄
-  - 2/5 模块完成 (Email, Telegram)
-- **整体进度**: 20% (12/60 任务)
+- **阶段 2 (核心功能)**: 60% 🔄
+  - 3/5 模块完成 (Email, Telegram, 规则引擎)
+- **整体进度**: 28% (17/60 任务)
 - **预计时间**: 按计划进行 (阶段 2: 第 3-4 周)
 
 ---
@@ -114,7 +114,22 @@
 - ✅ 支持 HTML 邮件内容
 - ✅ 单元测试 `email_test.go`
 
-### Task 10: 实现 Telegram 提供者 ✅
+### Task 11: 实现规则引擎基础 ✅
+**文件**:
+- `backend/internal/notification/rule_engine.go`
+- `backend/internal/notification/rule_engine_test.go`
+
+实现了:
+- ✅ RuleEngine 接口和实现
+- ✅ ThresholdEvaluator (阈值规则) - 支持 >, <, >=, <=, ==, !=
+- ✅ FrequencyEvaluator (频率规则) - 基于 Redis 的时间窗口计数
+- ✅ PatternEvaluator (模式匹配规则) - 正则表达式匹配
+- ✅ 表达式缓存优化
+- ✅ 事件类型匹配 (支持通配符)
+- ✅ 静默期检查
+- ✅ 集成到 NotificationManager
+- ✅ 规则触发状态更新
+- ✅ 完整的单元测试
 **文件**: `backend/internal/notification/providers/telegram.go`
 
 实现了:
@@ -148,11 +163,13 @@
 3. `backend/model/notification_rule.go`
 4. `backend/model/notification_log.go`
 
-### 核心代码 (4 个)
+### 核心代码 (6 个)
 5. `backend/internal/notification/event.go`
 6. `backend/internal/notification/provider.go`
 7. `backend/internal/notification/notification.go`
 8. `backend/internal/notification/manager.go`
+9. `backend/internal/notification/rule_engine.go` 🆕
+10. `backend/internal/notification/rule_engine_test.go` 🆕
 
 ### 提供者 (3 个)
 9. `backend/internal/notification/providers/webhook.go`
@@ -161,18 +178,19 @@
 12. `backend/internal/notification/providers/telegram.go` 🆕
 13. `backend/internal/notification/providers/telegram_test.go` 🆕
 
-### 更新的文件 (5 个)
-14. `backend/internal/config/config.go` ✏️
-15. `backend/etc/config.yaml` ✏️
-16. `backend/internal/svc/service_context.go` ✏️
-17. `backend/internal/notification/manager.go` ✏️
-18. `backend/go.mod` ✏️ (添加 telegram-bot-api 依赖)
+### 更新的文件 (6 个)
+16. `backend/internal/config/config.go` ✏️
+17. `backend/etc/config.yaml` ✏️
+18. `backend/internal/svc/service_context.go` ✏️
+19. `backend/internal/notification/manager.go` ✏️
+20. `backend/go.mod` ✏️ (添加 telegram-bot-api, expr 依赖)
+21. `backend/go.sum` ✏️
 
 ### 文档 (2 个)
-19. `docs/notification-phase1-testing.md`
-20. `docs/telegram-setup-guide.md` 🆕
+22. `docs/notification-phase1-testing.md`
+23. `docs/telegram-setup-guide.md`
 
-**总计**: 20 个文件 (13 个新增, 5 个更新, 2 个文档)
+**总计**: 23 个文件 (15 个新增, 6 个更新, 2 个文档)
 
 ---
 
@@ -190,7 +208,13 @@
 - ✅ 通配符事件匹配 (`system.*`, `*`)
 - ✅ 发送状态跟踪
 
-### Telegram 支持 🆕
+### 规则引擎 🆕
+- ✅ 阈值规则 (Threshold) - 支持数值比较
+- ✅ 频率规则 (Frequency) - 基于 Redis 的时间窗口统计
+- ✅ 模式匹配规则 (Pattern) - 正则表达式匹配
+- ✅ 表达式缓存 (提升性能)
+- ✅ 静默期机制 (避免告警风暴)
+- ✅ 规则触发状态跟踪
 - ✅ Markdown V2 格式消息
 - ✅ 级别图标 (info, warning, error, critical, success)
 - ✅ 自动转义特殊字符
@@ -215,10 +239,10 @@
 |------|--------|----------------|
 | SQL | 1 | 150 |
 | 模型 | 3 | 300 |
-| 核心代码 | 4 | 450 |
+| 核心代码 | 6 | 900 |
 | 提供者 | 5 | 400 |
-| 配置/集成 | 5 | 250 |
-| **总计** | **18** | **~1550** |
+| 配置/集成 | 6 | 300 |
+| **总计** | **21** | **~2050** |
 
 ---
 
@@ -262,13 +286,14 @@
 - [x] 单元测试
 - [x] 配置文档
 
-### Task 19-24: 规则引擎基础
-- [ ] 添加 expr 依赖
-- [ ] 创建 RuleEngine
-- [ ] 实现阈值规则评估器
-- [ ] 实现频率规则评估器
-- [ ] 规则缓存 (Redis)
-- [ ] 集成到 NotificationManager
+### Task 19-24: 规则引擎基础 ✅
+- [x] 添加 expr 依赖
+- [x] 创建 RuleEngine 和评估器接口
+- [x] 实现阈值规则评估器
+- [x] 实现频率规则评估器 (Redis 缓存)
+- [x] 实现模式匹配规则评估器
+- [x] 集成到 NotificationManager
+- [x] 单元测试
 
 ### Task 25-28: 通知模板系统
 - [ ] 创建 Template 引擎
@@ -331,5 +356,5 @@
 
 ---
 
-**最后更新**: 2026-01-29 (Task 14-18 完成)
-**下次更新**: 规则引擎完成后
+**最后更新**: 2026-01-29 (Task 19-24 完成)
+**下次更新**: 通知模板系统完成后
