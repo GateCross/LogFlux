@@ -1,26 +1,26 @@
-package user
+package notification
 
 import (
 	"net/http"
 
 	"logflux/common/result"
-	"logflux/internal/logic/user"
+	"logflux/internal/logic/notification"
 	"logflux/internal/svc"
 	"logflux/internal/types"
 
 	"github.com/zeromicro/go-zero/rest/httpx"
 )
 
-func ToggleUserStatusHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
+func CreateChannelHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req types.ToggleUserStatusReq
+		var req types.ChannelReq
 		if err := httpx.Parse(r, &req); err != nil {
 			httpx.ErrorCtx(r.Context(), w, err)
 			return
 		}
 
-		l := user.NewToggleUserStatusLogic(r.Context(), svcCtx)
-		resp, err := l.ToggleUserStatus(&req)
+		l := notification.NewCreateChannelLogic(r.Context(), svcCtx)
+		resp, err := l.CreateChannel(&req)
 		result.HttpResult(r, w, resp, err)
 	}
 }

@@ -34,9 +34,17 @@ func (e *EmailProvider) Send(ctx context.Context, config map[string]interface{},
 	m.SetHeader("To", emailConfig.To...)
 	m.SetHeader("Subject", fmt.Sprintf("[%s] %s", strings.ToUpper(event.Level), event.Title))
 
-	// 构建邮件正文 (这里简单使用 HTML)
-	// TODO: 后续可以使用模板系统
-	body := fmt.Sprintf(`
+	// 构建邮件正文
+	var body string
+	if content, ok := event.Data["rendered_content"]; ok && content != nil {
+		if contentStr, ok := content.(string); ok {
+			body = contentStr
+		}
+	}
+
+	if body == "" {
+		// Fallback: 使用默认格式
+		body = fmt.Sprintf(`
 		<h2>%s</h2>
 		<p><strong>时间:</strong> %s</p>
 		<p><strong>级别:</strong> %s</p>
@@ -46,6 +54,7 @@ func (e *EmailProvider) Send(ctx context.Context, config map[string]interface{},
 		<h3>详细信息:</h3>
 		<pre>%s</pre>
 	`, event.Title, event.Timestamp.Format("2006-01-02 15:04:05"), event.Level, event.Message, prettyJSON(event.Data))
+	}
 
 	m.SetBody("text/html", body)
 

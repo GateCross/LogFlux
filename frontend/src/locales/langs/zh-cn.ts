@@ -232,7 +232,12 @@ const local: App.I18n.Schema = {
     caddy_log: 'Caddy日志',
     manage: '系统管理',
     manage_user: '用户管理',
-    manage_role: '角色管理'
+    manage_role: '角色管理',
+    notification: '通知管理',
+    notification_channel: '渠道管理',
+    notification_rule: '规则管理',
+    notification_template: '模板管理',
+    notification_log: '发送记录'
   },
   page: {
     login: {

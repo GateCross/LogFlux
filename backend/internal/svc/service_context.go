@@ -8,6 +8,7 @@ import (
 	"logflux/internal/ingest"
 	"logflux/internal/notification"
 	"logflux/internal/notification/providers"
+	"logflux/internal/notification/template"
 	"logflux/internal/tasks"
 	"logflux/model"
 
@@ -40,7 +41,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		// 通知相关表
 		&model.NotificationChannel{},
 		&model.NotificationRule{},
+		&model.NotificationRule{},
 		&model.NotificationLog{},
+		&model.NotificationTemplate{},
 	)
 
 	// 创建归档存储过程（如果不存在）
@@ -106,16 +109,16 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		}
 	}
 
-	// 初始化归档任务
-	archiveTask := tasks.NewArchiveTask(db, c.Archive.RetentionDay, c.Archive.Enabled)
-	if c.Archive.Enabled {
-		go archiveTask.Start(context.Background())
-	}
-
 	// 初始化通知管理器
 	var notificationMgr notification.NotificationManager
 	if c.Notification.Enabled {
 		notificationMgr = initNotificationManager(db, rdb, c)
+	}
+
+	// 初始化归档任务
+	archiveTask := tasks.NewArchiveTask(db, c.Archive.RetentionDay, c.Archive.Enabled, notificationMgr)
+	if c.Archive.Enabled {
+		go archiveTask.Start(context.Background())
 	}
 
 	return &ServiceContext{
@@ -245,8 +248,13 @@ $$ LANGUAGE plpgsql;
 
 // initNotificationManager 初始化通知管理器
 func initNotificationManager(db *gorm2.DB, rdb *redis.Client, c config.Config) notification.NotificationManager {
+	// 初始化模板管理器
+	templateMgr := template.NewTemplateManager(db)
+	// 加载模板 (忽略错误，因为初始可能为空)
+	_ = templateMgr.LoadTemplates()
+
 	// 创建通知管理器
-	mgr := notification.NewManager(db, rdb)
+	mgr := notification.NewManager(db, rdb, templateMgr)
 
 	// 注册通知提供者
 	_ = mgr.RegisterProvider(providers.NewWebhookProvider())

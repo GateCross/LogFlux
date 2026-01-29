@@ -55,8 +55,16 @@ func (l *GetConstantRoutesLogic) GetConstantRoutes() (resp []types.MenuRoute, er
 				HideInMenu: true,
 			},
 		},
-		// login is usually handled separately or via static import in some versions,
-		// but providing it here ensures it exists in dynamic map using blank layout
+		{
+			Name:      "login",
+			Path:      "/login/:module(pwd-login|code-login|register|reset-pwd|bind-wechat)?",
+			Component: "layout.base$view.login",
+			Meta: types.RouteMeta{
+				Title:      "login",
+				I18nKey:    "route.login",
+				HideInMenu: true,
+			},
+		},
 	}
 
 	return routes, nil

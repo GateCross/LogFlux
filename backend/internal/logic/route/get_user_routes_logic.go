@@ -53,6 +53,11 @@ func (l *GetUserRoutesLogic) GetUserRoutes() (resp *types.UserRouteResp, err err
 
 	// 构建基于权限的路由
 	routes := l.buildRoutes(userPermissions)
+	l.Logger.Infof("User %v Permissions: %v, Routes Count: %d", userId, userPermissions, len(routes))
+	if len(routes) > 0 {
+		routesJson, _ := json.Marshal(routes)
+		l.Logger.Infof("Routes content: %s", string(routesJson))
+	}
 
 	return &types.UserRouteResp{
 		Home:   "dashboard",
@@ -70,6 +75,9 @@ func (l *GetUserRoutesLogic) buildRoutes(permissions map[string]bool) []types.Me
 	}
 	if permissions["manage_user"] || permissions["manage_role"] {
 		permissions["manage"] = true
+	}
+	if permissions["notification_channel"] || permissions["notification_rule"] || permissions["notification_template"] || permissions["notification_log"] {
+		permissions["notification"] = true
 	}
 
 	// Dashboard 路由（所有角色都可访问）
@@ -171,6 +179,70 @@ func (l *GetUserRoutesLogic) buildRoutes(permissions map[string]bool) []types.Me
 				Children: manageChildren,
 			})
 		}
+	}
+
+	// Notification (Admin only)
+	if permissions["manage"] {
+		notificationChildren := []types.MenuRoute{
+			{
+				Name:      "notification_channel",
+				Path:      "/notification/channel",
+				Component: "view.notification_channel",
+				Meta: types.RouteMeta{
+					Title:   "notification_channel",
+					I18nKey: "route.notification_channel",
+					Icon:    "mdi:broadcast",
+					Roles:   []string{"admin"},
+				},
+			},
+			{
+				Name:      "notification_rule",
+				Path:      "/notification/rule",
+				Component: "view.notification_rule",
+				Meta: types.RouteMeta{
+					Title:   "notification_rule",
+					I18nKey: "route.notification_rule",
+					Icon:    "carbon:rule",
+					Roles:   []string{"admin"},
+				},
+			},
+			{
+				Name:      "notification_template",
+				Path:      "/notification/template",
+				Component: "view.notification_template",
+				Meta: types.RouteMeta{
+					Title:   "notification_template",
+					I18nKey: "route.notification_template",
+					Icon:    "carbon:template",
+					Roles:   []string{"admin"},
+				},
+			},
+			{
+				Name:      "notification_log",
+				Path:      "/notification/log",
+				Component: "view.notification_log",
+				Meta: types.RouteMeta{
+					Title:   "notification_log",
+					I18nKey: "route.notification_log",
+					Icon:    "carbon:script",
+					Roles:   []string{"admin"},
+				},
+			},
+		}
+
+		routes = append(routes, types.MenuRoute{
+			Name:      "notification",
+			Path:      "/notification",
+			Component: "layout.base",
+			Meta: types.RouteMeta{
+				Title:   "notification",
+				I18nKey: "route.notification",
+				Icon:    "carbon:notification",
+				Order:   10,
+				Roles:   []string{"admin"},
+			},
+			Children: notificationChildren,
+		})
 	}
 
 	return routes

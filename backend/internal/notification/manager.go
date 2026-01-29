@@ -3,6 +3,7 @@ package notification
 import (
 	"context"
 	"fmt"
+	"logflux/internal/notification/template"
 	"logflux/model"
 	"strings"
 	"sync"
@@ -32,18 +33,22 @@ type Manager struct {
 
 	// 规则引擎
 	ruleEngine RuleEngine
+
+	// 模板管理器
+	templateMgr *template.TemplateManager
 }
 
 // NewManager 创建通知管理器
-func NewManager(db *gorm.DB, redis *redis.Client) *Manager {
+func NewManager(db *gorm.DB, redis *redis.Client, tm *template.TemplateManager) *Manager {
 	return &Manager{
-		db:         db,
-		redis:      redis,
-		logger:     logx.WithContext(context.Background()),
-		providers:  make(map[string]NotificationProvider),
-		channels:   make(map[uint]*model.NotificationChannel),
-		rules:      make(map[uint]*model.NotificationRule),
-		ruleEngine: NewRuleEngine(redis),
+		db:          db,
+		redis:       redis,
+		logger:      logx.WithContext(context.Background()),
+		providers:   make(map[string]NotificationProvider),
+		channels:    make(map[uint]*model.NotificationChannel),
+		rules:       make(map[uint]*model.NotificationRule),
+		ruleEngine:  NewRuleEngine(redis),
+		templateMgr: tm,
 	}
 }
 
@@ -114,6 +119,14 @@ func (m *Manager) ReloadRules() error {
 	defer m.mu.Unlock()
 
 	return m.loadRulesLocked()
+}
+
+// ReloadTemplates 重新加载通知模板
+func (m *Manager) ReloadTemplates() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	return m.templateMgr.LoadTemplates()
 }
 
 // loadChannelsLocked 加载通知渠道 (需要持有锁)
@@ -326,6 +339,19 @@ func (m *Manager) sendToChannel(ctx context.Context, channel *model.Notification
 		return
 	}
 
+	// 渲染通知内容
+	templateName := m.determineTemplateName(channel, rule)
+	if content, errRender := m.templateMgr.Render(templateName, event); errRender == nil {
+		// 将渲染后的内容存入 Event Data，供 Provider 使用
+		if event.Data == nil {
+			event.Data = make(map[string]interface{})
+		}
+		event.Data["rendered_content"] = content
+	} else {
+		m.logger.Errorf("Failed to render template %s: %v", templateName, errRender)
+		// Fallback: Provider will use event.Message
+	}
+
 	// 发送通知
 	startTime := time.Now()
 	// 注意: channel.Config 是 JSONMap 类型，需要转换为 map[string]interface{}
@@ -367,17 +393,22 @@ func (m *Manager) updateLogStatus(logID uint, status, errorMessage string) {
 	m.db.Model(&model.NotificationLog{}).Where("id = ?", logID).Updates(updates)
 }
 
-// EvaluateRules 评估规则并触发通知
-func (m *Manager) EvaluateRules(ctx context.Context, data map[string]interface{}) error {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	if !m.started {
-		return fmt.Errorf("notification manager not started")
+// determineTemplateName 确定使用的模板名称
+func (m *Manager) determineTemplateName(channel *model.NotificationChannel, rule *model.NotificationRule) string {
+	// 1. 优先使用规则中定义的模板
+	if rule != nil && rule.Template != "" {
+		return rule.Template
 	}
 
-	// TODO: 实现规则评估逻辑
-	// 这将在后续阶段实现规则引擎时完成
+	// 2. 其次使用系统默认的对应类型模板
+	switch channel.Type {
+	case "email":
+		return "default_email"
+	case "telegram":
+		return "default_telegram"
+	case "webhook":
+		return "default_webhook"
+	}
 
-	return nil
+	return "default_email" // Fallback
 }

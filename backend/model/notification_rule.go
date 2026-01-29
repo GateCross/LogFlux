@@ -2,7 +2,6 @@ package model
 
 import (
 	"database/sql/driver"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -77,14 +76,17 @@ func (i *Int64Array) Scan(value interface{}) error {
 		return nil
 	}
 
-	bytes, ok := value.([]byte)
-	if !ok {
-		return errors.New("failed to scan Int64Array value")
+	var str string
+	switch v := value.(type) {
+	case []byte:
+		str = string(v)
+	case string:
+		str = v
+	default:
+		return fmt.Errorf("failed to scan Int64Array value, type: %T", value)
 	}
 
-	// Parse PostgreSQL array format
-	str := string(bytes)
-	if str == "{}" {
+	if str == "{}" || str == "" {
 		*i = []int64{}
 		return nil
 	}
@@ -125,9 +127,9 @@ type ThresholdCondition struct {
 
 // FrequencyCondition 频率规则条件
 type FrequencyCondition struct {
-	Event   string `json:"event"`             // 事件类型
-	Count   int    `json:"count"`             // 次数阈值
-	Window  string `json:"window"`            // 时间窗口,如 "5m", "1h"
+	Event   string `json:"event"`              // 事件类型
+	Count   int    `json:"count"`              // 次数阈值
+	Window  string `json:"window"`             // 时间窗口,如 "5m", "1h"
 	GroupBy string `json:"group_by,omitempty"` // 分组字段,如 "remote_ip"
 }
 

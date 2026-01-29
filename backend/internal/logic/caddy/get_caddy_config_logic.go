@@ -34,8 +34,6 @@ func (l *GetCaddyConfigLogic) GetCaddyConfig(req *types.CaddyConfigReq) (resp *t
 	// Read from Database (Source of Truth)
 	if server.Config != "" {
 		return &types.CaddyConfigResp{
-			Code:   200,
-			Msg:    "success",
 			Config: server.Config,
 		}, nil
 	}
@@ -46,8 +44,6 @@ func (l *GetCaddyConfigLogic) GetCaddyConfig(req *types.CaddyConfigReq) (resp *t
 # It will be saved to the database and pushed to Caddy.
 `
 	return &types.CaddyConfigResp{
-		Code:   200,
-		Msg:    "success",
 		Config: defaultConfig,
 	}, nil
 
