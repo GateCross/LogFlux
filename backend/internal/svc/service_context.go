@@ -41,7 +41,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		// 通知相关表
 		&model.NotificationChannel{},
 		&model.NotificationRule{},
-		&model.NotificationRule{},
 		&model.NotificationLog{},
 		&model.NotificationTemplate{},
 	)
@@ -171,14 +170,6 @@ func initRBACData(db *gorm2.DB) {
 	// 初始化菜单数据
 	menus := []model.Menu{
 		{
-			Name:          "home",
-			Path:          "/home",
-			Component:     "layout.base$view.home",
-			Order:         0,
-			Meta:          `{"title":"home","i18nKey":"route.home","icon":"mdi:home","order":0}`,
-			RequiredRoles: []string{}, // Public
-		},
-		{
 			Name:          "dashboard",
 			Path:          "/dashboard",
 			Component:     "layout.base$view.dashboard",
@@ -306,6 +297,11 @@ func initRBACData(db *gorm2.DB) {
 	setParent("notification_rule", "notification")
 	setParent("notification_template", "notification")
 	setParent("notification_log", "notification")
+
+	// 清理遗留数据
+	db.Where("name = ?", "home").Delete(&model.Menu{})
+	db.Where("path = ?", "/home").Delete(&model.Menu{})
+	db.Where("component = ?", "home").Delete(&model.Menu{})
 }
 
 // createArchiveFunction 创建归档存储过程

@@ -3,12 +3,10 @@ package notification
 import (
 	"net/http"
 
-	"logflux/common/result"
+	"github.com/zeromicro/go-zero/rest/httpx"
 	"logflux/internal/logic/notification"
 	"logflux/internal/svc"
 	"logflux/internal/types"
-
-	"github.com/zeromicro/go-zero/rest/httpx"
 )
 
 func TestChannelHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
@@ -21,6 +19,10 @@ func TestChannelHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 
 		l := notification.NewTestChannelLogic(r.Context(), svcCtx)
 		resp, err := l.TestChannel(&req)
-		result.HttpResult(r, w, resp, err)
+		if err != nil {
+			httpx.ErrorCtx(r.Context(), w, err)
+		} else {
+			httpx.OkJsonCtx(r.Context(), w, resp)
+		}
 	}
 }

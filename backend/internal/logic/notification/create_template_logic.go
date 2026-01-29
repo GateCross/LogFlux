@@ -25,20 +25,15 @@ func NewCreateTemplateLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Cr
 }
 
 func (l *CreateTemplateLogic) CreateTemplate(req *types.TemplateReq) (resp *types.BaseResp, err error) {
-	t := &model.NotificationTemplate{
+	template := &model.NotificationTemplate{
 		Name:    req.Name,
 		Format:  req.Format,
 		Content: req.Content,
 		Type:    req.Type,
 	}
 
-	if err := l.svcCtx.DB.Create(t).Error; err != nil {
+	if err := l.svcCtx.DB.Create(template).Error; err != nil {
 		return nil, err
-	}
-
-	// Reload templates
-	if l.svcCtx.NotificationMgr != nil {
-		l.svcCtx.NotificationMgr.ReloadTemplates()
 	}
 
 	return &types.BaseResp{

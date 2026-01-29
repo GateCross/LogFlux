@@ -5,7 +5,6 @@ import (
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -25,18 +24,7 @@ func NewDeleteLogSourceLogic(ctx context.Context, svcCtx *svc.ServiceContext) *D
 }
 
 func (l *DeleteLogSourceLogic) DeleteLogSource(req *types.IDReq) (resp *types.BaseResp, err error) {
-	var source model.LogSource
-	if err := l.svcCtx.DB.First(&source, req.ID).Error; err != nil {
-		return nil, err
-	}
+	// todo: add your logic here and delete this line
 
-	// Stop monitoring
-	l.svcCtx.Ingestor.Stop(source.Path)
-
-	// Delete from DB
-	if err := l.svcCtx.DB.Delete(&source).Error; err != nil {
-		return nil, err
-	}
-
-	return &types.BaseResp{Code: 0, Msg: "Success"}, nil
+	return
 }

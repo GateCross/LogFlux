@@ -30,27 +30,21 @@ func (l *UpdateTemplateLogic) UpdateTemplate(req *types.TemplateUpdateReq) (resp
 		return nil, err
 	}
 
-	updates := make(map[string]interface{})
 	if req.Name != "" {
-		updates["name"] = req.Name
+		template.Name = req.Name
 	}
 	if req.Format != "" {
-		updates["format"] = req.Format
+		template.Format = req.Format
 	}
 	if req.Content != "" {
-		updates["content"] = req.Content
+		template.Content = req.Content
 	}
 	if req.Type != "" {
-		updates["type"] = req.Type
+		template.Type = req.Type
 	}
 
-	if err := l.svcCtx.DB.Model(&template).Updates(updates).Error; err != nil {
+	if err := l.svcCtx.DB.Save(&template).Error; err != nil {
 		return nil, err
-	}
-
-	// Reload templates
-	if l.svcCtx.NotificationMgr != nil {
-		l.svcCtx.NotificationMgr.ReloadTemplates()
 	}
 
 	return &types.BaseResp{

@@ -226,12 +226,13 @@ const local: App.I18n.Schema = {
     }
   },
   route: {
+    home: '首页',
     login: '登录',
     403: '无权限',
     404: '页面不存在',
     500: '服务器错误',
     'iframe-page': '外链页面',
-    home: '首页',
+
     dashboard: '仪表盘',
     caddy: 'Caddy管理',
     caddy_config: 'Caddy配置',
@@ -321,6 +322,116 @@ const local: App.I18n.Schema = {
         desc5: 'LogFlux 刚才把工作台页面优化完成了！'
       },
       creativity: '创意'
+    },
+    notification: {
+      channel: {
+        title: '通知渠道',
+        add: '新增渠道',
+        edit: '编辑渠道',
+        name: '名称',
+        type: '类型',
+        status: '状态',
+        config: '配置',
+        events: '事件',
+        description: '描述',
+        enabled: '启用',
+        disabled: '禁用',
+        test: '测试',
+        delete: '删除',
+        deleteConfirmTitle: '确认删除',
+        deleteConfirmContent: '确认删除渠道 "{name}" 吗?',
+        testSuccess: '测试通知已发送',
+        testFailed: '测试失败',
+        placeholder: {
+          name: '渠道名称',
+          type: '选择类型',
+          config: 'JSON 配置 (例如: { "webhook_url": "..." })',
+          events: '["*"] 或 ["error", "caddy"]',
+          description: '描述'
+        }
+      },
+      rule: {
+        title: '通知规则',
+        add: '新增规则',
+        edit: '编辑规则',
+        name: '名称',
+        ruleType: '规则类型',
+        eventType: '事件类型',
+        status: '状态',
+        condition: '条件',
+        channels: '通知渠道',
+        template: '模板',
+        silence: '静默时间 (秒)',
+        description: '描述',
+        enabled: '启用',
+        disabled: '禁用',
+        deleteConfirmTitle: '确认删除',
+        deleteConfirmContent: '确认删除规则 "{name}" 吗?',
+        placeholder: {
+          name: '规则名称',
+          type: '选择类型',
+          eventType: '事件类型 (例如: error)',
+          condition: 'JSON 条件 (例如: { "level": "error" })',
+          channels: '选择渠道',
+          template: '选择模板 (可选)',
+          silence: '0',
+          description: '描述'
+        },
+        types: {
+          threshold: '阈值',
+          frequency: '频率',
+          pattern: '模式匹配'
+        }
+      },
+      template: {
+        title: '通知模板',
+        add: '新增模板',
+        edit: '编辑模板',
+        name: '名称',
+        format: '格式',
+        type: '类型',
+        content: '模板内容',
+        preview: '预览',
+        mockData: '模拟数据',
+        refreshPreview: '刷新预览',
+        deleteConfirmTitle: '确认删除',
+        deleteConfirmContent: '确认删除模板 "{name}" 吗?',
+        types: {
+          user: '自定义',
+          system: '系统'
+        },
+        formats: {
+          html: 'HTML',
+          text: '文本',
+          markdown: 'Markdown',
+          json: 'JSON'
+        },
+        placeholder: {
+          name: '模板名称',
+          format: '格式',
+          type: '类型',
+          mockData: '模拟数据 (JSON)'
+        }
+      },
+      log: {
+        title: '通知日志',
+        status: '状态',
+        channel: '渠道',
+        refresh: '刷新',
+        id: 'ID',
+        eventTitle: '标题',
+        eventType: '类型',
+        level: '级别',
+        sentAt: '发送时间',
+        message: '消息内容',
+        error: '错误信息',
+        statuses: {
+          pending: '等待中',
+          sending: '发送中',
+          success: '成功',
+          failed: '失败'
+        }
+      }
     }
   },
   form: {

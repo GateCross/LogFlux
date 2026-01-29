@@ -35,33 +35,6 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 		[]rest.Route{
 			{
 				Method:  http.MethodGet,
-				Path:    "/menu/list",
-				Handler: menu.GetMenuListHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/menu",
-				Handler: menu.CreateMenuHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPut,
-				Path:    "/menu/:id",
-				Handler: menu.UpdateMenuHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodDelete,
-				Path:    "/menu/:id",
-				Handler: menu.DeleteMenuHandler(serverCtx),
-			},
-		},
-		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
-		rest.WithPrefix("/api"),
-	)
-
-	server.AddRoutes(
-		[]rest.Route{
-			{
-				Method:  http.MethodGet,
 				Path:    "/caddy/server",
 				Handler: caddy.GetCaddyServersHandler(serverCtx),
 			},
@@ -98,11 +71,6 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 	server.AddRoutes(
 		[]rest.Route{
 			{
-				Method:  http.MethodGet,
-				Path:    "/caddy/logs",
-				Handler: log.GetCaddyLogsHandler(serverCtx),
-			},
-			{
 				Method:  http.MethodPost,
 				Path:    "/source",
 				Handler: log.AddLogSourceHandler(serverCtx),
@@ -121,6 +89,45 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Method:  http.MethodDelete,
 				Path:    "/source/:id",
 				Handler: log.DeleteLogSourceHandler(serverCtx),
+			},
+		},
+		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
+		rest.WithPrefix("/api"),
+	)
+
+	server.AddRoutes(
+		[]rest.Route{
+			{
+				Method:  http.MethodGet,
+				Path:    "/caddy/logs",
+				Handler: log.GetCaddyLogsHandler(serverCtx),
+			},
+		},
+		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
+		rest.WithPrefix("/api"),
+	)
+
+	server.AddRoutes(
+		[]rest.Route{
+			{
+				Method:  http.MethodPost,
+				Path:    "/menu",
+				Handler: menu.CreateMenuHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPut,
+				Path:    "/menu/:id",
+				Handler: menu.UpdateMenuHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodDelete,
+				Path:    "/menu/:id",
+				Handler: menu.DeleteMenuHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/menu/list",
+				Handler: menu.GetMenuListHandler(serverCtx),
 			},
 		},
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
@@ -272,6 +279,11 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Handler: user.DeleteUserHandler(serverCtx),
 			},
 			{
+				Method:  http.MethodPost,
+				Path:    "/user/change_password",
+				Handler: user.ChangePasswordHandler(serverCtx),
+			},
+			{
 				Method:  http.MethodGet,
 				Path:    "/user/info",
 				Handler: user.GetUserInfoHandler(serverCtx),
@@ -280,11 +292,6 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Method:  http.MethodGet,
 				Path:    "/user/list",
 				Handler: user.GetUserListHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/user/change_password",
-				Handler: user.ChangePasswordHandler(serverCtx),
 			},
 		},
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),

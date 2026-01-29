@@ -1,0 +1,264 @@
+syntax = "v1"
+
+type (
+	// User
+	UserInfoReq  {}
+	UserInfoResp {
+		UserId   int64    `json:"userId"`
+		Username string   `json:"username"`
+		Roles    []string `json:"roles"`
+	}
+	UserListReq {
+		Page     int    `form:"page,default=1"`
+		PageSize int    `form:"pageSize,default=20"`
+		Username string `form:"username,optional"`
+	}
+	UserItem {
+		ID        uint     `json:"id"`
+		Username  string   `json:"username"`
+		Roles     []string `json:"roles"`
+		CreatedAt string   `json:"createdAt"`
+	}
+	UserListResp {
+		List  []UserItem `json:"list"`
+		Total int64      `json:"total"`
+	}
+	AddUserReq {
+		Username string   `json:"username"`
+		Password string   `json:"password"`
+		Roles    []string `json:"roles"`
+	}
+	UpdateUserReq {
+		ID       uint     `path:"id"`
+		Password string   `json:"password,optional"`
+		Roles    []string `json:"roles,optional"`
+	}
+	ChangePasswordReq {
+		OldPassword string `json:"oldPassword"`
+		NewPassword string `json:"newPassword"`
+	}
+
+	// Role
+	RoleItem {
+		ID          uint     `json:"id"`
+		Name        string   `json:"name"`
+		DisplayName string   `json:"displayName"`
+		Description string   `json:"description"`
+		Permissions []string `json:"permissions"`
+		CreatedAt   string   `json:"createdAt"`
+	}
+	RoleListResp {
+		List []RoleItem `json:"list"`
+	}
+	UpdateRolePermissionsReq {
+		ID          uint     `path:"id"`
+		Permissions []string `json:"permissions"`
+	}
+
+	// Log Source Management
+	LogSourceReq {
+		Name string `json:"name"`
+		Path string `json:"path"`
+		Type string `json:"type,default=caddy"`
+	}
+	LogSourceUpdateReq {
+		ID      uint   `path:"id"`
+		Name    string `json:"name,optional"`
+		Path    string `json:"path,optional"`
+		Enabled bool   `json:"enabled,optional"`
+	}
+	LogSourceListReq {
+		Page     int `form:"page,default=1"`
+		PageSize int `form:"pageSize,default=20"`
+	}
+	LogSourceItem {
+		ID        uint   `json:"id"`
+		Name      string `json:"name"`
+		Path      string `json:"path"`
+		Type      string `json:"type"`
+		Enabled   bool   `json:"enabled"`
+		CreatedAt string `json:"createdAt"`
+	}
+	LogSourceListResp {
+		List  []LogSourceItem `json:"list"`
+		Total int64           `json:"total"`
+	}
+
+	// Caddy Management
+	CaddyServerReq {
+		Name     string `json:"name"`
+		Url      string `json:"url"` // http://localhost:2019 or remote IP
+		Token    string `json:"token,optional"` // For remote auth if needed
+		Type     string `json:"type,default=local"` // local | remote
+		Username string `json:"username,optional"`
+		Password string `json:"password,optional"`
+	}
+	CaddyServerItem {
+		ID        uint   `json:"id"`
+		Name      string `json:"name"`
+		Url       string `json:"url"`
+		Type      string `json:"type"`
+		CreatedAt string `json:"createdAt"`
+	}
+	CaddyServerListResp {
+		List []CaddyServerItem `json:"list"`
+	}
+	UpdateCaddyServerReq {
+		ID       uint   `path:"id"`
+		Name     string `json:"name,optional"`
+		Url      string `json:"url,optional"`
+		Token    string `json:"token,optional"`
+		Type     string `json:"type,optional"`
+		Username string `json:"username,optional"`
+		Password string `json:"password,optional"`
+	}
+	// Proxy Config
+	CaddyConfigReq {
+		ServerId uint `path:"serverId"`
+	}
+	CaddyConfigUpdateReq {
+		ServerId uint   `path:"serverId"`
+		Config   string `json:"config"` // JSON string
+	}
+	CaddyConfigResp {
+		Config string `json:"config"`
+	}
+)
+
+@server (
+	prefix: /api
+	group:  user
+	jwt:    Auth
+)
+service logflux-api {
+	@handler GetUserInfo
+	get /user/info (UserInfoReq) returns (UserInfoResp)
+
+	@handler GetUserList
+	get /user/list (UserListReq) returns (UserListResp)
+
+	@handler AddUser
+	post /user (AddUserReq) returns (BaseResp)
+
+	@handler UpdateUser
+	put /user/:id (UpdateUserReq) returns (BaseResp)
+
+	@handler DeleteUser
+	delete /user/:id (IDReq) returns (BaseResp)
+
+	@handler ChangePassword
+	post /user/change_password (ChangePasswordReq) returns (BaseResp)
+}
+
+@server (
+	prefix: /api
+	group:  role
+	jwt:    Auth
+)
+service logflux-api {
+	@handler GetRoleList
+	get /role/list returns (RoleListResp)
+
+	@handler UpdateRolePermissions
+	put /role/:id/permissions (UpdateRolePermissionsReq) returns (BaseResp)
+}
+
+@server (
+	prefix: /api
+	group:  log
+	jwt:    Auth
+)
+service logflux-api {
+	@handler AddLogSource
+	post /source (LogSourceReq) returns (BaseResp)
+
+	@handler ListLogSources
+	get /source (LogSourceListReq) returns (LogSourceListResp)
+
+	@handler UpdateLogSource
+	put /source/:id (LogSourceUpdateReq) returns (BaseResp)
+
+	@handler DeleteLogSource
+	delete /source/:id (IDReq) returns (BaseResp)
+}
+
+@server (
+	prefix: /api
+	group:  caddy
+	jwt:    Auth
+)
+service logflux-api {
+	@handler GetCaddyServers
+	get /caddy/server returns (CaddyServerListResp)
+
+	@handler AddCaddyServer
+	post /caddy/server (CaddyServerReq) returns (BaseResp)
+
+	@handler UpdateCaddyServer
+	put /caddy/server/:id (UpdateCaddyServerReq) returns (BaseResp)
+
+	@handler DeleteCaddyServer
+	delete /caddy/server/:id (IDReq) returns (BaseResp)
+
+	@handler GetCaddyConfig
+	get /caddy/server/:serverId/config (CaddyConfigReq) returns (CaddyConfigResp)
+
+	@handler UpdateCaddyConfig
+	post /caddy/server/:serverId/config (CaddyConfigUpdateReq) returns (BaseResp)
+}
+
+@server (
+	prefix: /api
+	group:  menu
+	jwt:    Auth
+)
+service logflux-api {
+	@handler GetMenuList
+	get /menu/list returns (MenuListResp)
+
+	@handler CreateMenu
+	post /menu (CreateMenuReq) returns (BaseResp)
+
+	@handler UpdateMenu
+	put /menu/:id (UpdateMenuReq) returns (BaseResp)
+
+	@handler DeleteMenu
+	delete /menu/:id (IDReq) returns (BaseResp)
+}
+
+type (
+	// Menu Management
+	CreateMenuReq {
+		Name          string   `json:"name"`
+		Path          string   `json:"path"`
+		Component     string   `json:"component"`
+		Order         int      `json:"order"`
+		Meta          string   `json:"meta"`          // JSON string
+		RequiredRoles []string `json:"requiredRoles"` // Array of role names
+		ParentID      uint     `json:"parentId,optional"`
+	}
+	UpdateMenuReq {
+		ID            uint     `path:"id"`
+		Name          string   `json:"name,optional"`
+		Path          string   `json:"path,optional"`
+		Component     string   `json:"component,optional"`
+		Order         int      `json:"order,optional"`
+		Meta          string   `json:"meta,optional"`          // JSON string
+		RequiredRoles []string `json:"requiredRoles,optional"` // Array of role names
+		ParentID      uint     `json:"parentId,optional"`
+	}
+	MenuItem {
+		ID            uint       `json:"id"`
+		Name          string     `json:"name"`
+		Path          string     `json:"path"`
+		Component     string     `json:"component"`
+		Order         int        `json:"order"`
+		Meta          RouteMeta  `json:"meta"`
+		RequiredRoles []string   `json:"requiredRoles"`
+		Children      []MenuItem `json:"children,omitempty"`
+		CreatedAt     string     `json:"createdAt"`
+	}
+	MenuListResp {
+		List []MenuItem `json:"list"`
+	}
+)

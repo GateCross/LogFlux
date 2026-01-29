@@ -3,6 +3,7 @@ package notification
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
@@ -44,8 +45,8 @@ func (l *GetChannelListLogic) GetChannelList() (resp *types.ChannelListResp, err
 			Config:      string(configBytes),
 			Events:      string(eventsBytes),
 			Description: ch.Description,
-			CreatedAt:   ch.CreatedAt.Format("2006-01-02 15:04:05"),
-			UpdatedAt:   ch.UpdatedAt.Format("2006-01-02 15:04:05"),
+			CreatedAt:   ch.CreatedAt.Format(time.DateTime),
+			UpdatedAt:   ch.UpdatedAt.Format(time.DateTime),
 		})
 	}
 

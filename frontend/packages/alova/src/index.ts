@@ -52,6 +52,7 @@ export const createAlovaRequest = <
           } else {
             error = new Error('the backend request error');
             error.code = BACKEND_ERROR_CODE;
+            error.response = response;
           }
         } catch (err) {
           error = err;

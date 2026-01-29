@@ -3,6 +3,7 @@ package route
 import (
 	"context"
 	"encoding/json"
+	"errors"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
@@ -29,8 +30,24 @@ func (l *GetUserRoutesLogic) GetUserRoutes() (resp *types.UserRouteResp, err err
 	// 获取当前用户信息
 	userId := l.ctx.Value("userId")
 
+	// Parse userId
+	var uid int64
+	if jsonUid, ok := userId.(json.Number); ok {
+		if id, err := jsonUid.Int64(); err == nil {
+			uid = id
+		} else {
+			return nil, errors.New("invalid userId format")
+		}
+	} else if floatUid, ok := userId.(float64); ok {
+		uid = int64(floatUid)
+	} else if intUid, ok := userId.(int); ok {
+		uid = int64(intUid)
+	} else {
+		return nil, errors.New("invalid userId type")
+	}
+
 	var user model.User
-	if err := l.svcCtx.DB.First(&user, userId).Error; err != nil {
+	if err := l.svcCtx.DB.First(&user, uid).Error; err != nil {
 		return nil, err
 	}
 

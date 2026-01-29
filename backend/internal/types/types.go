@@ -74,6 +74,11 @@ type CaddyServerReq struct {
 	Password string `json:"password,optional"`
 }
 
+type ChangePasswordReq struct {
+	OldPassword string `json:"oldPassword"`
+	NewPassword string `json:"newPassword"`
+}
+
 type ChannelItem struct {
 	ID          uint   `json:"id"`
 	Name        string `json:"name"`
@@ -107,6 +112,16 @@ type ChannelUpdateReq struct {
 	Config      string `json:"config,optional"`
 	Events      string `json:"events,optional"`
 	Description string `json:"description,optional"`
+}
+
+type CreateMenuReq struct {
+	Name          string   `json:"name"`
+	Path          string   `json:"path"`
+	Component     string   `json:"component"`
+	Order         int      `json:"order"`
+	Meta          string   `json:"meta"`          // JSON string
+	RequiredRoles []string `json:"requiredRoles"` // Array of role names
+	ParentID      uint     `json:"parentId,optional"`
 }
 
 type IDReq struct {
@@ -188,6 +203,22 @@ type LoginResp struct {
 	RefreshToken string `json:"refreshToken"`
 }
 
+type MenuItem struct {
+	ID            uint       `json:"id"`
+	Name          string     `json:"name"`
+	Path          string     `json:"path"`
+	Component     string     `json:"component"`
+	Order         int        `json:"order"`
+	Meta          RouteMeta  `json:"meta"`
+	RequiredRoles []string   `json:"requiredRoles"`
+	Children      []MenuItem `json:"children,omitempty"`
+	CreatedAt     string     `json:"createdAt"`
+}
+
+type MenuListResp struct {
+	List []MenuItem `json:"list"`
+}
+
 type MenuRoute struct {
 	Name      string      `json:"name"`
 	Path      string      `json:"path"`
@@ -220,7 +251,7 @@ type RoleListResp struct {
 }
 
 type RouteMeta struct {
-	Title      string   `json:"title,optional"`
+	Title      string   `json:"title"`
 	I18nKey    string   `json:"i18nKey,omitempty"`
 	Icon       string   `json:"icon,omitempty"`
 	LocalIcon  string   `json:"localIcon,omitempty"`
@@ -316,6 +347,17 @@ type UpdateCaddyServerReq struct {
 	Password string `json:"password,optional"`
 }
 
+type UpdateMenuReq struct {
+	ID            uint     `path:"id"`
+	Name          string   `json:"name,optional"`
+	Path          string   `json:"path,optional"`
+	Component     string   `json:"component,optional"`
+	Order         int      `json:"order,optional"`
+	Meta          string   `json:"meta,optional"`          // JSON string
+	RequiredRoles []string `json:"requiredRoles,optional"` // Array of role names
+	ParentID      uint     `json:"parentId,optional"`
+}
+
 type UpdateRolePermissionsReq struct {
 	ID          uint     `path:"id"`
 	Permissions []string `json:"permissions"`
@@ -357,46 +399,4 @@ type UserListResp struct {
 type UserRouteResp struct {
 	Home   string      `json:"home"`
 	Routes []MenuRoute `json:"routes"`
-}
-
-type MenuItem struct {
-	ID            uint       `json:"id"`
-	Name          string     `json:"name"`
-	Path          string     `json:"path"`
-	Component     string     `json:"component"`
-	Order         int        `json:"order"`
-	Meta          RouteMeta  `json:"meta"`
-	RequiredRoles []string   `json:"roles"`
-	Children      []MenuItem `json:"children,omitempty"`
-	CreatedAt     string     `json:"createdAt"`
-}
-
-type MenuListResp struct {
-	List []MenuItem `json:"list"`
-}
-
-type CreateMenuReq struct {
-	Name          string    `json:"name"`
-	Path          string    `json:"path"`
-	Component     string    `json:"component"`
-	Order         int       `json:"order"`
-	Meta          RouteMeta `json:"meta"`
-	RequiredRoles []string  `json:"roles"`
-	ParentID      uint      `json:"parentId,optional"`
-}
-
-type UpdateMenuReq struct {
-	ID            uint      `path:"id" json:"id,optional"`
-	Name          string    `json:"name"`
-	Path          string    `json:"path"`
-	Component     string    `json:"component"`
-	Order         int       `json:"order"`
-	Meta          RouteMeta `json:"meta"`
-	RequiredRoles []string  `json:"roles"`
-	ParentID      uint      `json:"parentId,optional"`
-}
-
-type ChangePasswordReq struct {
-	OldPassword string `json:"oldPassword"`
-	NewPassword string `json:"newPassword"`
 }

@@ -1,0 +1,50 @@
+syntax = "v1"
+
+type (
+	// Route
+	MenuRoute {
+		Name      string      `json:"name"`
+		Path      string      `json:"path"`
+		Component string      `json:"component"`
+		Meta      RouteMeta   `json:"meta"`
+		Children  []MenuRoute `json:"children,omitempty"`
+	}
+	RouteMeta {
+		Title      string   `json:"title"`
+		I18nKey    string   `json:"i18nKey,omitempty"`
+		Icon       string   `json:"icon,omitempty"`
+		LocalIcon  string   `json:"localIcon,omitempty"`
+		Order      int      `json:"order,omitempty"`
+		HideInMenu bool     `json:"hideInMenu,omitempty"`
+		Roles      []string `json:"roles,omitempty"`
+	}
+	UserRouteResp {
+		Home   string      `json:"home"`
+		Routes []MenuRoute `json:"routes"`
+	}
+	IsRouteExistReq {
+		RouteName string `form:"routeName"`
+	}
+)
+
+@server (
+	prefix: /api
+	group:  route
+	jwt:    Auth
+)
+service logflux-api {
+	@handler GetUserRoutes
+	get /route/getUserRoutes returns (UserRouteResp)
+}
+
+@server (
+	prefix: /api
+	group:  route
+)
+service logflux-api {
+	@handler GetConstantRoutes
+	get /route/getConstantRoutes returns ([]MenuRoute)
+
+	@handler IsRouteExist
+	get /route/isRouteExist (IsRouteExistReq) returns (bool)
+}
