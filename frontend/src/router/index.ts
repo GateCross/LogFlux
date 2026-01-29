@@ -21,6 +21,7 @@ export const router = createRouter({
   history: historyCreatorMap[VITE_ROUTER_HISTORY_MODE](VITE_BASE_URL),
   routes: createBuiltinVueRoutes()
 });
+console.log('Router initialized. Routes:', router.getRoutes().map(r => r.name));
 
 /** Setup Vue Router */
 export async function setupRouter(app: App) {

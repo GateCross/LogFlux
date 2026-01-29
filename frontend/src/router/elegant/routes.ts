@@ -96,7 +96,7 @@ export const generatedRoutes: GeneratedRoute[] = [
   {
     name: 'login',
     path: '/login/:module(pwd-login|code-login|register|reset-pwd|bind-wechat)?',
-    component: 'layout.base$view.login',
+    component: 'layout.blank$view.login',
     props: true,
     meta: {
       title: 'login',
@@ -113,6 +113,15 @@ export const generatedRoutes: GeneratedRoute[] = [
       i18nKey: 'route.manage'
     },
     children: [
+      {
+        name: 'manage_menu',
+        path: '/manage/menu',
+        component: 'view.manage_menu',
+        meta: {
+          title: 'manage_menu',
+          i18nKey: 'route.manage_menu'
+        }
+      },
       {
         name: 'manage_role',
         path: '/manage/role',

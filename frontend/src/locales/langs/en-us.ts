@@ -30,6 +30,12 @@ const local: App.I18n.Schema = {
     keywordSearch: 'Please enter keyword',
     logout: 'Logout',
     logoutConfirm: 'Are you sure you want to log out?',
+    changePassword: 'Change Password',
+    oldPassword: 'Old Password',
+    newPassword: 'New Password',
+    confirmPassword: 'Confirm Password',
+    passwordNoMatch: 'The two passwords do not match',
+    changePasswordSuccess: 'Password changed successfully, please log in again',
     lookForward: 'Coming soon',
     modify: 'Modify',
     modifySuccess: 'Modify Success',
@@ -235,8 +241,14 @@ const local: App.I18n.Schema = {
     caddy_config: 'Caddy Config',
     caddy_log: 'Caddy Logs',
     manage: 'System Manage',
-    manage_user: 'User Manage',
-    manage_role: 'Role Manage'
+    manage_user: 'User Management',
+    manage_role: 'Role Management',
+    manage_menu: 'Menu Management',
+    notification: 'Notification',
+    notification_channel: 'Channel Management',
+    notification_rule: 'Rule Management',
+    notification_template: 'Template Management',
+    notification_log: 'Notification Log'
   },
   page: {
     login: {

@@ -28,6 +28,7 @@ declare module "@elegant-router/types" {
     "iframe-page": "/iframe-page/:url";
     "login": "/login/:module(pwd-login|code-login|register|reset-pwd|bind-wechat)?";
     "manage": "/manage";
+    "manage_menu": "/manage/menu";
     "manage_role": "/manage/role";
     "manage_user": "/manage/user";
     "notification": "/notification";
@@ -101,6 +102,7 @@ declare module "@elegant-router/types" {
     | "caddy_log"
     | "dashboard"
     | "home"
+    | "manage_menu"
     | "manage_role"
     | "manage_user"
     | "notification_channel"

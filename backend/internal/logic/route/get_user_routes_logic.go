@@ -52,12 +52,10 @@ func (l *GetUserRoutesLogic) GetUserRoutes() (resp *types.UserRouteResp, err err
 	}
 
 	// 构建基于权限的路由
-	routes := l.buildRoutes(userPermissions)
-	l.Logger.Infof("User %v Permissions: %v, Routes Count: %d", userId, userPermissions, len(routes))
-	if len(routes) > 0 {
-		routesJson, _ := json.Marshal(routes)
-		l.Logger.Infof("Routes content: %s", string(routesJson))
-	}
+	routes := l.buildRoutesFromDB(userPermissions, roles)
+
+	// 调试日志
+	// l.Logger.Infof("User %v Permissions: %v, Roles: %v, Routes Count: %d", userId, userPermissions, user.Roles, len(routes))
 
 	return &types.UserRouteResp{
 		Home:   "dashboard",
@@ -65,192 +63,84 @@ func (l *GetUserRoutesLogic) GetUserRoutes() (resp *types.UserRouteResp, err err
 	}, nil
 }
 
-// buildRoutes 根据用户权限构建路由
-func (l *GetUserRoutesLogic) buildRoutes(permissions map[string]bool) []types.MenuRoute {
-	routes := []types.MenuRoute{}
+// buildRoutesFromDB 从数据库构建路由树
+func (l *GetUserRoutesLogic) buildRoutesFromDB(permissions map[string]bool, userRoles []model.Role) []types.MenuRoute {
+	var allMenus []model.Menu
+	// 获取所有菜单，按 Order 排序
+	l.svcCtx.DB.Order("\"order\" asc").Find(&allMenus)
 
-	// 自动添加父级权限：如果有任何子权限，就认为拥有父权限
-	if permissions["logs_caddy"] {
-		permissions["logs"] = true
-	}
-	if permissions["manage_user"] || permissions["manage_role"] {
-		permissions["manage"] = true
-	}
-	if permissions["notification_channel"] || permissions["notification_rule"] || permissions["notification_template"] || permissions["notification_log"] {
-		permissions["notification"] = true
-	}
+	// 重新构建：使用递归方法
+	// 让我们使用 ID 索引所有原始 model，然后递归构建。
 
-	// Dashboard 路由（所有角色都可访问）
-	if permissions["dashboard"] {
-		routes = append(routes, types.MenuRoute{
-			Name:      "dashboard",
-			Path:      "/dashboard",
-			Component: "layout.base$view.dashboard",
-			Meta: types.RouteMeta{
-				Title:   "dashboard",
-				I18nKey: "route.dashboard",
-				Icon:    "mdi:monitor-dashboard",
-				Order:   1,
-			},
-		})
-	}
+	return l.buildTree(allMenus, nil, userRoles)
+}
 
-	// Caddy 路由 (原 Logs 模块)
-	if permissions["logs_caddy"] {
-		routes = append(routes, types.MenuRoute{
-			Name:      "caddy",
-			Path:      "/caddy",
-			Component: "layout.base",
-			Meta: types.RouteMeta{
-				Title:   "caddy",
-				I18nKey: "route.caddy",
-				Icon:    "carbon:cloud-monitoring",
-				Order:   2,
-			},
-			Children: []types.MenuRoute{
-				{
-					Name:      "caddy_config",
-					Path:      "/caddy/config",
-					Component: "view.caddy_config",
-					Meta: types.RouteMeta{
-						Title:   "caddy_config",
-						I18nKey: "route.caddy_config",
-						Icon:    "carbon:settings",
-					},
-				},
-				{
-					Name:      "caddy_log",
-					Path:      "/caddy/log",
-					Component: "view.caddy_log",
-					Meta: types.RouteMeta{
-						Title:   "caddy_log",
-						I18nKey: "route.caddy_log",
-						Icon:    "carbon:catalog",
-					},
-				},
-			},
-		})
-	}
+func (l *GetUserRoutesLogic) buildTree(allMenus []model.Menu, parentID *uint, userRoles []model.Role) []types.MenuRoute {
+	var routes []types.MenuRoute
 
-	// Manage 路由（仅 admin）
-	if permissions["manage"] {
-		manageChildren := []types.MenuRoute{}
-
-		if permissions["manage_user"] {
-			manageChildren = append(manageChildren, types.MenuRoute{
-				Name:      "manage_user",
-				Path:      "/manage/user",
-				Component: "view.manage_user",
-				Meta: types.RouteMeta{
-					Title:   "manage_user",
-					I18nKey: "route.manage_user",
-					Icon:    "ic:round-manage-accounts",
-					Roles:   []string{"admin"},
-				},
-			})
+	for _, m := range allMenus {
+		// 检查父节点匹配
+		isMatch := false
+		if parentID == nil {
+			if m.ParentID == nil {
+				isMatch = true
+			}
+		} else {
+			if m.ParentID != nil && *m.ParentID == *parentID {
+				isMatch = true
+			}
 		}
 
-		if permissions["manage_role"] {
-			manageChildren = append(manageChildren, types.MenuRoute{
-				Name:      "manage_role",
-				Path:      "/manage/role",
-				Component: "view.manage_role",
-				Meta: types.RouteMeta{
-					Title:   "manage_role",
-					I18nKey: "route.manage_role",
-					Icon:    "carbon:user-role",
-					Roles:   []string{"admin"},
-				},
-			})
-		}
+		if isMatch {
+			// 权限检查
+			if !l.hasPermission(m, userRoles) {
+				continue
+			}
 
-		if len(manageChildren) > 0 {
-			routes = append(routes, types.MenuRoute{
-				Name:      "manage",
-				Path:      "/manage",
-				Component: "layout.base",
-				Meta: types.RouteMeta{
-					Title:   "manage",
-					I18nKey: "route.manage",
-					Icon:    "carbon:cloud-service-management",
-					Order:   9,
-					Roles:   []string{"admin"},
-				},
-				Children: manageChildren,
-			})
+			children := l.buildTree(allMenus, &m.ID, userRoles)
+
+			route := types.MenuRoute{
+				Name:      m.Name,
+				Path:      m.Path,
+				Component: m.Component,
+				Meta:      l.parseMenuMeta(m.Meta),
+			}
+
+			if len(children) > 0 {
+				route.Children = children
+			}
+
+			routes = append(routes, route)
 		}
 	}
-
-	// Notification (Admin only)
-	if permissions["manage"] {
-		notificationChildren := []types.MenuRoute{
-			{
-				Name:      "notification_channel",
-				Path:      "/notification/channel",
-				Component: "view.notification_channel",
-				Meta: types.RouteMeta{
-					Title:   "notification_channel",
-					I18nKey: "route.notification_channel",
-					Icon:    "mdi:broadcast",
-					Roles:   []string{"admin"},
-				},
-			},
-			{
-				Name:      "notification_rule",
-				Path:      "/notification/rule",
-				Component: "view.notification_rule",
-				Meta: types.RouteMeta{
-					Title:   "notification_rule",
-					I18nKey: "route.notification_rule",
-					Icon:    "carbon:rule",
-					Roles:   []string{"admin"},
-				},
-			},
-			{
-				Name:      "notification_template",
-				Path:      "/notification/template",
-				Component: "view.notification_template",
-				Meta: types.RouteMeta{
-					Title:   "notification_template",
-					I18nKey: "route.notification_template",
-					Icon:    "carbon:template",
-					Roles:   []string{"admin"},
-				},
-			},
-			{
-				Name:      "notification_log",
-				Path:      "/notification/log",
-				Component: "view.notification_log",
-				Meta: types.RouteMeta{
-					Title:   "notification_log",
-					I18nKey: "route.notification_log",
-					Icon:    "carbon:script",
-					Roles:   []string{"admin"},
-				},
-			},
-		}
-
-		routes = append(routes, types.MenuRoute{
-			Name:      "notification",
-			Path:      "/notification",
-			Component: "layout.base",
-			Meta: types.RouteMeta{
-				Title:   "notification",
-				I18nKey: "route.notification",
-				Icon:    "carbon:notification",
-				Order:   10,
-				Roles:   []string{"admin"},
-			},
-			Children: notificationChildren,
-		})
-	}
-
 	return routes
 }
 
+// hasPermission 检查用户是否拥有菜单所需的角色
+func (l *GetUserRoutesLogic) hasPermission(menu model.Menu, userRoles []model.Role) bool {
+	// 如果没有定义 RequiredRoles，则默认允许访问 (public)
+	if len(menu.RequiredRoles) == 0 {
+		return true
+	}
+
+	// 检查用户角色是否在 RequiredRoles 中
+	for _, userRole := range userRoles {
+		for _, requiredRole := range menu.RequiredRoles {
+			if userRole.Name == requiredRole {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
 // parseMenuMeta 解析菜单元数据
-func parseMenuMeta(metaJSON string) types.RouteMeta {
+func (l *GetUserRoutesLogic) parseMenuMeta(metaJSON string) types.RouteMeta {
 	var meta types.RouteMeta
+	if metaJSON == "" {
+		return meta
+	}
 	json.Unmarshal([]byte(metaJSON), &meta)
 	return meta
 }

@@ -210,9 +210,9 @@ type RoleItem struct {
 	ID          uint     `json:"id"`
 	Name        string   `json:"name"`
 	DisplayName string   `json:"displayName"`
-	Description string   `json:\"description\"`
-	Permissions []string `json:\"permissions\"`
-	CreatedAt   string   `json:\"createdAt\"`
+	Description string   `json:"description"`
+	Permissions []string `json:"permissions"`
+	CreatedAt   string   `json:"createdAt"`
 }
 
 type RoleListResp struct {
@@ -220,7 +220,7 @@ type RoleListResp struct {
 }
 
 type RouteMeta struct {
-	Title      string   `json:"title"`
+	Title      string   `json:"title,optional"`
 	I18nKey    string   `json:"i18nKey,omitempty"`
 	Icon       string   `json:"icon,omitempty"`
 	LocalIcon  string   `json:"localIcon,omitempty"`
@@ -357,4 +357,46 @@ type UserListResp struct {
 type UserRouteResp struct {
 	Home   string      `json:"home"`
 	Routes []MenuRoute `json:"routes"`
+}
+
+type MenuItem struct {
+	ID            uint       `json:"id"`
+	Name          string     `json:"name"`
+	Path          string     `json:"path"`
+	Component     string     `json:"component"`
+	Order         int        `json:"order"`
+	Meta          RouteMeta  `json:"meta"`
+	RequiredRoles []string   `json:"roles"`
+	Children      []MenuItem `json:"children,omitempty"`
+	CreatedAt     string     `json:"createdAt"`
+}
+
+type MenuListResp struct {
+	List []MenuItem `json:"list"`
+}
+
+type CreateMenuReq struct {
+	Name          string    `json:"name"`
+	Path          string    `json:"path"`
+	Component     string    `json:"component"`
+	Order         int       `json:"order"`
+	Meta          RouteMeta `json:"meta"`
+	RequiredRoles []string  `json:"roles"`
+	ParentID      uint      `json:"parentId,optional"`
+}
+
+type UpdateMenuReq struct {
+	ID            uint      `path:"id" json:"id,optional"`
+	Name          string    `json:"name"`
+	Path          string    `json:"path"`
+	Component     string    `json:"component"`
+	Order         int       `json:"order"`
+	Meta          RouteMeta `json:"meta"`
+	RequiredRoles []string  `json:"roles"`
+	ParentID      uint      `json:"parentId,optional"`
+}
+
+type ChangePasswordReq struct {
+	OldPassword string `json:"oldPassword"`
+	NewPassword string `json:"newPassword"`
 }

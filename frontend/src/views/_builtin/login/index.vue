@@ -35,7 +35,10 @@ const moduleMap: Record<UnionKey.LoginModule, LoginModule> = {
   'bind-wechat': { label: loginModuleRecord['bind-wechat'], component: BindWechat }
 };
 
-const activeModule = computed(() => moduleMap[props.module || 'pwd-login']);
+const activeModule = computed(() => {
+  const active: LoginModule = moduleMap[props.module || 'pwd-login'] || moduleMap['pwd-login'];
+  return active;
+});
 
 const bgThemeColor = computed(() =>
   themeStore.darkMode ? getPaletteColorByNumber(themeStore.themeColor, 600) : themeStore.themeColor

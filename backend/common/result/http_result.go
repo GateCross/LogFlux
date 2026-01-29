@@ -13,6 +13,20 @@ type ResponseBean struct {
 	Data interface{} `json:"data,omitempty"`
 }
 
+// NewErrMsg 返回自定义错误消息
+func NewErrMsg(msg string) error {
+	return &CodeError{Code: 400, Msg: msg}
+}
+
+type CodeError struct {
+	Code int
+	Msg  string
+}
+
+func (e *CodeError) Error() string {
+	return e.Msg
+}
+
 // HttpResult
 func HttpResult(r *http.Request, w http.ResponseWriter, resp interface{}, err error) {
 	if err == nil {
@@ -25,12 +39,13 @@ func HttpResult(r *http.Request, w http.ResponseWriter, resp interface{}, err er
 		httpx.OkJson(w, r)
 	} else {
 		// 错误返回
-		// 这里可以根据自定义错误类型进一步处理 Code
 		errCode := 500
-		errMsg := "服务器内部错误"
+		errMsg := err.Error()
 
-		// 简单的错误处理示例，实际项目中建议封装 errorx 包
-		errMsg = err.Error()
+		if ce, ok := err.(*CodeError); ok {
+			errCode = ce.Code
+			errMsg = ce.Msg
+		}
 
 		httpx.OkJson(w, ResponseBean{
 			Code: errCode,

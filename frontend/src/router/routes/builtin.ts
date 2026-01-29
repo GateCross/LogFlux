@@ -25,12 +25,17 @@ const NOT_FOUND_ROUTE: CustomRoute = {
 
 /** get constant routes from generated routes */
 function getConstantRoutes() {
-  return generatedRoutes.map(route => {
+  const constantRoutes = generatedRoutes.filter(route => route.meta?.constant);
+
+  return constantRoutes.map(route => {
     if (route.name === 'login') {
-      route.component = 'layout.blank$view.login';
+      route.component = 'layout.blank$view.login' as any;
     }
-    return route;
-  }).filter(route => route.meta?.constant);
+    if (['403', '404', '500'].includes(route.name)) {
+      route.component = `layout.blank$view.${route.name}` as any;
+    }
+    return route as unknown as ElegantRoute;
+  });
 }
 
 /** builtin routes, it must be constant and setup in vue-router */

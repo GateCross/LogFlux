@@ -117,42 +117,44 @@ function getSiderAndCollapsedWidth(isCollapsed: boolean) {
 </script>
 
 <template>
-  <AdminLayout
-    v-model:sider-collapse="appStore.siderCollapse"
-    :mode="layoutMode"
-    :scroll-el-id="LAYOUT_SCROLL_EL_ID"
-    :scroll-mode="themeStore.layout.scrollMode"
-    :is-mobile="appStore.isMobile"
-    :full-content="appStore.fullContent"
-    :fixed-top="themeStore.fixedHeaderAndTab"
-    :header-height="themeStore.header.height"
-    :tab-visible="themeStore.tab.visible"
-    :tab-height="themeStore.tab.height"
-    :content-class="appStore.contentXScrollable ? 'overflow-x-hidden' : ''"
-    :sider-visible="siderVisible"
-    :sider-width="siderWidth"
-    :sider-collapsed-width="siderCollapsedWidth"
-    :footer-visible="themeStore.footer.visible"
-    :footer-height="themeStore.footer.height"
-    :fixed-footer="themeStore.footer.fixed"
-    :right-footer="themeStore.footer.right"
-  >
-    <template #header>
-      <GlobalHeader v-bind="headerProps" />
-    </template>
-    <template #tab>
-      <GlobalTab />
-    </template>
-    <template #sider>
-      <GlobalSider />
-    </template>
-    <GlobalMenu />
-    <GlobalContent />
-    <ThemeDrawer />
-    <template #footer>
-      <GlobalFooter />
-    </template>
-  </AdminLayout>
+  <div class="h-full">
+    <AdminLayout
+      v-model:sider-collapse="appStore.siderCollapse"
+      :mode="layoutMode"
+      :scroll-el-id="LAYOUT_SCROLL_EL_ID"
+      :scroll-mode="themeStore.layout.scrollMode"
+      :is-mobile="appStore.isMobile"
+      :full-content="appStore.fullContent"
+      :fixed-top="themeStore.fixedHeaderAndTab"
+      :header-height="themeStore.header.height"
+      :tab-visible="themeStore.tab.visible"
+      :tab-height="themeStore.tab.height"
+      :content-class="appStore.contentXScrollable ? 'overflow-x-hidden' : ''"
+      :sider-visible="siderVisible"
+      :sider-width="siderWidth"
+      :sider-collapsed-width="siderCollapsedWidth"
+      :footer-visible="themeStore.footer.visible"
+      :footer-height="themeStore.footer.height"
+      :fixed-footer="themeStore.footer.fixed"
+      :right-footer="themeStore.footer.right"
+    >
+      <template #header>
+        <GlobalHeader v-bind="headerProps" />
+      </template>
+      <template #tab>
+        <GlobalTab />
+      </template>
+      <template #sider>
+        <GlobalSider />
+      </template>
+      <GlobalMenu />
+      <GlobalContent />
+      <ThemeDrawer />
+      <template #footer>
+        <GlobalFooter />
+      </template>
+    </AdminLayout>
+  </div>
 </template>
 
 <style lang="scss">

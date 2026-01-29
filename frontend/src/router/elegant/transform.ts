@@ -42,9 +42,13 @@ function transformElegantRouteToVueRoute(
   }
 
   function getLayoutName(component: string) {
+    if (!component) {
+      throw new Error(`Layout component is undefined`);
+    }
+
     const layout = component.replace(LAYOUT_PREFIX, '');
 
-    if(!layouts[layout]) {
+    if (!layouts[layout]) {
       throw new Error(`Layout component "${layout}" not found`);
     }
 
@@ -56,9 +60,13 @@ function transformElegantRouteToVueRoute(
   }
 
   function getViewName(component: string) {
+    if (!component) {
+      throw new Error(`View component is undefined`);
+    }
+
     const view = component.replace(VIEW_PREFIX, '');
 
-    if(!views[view]) {
+    if (!views[view]) {
       throw new Error(`View component "${view}" not found`);
     }
 
@@ -129,6 +137,16 @@ function transformElegantRouteToVueRoute(
         vueRoute.component = views[viewName];
       }
 
+    } else {
+      // Special case: routes with redirect but no component (like root route)
+      if ((route as any).redirect) {
+        // Allow routes with redirect to pass through
+      } else if (!children?.length) {
+        // If component is empty, no redirect, and no children, skip the route
+        console.warn(`Route "${route.name}" has no component and no children, skipping`);
+        return [];
+      }
+      // If it has children but no component, it's a route group (parent menu)
     }
   } catch (error: any) {
     console.error(`Error transforming route "${route.name}": ${error.toString()}`);
@@ -145,7 +163,7 @@ function transformElegantRouteToVueRoute(
   if (children?.length) {
     const childRoutes = children.flatMap(child => transformElegantRouteToVueRoute(child, layouts, views));
 
-    if(isFirstLevelRoute(route)) {
+    if (isFirstLevelRoute(route)) {
       vueRoute.children = childRoutes;
     } else {
       vueRoutes.push(...childRoutes);
@@ -174,6 +192,7 @@ const routeMap: RouteMap = {
   "iframe-page": "/iframe-page/:url",
   "login": "/login/:module(pwd-login|code-login|register|reset-pwd|bind-wechat)?",
   "manage": "/manage",
+  "manage_menu": "/manage/menu",
   "manage_role": "/manage/role",
   "manage_user": "/manage/user",
   "notification": "/notification",
