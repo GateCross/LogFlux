@@ -99,6 +99,7 @@ interface MenuItem {
     i18nKey?: App.I18n.I18nKey | null;
     icon?: string;
     localIcon?: string;
+    order?: number;
     hideInMenu?: boolean;
     roles?: string[];
   };
