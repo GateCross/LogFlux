@@ -119,6 +119,13 @@ const columns: DataTableColumns<MenuItem> = [
     type: 'selection'
   },
   {
+    title: $t('common.index'),
+    key: 'index',
+    width: 60,
+    align: 'center',
+    render: (_, index) => index + 1
+  },
+  {
     title: '',
     key: 'expander',
     width: 40,
