@@ -1,31 +1,35 @@
-{
-  # HTTP 重定向到 HTTPS
-  http:// {
-    redir https://{host}{uri} permanent
-  }
+# ==================================
+# 通用配置片段 (Snippets)
+# ==================================
+
+# GeoIP2 配置（如需使用，请在 docker-compose.yml 中映射数据库文件）
+(geoip) {
+  geoip2 /usr/share/GeoIP/GeoLite2-City.mmdb
 }
 
-# HTTPS 服务
-:443 {
-  # 启用 GeoIP2
-  geoip2 /usr/share/GeoIP/GeoLite2-City.mmdb
-
-  # 编码压缩
+# 压缩编码
+(compression) {
   encode zstd gzip
+}
 
-  # 日志配置
+# 日志配置
+(logging) {
   log {
     output file /var/log/caddy/access.log
     format json
     level INFO
   }
+}
 
-  # 健康检查
+# 健康检查端点
+(health_check) {
   handle /api/health {
     respond "OK" 200
   }
+}
 
-  # API 反向代理到后端
+# API 反向代理
+(api_proxy) {
   handle /api/* {
     reverse_proxy localhost:8888 {
       header_up Host {host}
@@ -40,12 +44,14 @@
       }
     }
   }
+}
 
-  # 前端静态文件
+# 前端静态文件（完整配置）
+(frontend_full) {
   handle {
     root * /app/frontend
 
-    # 尝试提供文件，否则返回 index.html (SPA 路由支持)
+    # SPA 路由支持
     try_files {path} /index.html
 
     file_server {
@@ -69,51 +75,52 @@
       Cache-Control "no-cache, no-store, must-revalidate"
     }
   }
-
-  # 安全头
-  header {
-    X-Content-Type-Options "nosniff"
-    X-Frame-Options "SAMEORIGIN"
-    X-XSS-Protection "1; mode=block"
-    Referrer-Policy "strict-origin-when-cross-origin"
-    # Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
-  }
 }
 
-# HTTP 服务 (开发环境)
-:80 {
-  # GeoIP2
-  geoip2 /usr/share/GeoIP/GeoLite2-City.mmdb
-
-  # 编码压缩
-  encode zstd gzip
-
-  # 日志配置
-  log {
-    output file /var/log/caddy/access.log
-    format json
-    level INFO
-  }
-
-  # 健康检查
-  handle /api/health {
-    respond "OK" 200
-  }
-
-  # API 反向代理
-  handle /api/* {
-    reverse_proxy localhost:8888 {
-      header_up Host {host}
-      header_up X-Real-IP {remote_host}
-      header_up X-Forwarded-For {remote_host}
-      header_up X-Forwarded-Proto {scheme}
-    }
-  }
-
-  # 前端静态文件
+# 前端静态文件（简化配置，用于开发环境）
+(frontend_simple) {
   handle {
     root * /app/frontend
     try_files {path} /index.html
     file_server
   }
+}
+
+# 安全响应头
+(security_headers) {
+  header {
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "SAMEORIGIN"
+    X-XSS-Protection "1; mode=block"
+    Referrer-Policy "strict-origin-when-cross-origin"
+    # 如需启用 HSTS，请取消下行注释
+    # Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+  }
+}
+
+# ==================================
+# HTTPS 服务
+# ==================================
+:443 {
+  # 导入通用配置
+  import geoip
+  import compression
+  import logging
+  import health_check
+  import api_proxy
+  import frontend_full
+  import security_headers
+}
+
+# ==================================
+# HTTP 服务（开发环境）
+# ==================================
+:80 {
+  # 导入通用配置
+  import geoip
+  import compression
+  import logging
+  import health_check
+  import api_proxy
+  import frontend_simple
 }
