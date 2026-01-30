@@ -23,7 +23,8 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
     userId: '',
     username: '',
     roles: [],
-    buttons: []
+    buttons: [],
+    preferences: ''
   });
 
   /** is super role in static route */
@@ -48,7 +49,8 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
       userId: '',
       username: '',
       roles: [],
-      buttons: []
+      buttons: [],
+      preferences: ''
     });
 
     if (!route.meta.constant) {

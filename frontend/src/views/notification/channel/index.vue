@@ -97,7 +97,10 @@ const rules = computed(() => ({
 const typeOptions = [
   { label: 'Webhook', value: 'webhook' },
   { label: 'Telegram', value: 'telegram' },
-  { label: 'Email', value: 'email' }
+  { label: 'Slack', value: 'slack' },
+  { label: 'Discord', value: 'discord' },
+  { label: 'Email', value: 'email' },
+  { label: 'In-App', value: 'in_app' }
 ];
 
 const columns: DataTableColumns<ChannelItem> = [
@@ -186,7 +189,7 @@ async function handleSubmit() {
       showModal.value = false;
       fetchData();
     } else {
-      message.error(t('common.updateSuccess')); // Note: updateSuccess might not be best for 'Failed', using generic failed message if available or fallback
+      message.error(t('common.updateFailed'));
     }
   } finally {
     submitting.value = false;
@@ -205,7 +208,7 @@ function handleDelete(row: ChannelItem) {
         message.success(t('common.deleteSuccess'));
         fetchData();
       } else {
-        message.error(t('common.deleteSuccess')); // Should be failed, but reusing existing key or context
+        message.error(t('common.deleteFailed'));
       }
     }
   });

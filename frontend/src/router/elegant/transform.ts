@@ -180,7 +180,9 @@ const routeMap: RouteMap = {
   "notification_channel": "/notification/channel",
   "notification_log": "/notification/log",
   "notification_rule": "/notification/rule",
-  "notification_template": "/notification/template"
+  "notification_template": "/notification/template",
+  "user": "/user",
+  "user_center": "/user/center"
 };
 
 /**

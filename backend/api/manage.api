@@ -7,6 +7,7 @@ type (
 		UserId   int64    `json:"userId"`
 		Username string   `json:"username"`
 		Roles    []string `json:"roles"`
+		Preferences string `json:"preferences"` // JSON string
 	}
 	UserListReq {
 		Page     int    `form:"page,default=1"`
@@ -37,6 +38,9 @@ type (
 	ChangePasswordReq {
 		OldPassword string `json:"oldPassword"`
 		NewPassword string `json:"newPassword"`
+	}
+	UserPreferencesReq {
+		Preferences string `json:"preferences"` // JSON string
 	}
 
 	// Role
@@ -149,6 +153,9 @@ service logflux-api {
 
 	@handler ChangePassword
 	post /user/change_password (ChangePasswordReq) returns (BaseResp)
+
+	@handler UpdateUserPreferences
+	put /user/preferences (UserPreferencesReq) returns (BaseResp)
 }
 
 @server (
@@ -230,23 +237,23 @@ service logflux-api {
 type (
 	// Menu Management
 	CreateMenuReq {
-		Name          string   `json:"name"`
-		Path          string   `json:"path"`
-		Component     string   `json:"component"`
-		Order         int      `json:"order"`
-		Meta          string   `json:"meta"`          // JSON string
-		RequiredRoles []string `json:"requiredRoles"` // Array of role names
-		ParentID      uint     `json:"parentId,optional"`
+		Name          string    `json:"name"`
+		Path          string    `json:"path"`
+		Component     string    `json:"component"`
+		Order         int       `json:"order"`
+		Meta          RouteMeta `json:"meta"`          // JSON string
+		RequiredRoles []string  `json:"requiredRoles"` // Array of role names
+		ParentID      uint      `json:"parentId,optional"`
 	}
 	UpdateMenuReq {
-		ID            uint     `path:"id"`
-		Name          string   `json:"name,optional"`
-		Path          string   `json:"path,optional"`
-		Component     string   `json:"component,optional"`
-		Order         int      `json:"order,optional"`
-		Meta          string   `json:"meta,optional"`          // JSON string
-		RequiredRoles []string `json:"requiredRoles,optional"` // Array of role names
-		ParentID      uint     `json:"parentId,optional"`
+		ID            uint      `path:"id"`
+		Name          string    `json:"name,optional"`
+		Path          string    `json:"path,optional"`
+		Component     string    `json:"component,optional"`
+		Order         int       `json:"order,optional"`
+		Meta          RouteMeta `json:"meta,optional"`          // JSON string
+		RequiredRoles []string  `json:"requiredRoles,optional"` // Array of role names
+		ParentID      uint      `json:"parentId,optional"`
 	}
 	MenuItem {
 		ID            uint       `json:"id"`
@@ -256,6 +263,7 @@ type (
 		Order         int        `json:"order"`
 		Meta          RouteMeta  `json:"meta"`
 		RequiredRoles []string   `json:"requiredRoles"`
+		ParentID      uint       `json:"parentId"`
 		Children      []MenuItem `json:"children,omitempty"`
 		CreatedAt     string     `json:"createdAt"`
 	}
