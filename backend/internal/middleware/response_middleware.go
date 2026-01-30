@@ -1,133 +1,99 @@
 package middleware
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
+	"sync"
 
 	"logflux/common/result"
+
+	"github.com/zeromicro/go-zero/core/logx"
 )
 
+// responseWriter 池，复用对象减少 GC 压力
+var rwPool = sync.Pool{
+	New: func() interface{} {
+		return &responseWriter{
+			body: bytes.NewBuffer(make([]byte, 0, 1024)),
+		}
+	},
+}
+
+// ResponseMiddleware 全局响应中间件
+// 自动将未包装的 JSON 响应包装为 {code, msg, data} 格式
 func ResponseMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		rw := &responseWriter{
-			ResponseWriter: w,
-			statusCode:     http.StatusOK, // default to 200
-		}
+		// 从池中获取 responseWriter
+		rw := rwPool.Get().(*responseWriter)
+		rw.ResponseWriter = w
+		rw.statusCode = http.StatusOK
+		rw.body.Reset()
+
+		defer func() {
+			// 归还到池中
+			rwPool.Put(rw)
+		}()
+
 		next(rw, r)
 
-		// If status code is 200 and body is not empty, try to wrap it
-		if rw.statusCode == http.StatusOK && len(rw.body) > 0 {
-			var data interface{}
-			// Try to unmarshal the existing body to see if it's JSON
-			if err := json.Unmarshal(rw.body, &data); err == nil {
-				// Optimization: Check if it's already wrapped to avoid double wrapping
-				// We unmarshal into a map to check keys
-				var tempMap map[string]interface{}
-				if err := json.Unmarshal(rw.body, &tempMap); err == nil {
-					// Check for "code" and "msg" keys to identify if it's likely already a ResponseBean
-					if _, ok := tempMap["code"]; ok {
-						if _, ok := tempMap["msg"]; ok {
-							// Likely already wrapped (e.g. by HttpResult or logic), invalid to wrap again.
-							// Just write original body.
-							w.WriteHeader(rw.statusCode)
-							w.Write(rw.body)
-							return
-						}
-					}
-				}
+		bodyBytes := rw.body.Bytes()
 
-				// We assume standard goctl handlers return pure DTOs (data).
-				// We wrap them into Result.ResponseBean.
-
-				resp := result.ResponseBean{
-					Code: 200,
-					Msg:  "success",
-					Data: data,
-				}
-
-				w.Header().Set("Content-Type", "application/json; charset=utf-8")
-				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(resp)
-			} else {
-				// Not valid JSON, write original body
-				w.WriteHeader(rw.statusCode)
-				w.Write(rw.body)
-			}
-		} else {
-			// For non-200 status or empty body, just write what we captured
+		// 非 200 或空 body，直接写入原始响应
+		if rw.statusCode != http.StatusOK || len(bodyBytes) == 0 {
 			w.WriteHeader(rw.statusCode)
-			w.Write(rw.body)
+			w.Write(bodyBytes)
+			return
+		}
+
+		// 单次 JSON 解析：直接解析为 map 检查是否已包装
+		var dataMap map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dataMap); err != nil {
+			// 非 JSON 响应，直接写入
+			logx.Debugf("响应非 JSON 格式，跳过包装: %s", r.URL.Path)
+			w.WriteHeader(rw.statusCode)
+			w.Write(bodyBytes)
+			return
+		}
+
+		// 检查是否已包装（包含 code 和 msg 字段）
+		_, hasCode := dataMap["code"]
+		_, hasMsg := dataMap["msg"]
+		if hasCode && hasMsg {
+			// 已包装，直接写入
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.WriteHeader(http.StatusOK)
+			w.Write(bodyBytes)
+			return
+		}
+
+		// 未包装，进行包装
+		resp := result.ResponseBean{
+			Code: 200,
+			Msg:  "success",
+			Data: dataMap,
+		}
+
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			logx.Errorf("响应编码失败: %v", err)
 		}
 	}
 }
 
-// Global Response Interceptor
-func GlobalResponseHandler(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		rw := &responseWriter{
-			ResponseWriter: w,
-			statusCode:     http.StatusOK,
-			body:           []byte{},
-		}
-		next.ServeHTTP(rw, r)
-
-		// If status code is 200, we try to wrap it
-		if rw.statusCode == http.StatusOK && len(rw.body) > 0 {
-			// Check if it's already a ResponseBean structure?
-			// Simpler: assume all 200 OK JSON logic responses need wrapping if they are not already.
-			// However, raw bytes might be just a JSON string.
-
-			// Let's rely on type assertion in logic if possible? No, middleware sees bytes.
-			// Strategy: Unmarshal into interface{}, then wrap.
-
-			var data interface{}
-			if err := json.Unmarshal(rw.body, &data); err == nil {
-				// Check if it already looks like {code, msg, data}?
-				// This is tricky if APIs return similar structure.
-				// But we know standard goctl handler returns pure DTO.
-
-				// Double check if it's already wrapped (e.g. by SetErrorHandler for 200 errors)
-				// If SetErrorHandler returns 200, it writes ResponseBean.
-				// We can check if "code", "msg", "data" keys exist?
-				// Safe bet: The user wants standard goctl handlers to work.
-				// Standard goctl `httpx.OkJsonCtx` writes pure DTO.
-
-				resp := result.ResponseBean{
-					Code: 200,
-					Msg:  "success",
-					Data: data,
-				}
-
-				// Reset header if needed?
-				w.Header().Set("Content-Type", "application/json; charset=utf-8")
-				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(resp)
-			} else {
-				// Not JSON or error, write original
-				w.WriteHeader(rw.statusCode)
-				w.Write(rw.body)
-			}
-		} else {
-			// Non-200 or empty, write as is (Error handler usually handles errors)
-			w.WriteHeader(rw.statusCode)
-			w.Write(rw.body)
-		}
-	})
-}
-
-// Wrapper to capture status and body
+// responseWriter 包装器，捕获状态码和响应体
 type responseWriter struct {
 	http.ResponseWriter
 	statusCode int
-	body       []byte
+	body       *bytes.Buffer
 }
 
 func (w *responseWriter) WriteHeader(statusCode int) {
 	w.statusCode = statusCode
-	// Don't write header yet, we might change it or body
+	// 延迟写入 header，可能需要修改
 }
 
 func (w *responseWriter) Write(body []byte) (int, error) {
-	w.body = append(w.body, body...)
-	return len(body), nil
+	return w.body.Write(body)
 }

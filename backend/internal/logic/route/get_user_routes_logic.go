@@ -114,13 +114,21 @@ func (l *GetUserRoutesLogic) buildTree(allMenus []model.Menu, parentID *uint, us
 				continue
 			}
 
+			// 解析 meta 并检查 hideInMenu
+			meta := l.parseMenuMeta(m.Meta)
+			if meta.HideInMenu {
+				// 跳过隐藏的菜单项（如 403、404、500、login 等错误页面）
+				logx.Infof("过滤隐藏菜单: name=%s, path=%s, hideInMenu=%v", m.Name, m.Path, meta.HideInMenu)
+				continue
+			}
+
 			children := l.buildTree(allMenus, &m.ID, userRoles)
 
 			route := types.MenuRoute{
 				Name:      m.Name,
 				Path:      m.Path,
 				Component: m.Component,
-				Meta:      l.parseMenuMeta(m.Meta),
+				Meta:      meta,
 			}
 
 			if len(children) > 0 {
