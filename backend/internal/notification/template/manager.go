@@ -252,3 +252,30 @@ Message: {{.Message}}
 		},
 	}
 }
+
+// RenderContent 渲染模板内容字符串 (静态辅助函数)
+func RenderContent(format string, content string, data interface{}) (string, error) {
+	var buf bytes.Buffer
+	var err error
+
+	if format == "html" {
+		tmpl, parseErr := html_template.New("preview").Parse(content)
+		if parseErr != nil {
+			return "", parseErr
+		}
+		err = tmpl.Execute(&buf, data)
+	} else {
+		// text, markdown, json
+		tmpl, parseErr := text_template.New("preview").Parse(content)
+		if parseErr != nil {
+			return "", parseErr
+		}
+		err = tmpl.Execute(&buf, data)
+	}
+
+	if err != nil {
+		return "", err
+	}
+
+	return buf.String(), nil
+}
