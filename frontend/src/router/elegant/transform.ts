@@ -169,6 +169,7 @@ const routeMap: RouteMap = {
   "caddy": "/caddy",
   "caddy_config": "/caddy/config",
   "caddy_log": "/caddy/log",
+  "cron": "/cron",
   "dashboard": "/dashboard",
   "iframe-page": "/iframe-page/:url",
   "login": "/login/:module(pwd-login|code-login|register|reset-pwd|bind-wechat)?",

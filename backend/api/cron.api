@@ -1,0 +1,94 @@
+syntax = "v1"
+
+type (
+	// Cron Task Management
+	CronTaskReq {
+		Name     string `json:"name"`
+		Schedule string `json:"schedule"`
+		Script   string `json:"script"`
+		Status   int    `json:"status"` // 1: enable, 0: disable
+		Timeout  int    `json:"timeout,default=60"`
+	}
+	CronTaskUpdateReq {
+		ID       uint   `path:"id"`
+		Name     string `json:"name,optional"`
+		Schedule string `json:"schedule,optional"`
+		Script   string `json:"script,optional"`
+		Status   int    `json:"status,optional"`
+		Timeout  int    `json:"timeout,optional"`
+	}
+	CronTaskListReq {
+		Page     int    `form:"page,default=1"`
+		PageSize int    `form:"pageSize,default=20"`
+		Name     string `form:"name,optional"`
+	}
+	CronTaskItem {
+		ID        uint   `json:"id"`
+		Name      string `json:"name"`
+		Schedule  string `json:"schedule"`
+		Script    string `json:"script"`
+		Status    int    `json:"status"`
+		Timeout   int    `json:"timeout"`
+		NextRun   string `json:"nextRun"`
+		CreatedAt string `json:"createdAt"`
+		UpdatedAt string `json:"updatedAt"`
+	}
+	CronTaskListResp {
+		List  []CronTaskItem `json:"list"`
+		Total int64          `json:"total"`
+	}
+
+	// Trigger Task
+	TriggerTaskReq {
+		ID uint `path:"id"`
+	}
+	
+	// Cron Logs
+	CronLogListReq {
+		Page     int    `form:"page,default=1"`
+		PageSize int    `form:"pageSize,default=20"`
+		TaskID   uint   `form:"taskId,optional"`
+		Status   int    `form:"status,optional"` // -1: all
+	}
+	CronLogItem {
+		ID        uint   `json:"id"`
+		TaskID    uint   `json:"taskId"`
+		TaskName  string `json:"taskName"`
+		StartTime string `json:"startTime"`
+		EndTime   string `json:"endTime"`
+		Status    int    `json:"status"`
+		ExitCode  int    `json:"exitCode"`
+		Output    string `json:"output"`
+		Error     string `json:"error"`
+		Duration  int64  `json:"duration"`
+	}
+	CronLogListResp {
+		List  []CronLogItem `json:"list"`
+		Total int64         `json:"total"`
+	}
+)
+
+@server (
+	prefix: /api
+	group:  cron
+	jwt:    Auth
+)
+service logflux-api {
+	@handler GetCronTaskList
+	get /cron/task (CronTaskListReq) returns (CronTaskListResp)
+
+	@handler CreateCronTask
+	post /cron/task (CronTaskReq) returns (BaseResp)
+
+	@handler UpdateCronTask
+	put /cron/task/:id (CronTaskUpdateReq) returns (BaseResp)
+
+	@handler DeleteCronTask
+	delete /cron/task/:id (IDReq) returns (BaseResp)
+
+	@handler TriggerCronTask
+	post /cron/task/:id/trigger (TriggerTaskReq) returns (BaseResp)
+
+	@handler GetCronLogList
+	get /cron/log (CronLogListReq) returns (CronLogListResp)
+}

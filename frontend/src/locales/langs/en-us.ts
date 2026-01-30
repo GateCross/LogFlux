@@ -240,6 +240,7 @@ const local: App.I18n.Schema = {
     500: 'Server Error',
     'iframe-page': 'Iframe',
 
+    cron: 'Scheduled Tasks',
     dashboard: 'Dashboard',
     caddy: 'Caddy Management',
     caddy_config: 'Caddy Config',

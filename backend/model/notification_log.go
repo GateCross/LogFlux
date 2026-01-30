@@ -10,7 +10,7 @@ type NotificationLog struct {
 	CreatedAt time.Time `gorm:"index:idx_created_at,sort:desc" json:"created_at"`
 
 	// 关联的渠道和规则
-	ChannelID uint  `gorm:"index;not null" json:"channel_id"`
+	ChannelID *uint `gorm:"index" json:"channel_id"`        // Allow NULL for deleted channels
 	RuleID    *uint `gorm:"index" json:"rule_id,omitempty"` // 可选,手动发送的通知没有规则
 
 	// 事件信息
@@ -27,8 +27,8 @@ type NotificationLog struct {
 	ReadAt *time.Time `json:"read_at,omitempty"`
 
 	// 关联
-	Channel *NotificationChannel `gorm:"foreignKey:ChannelID" json:"channel,omitempty"`
-	Rule    *NotificationRule    `gorm:"foreignKey:RuleID" json:"rule,omitempty"`
+	Channel *NotificationChannel `gorm:"foreignKey:ChannelID;constraint:OnDelete:SET NULL" json:"channel,omitempty"`
+	Rule    *NotificationRule    `gorm:"foreignKey:RuleID;constraint:OnDelete:SET NULL" json:"rule,omitempty"`
 }
 
 // TableName 返回表名

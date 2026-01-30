@@ -126,25 +126,30 @@ func (l *GetUnreadNotificationsLogic) GetUnreadNotifications() (resp *types.LogL
 			ruleID = *item.RuleID
 		}
 
-		list = append(list, types.LogItem{
+		logItem := types.LogItem{
 			ID:         item.ID,
 			EventID:    item.EventType,
 			EventType:  item.EventType,
 			Title:      title,
 			Message:    message,
 			Level:      level,
-			ChannelID:  item.ChannelID,
+			ChannelID:  0, // Will set below
 			RuleID:     ruleID,
 			Status:     2, // success
 			Error:      item.ErrorMessage,
 			RetryCount: 0,
 			SentAt:     sentAt,
 			CreatedAt:  item.CreatedAt.Format("2006-01-02 15:04:05"),
-		})
+		}
+
+		if item.ChannelID != nil {
+			logItem.ChannelID = uint(*item.ChannelID)
+		}
+		list = append(list, logItem)
 	}
 
 	return &types.LogListResp{
 		List:  list,
-		Total: int64(len(list)), // Total 应该是过滤后的数量，或者是未读总数？对于未读列表，返回实际显示的条目数比较合理
+		Total: int64(len(list)), // Total 应该是过滤后的数量
 	}, nil
 }
