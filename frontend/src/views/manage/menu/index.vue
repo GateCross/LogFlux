@@ -100,8 +100,10 @@ interface MenuItem {
     icon?: string;
     localIcon?: string;
     hideInMenu?: boolean;
+    roles?: string[];
   };
-  roles: string[];
+  roles?: string[];
+  requiredRoles?: string[];
   children?: MenuItem[];
   createdAt: string;
 }
@@ -148,8 +150,9 @@ const columns: DataTableColumns<MenuItem> = [
     title: '所需角色',
     key: 'roles',
     render(row) {
-      if (!row.roles || row.roles.length === 0) return h(NTag, { size: 'small', bordered: false }, { default: () => '公开' });
-      return row.roles.map(role => h(NTag, { size: 'small', type: 'info', bordered: false, class: 'mr-1' }, { default: () => role }));
+      const roles = row.requiredRoles && row.requiredRoles.length > 0 ? row.requiredRoles : (row.meta?.roles || []);
+      if (!roles || roles.length === 0) return h(NTag, { size: 'small', bordered: false }, { default: () => '公开' });
+      return roles.map(role => h(NTag, { size: 'small', type: 'info', bordered: false, class: 'mr-1' }, { default: () => role }));
     }
   },
   {
@@ -241,7 +244,7 @@ function handleAddRoot() {
   formModel.path = '';
   formModel.component = 'layout.base';
   formModel.order = 0;
-  formModel.meta = { title: '', i18nKey: '' as App.I18n.I18nKey, icon: '', localIcon: '' };
+  formModel.meta = { title: '', i18nKey: '' as App.I18n.I18nKey, icon: '', localIcon: '', hideInMenu: false };
   formModel.roles = [];
   showModal.value = true;
 }
@@ -269,7 +272,7 @@ function handleEdit(row: MenuItem) {
     localIcon: row.meta.localIcon || '',
     hideInMenu: row.meta.hideInMenu || false
   };
-  formModel.roles = [...(row.roles || [])];
+  formModel.roles = [...(row.requiredRoles || row.meta?.roles || row.roles || [])];
   showModal.value = true;
 }
 
@@ -302,9 +305,9 @@ async function handleSubmit() {
             localIcon: formModel.meta.localIcon || '',
             order: formModel.order, // Sync order
             hideInMenu: formModel.meta.hideInMenu,
-            roles: formModel.roles // Sync roles
+            roles: formModel.roles // Sync roles to meta for compatibility if needed
           },
-          roles: formModel.roles,
+          requiredRoles: formModel.roles,
           parentId: formModel.parentId || 0 
         };
         const url = modalType.value === 'add' ? '/api/menu' : `/api/menu/${formModel.id}`;

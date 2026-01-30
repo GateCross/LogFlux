@@ -382,6 +382,7 @@ type UserItem struct {
 	ID        uint     `json:"id"`
 	Username  string   `json:"username"`
 	Roles     []string `json:"roles"`
+	Status    int      `json:"status"`
 	CreatedAt string   `json:"createdAt"`
 }
 
