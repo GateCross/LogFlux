@@ -10,6 +10,7 @@ const local: App.I18n.Schema = {
     action: '操作',
     add: '新增',
     addSuccess: '添加成功',
+    addFailed: '添加失败',
     backToHome: '返回首页',
     batchDelete: '批量删除',
     cancel: '取消',
@@ -22,6 +23,7 @@ const local: App.I18n.Schema = {
     confirm: '确认',
     delete: '删除',
     deleteSuccess: '删除成功',
+    deleteFailed: '删除失败',
     confirmDelete: '确认删除吗？',
     edit: '编辑',
     warning: '警告',
@@ -50,6 +52,7 @@ const local: App.I18n.Schema = {
     trigger: '触发',
     update: '更新',
     updateSuccess: '更新成功',
+    updateFailed: '更新失败',
     userCenter: '个人中心',
     yesOrNo: {
       yes: '是',
@@ -245,7 +248,9 @@ const local: App.I18n.Schema = {
     notification_channel: '渠道管理',
     notification_rule: '规则管理',
     notification_template: '模板管理',
-    notification_log: '发送记录'
+    notification_log: '发送记录',
+    user: '个人中心',
+    user_center: '个人中心'
   },
   page: {
     login: {

@@ -167,6 +167,11 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Handler: notification.GetNotificationLogsHandler(serverCtx),
 			},
 			{
+				Method:  http.MethodPost,
+				Path:    "/notification/read/:id",
+				Handler: notification.ReadNotificationHandler(serverCtx),
+			},
+			{
 				Method:  http.MethodGet,
 				Path:    "/notification/rule",
 				Handler: notification.GetRuleListHandler(serverCtx),
@@ -210,6 +215,11 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Method:  http.MethodPost,
 				Path:    "/notification/template/preview",
 				Handler: notification.PreviewTemplateHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/notification/unread",
+				Handler: notification.GetUnreadNotificationsHandler(serverCtx),
 			},
 		},
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
@@ -287,6 +297,11 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Method:  http.MethodGet,
 				Path:    "/user/info",
 				Handler: user.GetUserInfoHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPut,
+				Path:    "/user/preferences",
+				Handler: user.UpdateUserPreferencesHandler(serverCtx),
 			},
 			{
 				Method:  http.MethodGet,

@@ -2,6 +2,7 @@ package template
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	html_template "html/template"
 	"sync"
@@ -16,6 +17,7 @@ import (
 // TemplateManager 管理通知模板的加载和渲染
 type TemplateManager struct {
 	db        *gorm.DB
+	logger    logx.Logger
 	templates map[string]*ParsedTemplate
 	lock      sync.RWMutex
 }
@@ -29,18 +31,20 @@ type ParsedTemplate struct {
 
 // NewTemplateManager 创建新的模板管理器
 func NewTemplateManager(db *gorm.DB) *TemplateManager {
-	tm := &TemplateManager{
+	return &TemplateManager{
 		db:        db,
+		logger:    logx.WithContext(context.Background()),
 		templates: make(map[string]*ParsedTemplate),
 	}
-	return tm
 }
 
 // LoadTemplates 从数据库加载所有模板到内存
 func (tm *TemplateManager) LoadTemplates() error {
 	var dbTemplates []model.NotificationTemplate
+	// 尝试从数据库加载，如果表不存在（migration未完成），则忽略错误
 	if err := tm.db.Find(&dbTemplates).Error; err != nil {
-		return err
+		tm.logger.Errorf("failed to load templates from db: %v", err)
+		// Don't return error, just load defaults
 	}
 
 	tm.lock.Lock()
@@ -52,7 +56,7 @@ func (tm *TemplateManager) LoadTemplates() error {
 	// 加载数据库模板
 	for _, t := range dbTemplates {
 		if err := tm.parseAndCache(t); err != nil {
-			logx.Errorf("failed to parse template %s: %v", t.Name, err)
+			tm.logger.Errorf("failed to parse template %s: %v", t.Name, err)
 			continue
 		}
 	}
@@ -60,7 +64,7 @@ func (tm *TemplateManager) LoadTemplates() error {
 	// 加载默认模板（如果数据库中没有）
 	tm.ensureDefaults()
 
-	logx.Infof("loaded %d notification templates", len(tm.templates))
+	tm.logger.Infof("Loaded %d notification templates", len(tm.templates))
 	return nil
 }
 
@@ -114,23 +118,60 @@ func (tm *TemplateManager) Render(name string, data interface{}) (string, error)
 	return buf.String(), nil
 }
 
+// RenderContent 直接渲染内容
+func (tm *TemplateManager) RenderContent(content, format string, data interface{}) (string, error) {
+	var buf bytes.Buffer
+	var err error
+
+	if format == "html" {
+		tmpl, parseErr := html_template.New("preview").Parse(content)
+		if parseErr != nil {
+			return "", parseErr
+		}
+		err = tmpl.Execute(&buf, data)
+	} else {
+		// text, markdown, json
+		tmpl, parseErr := text_template.New("preview").Parse(content)
+		if parseErr != nil {
+			return "", parseErr
+		}
+		err = tmpl.Execute(&buf, data)
+	}
+
+	if err != nil {
+		return "", err
+	}
+
+	return buf.String(), nil
+}
+
 // ensureDefaults 确保默认模板存在
 func (tm *TemplateManager) ensureDefaults() {
 	defaults := GetDefaultTemplates()
 	for _, def := range defaults {
 		if _, exists := tm.templates[def.Name]; !exists {
-			// 如果内存中不存在（即数据库也没加载到），则使用默认值
-			// 注意：这里我们只在内存中加载，不强制写入数据库，除非需要
-			// 为了简单起见，这里作为 fallback 存在内存中
+			// 创建内存模型
 			modelTmpl := model.NotificationTemplate{
 				Name:    def.Name,
 				Format:  def.Format,
 				Content: def.Content,
 				Type:    "system",
 			}
+
+			// 尝试解析并缓存
 			if err := tm.parseAndCache(modelTmpl); err != nil {
-				logx.Errorf("failed to load default template %s: %v", def.Name, err)
+				tm.logger.Errorf("failed to load default template %s: %v", def.Name, err)
+				continue
 			}
+
+			// 尝试写入数据库（如果表存在）
+			// 我们在一个单独的协程中做这个，以免阻塞启动，且忽略错误（例如重复键或表不存在）
+			go func(t model.NotificationTemplate) {
+				if err := tm.db.FirstOrCreate(&t, model.NotificationTemplate{Name: t.Name}).Error; err != nil {
+					// 仅记录 debug 日志，因为如果是因为已存在（虽然我们检查了缓存但并发情况下可能）或其他原因，我们不希望太吵
+					// tm.logger.Debugf("failed to persist default template %s: %v", t.Name, err)
+				}
+			}(modelTmpl)
 		}
 	}
 }
@@ -150,44 +191,69 @@ func GetDefaultTemplates() []DefaultTemplateDef {
 			Format: "html",
 			Content: `<!DOCTYPE html>
 <html>
+<head>
+<style>
+  body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+  .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+  .header { background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+  .content { margin-bottom: 20px; }
+  .footer { font-size: 12px; color: #6c757d; margin-top: 30px; border-top: 1px solid #dee2e6; padding-top: 10px; }
+  pre { background-color: #f8f9fa; padding: 10px; border-radius: 5px; overflow-x: auto; }
+</style>
+</head>
 <body>
-    <h2>LogFlux Notification: {{.Type}}</h2>
-    <p><strong>Level:</strong> {{.Level}}</p>
-    <p><strong>Time:</strong> {{.Time}}</p>
-    <p><strong>Message:</strong></p>
-    <pre>{{.Message}}</pre>
+<div class="container">
+  <div class="header">
+    <h2>[{{.Level}}] {{.Title}}</h2>
+    <p>Time: {{.Timestamp}}</p>
+  </div>
+  <div class="content">
+    <p>{{.Message}}</p>
     {{if .Data}}
     <h3>Details:</h3>
-    <ul>
-        {{range $key, $value := .Data}}
-        <li><strong>{{$key}}:</strong> {{$value}}</li>
-        {{end}}
-    </ul>
+    <pre>{{.Data}}</pre>
     {{end}}
+  </div>
+  <div class="footer">
+    <p>Sent by LogFlux Notification System</p>
+  </div>
+</div>
 </body>
 </html>`,
 		},
 		{
-			Name:   "default_telegram",
-			Format: "markdown", // MarkdownV2
-			Content: `*LogFlux Alert*
-*Type*: {{.Type}}
-*Level*: {{.Level}}
-*Time*: {{.Time}}
+			Name:   "default_markdown",
+			Format: "markdown",
+			Content: `**[{{.Level}}] {{.Title}}**
 
-*Message*:
+**Time:** {{.Timestamp}}
+
+**Message:**
 {{.Message}}
+
+{{if .Data}}
+**Details:**
+` + "```json" + `
+{{.Data}}
+` + "```" + `
+{{end}}
 `,
 		},
 		{
-			Name:    "default_webhook",
-			Format:  "json", // Note: Provider typically handles JSON structure, this is for payload body content if customizable
-			Content: `{{.Message}}`,
+			Name:   "default_text",
+			Format: "text",
+			Content: `[{{.Level}}] {{.Title}}
+Time: {{.Timestamp}}
+
+Message: {{.Message}}
+
+{{if .Data}}Details: {{.Data}}{{end}}
+`,
 		},
 	}
 }
 
-// RenderContent 渲染模板内容字符串
+// RenderContent 渲染模板内容字符串 (静态辅助函数)
 func RenderContent(format string, content string, data interface{}) (string, error) {
 	var buf bytes.Buffer
 	var err error
@@ -199,7 +265,7 @@ func RenderContent(format string, content string, data interface{}) (string, err
 		}
 		err = tmpl.Execute(&buf, data)
 	} else {
-		// text or markdown
+		// text, markdown, json
 		tmpl, parseErr := text_template.New("preview").Parse(content)
 		if parseErr != nil {
 			return "", parseErr

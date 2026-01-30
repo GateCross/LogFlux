@@ -115,18 +115,20 @@ type ChannelUpdateReq struct {
 }
 
 type CreateMenuReq struct {
-	Name          string   `json:"name"`
-	Path          string   `json:"path"`
-	Component     string   `json:"component"`
-	Order         int      `json:"order"`
-	Meta          string   `json:"meta"`          // JSON string
-	RequiredRoles []string `json:"requiredRoles"` // Array of role names
-	ParentID      uint     `json:"parentId,optional"`
+	Name          string    `json:"name"`
+	Path          string    `json:"path"`
+	Component     string    `json:"component"`
+	Order         int       `json:"order"`
+	Meta          RouteMeta `json:"meta"`          // JSON string
+	RequiredRoles []string  `json:"requiredRoles"` // Array of role names
+	ParentID      uint      `json:"parentId,optional"`
 }
 
 type IDReq struct {
 	ID uint `path:"id"`
 }
+
+// ...
 
 type IsRouteExistReq struct {
 	RouteName string `form:"routeName"`
@@ -211,6 +213,7 @@ type MenuItem struct {
 	Order         int        `json:"order"`
 	Meta          RouteMeta  `json:"meta"`
 	RequiredRoles []string   `json:"requiredRoles"`
+	ParentID      uint       `json:"parentId"`
 	Children      []MenuItem `json:"children,omitempty"`
 	CreatedAt     string     `json:"createdAt"`
 }
@@ -348,14 +351,14 @@ type UpdateCaddyServerReq struct {
 }
 
 type UpdateMenuReq struct {
-	ID            uint     `path:"id"`
-	Name          string   `json:"name,optional"`
-	Path          string   `json:"path,optional"`
-	Component     string   `json:"component,optional"`
-	Order         int      `json:"order,optional"`
-	Meta          string   `json:"meta,optional"`          // JSON string
-	RequiredRoles []string `json:"requiredRoles,optional"` // Array of role names
-	ParentID      uint     `json:"parentId,optional"`
+	ID            uint      `path:"id"`
+	Name          string    `json:"name,optional"`
+	Path          string    `json:"path,optional"`
+	Component     string    `json:"component,optional"`
+	Order         int       `json:"order,optional"`
+	Meta          RouteMeta `json:"meta,optional"`          // JSON string
+	RequiredRoles []string  `json:"requiredRoles,optional"` // Array of role names
+	ParentID      uint      `json:"parentId,optional"`
 }
 
 type UpdateRolePermissionsReq struct {
@@ -373,15 +376,21 @@ type UserInfoReq struct {
 }
 
 type UserInfoResp struct {
-	UserId   int64    `json:"userId"`
-	Username string   `json:"username"`
-	Roles    []string `json:"roles"`
+	UserId      int64    `json:"userId"`
+	Username    string   `json:"username"`
+	Roles       []string `json:"roles"`
+	Preferences string   `json:"preferences"`
+}
+
+type UserPreferencesReq struct {
+	Preferences string `json:"preferences"`
 }
 
 type UserItem struct {
 	ID        uint     `json:"id"`
 	Username  string   `json:"username"`
 	Roles     []string `json:"roles"`
+	Status    int      `json:"status"`
 	CreatedAt string   `json:"createdAt"`
 }
 

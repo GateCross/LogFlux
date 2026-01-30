@@ -321,6 +321,7 @@ declare namespace App {
         action: string;
         add: string;
         addSuccess: string;
+        addFailed: string;
         backToHome: string;
         batchDelete: string;
         cancel: string;
@@ -333,6 +334,7 @@ declare namespace App {
         confirm: string;
         delete: string;
         deleteSuccess: string;
+        deleteFailed: string;
         confirmDelete: string;
         edit: string;
         warning: string;
@@ -355,6 +357,7 @@ declare namespace App {
         trigger: string;
         update: string;
         updateSuccess: string;
+        updateFailed: string;
         userCenter: string;
         changePassword: string;
         oldPassword: string;

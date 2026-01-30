@@ -99,9 +99,13 @@ interface MenuItem {
     i18nKey?: App.I18n.I18nKey | null;
     icon?: string;
     localIcon?: string;
+    order?: number;
     hideInMenu?: boolean;
+    roles?: string[];
   };
-  roles: string[];
+  roles?: string[];
+  requiredRoles?: string[];
+  parentId?: number; // Added field
   children?: MenuItem[];
   createdAt: string;
 }
@@ -115,6 +119,18 @@ const roleOptions = ref<any[]>([]);
 const columns: DataTableColumns<MenuItem> = [
   {
     type: 'selection'
+  },
+  {
+    title: $t('common.index'),
+    key: 'index',
+    width: 60,
+    align: 'center',
+    render: (row, index) => {
+        if (row.parentId && row.parentId > 0) {
+            return '';
+        }
+        return index + 1;
+    }
   },
   {
     title: '',
@@ -137,7 +153,16 @@ const columns: DataTableColumns<MenuItem> = [
     }
   },
   { title: '路径', key: 'path', width: 180 },
-  { title: '排序', key: 'order', width: 80, align: 'center' },
+  {
+    title: '排序',
+    key: 'order',
+    width: 80,
+    align: 'center',
+    render(row) {
+      // Use meta.order if available (common pattern in this project), fallback to row.order
+      return row.order || row.meta?.order || 0;
+    }
+  },
   {
     title: '国际化Key',
     key: 'i18nKey',
@@ -148,8 +173,9 @@ const columns: DataTableColumns<MenuItem> = [
     title: '所需角色',
     key: 'roles',
     render(row) {
-      if (!row.roles || row.roles.length === 0) return h(NTag, { size: 'small', bordered: false }, { default: () => '公开' });
-      return row.roles.map(role => h(NTag, { size: 'small', type: 'info', bordered: false, class: 'mr-1' }, { default: () => role }));
+      const roles = row.requiredRoles && row.requiredRoles.length > 0 ? row.requiredRoles : (row.meta?.roles || []);
+      if (!roles || roles.length === 0) return h(NTag, { size: 'small', bordered: false }, { default: () => '公开' });
+      return roles.map(role => h(NTag, { size: 'small', type: 'info', bordered: false, class: 'mr-1' }, { default: () => role }));
     }
   },
   {
@@ -241,7 +267,7 @@ function handleAddRoot() {
   formModel.path = '';
   formModel.component = 'layout.base';
   formModel.order = 0;
-  formModel.meta = { title: '', i18nKey: '' as App.I18n.I18nKey, icon: '', localIcon: '' };
+  formModel.meta = { title: '', i18nKey: '' as App.I18n.I18nKey, icon: '', localIcon: '', hideInMenu: false };
   formModel.roles = [];
   showModal.value = true;
 }
@@ -261,7 +287,7 @@ function handleEdit(row: MenuItem) {
   formModel.name = row.name;
   formModel.path = row.path;
   formModel.component = row.component;
-  formModel.order = row.order;
+  formModel.order = row.order || (row.meta.order ?? 0); // Try to get order from meta if top level is missing
   formModel.meta = {
     title: row.meta.title || '',
     i18nKey: (row.meta.i18nKey || '') as App.I18n.I18nKey,
@@ -269,7 +295,7 @@ function handleEdit(row: MenuItem) {
     localIcon: row.meta.localIcon || '',
     hideInMenu: row.meta.hideInMenu || false
   };
-  formModel.roles = [...(row.roles || [])];
+  formModel.roles = [...(row.requiredRoles || row.meta?.roles || row.roles || [])];
   showModal.value = true;
 }
 
@@ -302,9 +328,9 @@ async function handleSubmit() {
             localIcon: formModel.meta.localIcon || '',
             order: formModel.order, // Sync order
             hideInMenu: formModel.meta.hideInMenu,
-            roles: formModel.roles // Sync roles
+            roles: formModel.roles // Sync roles to meta for compatibility if needed
           },
-          roles: formModel.roles,
+          requiredRoles: formModel.roles,
           parentId: formModel.parentId || 0 
         };
         const url = modalType.value === 'add' ? '/api/menu' : `/api/menu/${formModel.id}`;

@@ -33,6 +33,7 @@ export function setupElegantRouter() {
 
       if (constantRoutes.includes(key)) {
         meta.constant = true;
+        meta.hideInMenu = true; // 错误页面和登录页不显示在菜单中
       }
 
       return meta;

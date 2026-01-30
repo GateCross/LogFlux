@@ -28,7 +28,7 @@ func NewGetMenuListLogic(ctx context.Context, svcCtx *svc.ServiceContext) *GetMe
 func (l *GetMenuListLogic) GetMenuList() (resp *types.MenuListResp, err error) {
 	var allMenus []model.Menu
 	// 获取所有菜单，按 Order 排序
-	if err := l.svcCtx.DB.Order("\"order\" asc").Find(&allMenus).Error; err != nil {
+	if err := l.svcCtx.DB.Order("\"order\" asc, id asc").Find(&allMenus).Error; err != nil {
 		return nil, err
 	}
 
@@ -73,6 +73,12 @@ func (l *GetMenuListLogic) buildTree(allMenus []model.Menu, parentID *uint) []ty
 				Meta:          meta,
 				RequiredRoles: m.RequiredRoles,
 				CreatedAt:     m.CreatedAt.Format("2006-01-02 15:04:05"),
+			}
+			if item.Order == 0 && meta.Order != 0 {
+				item.Order = meta.Order
+			}
+			if m.ParentID != nil {
+				item.ParentID = *m.ParentID
 			}
 
 			if len(children) > 0 {

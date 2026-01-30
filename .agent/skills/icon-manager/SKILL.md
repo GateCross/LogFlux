@@ -1,46 +1,87 @@
 ---
 name: icon-manager
-description: Add new icons or fix icon issues in the frontend. Use when user asks to "add icon" or reports "icon not showing".
-version: 1.0.0
+description: 管理前端 Iconify 图标。使用场景："添加图标"、"图标不显示"、"图标报错"。
+version: 2.0.0
 ---
 
-# 图标管理专家 (Icon Manager)
+# 图标管理专家
 
 你是专注于 Iconify 集成的前端设计工程师。
 
-## Context (背景)
-本项目使用 `frontend/src/plugins/iconify.ts` 来注册离线使用的图标。我们**不依赖**运行时的 API 调用来加载图标。
+---
 
-## 能力：添加新图标 (Add New Icon)
+## 背景
 
-### 1. 验证可用性 (Verify Availability)
-在添加代码之前，检查 `package.json` 中是否已安装相应的图标集。
-```bash
-grep "@iconify-json/<set-name>" frontend/package.json
-```
-如果未安装，停止并在继续前请求用户安装。
+本项目使用 `frontend/src/plugins/iconify.ts` 离线注册图标，**不依赖**运行时 API 调用。
 
-### 2. 搜索图标 (Search for Icon)
-确认图标名称存在。
-```bash
-# 示例：在 mdi 中搜索 'home'
-find frontend/node_modules/@iconify/icons-mdi -name "home.d.ts"
-```
+已安装的图标集（检查 `package.json`）：
+- `@iconify-json/mdi` - Material Design Icons
+- `@iconify-json/carbon` - Carbon Icons
+- `@iconify-json/ic` - Google Material Icons
+- `@iconify-json/ant-design` - Ant Design Icons
+- 更多请查看 `frontend/package.json`
 
-### 3. 实现注册 (Implement Registration)
-编辑 `frontend/src/plugins/iconify.ts`：
-1.  **导入 (Import)**: 在顶部添加 `import PascalName from '@iconify/icons-set/kebab-name';`。
-2.  **注册 (Register)**: 在 `setupIconifyOffline()` 中添加 `addIcon('set:kebab-name', PascalName);`。
+---
 
-### 4. 验证 (Verification)
-运行类型检查以确保没有导入错误。
-```bash
-npm run typecheck
-```
+## 能力一：添加新图标
 
-## 能力：修复图标问题 (Fix Icon Issues)
+### 工作流
 
-### 诊断 "图标不显示" (Diagnose "Icon Not Showing")
-1. 检查是否为该特定图标字符串调用了 `addIcon`。
-2. 验证传递给组件的字符串是否与注册的 key 匹配（例如 `carbon:user` vs `carbon:user-filled`）。
-3. 检查控制台是否有关于丢失图标的警告。
+1. **确认图标集已安装**
+   ```bash
+   grep "@iconify-json/<set-name>" frontend/package.json
+   ```
+   如未安装，先安装：`pnpm add @iconify-json/<set-name> -D`
+
+2. **搜索图标名称**
+   ```bash
+   # 示例：在 mdi 图标集中搜索 'home'
+   ls frontend/node_modules/@iconify-json/mdi/icons/*.json | head -20
+   ```
+
+3. **注册图标**
+
+   编辑 `frontend/src/plugins/iconify.ts`：
+   
+   ```typescript
+   // 1. 添加导入
+   import HomeIcon from '@iconify/icons-mdi/home';
+   
+   // 2. 在 setupIconifyOffline() 中注册
+   addIcon('mdi:home', HomeIcon);
+   ```
+
+4. **验证**
+   ```bash
+   cd frontend && pnpm typecheck
+   ```
+
+---
+
+## 能力二：修复图标问题
+
+### "图标不显示" 诊断步骤
+
+1. **检查注册**：确认 `iconify.ts` 中已调用 `addIcon('prefix:name', Icon)`
+2. **检查命名**：组件中使用的名称必须与注册的 key 完全匹配
+   - ✅ `icon="mdi:home"`
+   - ❌ `icon="mdi-home"` （分隔符错误）
+3. **检查控制台**：查看是否有关于丢失图标的警告
+
+### 常见问题
+
+| 问题 | 原因 | 解决方案 |
+|------|------|---------|
+| 图标显示为空白 | 未注册或名称不匹配 | 检查 `iconify.ts` 注册 |
+| Console 报 404 | 运行时尝试远程加载 | 确认已离线注册 |
+| TypeScript 报错 | 图标集未安装 | 安装对应 `@iconify-json/*` |
+
+---
+
+## 导航速查
+
+| 功能 | 路径 |
+|------|------|
+| **图标注册文件** | `frontend/src/plugins/iconify.ts` |
+| **图标依赖** | `frontend/package.json` |
+| **图标组件使用** | 搜索 `<icon-*` 或 `SvgIcon` |

@@ -112,3 +112,11 @@ export function previewTemplate(data: any) {
 export function getLogList(params: any) {
     return request<any>({ url: '/api/notification/log', method: 'get', params });
 }
+
+export function getUnreadNotifications() {
+    return request<any>({ url: '/api/notification/unread', method: 'get' });
+}
+
+export function readNotification(id: number) {
+    return request<any>({ url: `/api/notification/read/${id}`, method: 'post' });
+}

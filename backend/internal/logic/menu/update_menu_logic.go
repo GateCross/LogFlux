@@ -2,6 +2,7 @@ package menu
 
 import (
 	"context"
+	"encoding/json"
 
 	"logflux/common/result"
 	"logflux/internal/svc"
@@ -42,11 +43,10 @@ func (l *UpdateMenuLogic) UpdateMenu(req *types.UpdateMenuReq) (resp *types.Base
 	if req.Component != "" {
 		updates["component"] = req.Component
 	}
-	if req.Order != 0 {
-		updates["order"] = req.Order
-	}
-	if req.Meta != "" {
-		updates["meta"] = req.Meta
+	updates["order"] = req.Order
+	if req.Meta.Title != "" { // Check if Meta is not empty (simplified check)
+		metaBytes, _ := json.Marshal(req.Meta)
+		updates["meta"] = string(metaBytes)
 	}
 	if req.RequiredRoles != nil {
 		updates["required_roles"] = pq.StringArray(req.RequiredRoles)
