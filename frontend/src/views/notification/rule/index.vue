@@ -258,7 +258,7 @@ async function handleSubmit() {
       showModal.value = false;
       fetchData();
     } else {
-      message.error(t('common.updateSuccess')); // Fallback to generic success (should be failed)
+      message.error(t('common.updateFailed'));
     }
   } finally {
     submitting.value = false;
@@ -277,7 +277,7 @@ function handleDelete(row: RuleItem) {
         message.success(t('common.deleteSuccess'));
         fetchData();
       } else {
-        message.error(t('common.deleteSuccess'));
+        message.error(t('common.deleteFailed'));
       }
     }
   });

@@ -159,6 +159,7 @@ const (
 	ChannelTypeSlack    = "slack"
 	ChannelTypeWeCom    = "wecom"
 	ChannelTypeDingTalk = "dingtalk"
+	ChannelTypeDiscord  = "discord"
 )
 
 // Webhook 配置结构
@@ -198,4 +199,11 @@ type WeComConfig struct {
 type DingTalkConfig struct {
 	WebhookURL string `json:"webhook_url"`
 	Secret     string `json:"secret,omitempty"`
+}
+
+// Discord 配置结构
+type DiscordConfig struct {
+	WebhookURL string `json:"webhook_url"`
+	Username   string `json:"username,omitempty"`
+	AvatarURL  string `json:"avatar_url,omitempty"`
 }

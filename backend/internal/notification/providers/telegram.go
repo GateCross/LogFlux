@@ -123,7 +123,7 @@ func formatTelegramMessage(event *notification.Event) string {
 	builder.WriteString("\n")
 
 	// 详细数据 (如果存在)
-	if event.Data != nil && len(event.Data) > 0 {
+	if len(event.Data) > 0 {
 		builder.WriteString("\n📊 *详细信息:*\n")
 		builder.WriteString("```json\n")
 		builder.WriteString(prettyJSON(event.Data))

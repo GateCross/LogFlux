@@ -53,6 +53,7 @@ func (l *GetUserListLogic) GetUserList(req *types.UserListReq) (resp *types.User
 			ID:        u.ID,
 			Username:  u.Username,
 			Roles:     u.Roles,
+			Status:    u.Status,
 			CreatedAt: u.CreatedAt.Format("2006-01-02 15:04:05"),
 		})
 	}

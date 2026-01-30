@@ -17,9 +17,23 @@ export function fetchLogin(username: string, password: string) {
   });
 }
 
-/** Get user info */
 export function fetchGetUserInfo() {
   return request<Api.Auth.UserInfo>({ url: '/api/user/info' });
+}
+
+/**
+ * Update user preferences
+ * 
+ * @param preferences User preferences JSON string
+ */
+export function fetchUpdateUserPreferences(preferences: string) {
+  return request<any>({
+    url: '/api/user/preferences',
+    method: 'put',
+    data: {
+      preferences
+    }
+  });
 }
 
 /**
