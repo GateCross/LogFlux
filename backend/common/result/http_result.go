@@ -18,6 +18,11 @@ func NewErrMsg(msg string) error {
 	return &CodeError{Code: 400, Msg: msg}
 }
 
+// NewCodeError 返回自定义代码和消息的错误
+func NewCodeError(code int, msg string) error {
+	return &CodeError{Code: code, Msg: msg}
+}
+
 type CodeError struct {
 	Code int
 	Msg  string

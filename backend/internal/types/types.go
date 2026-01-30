@@ -124,11 +124,74 @@ type CreateMenuReq struct {
 	ParentID      uint      `json:"parentId,optional"`
 }
 
+type CronLogItem struct {
+	ID        uint   `json:"id"`
+	TaskID    uint   `json:"taskId"`
+	TaskName  string `json:"taskName"`
+	StartTime string `json:"startTime"`
+	EndTime   string `json:"endTime"`
+	Status    int    `json:"status"`
+	ExitCode  int    `json:"exitCode"`
+	Output    string `json:"output"`
+	Error     string `json:"error"`
+	Duration  int64  `json:"duration"`
+}
+
+type CronLogListReq struct {
+	Page     int  `form:"page,default=1"`
+	PageSize int  `form:"pageSize,default=20"`
+	TaskID   uint `form:"taskId,optional"`
+	Status   int  `form:"status,optional"` // -1: all
+}
+
+type CronLogListResp struct {
+	List  []CronLogItem `json:"list"`
+	Total int64         `json:"total"`
+}
+
+type CronTaskItem struct {
+	ID        uint   `json:"id"`
+	Name      string `json:"name"`
+	Schedule  string `json:"schedule"`
+	Script    string `json:"script"`
+	Status    int    `json:"status"`
+	Timeout   int    `json:"timeout"`
+	NextRun   string `json:"nextRun"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
+}
+
+type CronTaskListReq struct {
+	Page     int    `form:"page,default=1"`
+	PageSize int    `form:"pageSize,default=20"`
+	Name     string `form:"name,optional"`
+}
+
+type CronTaskListResp struct {
+	List  []CronTaskItem `json:"list"`
+	Total int64          `json:"total"`
+}
+
+type CronTaskReq struct {
+	Name     string `json:"name"`
+	Schedule string `json:"schedule"`
+	Script   string `json:"script"`
+	Status   int    `json:"status"` // 1: enable, 0: disable
+	Timeout  int    `json:"timeout,default=60"`
+}
+
+type CronTaskUpdateReq struct {
+	ID       uint   `path:"id"`
+	Name     string `json:"name,optional"`
+	Schedule string `json:"schedule,optional"`
+	Script   string `json:"script,optional"`
+	Status   int    `json:"status,optional"`
+	Timeout  int    `json:"timeout,optional"`
+}
+
 type IDReq struct {
 	ID uint `path:"id"`
 }
-
-// ...
 
 type IsRouteExistReq struct {
 	RouteName string `form:"routeName"`
@@ -340,6 +403,10 @@ type TestChannelReq struct {
 	ID uint `json:"id"`
 }
 
+type TriggerTaskReq struct {
+	ID uint `path:"id"`
+}
+
 type UpdateCaddyServerReq struct {
 	ID       uint   `path:"id"`
 	Name     string `json:"name,optional"`
@@ -379,11 +446,7 @@ type UserInfoResp struct {
 	UserId      int64    `json:"userId"`
 	Username    string   `json:"username"`
 	Roles       []string `json:"roles"`
-	Preferences string   `json:"preferences"`
-}
-
-type UserPreferencesReq struct {
-	Preferences string `json:"preferences"`
+	Preferences string   `json:"preferences"` // JSON string
 }
 
 type UserItem struct {
@@ -403,6 +466,10 @@ type UserListReq struct {
 type UserListResp struct {
 	List  []UserItem `json:"list"`
 	Total int64      `json:"total"`
+}
+
+type UserPreferencesReq struct {
+	Preferences string `json:"preferences"` // JSON string
 }
 
 type UserRouteResp struct {

@@ -23,6 +23,7 @@ type ServiceContext struct {
 	Redis           *redis.Client
 	Ingestor        *ingest.CaddyIngestor
 	ArchiveTask     *tasks.ArchiveTask
+	CronScheduler   *tasks.CronScheduler
 	NotificationMgr notification.NotificationManager
 }
 
@@ -43,6 +44,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		&model.NotificationRule{},
 		&model.NotificationLog{},
 		&model.NotificationTemplate{},
+		// 定时任务表
+		&model.CronTask{},
+		&model.CronTaskLog{},
 	)
 
 	// 创建归档存储过程（如果不存在）
@@ -120,12 +124,17 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		go archiveTask.Start(context.Background())
 	}
 
+	// 初始化定时任务调度器
+	cronScheduler := tasks.NewCronScheduler(db)
+	cronScheduler.Start()
+
 	return &ServiceContext{
 		Config:          c,
 		DB:              db,
 		Redis:           rdb,
 		Ingestor:        ingestor,
 		ArchiveTask:     archiveTask,
+		CronScheduler:   cronScheduler,
 		NotificationMgr: notificationMgr,
 	}
 }
@@ -265,6 +274,14 @@ func initRBACData(db *gorm2.DB) {
 			Meta:          `{"title":"notification_log","i18nKey":"route.notification_log","icon":"carbon:script","roles":["admin"]}`,
 			RequiredRoles: []string{"admin"},
 		},
+		{
+			Name:          "cron",
+			Path:          "/cron",
+			Component:     "layout.base$view.cron",
+			Order:         3,
+			Meta:          `{"title":"cron","i18nKey":"route.cron","icon":"mdi:clock-time-four-outline","order":3,"roles":["admin"]}`,
+			RequiredRoles: []string{"admin"},
+		},
 	}
 
 	// 第一步：确保所有菜单存在
@@ -296,7 +313,10 @@ func initRBACData(db *gorm2.DB) {
 	setParent("notification_channel", "notification")
 	setParent("notification_rule", "notification")
 	setParent("notification_template", "notification")
+	setParent("notification_template", "notification")
 	setParent("notification_log", "notification")
+	setParent("notification_log", "notification")
+	// setParent("cron", "manage") // moved to top level
 
 	// 清理遗留数据
 	db.Where("name = ?", "home").Delete(&model.Menu{})

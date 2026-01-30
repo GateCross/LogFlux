@@ -8,6 +8,7 @@ import (
 
 	auth "logflux/internal/handler/auth"
 	caddy "logflux/internal/handler/caddy"
+	cron "logflux/internal/handler/cron"
 	log "logflux/internal/handler/log"
 	menu "logflux/internal/handler/menu"
 	notification "logflux/internal/handler/notification"
@@ -62,6 +63,43 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Method:  http.MethodPost,
 				Path:    "/caddy/server/:serverId/config",
 				Handler: caddy.UpdateCaddyConfigHandler(serverCtx),
+			},
+		},
+		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
+		rest.WithPrefix("/api"),
+	)
+
+	server.AddRoutes(
+		[]rest.Route{
+			{
+				Method:  http.MethodGet,
+				Path:    "/cron/log",
+				Handler: cron.GetCronLogListHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/cron/task",
+				Handler: cron.GetCronTaskListHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/cron/task",
+				Handler: cron.CreateCronTaskHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPut,
+				Path:    "/cron/task/:id",
+				Handler: cron.UpdateCronTaskHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodDelete,
+				Path:    "/cron/task/:id",
+				Handler: cron.DeleteCronTaskHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/cron/task/:id/trigger",
+				Handler: cron.TriggerCronTaskHandler(serverCtx),
 			},
 		},
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
@@ -299,14 +337,14 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Handler: user.GetUserInfoHandler(serverCtx),
 			},
 			{
-				Method:  http.MethodPut,
-				Path:    "/user/preferences",
-				Handler: user.UpdateUserPreferencesHandler(serverCtx),
-			},
-			{
 				Method:  http.MethodGet,
 				Path:    "/user/list",
 				Handler: user.GetUserListHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPut,
+				Path:    "/user/preferences",
+				Handler: user.UpdateUserPreferencesHandler(serverCtx),
 			},
 		},
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),

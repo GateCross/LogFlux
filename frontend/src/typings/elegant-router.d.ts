@@ -23,6 +23,7 @@ declare module "@elegant-router/types" {
     "caddy": "/caddy";
     "caddy_config": "/caddy/config";
     "caddy_log": "/caddy/log";
+    "cron": "/cron";
     "dashboard": "/dashboard";
     "iframe-page": "/iframe-page/:url";
     "login": "/login/:module(pwd-login|code-login|register|reset-pwd|bind-wechat)?";
@@ -72,6 +73,7 @@ declare module "@elegant-router/types" {
     | "404"
     | "500"
     | "caddy"
+    | "cron"
     | "dashboard"
     | "iframe-page"
     | "login"
@@ -101,6 +103,7 @@ declare module "@elegant-router/types" {
     | "login"
     | "caddy_config"
     | "caddy_log"
+    | "cron"
     | "dashboard"
     | "manage_menu"
     | "manage_role"

@@ -316,7 +316,7 @@ func (m *Manager) matchPattern(eventType, pattern string) bool {
 func (m *Manager) sendToChannel(ctx context.Context, channel *model.NotificationChannel, event *Event, rule *model.NotificationRule) {
 	// 创建通知日志
 	log := &model.NotificationLog{
-		ChannelID: channel.ID,
+		ChannelID: &channel.ID,
 		EventType: event.Type,
 		EventData: model.JSONMap(event.Data),
 		Status:    model.NotificationStatusPending,

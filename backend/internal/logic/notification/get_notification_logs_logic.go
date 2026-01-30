@@ -76,7 +76,7 @@ func (l *GetNotificationLogsLogic) GetNotificationLogs(req *types.LogListReq) (r
 			Title:      "",
 			Message:    "",
 			Level:      "",
-			ChannelID:  log.ChannelID,
+			ChannelID:  0,
 			Status:     statusInt,
 			Error:      log.ErrorMessage,
 			RetryCount: 0, // Model doesn't have RetryCount
@@ -84,6 +84,9 @@ func (l *GetNotificationLogsLogic) GetNotificationLogs(req *types.LogListReq) (r
 		}
 		if log.RuleID != nil {
 			item.RuleID = uint(*log.RuleID)
+		}
+		if log.ChannelID != nil {
+			item.ChannelID = uint(*log.ChannelID)
 		}
 		if log.SentAt != nil {
 			item.SentAt = log.SentAt.Format("2006-01-02 15:04:05")
