@@ -15,6 +15,7 @@ declare namespace Api {
       username: string;
       roles: string[];
       buttons?: string[];
+      preferences?: string;
     }
   }
 }

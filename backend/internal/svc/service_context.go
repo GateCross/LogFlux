@@ -351,6 +351,9 @@ func initNotificationManager(db *gorm2.DB, rdb *redis.Client, c config.Config) n
 	_ = mgr.RegisterProvider(providers.NewWebhookProvider())
 	_ = mgr.RegisterProvider(providers.NewEmailProvider())
 	_ = mgr.RegisterProvider(providers.NewTelegramProvider())
+	_ = mgr.RegisterProvider(providers.NewSlackProvider())
+	_ = mgr.RegisterProvider(providers.NewDiscordProvider())
+	_ = mgr.RegisterProvider(providers.NewInAppProvider())
 
 	// 从配置文件同步通知渠道到数据库
 	if len(c.Notification.Channels) > 0 {

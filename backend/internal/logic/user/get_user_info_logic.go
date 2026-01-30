@@ -57,9 +57,18 @@ func (l *GetUserInfoLogic) GetUserInfo(req *types.UserInfoReq) (resp *types.User
 		return nil, errors.New("查询用户失败")
 	}
 
+	// Serialize preferences to JSON string
+	var prefsStr string
+	if user.Preferences != nil {
+		if prefsBytes, err := json.Marshal(user.Preferences); err == nil {
+			prefsStr = string(prefsBytes)
+		}
+	}
+
 	return &types.UserInfoResp{
-		UserId:   int64(user.ID),
-		Username: user.Username,
-		Roles:    user.Roles,
+		UserId:      int64(user.ID),
+		Username:    user.Username,
+		Roles:       user.Roles,
+		Preferences: prefsStr,
 	}, nil
 }

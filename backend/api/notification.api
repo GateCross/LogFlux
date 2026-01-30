@@ -194,4 +194,9 @@ service logflux-api {
 	// Log
 	@handler GetNotificationLogs
 	get /notification/log (LogListReq) returns (LogListResp)
+	@handler GetUnreadNotifications
+	get /notification/unread returns (LogListResp)
+
+	@handler ReadNotification
+	post /notification/read/:id (IDReq) returns (BaseResp)
 }

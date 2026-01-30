@@ -22,6 +22,10 @@ type NotificationLog struct {
 	ErrorMessage string     `gorm:"type:text" json:"error_message,omitempty"`
 	SentAt       *time.Time `json:"sent_at,omitempty"`
 
+	// In-App Notification status
+	IsRead bool       `gorm:"default:false;index" json:"is_read"`
+	ReadAt *time.Time `json:"read_at,omitempty"`
+
 	// 关联
 	Channel *NotificationChannel `gorm:"foreignKey:ChannelID" json:"channel,omitempty"`
 	Rule    *NotificationRule    `gorm:"foreignKey:RuleID" json:"rule,omitempty"`

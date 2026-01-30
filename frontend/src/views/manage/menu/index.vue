@@ -104,6 +104,7 @@ interface MenuItem {
   };
   roles?: string[];
   requiredRoles?: string[];
+  parentId?: number; // Added field
   children?: MenuItem[];
   createdAt: string;
 }
@@ -123,7 +124,12 @@ const columns: DataTableColumns<MenuItem> = [
     key: 'index',
     width: 60,
     align: 'center',
-    render: (_, index) => index + 1
+    render: (row, index) => {
+        if (row.parentId && row.parentId > 0) {
+            return '';
+        }
+        return index + 1;
+    }
   },
   {
     title: '',
@@ -146,7 +152,16 @@ const columns: DataTableColumns<MenuItem> = [
     }
   },
   { title: '路径', key: 'path', width: 180 },
-  { title: '排序', key: 'order', width: 80, align: 'center' },
+  {
+    title: '排序',
+    key: 'order',
+    width: 80,
+    align: 'center',
+    render(row) {
+      // Use meta.order if available (common pattern in this project), fallback to row.order
+      return row.order || row.meta?.order || 0;
+    }
+  },
   {
     title: '国际化Key',
     key: 'i18nKey',
@@ -271,7 +286,7 @@ function handleEdit(row: MenuItem) {
   formModel.name = row.name;
   formModel.path = row.path;
   formModel.component = row.component;
-  formModel.order = row.order;
+  formModel.order = row.order || (row.meta.order ?? 0); // Try to get order from meta if top level is missing
   formModel.meta = {
     title: row.meta.title || '',
     i18nKey: (row.meta.i18nKey || '') as App.I18n.I18nKey,

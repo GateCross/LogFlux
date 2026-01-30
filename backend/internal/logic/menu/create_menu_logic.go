@@ -2,6 +2,7 @@ package menu
 
 import (
 	"context"
+	"encoding/json"
 
 	"logflux/common/result"
 	"logflux/internal/svc"
@@ -34,12 +35,13 @@ func (l *CreateMenuLogic) CreateMenu(req *types.CreateMenuReq) (resp *types.Base
 		return nil, result.NewErrMsg("菜单标识已存在")
 	}
 
+	metaBytes, _ := json.Marshal(req.Meta)
 	menu := model.Menu{
 		Name:          req.Name,
 		Path:          req.Path,
 		Component:     req.Component,
 		Order:         req.Order,
-		Meta:          req.Meta,
+		Meta:          string(metaBytes),
 		RequiredRoles: pq.StringArray(req.RequiredRoles),
 	}
 
