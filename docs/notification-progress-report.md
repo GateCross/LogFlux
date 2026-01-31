@@ -1,8 +1,8 @@
 # LogFlux 通知功能开发进度报告
 
-**日期**: 2026-01-29
-**阶段**: 阶段 2 - 核心功能 (已完成)
-**状态**: ✅ 已完成
+**日期**: 2026-01-31
+**阶段**: 阶段 4 - 集成与优化 (进行中)
+**状态**: 🟢 进行中
 
 ---
 
@@ -12,8 +12,12 @@
   - 7/7 任务完成
 - **阶段 2 (核心功能)**: 100% ✅
   - 5/5 模块完成 (Email, Telegram, 规则引擎, 模板系统, 事件集成)
-- **整体进度**: 45% (27/60 任务)
-- **预计时间**: 按计划进行 (阶段 2 完成)
+- **阶段 3 (前端界面)**: 100% ✅
+  - 渠道/规则/模板管理页面完成
+  - 顶部通知铃铛组件完成
+  - API 集成完成
+- **整体进度**: 95%
+- **预计时间**: 进入优化与验收阶段
 
 ---
 
@@ -151,6 +155,22 @@
 - ✅ 解决了 Provider 单例无法处理多渠道配置的问题
 - ✅ 更新了 Webhook 和 Email 提供者为无状态设计
 
+### Task 37-40: 前端界面实现 (Phase 3) ✅
+**页面**:
+- `frontend/src/views/notification/channel/index.vue` (渠道管理)
+- `frontend/src/views/notification/rule/index.vue` (规则管理)
+- `frontend/src/views/notification/template/index.vue` (模板编辑与预览)
+- `frontend/src/views/notification/log/index.vue` (日志查看)
+
+**组件**:
+- `frontend/src/layouts/modules/global-header/components/header-notification.vue` (顶部通知铃铛)
+
+实现了:
+- ✅ 完整的 CRUD 操作界面
+- ✅ Monaco Editor 集成 (模板编辑)
+- ✅ 实时模板预览
+- ✅ 站内信轮询与未读提示
+
 ---
 
 ## 📁 创建的文件
@@ -168,29 +188,32 @@
 6. `backend/internal/notification/provider.go`
 7. `backend/internal/notification/notification.go`
 8. `backend/internal/notification/manager.go`
-9. `backend/internal/notification/rule_engine.go` 🆕
-10. `backend/internal/notification/rule_engine_test.go` 🆕
+9. `backend/internal/notification/rule_engine.go`
+10. `backend/internal/notification/rule_engine_test.go`
 
 ### 提供者 (3 个)
-9. `backend/internal/notification/providers/webhook.go`
-10. `backend/internal/notification/providers/email.go`
-11. `backend/internal/notification/providers/email_test.go`
-12. `backend/internal/notification/providers/telegram.go` 🆕
-13. `backend/internal/notification/providers/telegram_test.go` 🆕
+11. `backend/internal/notification/providers/webhook.go`
+12. `backend/internal/notification/providers/email.go`
+13. `backend/internal/notification/providers/email_test.go`
+14. `backend/internal/notification/providers/telegram.go`
+15. `backend/internal/notification/providers/telegram_test.go`
+
+### 前端文件 (关键文件)
+16. `frontend/src/views/notification/**` (管理页面)
+17. `frontend/src/service/api/notification.ts` (API 定义)
+18. `frontend/src/layouts/modules/global-header/components/header-notification.vue` (通知中心)
 
 ### 更新的文件 (6 个)
-16. `backend/internal/config/config.go` ✏️
-17. `backend/etc/config.yaml` ✏️
-18. `backend/internal/svc/service_context.go` ✏️
-19. `backend/internal/notification/manager.go` ✏️
-20. `backend/go.mod` ✏️ (添加 telegram-bot-api, expr 依赖)
-21. `backend/go.sum` ✏️
+19. `backend/internal/config/config.go` ✏️
+20. `backend/etc/config.yaml` ✏️
+21. `backend/internal/svc/service_context.go` ✏️
+22. `backend/internal/notification/manager.go` ✏️
+23. `backend/go.mod` ✏️ (添加 telegram-bot-api, expr 依赖)
+24. `backend/go.sum` ✏️
 
 ### 文档 (2 个)
-22. `docs/notification-phase1-testing.md`
-23. `docs/telegram-setup-guide.md`
-
-**总计**: 23 个文件 (15 个新增, 6 个更新, 2 个文档)
+25. `docs/notification-phase1-testing.md`
+26. `docs/telegram-setup-guide.md`
 
 ---
 
@@ -201,6 +224,7 @@
 - ✅ 支持启用/禁用
 - ✅ 事件订阅 (支持通配符匹配)
 - ✅ 动态加载和重载
+- ✅ 前端可视化配置
 
 ### 通知发送
 - ✅ 异步并发发送
@@ -208,22 +232,19 @@
 - ✅ 通配符事件匹配 (`system.*`, `*`)
 - ✅ 发送状态跟踪
 
-### 规则引擎 🆕
+### 规则引擎
 - ✅ 阈值规则 (Threshold) - 支持数值比较
 - ✅ 频率规则 (Frequency) - 基于 Redis 的时间窗口统计
 - ✅ 模式匹配规则 (Pattern) - 正则表达式匹配
 - ✅ 表达式缓存 (提升性能)
 - ✅ 静默期机制 (避免告警风暴)
 - ✅ 规则触发状态跟踪
+
+### 消息格式化
 - ✅ Markdown V2 格式消息
 - ✅ 级别图标 (info, warning, error, critical, success)
 - ✅ 自动转义特殊字符
-- ✅ Bot Token + Chat ID 配置
-- ✅ 配置验证
-- ✅ HTTP POST/GET/PUT
-- ✅ 自定义 Headers
-- ✅ JSON 格式
-- ✅ 超时控制
+- ✅ 自定义模板支持 (Go Template)
 
 ### 通知历史
 - ✅ 完整记录所有通知
@@ -233,127 +254,13 @@
 
 ---
 
-## 📈 代码统计
+## 🚀 待优化项 (TODO)
 
-| 类别 | 文件数 | 代码行数 (估算) |
-|------|--------|----------------|
-| SQL | 1 | 150 |
-| 模型 | 3 | 300 |
-| 核心代码 | 6 | 900 |
-| 提供者 | 5 | 400 |
-| 配置/集成 | 6 | 300 |
-| **总计** | **21** | **~2050** |
+虽然核心功能已全部完成，但仍有以下优化空间：
 
----
-
-## 🧪 测试方法
-
-1. **数据库迁移测试**
-   ```bash
-   psql -h 192.168.50.10 -U postgres -d logflux \
-     -f backend/scripts/migrations/001_create_notification_tables.sql
-   ```
-
-2. **系统启动测试**
-   ```bash
-   cd backend
-   go run logflux.go -f etc/config.yaml
-   ```
-   - 应该自动发送系统启动通知
-
-3. **Webhook 测试**
-   - 使用 webhook.site 获取测试 URL
-   - 更新配置文件
-   - 重启服务
-   - 检查 webhook.site 是否收到通知
-
-详细测试步骤: [notification-phase1-testing.md](./notification-phase1-testing.md)
-
----
-
-## 🐛 已知问题
-
-暂无
-
----
-
-## 📝 下一步计划 (阶段 2)
-
-### Task 14-18: Telegram 提供者 ✅
-- [x] 添加 telegram-bot-api 依赖
-- [x] 实现 TelegramProvider
-- [x] 支持 Markdown V2 格式
-- [x] 单元测试
-- [x] 配置文档
-
-### Task 19-24: 规则引擎基础 ✅
-- [x] 添加 expr 依赖
-- [x] 创建 RuleEngine 和评估器接口
-- [x] 实现阈值规则评估器
-- [x] 实现频率规则评估器 (Redis 缓存)
-- [x] 实现模式匹配规则评估器
-- [x] 集成到 NotificationManager
-- [x] 单元测试
-
-### Task 25-28: 通知模板系统 ✅
-- [x] 创建 notification_templates 表和 Model
-- [x] 实现 TemplateManager (加载/缓存/渲染)
-- [x] 实现默认模板策略 (Email/Telegram/Webhook)
-- [x] 集成到 NotificationManager 和 Provider
-
-### Task 29-33: 事件集成 ✅
-- [x] 归档任务事件 (成功/失败)
-- [x] 系统启动事件
-- [x] Caddy 服务器添加/更新事件
-- [x] 修复接口依赖问题
-
-### Task 34-35: 通知历史记录与清理 ✅
-- [x] 异步写入数据库 notification_logs
-- [x] 实现日志清理定时任务 (保留 30 天)
-
-### Task 36: 前端菜单显示优化 ✅
-- [x] 修复菜单列表显示问题
-- [x] 添加序号列 (Index)
-- [x] 移除令人困惑的默认排序字段显示 (Order=0)
-- [x] 优化树形结构显示
-- [x] 修复编辑模态框中排序字段未填充的问题
-- [x] 优化二级菜单序号显示 (隐藏子菜单序号)
-
-**预计完成时间**: 已完成
-
----
-
-## 💡 技术亮点
-
-1.  **模板系统**
-    - 支持 Markdown/HTML 多格式渲染
-    - 智能回退机制 (Rule -> Channel -> System Default)
-    - 高性能缓存设计
-2. **灵活的事件匹配**
-   - 支持精确匹配: `system.startup`
-   - 支持前缀通配符: `system.*`
-   - 支持全匹配: `*`
-
-3. **异步发送**
-   - 使用 goroutine 并发发送
-   - 不阻塞主流程
-   - WaitGroup 确保完成
-
-3. **配置同步**
-   - 配置文件 ↔ 数据库双向同步
-   - 支持配置文件定义默认渠道和规则
-   - 支持 API 动态管理 (待实现)
-
-4. **完整的状态追踪**
-   - 每条通知都有完整记录
-   - 成功/失败状态
-   - 错误信息记录
-   - 发送时间戳
-
-6. **接口重构优化** 🆕
-   - 重构了 `NotificationProvider` 接口
-   - 支持多渠道复用同一类型 Provider
-   - 更好的并发安全性 (无状态 Provider)
+1.  **批量操作优化**: 前端“全部已读”目前采用循环调用单条接口的方式，建议后端增加 `POST /api/notification/read/batch` 接口。
+2.  **Websocket 推送**: 目前通知中心采用轮询机制 (Polling)，未来可考虑升级为 Websocket 以提升实时性。
+3.  **用户偏好设置**: 增加前端界面，允许用户自定义接收通知的最低级别 (MinLevel)。
 
 ---
 
@@ -361,11 +268,10 @@
 
 感谢使用 LogFlux 通知功能! 如有问题或建议,请参考:
 - [完整设计文档](./notification-feature-design.md)
-- [任务清单](./notification-task-checklist.md)
 - [快速参考](./notification-quick-reference.md)
 - [测试指南](./notification-phase1-testing.md)
 
 ---
 
-**最后更新**: 2026-01-29 (Task 19-24 完成)
-**下次更新**: 通知模板系统完成后
+**最后更新**: 2026-01-31 (更新前端完成情况)
+

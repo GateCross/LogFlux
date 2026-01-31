@@ -285,19 +285,26 @@ func initRBACData(db *gorm2.DB) {
 	}
 
 	// 第一步：确保所有菜单存在
+	createdMenus := make(map[string]bool)
 	for i := range menus {
 		menu := menus[i]
 		var existingMenu model.Menu
 		if db.Where("name = ?", menu.Name).First(&existingMenu).Error == gorm2.ErrRecordNotFound {
 			db.Create(&menu)
+			createdMenus[menu.Name] = true
 		} else {
-			// 更新基础信息（除了 ParentID，后面分步建立链接）
-			db.Model(&existingMenu).Select("Path", "Component", "Order", "Meta", "RequiredRoles").Updates(menu)
+			// 只更新代码路径相关的技术字段，保留用户的配置（排序、图标、权限等）
+			db.Model(&existingMenu).Select("Path", "Component").Updates(menu)
 		}
 	}
 
 	// 第二步：建立父子关系
 	setParent := func(childName, parentName string) {
+		// 仅对新创建的菜单设置默认父级，避免覆盖用户的层级调整
+		if !createdMenus[childName] {
+			return
+		}
+
 		var child, parent model.Menu
 		if db.Where("name = ?", childName).First(&child).Error == nil &&
 			db.Where("name = ?", parentName).First(&parent).Error == nil {

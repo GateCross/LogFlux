@@ -22,7 +22,7 @@ function loginOrRegister() {
   toLogin();
 }
 
-type DropdownKey = 'logout' | 'changePassword';
+type DropdownKey = 'user-center' | 'logout' | 'changePassword';
 
 type DropdownOption =
   | {
@@ -37,6 +37,11 @@ type DropdownOption =
 
 const options = computed(() => {
   const opts: DropdownOption[] = [
+    {
+      label: 'User Center',
+      key: 'user-center',
+      icon: SvgIconVNode({ icon: 'ph:user', fontSize: 18 })
+    },
     {
       label: $t('common.changePassword'),
       key: 'changePassword',
@@ -129,6 +134,8 @@ function handleDropdown(key: DropdownKey) {
     formModel.newPassword = '';
     formModel.confirmPassword = '';
     showModal.value = true;
+  } else if (key === 'user-center') {
+    routerPushByKey('user_center');
   } else {
     // If your other options are jumps from other routes, they will be directly supported here
     routerPushByKey(key);

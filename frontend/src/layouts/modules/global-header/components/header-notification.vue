@@ -3,7 +3,7 @@ import { ref, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import { NPopover, NList, NListItem, NThing, NAvatar, NText, NButton, NEmpty, useMessage } from 'naive-ui';
-import { getUnreadNotifications, readNotification } from '@/service/api/notification';
+import { getUnreadNotifications, readNotification, readAllNotifications } from '@/service/api/notification';
 
 defineOptions({
   name: 'HeaderNotification'
@@ -37,9 +37,10 @@ async function handleRead(id: number) {
 }
 
 async function handleReadAll() {
-  // TODO: Add mark all read API
-  for (const item of list.value) {
-    await handleRead(item.id);
+  const { error } = await readAllNotifications();
+  if (!error) {
+    list.value = [];
+    message.success(t('common.success'));
   }
 }
 
