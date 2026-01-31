@@ -442,6 +442,26 @@ const local: App.I18n.Schema = {
           failed: 'Failed'
         }
       }
+    },
+    userCenter: {
+      profile: 'Profile',
+      preferences: 'Preferences',
+      notificationSettings: 'Notification Settings',
+      inAppNotificationLevel: 'In-App Notification Level',
+      selectMinLevel: 'Select Minimum Level',
+      savePreferences: 'Save Preferences',
+      note: 'Note',
+      noteContent: 'Only notifications with a level equal to or higher than the selected level will be shown in the global header.',
+      saveSuccess: 'Preferences saved successfully',
+      saveFailed: 'Failed to save preferences',
+      levels: {
+        info: 'Info',
+        warning: 'Warning',
+        error: 'Error',
+        critical: 'Critical'
+      },
+      username: 'Username',
+      roles: 'Roles'
     }
   },
   form: {

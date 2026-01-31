@@ -151,6 +151,7 @@ func initRBACData(db *gorm2.DB) {
 				"dashboard", "manage", "manage_user", "manage_role", "manage_menu",
 				"logs", "logs_caddy",
 				"notification", "notification_channel", "notification_rule", "notification_template", "notification_log",
+				"user_center",
 			},
 		},
 		{
@@ -282,6 +283,22 @@ func initRBACData(db *gorm2.DB) {
 			Meta:          `{"title":"cron","i18nKey":"route.cron","icon":"mdi:clock-time-four-outline","order":3,"roles":["admin"]}`,
 			RequiredRoles: []string{"admin"},
 		},
+		// --- 个人中心 ---
+		{
+			Name:          "user",
+			Path:          "/user",
+			Component:     "layout.base",
+			Order:         11,
+			Meta:          `{"title":"user","i18nKey":"route.user","icon":"carbon:user-avatar","order":11}`,
+			RequiredRoles: []string{}, // Public
+		},
+		{
+			Name:          "user_center",
+			Path:          "/user/center",
+			Component:     "view.user_center",
+			Meta:          `{"title":"user_center","i18nKey":"route.user_center","icon":"carbon:user-profile"}`,
+			RequiredRoles: []string{}, // Public
+		},
 	}
 
 	// 第一步：确保所有菜单存在
@@ -323,6 +340,7 @@ func initRBACData(db *gorm2.DB) {
 	setParent("notification_template", "notification")
 	setParent("notification_log", "notification")
 	setParent("notification_log", "notification")
+	setParent("user_center", "user")
 	// setParent("cron", "manage") // moved to top level
 
 	// 清理遗留数据

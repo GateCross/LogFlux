@@ -673,6 +673,26 @@ declare namespace App {
             };
           };
         };
+        userCenter: {
+          profile: string;
+          preferences: string;
+          notificationSettings: string;
+          inAppNotificationLevel: string;
+          selectMinLevel: string;
+          savePreferences: string;
+          note: string;
+          noteContent: string;
+          saveSuccess: string;
+          saveFailed: string;
+          levels: {
+            info: string;
+            warning: string;
+            error: string;
+            critical: string;
+          };
+          username: string;
+          roles: string;
+        };
       };
       form: {
         required: string;
