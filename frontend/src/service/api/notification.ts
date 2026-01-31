@@ -120,3 +120,7 @@ export function getUnreadNotifications() {
 export function readNotification(id: number) {
     return request<any>({ url: `/api/notification/read/${id}`, method: 'post' });
 }
+
+export function readAllNotifications() {
+    return request<any>({ url: '/api/notification/read/all', method: 'post' });
+}

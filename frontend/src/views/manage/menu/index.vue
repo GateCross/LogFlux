@@ -282,6 +282,7 @@ function handleAddChild(row: MenuItem) {
 function handleEdit(row: MenuItem) {
   modalType.value = 'edit';
   formModel.id = row.id;
+  formModel.parentId = row.parentId || null;
   // Parent ID lookup is tricky from tree data, but let's assume it's there or just let them change it
   // In a real app we might need to know ParentID explicitly from API
   formModel.name = row.name;

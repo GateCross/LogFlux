@@ -199,4 +199,7 @@ service logflux-api {
 
 	@handler ReadNotification
 	post /notification/read/:id (IDReq) returns (BaseResp)
+
+	@handler ReadAllNotifications
+	post /notification/read/all returns (BaseResp)
 }

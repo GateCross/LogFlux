@@ -210,6 +210,11 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Handler: notification.ReadNotificationHandler(serverCtx),
 			},
 			{
+				Method:  http.MethodPost,
+				Path:    "/notification/read/all",
+				Handler: notification.ReadAllNotificationsHandler(serverCtx),
+			},
+			{
 				Method:  http.MethodGet,
 				Path:    "/notification/rule",
 				Handler: notification.GetRuleListHandler(serverCtx),
