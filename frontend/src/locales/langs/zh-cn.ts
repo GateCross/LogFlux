@@ -438,6 +438,26 @@ const local: App.I18n.Schema = {
           failed: '失败'
         }
       }
+    },
+    userCenter: {
+      profile: '个人资料',
+      preferences: '偏好设置',
+      notificationSettings: '通知设置',
+      inAppNotificationLevel: '应用内通知级别',
+      selectMinLevel: '选择最低级别',
+      savePreferences: '保存偏好设置',
+      note: '提示',
+      noteContent: '只有级别等于或高于所选级别的通知才会显示在全局头部。',
+      saveSuccess: '偏好设置保存成功',
+      saveFailed: '偏好设置保存失败',
+      levels: {
+        info: '信息',
+        warning: '警告',
+        error: '错误',
+        critical: '严重'
+      },
+      username: '用户名',
+      roles: '角色'
     }
   },
   form: {
