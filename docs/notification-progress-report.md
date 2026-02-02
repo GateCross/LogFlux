@@ -4,6 +4,27 @@
 **阶段**: 阶段 4 - 集成与优化 (进行中)
 **状态**: 🟢 进行中
 
+## 本次进度（WIP：Notification Log JobStatus + Delete/Clear）
+
+> 说明：已按“Notification Log JobStatus + Delete/Clear”方案开始实现，但当前暂停，不继续推进；以下为已落地/已修改的内容，便于后续接手。
+
+### 已修改（未提交）
+
+- 后端：`GET /notification/log` 查询逻辑已开始扩展，加入 `LEFT JOIN notification_jobs` 并选择 job 相关字段（job_status / retry_count / next_run_at / last_error），并调整了原 status 过滤语义（由 `0 表示不过滤` 改为指针类型，允许 `0=pending`）。
+- 后端：已新增/草拟通知队列与 worker 相关实现与测试（worker、重试、状态语义等）。
+- 前端：通知日志列表页已开始接入 JobStatus 字段展示（包含 i18n keys、API typings、页面列/展示调整），但“删除/批量删除/清空”接口对接尚未完成。
+
+### 验证结果
+
+- `backend/go test ./...`：通过
+- `frontend/pnpm build`：通过
+
+### 待完成（后续工作）
+
+- 补齐后端 API spec（notification.api）并 goctl 生成：新增 delete/batch-delete/clear 三个 endpoint。
+- 逻辑层：实现单删/批删/清空（TRUNCATE logs+jobs RESTART IDENTITY）并补全 sqlmock 测试。
+- 前端：补齐三类删除操作 UI（单删/批删/清空）与 API 封装。
+
 ---
 
 ## 📊 完成度
