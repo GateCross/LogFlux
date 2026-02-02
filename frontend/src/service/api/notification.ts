@@ -46,11 +46,19 @@ export interface LogItem {
     level: string;
     channelId: number;
     ruleId: number;
+
+    /** logs 维度: 0=pending,1=sending,2=success,3=failed */
     status: number;
     error: string;
     retryCount: number;
     sentAt: string;
     createdAt: string;
+
+    /** jobs 维度: queued/processing/succeeded/failed */
+    jobStatus: string;
+    jobRetryCount: number;
+    nextRunAt: string;
+    lastError: string;
 }
 
 export function getChannelList() {

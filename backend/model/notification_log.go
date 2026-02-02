@@ -39,6 +39,7 @@ func (NotificationLog) TableName() string {
 // NotificationStatus 通知状态常量
 const (
 	NotificationStatusPending = "pending"
+	NotificationStatusSending = "sending"
 	NotificationStatusSuccess = "success"
 	NotificationStatusFailed  = "failed"
 )

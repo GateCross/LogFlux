@@ -2,6 +2,7 @@ package notification
 
 import (
 	"context"
+	"time"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
@@ -25,14 +26,28 @@ func NewGetNotificationLogsLogic(ctx context.Context, svcCtx *svc.ServiceContext
 }
 
 func (l *GetNotificationLogsLogic) GetNotificationLogs(req *types.LogListReq) (resp *types.LogListResp, err error) {
-	var logs []model.NotificationLog
-	db := l.svcCtx.DB.Model(&model.NotificationLog{})
+	type logWithJob struct {
+		model.NotificationLog
+		JobStatus     string     `gorm:"column:job_status"`
+		JobRetryCount int        `gorm:"column:job_retry_count"`
+		JobNextRunAt  *time.Time `gorm:"column:job_next_run_at"`
+		JobLastError  string     `gorm:"column:job_last_error"`
+	}
+
+	var logs []logWithJob
+	db := l.svcCtx.DB.Model(&model.NotificationLog{}).
+		Select("notification_logs.*, notification_jobs.status as job_status, notification_jobs.retry_count as job_retry_count, notification_jobs.next_run_at as job_next_run_at, notification_jobs.last_error as job_last_error").
+		Joins("LEFT JOIN notification_jobs ON notification_jobs.log_id = notification_logs.id")
 
 	// 过滤条件
-	if req.Status != 0 {
-		switch req.Status {
-		case 1:
+	if req.Status != nil {
+		switch *req.Status {
+		case 0:
+			// 前端 0 = pending (排队/未发送)
 			db = db.Where("status = ?", model.NotificationStatusPending)
+		case 1:
+			// 前端 1 = sending
+			db = db.Where("status = ?", model.NotificationStatusSending)
 		case 2:
 			db = db.Where("status = ?", model.NotificationStatusSuccess)
 		case 3:
@@ -41,10 +56,13 @@ func (l *GetNotificationLogsLogic) GetNotificationLogs(req *types.LogListReq) (r
 	}
 
 	if req.ChannelID != 0 {
-		db = db.Where("channel_id = ?", req.ChannelID)
+		db = db.Where("notification_logs.channel_id = ?", req.ChannelID)
 	}
 	if req.RuleID != 0 {
-		db = db.Where("rule_id = ?", req.RuleID)
+		db = db.Where("notification_logs.rule_id = ?", req.RuleID)
+	}
+	if req.JobStatus != "" {
+		db = db.Where("notification_jobs.status = ?", req.JobStatus)
 	}
 
 	// 分页
@@ -58,10 +76,12 @@ func (l *GetNotificationLogsLogic) GetNotificationLogs(req *types.LogListReq) (r
 
 	list := make([]types.LogItem, 0, len(logs))
 	for _, log := range logs {
-		// 映射 status string 到 int
+		// 映射 status string 到 int（与前端一致）
 		statusInt := 0
 		switch log.Status {
 		case model.NotificationStatusPending:
+			statusInt = 0
+		case model.NotificationStatusSending:
 			statusInt = 1
 		case model.NotificationStatusSuccess:
 			statusInt = 2
@@ -79,8 +99,11 @@ func (l *GetNotificationLogsLogic) GetNotificationLogs(req *types.LogListReq) (r
 			ChannelID:  0,
 			Status:     statusInt,
 			Error:      log.ErrorMessage,
-			RetryCount: 0, // Model doesn't have RetryCount
+			RetryCount: 0,
 			CreatedAt:  log.CreatedAt.Format("2006-01-02 15:04:05"),
+			JobStatus:     log.JobStatus,
+			JobRetryCount: log.JobRetryCount,
+			LastError:     log.JobLastError,
 		}
 		if log.RuleID != nil {
 			item.RuleID = uint(*log.RuleID)
@@ -90,6 +113,9 @@ func (l *GetNotificationLogsLogic) GetNotificationLogs(req *types.LogListReq) (r
 		}
 		if log.SentAt != nil {
 			item.SentAt = log.SentAt.Format("2006-01-02 15:04:05")
+		}
+		if log.JobNextRunAt != nil {
+			item.NextRunAt = log.JobNextRunAt.Format("2006-01-02 15:04:05")
 		}
 
 		// Safe assertions for map values

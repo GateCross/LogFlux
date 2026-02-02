@@ -431,11 +431,26 @@ const local: App.I18n.Schema = {
         sentAt: '发送时间',
         message: '消息内容',
         error: '错误信息',
+        job: '队列状态',
+        jobStatus: '队列状态',
+        nextRunAt: '下次执行时间',
         statuses: {
           pending: '等待中',
           sending: '发送中',
           success: '成功',
           failed: '失败'
+        },
+        jobStatuses: {
+          queued: '排队中',
+          processing: '处理中',
+          succeeded: '已完成',
+          failed: '失败'
+        },
+        actions: {
+          delete: '删除',
+          clear: '清空',
+          clearConfirm: '确认清空所有记录吗？',
+          deleteConfirm: '确认删除该记录吗？'
         }
       }
     },

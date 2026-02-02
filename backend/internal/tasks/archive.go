@@ -103,7 +103,7 @@ func (t *ArchiveTask) runArchive() {
 	duration := time.Since(startTime)
 	msg := fmt.Sprintf("Archive completed: %d records moved to archive table (before %s), took %v\n",
 		archivedCount, archiveDate.Format("2006-01-02"), duration)
-	fmt.Printf(msg)
+	fmt.Printf("%s", msg)
 
 	// 发送成功通知 (仅当有数据归档或作为定期报告时)
 	if t.notificationMgr != nil {

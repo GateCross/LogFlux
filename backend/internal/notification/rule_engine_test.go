@@ -6,7 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/redis/go-redis/v9"
+	"github.com/DATA-DOG/go-sqlmock"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
 func TestThresholdEvaluator(t *testing.T) {
@@ -163,14 +165,8 @@ func TestMatchEventType(t *testing.T) {
 }
 
 func TestRuleEngine_Evaluate_SilencePeriod(t *testing.T) {
-	// 使用 miniredis 或 mock Redis
-	// 这里简化测试,仅测试静默期逻辑
-	rdb := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379",
-	})
-	defer rdb.Close()
-
-	engine := NewRuleEngine(rdb)
+	// 仅测试静默期逻辑; 该测试不应依赖外部 Redis
+	engine := NewRuleEngine(nil)
 
 	// 创建规则
 	lastTriggered := time.Now().Add(-1 * time.Minute) // 1 分钟前触发
@@ -203,5 +199,97 @@ func TestRuleEngine_Evaluate_SilencePeriod(t *testing.T) {
 	}
 	if triggered {
 		t.Error("Rule should not trigger during silence period")
+	}
+}
+
+func TestFrequencyEvaluator_NilRedis_DoesNotPanic(t *testing.T) {
+	evaluator := NewFrequencyEvaluator(nil)
+
+	// 频率规则依赖 Redis；当 Redis 未初始化时不应 panic
+	cond := model.JSONMap{
+		"event":  "test.event",
+		"count":  1,
+		"window": "1m",
+	}
+	event := &Event{Type: "test.event", Data: map[string]interface{}{"foo": "bar"}}
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("Evaluate() panicked: %v", r)
+		}
+	}()
+
+	_, _ = evaluator.Evaluate(context.Background(), cond, event)
+}
+
+func TestRuleEvaluators_ConcurrentEvaluate_NoPanic(t *testing.T) {
+	// 该测试主要用于捕获 concurrent map writes；它应在 -race 下跑更有效
+	threshold := NewThresholdEvaluator()
+	pattern := NewPatternEvaluator()
+
+	tEvent := &Event{Type: "test", Data: map[string]interface{}{"count": 15.0, "message": "error has occurred"}}
+	tCond := model.JSONMap{"field": "count", "operator": ">", "value": 10.0}
+	pCond := model.JSONMap{"field": "message", "pattern": "error.*occurred"}
+
+	const goroutines = 64
+	const iterations = 200
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("concurrent Evaluate panicked: %v", r)
+		}
+	}()
+
+	done := make(chan struct{})
+	for i := 0; i < goroutines; i++ {
+		go func() {
+			for j := 0; j < iterations; j++ {
+				_, _ = threshold.Evaluate(context.Background(), tCond, tEvent)
+				_, _ = pattern.Evaluate(context.Background(), pCond, tEvent)
+			}
+			done <- struct{}{}
+		}()
+	}
+
+	for i := 0; i < goroutines; i++ {
+		<-done
+	}
+}
+
+func TestManager_UpdateRuleTriggerStatus_UpdatesInMemoryRule(t *testing.T) {
+	// Setup mock DB (updateRuleTriggerStatus 会写 DB)
+	sqldb, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("failed to open sqlmock: %v", err)
+	}
+	defer sqldb.Close()
+
+	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqldb}), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("failed to open gorm: %v", err)
+	}
+
+	// 允许任意 UPDATE 语句（此处仅关心内存状态更新）
+	mock.ExpectBegin()
+	mock.ExpectExec("UPDATE").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	m := &Manager{db: gdb}
+	now := time.Now().Add(-1 * time.Hour)
+	rule := &model.NotificationRule{ID: 1, LastTriggeredAt: &now}
+	m.rules = map[uint]*model.NotificationRule{1: rule}
+
+	m.updateRuleTriggerStatus(context.Background(), rule)
+
+	updated := m.rules[1]
+	if updated == nil || updated.LastTriggeredAt == nil {
+		t.Fatalf("expected rule.LastTriggeredAt to be updated in memory")
+	}
+	if !updated.LastTriggeredAt.After(now) {
+		t.Fatalf("expected LastTriggeredAt to move forward, got=%v, old=%v", *updated.LastTriggeredAt, now)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("sql expectations not met: %v", err)
 	}
 }

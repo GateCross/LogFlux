@@ -435,11 +435,26 @@ const local: App.I18n.Schema = {
         sentAt: 'Sent At',
         message: 'Message',
         error: 'Error',
+        job: 'Job Status',
+        jobStatus: 'Job Status',
+        nextRunAt: 'Next Run At',
         statuses: {
           pending: 'Pending',
           sending: 'Sending',
           success: 'Success',
           failed: 'Failed'
+        },
+        jobStatuses: {
+          queued: 'Queued',
+          processing: 'Processing',
+          succeeded: 'Succeeded',
+          failed: 'Failed'
+        },
+        actions: {
+          delete: 'Delete',
+          clear: 'Clear',
+          clearConfirm: 'Are you sure you want to clear all records?',
+          deleteConfirm: 'Are you sure you want to delete this record?'
         }
       }
     },

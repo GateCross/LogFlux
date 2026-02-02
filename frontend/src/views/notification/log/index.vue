@@ -11,12 +11,20 @@
                class="w-32"
                @update:value="handleFilterChange"
             />
-            <n-select 
-               v-model:value="filters.channelId" 
-               :options="channelOptions" 
-               :placeholder="$t('page.notification.log.channel')" 
-               clearable 
+            <n-select
+               v-model:value="filters.channelId"
+               :options="channelOptions"
+               :placeholder="$t('page.notification.log.channel')"
+               clearable
                filterable
+               class="w-40"
+               @update:value="handleFilterChange"
+            />
+            <n-select
+               v-model:value="filters.jobStatus"
+               :options="jobStatusOptions"
+               :placeholder="$t('page.notification.log.jobStatus')"
+               clearable
                class="w-40"
                @update:value="handleFilterChange"
             />
@@ -65,6 +73,7 @@ const pagination = reactive({
 
 const filters = reactive({
   status: null as number | null,
+  jobStatus: null as string | null,
   channelId: null as number | null,
   ruleId: null as number | null
 });
@@ -76,6 +85,13 @@ const statusOptions = computed(() => [
   { label: t('page.notification.log.statuses.sending'), value: 1 },
   { label: t('page.notification.log.statuses.success'), value: 2 },
   { label: t('page.notification.log.statuses.failed'), value: 3 }
+]);
+
+const jobStatusOptions = computed(() => [
+  { label: t('page.notification.log.jobStatuses.queued'), value: 'queued' },
+  { label: t('page.notification.log.jobStatuses.processing'), value: 'processing' },
+  { label: t('page.notification.log.jobStatuses.succeeded'), value: 'succeeded' },
+  { label: t('page.notification.log.jobStatuses.failed'), value: 'failed' }
 ]);
 
 const columns: DataTableColumns<LogItem> = [
@@ -100,8 +116,8 @@ const columns: DataTableColumns<LogItem> = [
         return h(NTag, { bordered: false, type, size: 'small' }, { default: () => row.level });
      }
   },
-  { 
-     title: () => t('page.notification.log.status'), 
+  {
+     title: () => t('page.notification.log.status'),
      key: 'status',
      width: 100,
      render(row) {
@@ -114,6 +130,30 @@ const columns: DataTableColumns<LogItem> = [
            case 3: type = 'error'; text = t('page.notification.log.statuses.failed'); break;
         }
         return h(NTag, { bordered: false, type }, { default: () => text });
+     }
+  },
+  {
+     title: () => t('page.notification.log.job'),
+     key: 'jobStatus',
+     width: 140,
+     render(row) {
+        let type: 'default' | 'error' | 'warning' | 'info' | 'success' = 'default';
+        const status = row.jobStatus;
+        if (status === 'queued') type = 'default';
+        else if (status === 'processing') type = 'info';
+        else if (status === 'succeeded') type = 'success';
+        else if (status === 'failed') type = 'error';
+
+        const label = status ? t(`page.notification.log.jobStatuses.${status}` as any) : '-';
+        const tip = status
+          ? `${t('page.notification.log.jobStatus')}: ${label}\nretry=${row.jobRetryCount}, next=${row.nextRunAt || '-'}, err=${row.lastError || '-'}`
+          : '';
+
+        return h(
+          NTag,
+          { bordered: false, type, size: 'small', title: tip },
+          { default: () => label }
+        );
      }
   },
   { title: () => t('page.notification.log.sentAt'), key: 'sentAt', width: 160 },
@@ -129,7 +169,8 @@ async function fetchData() {
        pageSize: pagination.pageSize,
        status: filters.status,
        channelId: filters.channelId,
-       ruleId: filters.ruleId
+       ruleId: filters.ruleId,
+       jobStatus: filters.jobStatus
     };
     const { data, error } = await getLogList(params);
     if (!error && data) {
