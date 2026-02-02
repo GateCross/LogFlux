@@ -43,6 +43,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		&model.NotificationChannel{},
 		&model.NotificationRule{},
 		&model.NotificationLog{},
+		&model.NotificationJob{},
 		&model.NotificationTemplate{},
 		// 定时任务表
 		&model.CronTask{},

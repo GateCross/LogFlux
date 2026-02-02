@@ -36,6 +36,9 @@ type Manager struct {
 
 	// 模板管理器
 	templateMgr *template.TemplateManager
+
+	// async dispatch
+	workCh chan uint
 }
 
 // NewManager 创建通知管理器
@@ -49,6 +52,7 @@ func NewManager(db *gorm.DB, redis *redis.Client, tm *template.TemplateManager) 
 		rules:       make(map[uint]*model.NotificationRule),
 		ruleEngine:  NewRuleEngine(redis),
 		templateMgr: tm,
+		workCh:      make(chan uint, 1024),
 	}
 }
 
@@ -87,6 +91,13 @@ func (m *Manager) Start(ctx context.Context) error {
 	}
 
 	m.started = true
+
+	// 启动 worker pool（单实例固定 4 个 worker）
+	for i := 0; i < 4; i++ {
+		go m.workerLoop(ctx)
+	}
+	go m.scanLoop(ctx)
+
 	m.logger.Info("Notification manager started")
 	return nil
 }
@@ -166,9 +177,8 @@ func (m *Manager) loadRulesLocked() error {
 // Notify 发送通知
 func (m *Manager) Notify(ctx context.Context, event *Event) error {
 	m.mu.RLock()
-	defer m.mu.RUnlock()
-
 	if !m.started {
+		m.mu.RUnlock()
 		return fmt.Errorf("notification manager not started")
 	}
 
@@ -181,8 +191,6 @@ func (m *Manager) Notify(ctx context.Context, event *Event) error {
 		for _, channelID := range rule.ChannelIDs {
 			ruleChannelIDs[uint(channelID)] = true
 		}
-		// 更新规则触发状态
-		m.updateRuleTriggerStatus(ctx, rule)
 	}
 
 	// 3. 查找直接匹配事件的通知渠道
@@ -198,33 +206,41 @@ func (m *Manager) Notify(ctx context.Context, event *Event) error {
 			channelsToNotify[channelID] = channel
 		}
 	}
+	m.mu.RUnlock()
+
+	// 5. 更新规则触发状态（需要写锁，避免在持有读锁时升级造成死锁）
+	for _, rule := range triggeredRules {
+		m.updateRuleTriggerStatus(ctx, rule)
+	}
 
 	if len(channelsToNotify) == 0 {
 		m.logger.Infof("No matching channels for event: %s", event.Type)
 		return nil
 	}
 
-	// 5. 异步发送通知到所有匹配的渠道
-	var wg sync.WaitGroup
+	// 6. 入队（写 notification_logs + notification_jobs），不做网络发送
 	for _, channel := range channelsToNotify {
-		wg.Add(1)
-		go func(ch *model.NotificationChannel) {
-			defer wg.Done()
-			// 查找对应的规则 (用于模板渲染)
-			var rule *model.NotificationRule
-			for _, r := range triggeredRules {
-				for _, cid := range r.ChannelIDs {
-					if uint(cid) == ch.ID {
-						rule = r
-						break
-					}
+		// 查找对应的规则 (用于模板渲染)
+		var rule *model.NotificationRule
+		for _, r := range triggeredRules {
+			for _, cid := range r.ChannelIDs {
+				if uint(cid) == channel.ID {
+					rule = r
+					break
 				}
 			}
-			m.sendToChannel(ctx, ch, event, rule)
-		}(channel)
+		}
+
+		jobID := m.enqueueJob(ctx, channel, event, rule)
+		if jobID > 0 {
+			// 尝试低延迟派发；队列满时依赖扫描器补投递
+			select {
+			case m.workCh <- jobID:
+			default:
+			}
+		}
 	}
 
-	wg.Wait()
 	return nil
 }
 
@@ -265,6 +281,16 @@ func (m *Manager) updateRuleTriggerStatus(ctx context.Context, rule *model.Notif
 		Where("id = ?", rule.ID).
 		Updates(updates).Error; err != nil {
 		m.logger.Errorf("Failed to update rule trigger status: %v", err)
+	}
+
+	// 同步更新内存中的规则状态，保证 SilenceDuration 生效。
+	// 注意：Notify 期间持有 m.mu.RLock，因此这里使用 RLock 安全写入会造成数据竞争；
+	// 我们在内部升级为写锁以保护 m.rules map 及 rule 指针的写。
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if r, ok := m.rules[rule.ID]; ok {
+		r.LastTriggeredAt = &now
+		r.TriggerCount++
 	}
 }
 
@@ -405,10 +431,80 @@ func (m *Manager) determineTemplateName(channel *model.NotificationChannel, rule
 	case "email":
 		return "default_email"
 	case "telegram":
-		return "default_telegram"
+		return "default_markdown"
 	case "webhook":
-		return "default_webhook"
+		return "default_markdown"
 	}
 
-	return "default_email" // Fallback
+	return "default_markdown" // Fallback
+}
+
+func (m *Manager) enqueueJob(ctx context.Context, channel *model.NotificationChannel, event *Event, rule *model.NotificationRule) uint {
+	// 渲染通知内容（在入队时渲染，避免 worker 发送时再依赖共享 event.Data）
+	templateName := m.determineTemplateName(channel, rule)
+	content := ""
+	if m.templateMgr != nil {
+		if rendered, err := m.templateMgr.Render(templateName, event); err == nil {
+			content = rendered
+		} else {
+			m.logger.Errorf("Failed to render template %s: %v", templateName, err)
+		}
+	}
+
+	// 复制一份 event data，避免并发写 map
+	eventData := map[string]interface{}{}
+	if event.Data != nil {
+		for k, v := range event.Data {
+			eventData[k] = v
+		}
+	}
+	if eventData == nil {
+		eventData = map[string]interface{}{}
+	}
+	// 标准字段，供 UI 展示
+	eventData["title"] = event.Title
+	eventData["message"] = event.Message
+	eventData["level"] = event.Level
+	if content != "" {
+		eventData["rendered_content"] = content
+	}
+
+	// 创建通知日志
+	log := &model.NotificationLog{
+		ChannelID: &channel.ID,
+		EventType: event.Type,
+		EventData: model.JSONMap(eventData),
+		Status:    model.NotificationStatusPending,
+	}
+	if rule != nil {
+		log.RuleID = &rule.ID
+	}
+	if err := m.db.WithContext(ctx).Create(log).Error; err != nil {
+		m.logger.Errorf("Failed to create notification log: %v", err)
+		return 0
+	}
+
+	// 创建 job
+	job := &model.NotificationJob{
+		LogID:        log.ID,
+		ChannelID:    channel.ID,
+		ProviderType: channel.Type,
+		EventType:    event.Type,
+		EventLevel:   event.Level,
+		EventTitle:   event.Title,
+		EventMessage: event.Message,
+		EventData:    model.JSONMap(eventData),
+		TemplateName: templateName,
+		Status:       model.NotificationJobStatusQueued,
+		RetryCount:   0,
+		NextRunAt:    time.Now(),
+	}
+	if err := m.db.WithContext(ctx).Create(job).Error; err != nil {
+		m.logger.Errorf("Failed to create notification job: %v", err)
+		// 同步标记 log 失败（避免 UI 长期 pending）
+		m.updateLogStatus(log.ID, model.NotificationStatusFailed, fmt.Sprintf("enqueue failed: %v", err))
+		return 0
+	}
+
+	return job.ID
 }

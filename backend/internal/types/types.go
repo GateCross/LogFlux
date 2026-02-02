@@ -211,14 +211,23 @@ type LogItem struct {
 	RetryCount int    `json:"retryCount"`
 	SentAt     string `json:"sentAt"`
 	CreatedAt  string `json:"createdAt"`
+
+	// job 维度（队列状态）
+	JobStatus     string `json:"jobStatus"`
+	JobRetryCount int    `json:"jobRetryCount"`
+	NextRunAt     string `json:"nextRunAt"`
+	LastError     string `json:"lastError"`
 }
 
 type LogListReq struct {
-	Page      int  `form:"page,default=1"`
-	PageSize  int  `form:"pageSize,default=20"`
-	Status    int  `form:"status,optional"` // 0:pending, 1:sending, 2:success, 3:failed
+	Page      int `form:"page,default=1"`
+	PageSize  int `form:"pageSize,default=20"`
+	Status    *int `form:"status,optional"` // 0=pending, 1=sending, 2=success, 3=failed; 不传/空=全部
 	ChannelID uint `form:"channelId,optional"`
 	RuleID    uint `form:"ruleId,optional"`
+
+	// jobStatus: queued/processing/succeeded/failed
+	JobStatus string `form:"jobStatus,optional"`
 }
 
 type LogListResp struct {

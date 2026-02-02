@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"logflux/model"
 	"regexp"
+	"sync"
 	"time"
 
 	"github.com/expr-lang/expr"
@@ -92,14 +93,12 @@ type RuleEvaluator interface {
 
 // ThresholdEvaluator 阈值规则评估器
 type ThresholdEvaluator struct {
-	cache map[string]*vm.Program // 缓存编译后的表达式
+	cache sync.Map // map[string]*vm.Program
 }
 
 // NewThresholdEvaluator 创建阈值评估器
 func NewThresholdEvaluator() *ThresholdEvaluator {
-	return &ThresholdEvaluator{
-		cache: make(map[string]*vm.Program),
-	}
+	return &ThresholdEvaluator{}
 }
 
 // Evaluate 评估阈值规则
@@ -114,18 +113,37 @@ func (t *ThresholdEvaluator) Evaluate(ctx context.Context, condition model.JSONM
 	expression := fmt.Sprintf("data.%s %s value", cond.Field, cond.Operator)
 
 	// 编译表达式 (使用缓存)
-	program, exists := t.cache[expression]
-	if !exists {
-		compiled, err := expr.Compile(expression, expr.Env(map[string]interface{}{
+	if programAny, ok := t.cache.Load(expression); ok {
+		program := programAny.(*vm.Program)
+		// 执行表达式
+		env := map[string]interface{}{
 			"data":  event.Data,
 			"value": cond.Value,
-		}))
-		if err != nil {
-			return false, fmt.Errorf("failed to compile expression: %w", err)
 		}
-		program = compiled
-		t.cache[expression] = program
+		output, err := expr.Run(program, env)
+		if err != nil {
+			return false, fmt.Errorf("failed to evaluate expression: %w", err)
+		}
+
+		// 转换结果为布尔值
+		result, ok := output.(bool)
+		if !ok {
+			return false, fmt.Errorf("expression result is not boolean: %T", output)
+		}
+
+		return result, nil
 	}
+
+	compiled, err := expr.Compile(expression, expr.Env(map[string]interface{}{
+		"data":  event.Data,
+		"value": cond.Value,
+	}))
+	if err != nil {
+		return false, fmt.Errorf("failed to compile expression: %w", err)
+	}
+	program := compiled
+	// 只在未存在时写入，避免并发覆盖
+	t.cache.LoadOrStore(expression, program)
 
 	// 执行表达式
 	env := map[string]interface{}{
@@ -186,6 +204,10 @@ func (f *FrequencyEvaluator) Evaluate(ctx context.Context, condition model.JSONM
 		key = fmt.Sprintf("rule:frequency:%s:global", cond.Event)
 	}
 
+	if f.redis == nil {
+		return false, fmt.Errorf("redis is not configured")
+	}
+
 	// 增加计数
 	count, err := f.redis.Incr(ctx, key).Result()
 	if err != nil {
@@ -203,14 +225,12 @@ func (f *FrequencyEvaluator) Evaluate(ctx context.Context, condition model.JSONM
 
 // PatternEvaluator 模式匹配规则评估器
 type PatternEvaluator struct {
-	cache map[string]*regexp.Regexp // 缓存编译后的正则表达式
+	cache sync.Map // map[string]*regexp.Regexp
 }
 
 // NewPatternEvaluator 创建模式评估器
 func NewPatternEvaluator() *PatternEvaluator {
-	return &PatternEvaluator{
-		cache: make(map[string]*regexp.Regexp),
-	}
+	return &PatternEvaluator{}
 }
 
 // Evaluate 评估模式匹配规则
@@ -231,15 +251,17 @@ func (p *PatternEvaluator) Evaluate(ctx context.Context, condition model.JSONMap
 	strValue := fmt.Sprintf("%v", fieldValue)
 
 	// 编译正则表达式 (使用缓存)
-	regex, exists := p.cache[cond.Pattern]
-	if !exists {
-		compiled, err := regexp.Compile(cond.Pattern)
-		if err != nil {
-			return false, fmt.Errorf("invalid regex pattern: %w", err)
-		}
-		regex = compiled
-		p.cache[cond.Pattern] = regex
+	if regexAny, ok := p.cache.Load(cond.Pattern); ok {
+		regex := regexAny.(*regexp.Regexp)
+		return regex.MatchString(strValue), nil
 	}
+
+	compiled, err := regexp.Compile(cond.Pattern)
+	if err != nil {
+		return false, fmt.Errorf("invalid regex pattern: %w", err)
+	}
+	regex := compiled
+	p.cache.LoadOrStore(cond.Pattern, regex)
 
 	// 匹配
 	return regex.MatchString(strValue), nil
