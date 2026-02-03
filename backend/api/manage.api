@@ -130,6 +130,26 @@ type (
 		Config string `json:"config"`
 		Modules string `json:"modules,optional"`
 	}
+	CaddyConfigHistoryListReq {
+		ServerId uint `path:"serverId"`
+		Page     int  `form:"page,default=1"`
+		PageSize int  `form:"pageSize,default=20"`
+	}
+	CaddyConfigHistoryItem {
+		ID        uint   `json:"id"`
+		ServerId  uint   `json:"serverId"`
+		Action    string `json:"action"`
+		Hash      string `json:"hash"`
+		CreatedAt string `json:"createdAt"`
+	}
+	CaddyConfigHistoryListResp {
+		List  []CaddyConfigHistoryItem `json:"list"`
+		Total int64                    `json:"total"`
+	}
+	CaddyConfigRollbackReq {
+		ServerId  uint `path:"serverId"`
+		HistoryId uint `json:"historyId"`
+	}
 )
 
 @server (
@@ -215,6 +235,12 @@ service logflux-api {
 
 	@handler UpdateCaddyConfig
 	post /caddy/server/:serverId/config (CaddyConfigUpdateReq) returns (BaseResp)
+
+	@handler GetCaddyConfigHistory
+	get /caddy/server/:serverId/config/history (CaddyConfigHistoryListReq) returns (CaddyConfigHistoryListResp)
+
+	@handler RollbackCaddyConfig
+	post /caddy/server/:serverId/config/rollback (CaddyConfigRollbackReq) returns (BaseResp)
 }
 
 @server (
