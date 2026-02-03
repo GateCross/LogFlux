@@ -9,6 +9,7 @@ import (
 	"logflux/model"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 func (m *Manager) workerLoop(ctx context.Context) {
@@ -23,7 +24,7 @@ func (m *Manager) workerLoop(ctx context.Context) {
 }
 
 func (m *Manager) scanLoop(ctx context.Context) {
-	ticker := time.NewTicker(3 * time.Second)
+	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
 	for {
@@ -39,6 +40,7 @@ func (m *Manager) scanLoop(ctx context.Context) {
 func (m *Manager) dispatchDueJobs(ctx context.Context) {
 	var jobs []model.NotificationJob
 	err := m.db.WithContext(ctx).
+		Session(&gorm.Session{Logger: logger.Default.LogMode(logger.Silent)}).
 		Where("status = ? AND next_run_at <= ?", model.NotificationJobStatusQueued, time.Now()).
 		Order("id asc").
 		Limit(100).
