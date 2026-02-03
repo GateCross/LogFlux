@@ -21,9 +21,9 @@
 
 ### 待完成（后续工作）
 
-- 补齐后端 API spec（notification.api）并 goctl 生成：新增 delete/batch-delete/clear 三个 endpoint。
-- 逻辑层：实现单删/批删/清空（TRUNCATE logs+jobs RESTART IDENTITY）并补全 sqlmock 测试。
-- 前端：补齐三类删除操作 UI（单删/批删/清空）与 API 封装。
+- ✅ 补齐后端 API spec（notification.api）：新增 delete/batch-delete/clear 三个 endpoint。（完成于 2026-02-03）
+- ✅ 逻辑层：实现单删/批删/清空（TRUNCATE logs+jobs RESTART IDENTITY）并补全 sqlmock 测试。（完成于 2026-02-03）
+- ✅ 前端：补齐三类删除操作 UI（单删/批删/清空）与 API 封装。（完成于 2026-02-03）
 
 ---
 
@@ -294,5 +294,4 @@
 
 ---
 
-**最后更新**: 2026-01-31 (更新前端完成情况)
-
+**最后更新**: 2026-02-03 (补齐通知日志删除/批删/清空)

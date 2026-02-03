@@ -653,26 +653,42 @@ declare namespace App {
               mockData: string;
             };
           };
-          log: {
-            title: string;
-            status: string;
-            channel: string;
-            refresh: string;
-            id: string;
-            eventTitle: string;
-            eventType: string;
-            level: string;
-            sentAt: string;
-            message: string;
-            error: string;
-            statuses: {
-              pending: string;
-              sending: string;
-              success: string;
-              failed: string;
-            };
-          };
-        };
+	          log: {
+	            title: string;
+	            status: string;
+	            channel: string;
+	            refresh: string;
+	            id: string;
+	            eventTitle: string;
+	            eventType: string;
+	            level: string;
+	            sentAt: string;
+	            message: string;
+	            error: string;
+	            job: string;
+	            jobStatus: string;
+	            nextRunAt: string;
+	            statuses: {
+	              pending: string;
+	              sending: string;
+	              success: string;
+	              failed: string;
+	            };
+	            jobStatuses: {
+	              queued: string;
+	              processing: string;
+	              succeeded: string;
+	              failed: string;
+	            };
+	            actions: {
+	              delete: string;
+	              clear: string;
+	              clearConfirm: string;
+	              deleteConfirm: string;
+	              batchDeleteConfirm: string;
+	            };
+	          };
+	        };
         userCenter: {
           profile: string;
           preferences: string;

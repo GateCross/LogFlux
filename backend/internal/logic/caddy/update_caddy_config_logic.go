@@ -37,6 +37,9 @@ func (l *UpdateCaddyConfigLogic) UpdateCaddyConfig(req *types.CaddyConfigUpdateR
 
 	// 1. Save Caddyfile to Database (Source of Truth)
 	server.Config = req.Config
+	if req.Modules != "" {
+		server.Modules = req.Modules
+	}
 	if err := l.svcCtx.DB.Save(&server).Error; err != nil {
 		l.Logger.Errorf("Failed to save config to DB: %v", err)
 		return nil, fmt.Errorf("failed to save config to database")

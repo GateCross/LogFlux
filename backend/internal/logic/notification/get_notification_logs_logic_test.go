@@ -61,7 +61,7 @@ func TestGetNotificationLogs_MapsSendingStatusTo1(t *testing.T) {
 	mock.ExpectQuery("SELECT (.+) FROM \\\"notification_logs\\\"").WillReturnRows(rows)
 
 	logic := NewGetNotificationLogsLogic(context.Background(), &svc.ServiceContext{DB: gdb})
-	resp, err := logic.GetNotificationLogs(&types.LogListReq{Page: 1, PageSize: 20})
+	resp, err := logic.GetNotificationLogs(&types.LogListReq{Page: 1, PageSize: 20, Status: -1})
 	if err != nil {
 		t.Fatalf("GetNotificationLogs() error = %v", err)
 	}
@@ -88,8 +88,6 @@ func TestGetNotificationLogs_FilterBySending(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open gorm: %v", err)
 	}
-
-	status := 1
 
 	mock.ExpectQuery("SELECT count\\(\\*\\) FROM \\\"notification_logs\\\" LEFT JOIN notification_jobs").
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
@@ -124,7 +122,7 @@ func TestGetNotificationLogs_FilterBySending(t *testing.T) {
 		WillReturnRows(rows)
 
 	logic := NewGetNotificationLogsLogic(context.Background(), &svc.ServiceContext{DB: gdb})
-	resp, err := logic.GetNotificationLogs(&types.LogListReq{Page: 1, PageSize: 20, Status: &status})
+	resp, err := logic.GetNotificationLogs(&types.LogListReq{Page: 1, PageSize: 20, Status: 1})
 	if err != nil {
 		t.Fatalf("GetNotificationLogs() error = %v", err)
 	}

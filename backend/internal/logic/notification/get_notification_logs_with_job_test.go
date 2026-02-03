@@ -69,7 +69,7 @@ func TestGetNotificationLogs_IncludesJobFields(t *testing.T) {
 	mock.ExpectQuery("SELECT (.+) FROM \\\"notification_logs\\\"").WillReturnRows(rows)
 
 	logic := NewGetNotificationLogsLogic(context.Background(), &svc.ServiceContext{DB: gdb})
-	resp, err := logic.GetNotificationLogs(&types.LogListReq{Page: 1, PageSize: 20})
+	resp, err := logic.GetNotificationLogs(&types.LogListReq{Page: 1, PageSize: 20, Status: -1})
 	if err != nil {
 		t.Fatalf("GetNotificationLogs() error=%v", err)
 	}
@@ -111,7 +111,7 @@ func TestGetNotificationLogs_FilterByJobStatus(t *testing.T) {
 	)
 
 	logic := NewGetNotificationLogsLogic(context.Background(), &svc.ServiceContext{DB: gdb})
-	resp, err := logic.GetNotificationLogs(&types.LogListReq{Page: 1, PageSize: 20, JobStatus: "queued"})
+	resp, err := logic.GetNotificationLogs(&types.LogListReq{Page: 1, PageSize: 20, JobStatus: "queued", Status: -1})
 	if err != nil {
 		t.Fatalf("GetNotificationLogs() error=%v", err)
 	}

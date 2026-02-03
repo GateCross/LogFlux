@@ -446,14 +446,15 @@ const local: App.I18n.Schema = {
           succeeded: '已完成',
           failed: '失败'
         },
-        actions: {
-          delete: '删除',
-          clear: '清空',
-          clearConfirm: '确认清空所有记录吗？',
-          deleteConfirm: '确认删除该记录吗？'
-        }
-      }
-    },
+	        actions: {
+	          delete: '删除',
+	          clear: '清空',
+	          clearConfirm: '确认清空所有记录吗？',
+	          deleteConfirm: '确认删除该记录吗？',
+	          batchDeleteConfirm: '确认删除选中的 {count} 条记录吗？'
+	        }
+	      }
+	    },
     userCenter: {
       profile: '个人资料',
       preferences: '偏好设置',

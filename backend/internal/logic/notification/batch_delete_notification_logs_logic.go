@@ -24,16 +24,14 @@ func NewBatchDeleteNotificationLogsLogic(ctx context.Context, svcCtx *svc.Servic
 	}
 }
 
-type BatchDeleteReq struct {
-	IDs []uint `json:"ids"`
-}
-
-func (l *BatchDeleteNotificationLogsLogic) BatchDeleteNotificationLogs(req *BatchDeleteReq) (resp *types.BaseResp, err error) {
+func (l *BatchDeleteNotificationLogsLogic) BatchDeleteNotificationLogs(req *types.BatchDeleteNotificationLogsReq) (resp *types.BaseResp, err error) {
 	if len(req.IDs) == 0 {
 		return &types.BaseResp{Code: 200, Msg: "success"}, nil
 	}
 
-	l.svcCtx.DB.Where("log_id IN ?", req.IDs).Delete(&model.NotificationJob{})
+	if err := l.svcCtx.DB.Where("log_id IN ?", req.IDs).Delete(&model.NotificationJob{}).Error; err != nil {
+		return nil, err
+	}
 	if err := l.svcCtx.DB.Where("id IN ?", req.IDs).Delete(&model.NotificationLog{}).Error; err != nil {
 		return nil, err
 	}

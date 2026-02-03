@@ -32,6 +32,16 @@
                <template #icon><icon-ic-round-refresh /></template>
                {{ $t('page.notification.log.refresh') }}
             </n-button>
+            <n-button
+              type="error"
+              :disabled="checkedRowKeys.length === 0"
+              @click="handleBatchDelete"
+            >
+              {{ $t('common.batchDelete') }}
+            </n-button>
+            <n-button type="error" secondary @click="handleClear">
+              {{ $t('page.notification.log.actions.clear') }}
+            </n-button>
          </div>
        </template>
 
@@ -43,6 +53,9 @@
         :pagination="pagination"
         class="h-full"
         flex-height
+        :row-key="row => row.id"
+        :checked-row-keys="checkedRowKeys"
+        @update:checked-row-keys="handleCheckedRowKeysChange"
         @update:page="handlePageChange"
       />
     </n-card>
@@ -52,15 +65,18 @@
 <script setup lang="ts">
 import { ref, onMounted, h, reactive, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { NTag } from 'naive-ui';
+import { NButton, NTag, useDialog, useMessage } from 'naive-ui';
 import type { DataTableColumns } from 'naive-ui';
-import { getLogList, getChannelList } from '@/service/api/notification';
+import { batchDeleteNotificationLogs, clearNotificationLogs, deleteNotificationLog, getChannelList, getLogList } from '@/service/api/notification';
 import type { LogItem } from '@/service/api/notification';
 
 const { t } = useI18n();
+const message = useMessage();
+const dialog = useDialog();
 
 const loading = ref(false);
 const tableData = ref<LogItem[]>([]);
+const checkedRowKeys = ref<number[]>([]);
 const pagination = reactive({
   page: 1,
   pageSize: 20,
@@ -95,6 +111,7 @@ const jobStatusOptions = computed(() => [
 ]);
 
 const columns: DataTableColumns<LogItem> = [
+  { type: 'selection' },
   { title: 'ID', key: 'id', width: 80 },
   { title: () => t('page.notification.log.eventTitle'), key: 'title', width: 200, ellipsis: { tooltip: true } },
   { 
@@ -158,20 +175,37 @@ const columns: DataTableColumns<LogItem> = [
   },
   { title: () => t('page.notification.log.sentAt'), key: 'sentAt', width: 160 },
   { title: () => t('page.notification.log.message'), key: 'message', ellipsis: { tooltip: true } }, // Content can be long
-  { title: () => t('page.notification.log.error'), key: 'error', ellipsis: { tooltip: true }, render(row) { return row.error ? h('span', { class: 'text-red-500' }, row.error) : '-'; } }
+  { title: () => t('page.notification.log.error'), key: 'error', ellipsis: { tooltip: true }, render(row) { return row.error ? h('span', { class: 'text-red-500' }, row.error) : '-'; } },
+  {
+     title: () => t('common.action'),
+     key: 'action',
+     width: 100,
+     render(row) {
+        return h(NButton, { size: 'small', type: 'error', onClick: () => handleDelete(row) }, { default: () => t('common.delete') });
+     }
+  }
 ];
+
+function cleanParams(params: Record<string, any>) {
+  const cleaned: Record<string, any> = {};
+  for (const [k, v] of Object.entries(params)) {
+    if (v === null || v === undefined || v === '') continue;
+    cleaned[k] = v;
+  }
+  return cleaned;
+}
 
 async function fetchData() {
   loading.value = true;
   try {
-    const params = {
+    const params = cleanParams({
        page: pagination.page,
        pageSize: pagination.pageSize,
        status: filters.status,
        channelId: filters.channelId,
        ruleId: filters.ruleId,
        jobStatus: filters.jobStatus
-    };
+    });
     const { data, error } = await getLogList(params);
     if (!error && data) {
       tableData.value = data.list || [];
@@ -189,14 +223,81 @@ async function fetchChannels() {
    }
 }
 
+function handleCheckedRowKeysChange(keys: Array<number | string>) {
+  checkedRowKeys.value = keys.map(k => Number(k)).filter(k => !Number.isNaN(k));
+}
+
 function handleFilterChange() {
    pagination.page = 1;
+   checkedRowKeys.value = [];
    fetchData();
 }
 
 function handlePageChange(page: number) {
    pagination.page = page;
+   checkedRowKeys.value = [];
    fetchData();
+}
+
+function handleDelete(row: LogItem) {
+  dialog.warning({
+    title: t('common.confirm'),
+    content: t('page.notification.log.actions.deleteConfirm'),
+    positiveText: t('common.delete'),
+    negativeText: t('common.cancel'),
+    onPositiveClick: async () => {
+      const { error } = await deleteNotificationLog(row.id);
+      if (!error) {
+        message.success(t('common.deleteSuccess'));
+        checkedRowKeys.value = checkedRowKeys.value.filter(id => id !== row.id);
+        fetchData();
+      } else {
+        message.error(t('common.deleteFailed'));
+      }
+    }
+  });
+}
+
+function handleBatchDelete() {
+  if (checkedRowKeys.value.length === 0) return;
+
+  dialog.warning({
+    title: t('common.confirm'),
+    content: t('page.notification.log.actions.batchDeleteConfirm', { count: checkedRowKeys.value.length }),
+    positiveText: t('common.delete'),
+    negativeText: t('common.cancel'),
+    onPositiveClick: async () => {
+      const { error } = await batchDeleteNotificationLogs(checkedRowKeys.value);
+      if (!error) {
+        message.success(t('common.deleteSuccess'));
+        checkedRowKeys.value = [];
+        pagination.page = 1;
+        fetchData();
+      } else {
+        message.error(t('common.deleteFailed'));
+      }
+    }
+  });
+}
+
+function handleClear() {
+  dialog.warning({
+    title: t('common.confirm'),
+    content: t('page.notification.log.actions.clearConfirm'),
+    positiveText: t('common.confirm'),
+    negativeText: t('common.cancel'),
+    onPositiveClick: async () => {
+      const { error } = await clearNotificationLogs();
+      if (!error) {
+        message.success(t('common.deleteSuccess'));
+        checkedRowKeys.value = [];
+        pagination.page = 1;
+        fetchData();
+      } else {
+        message.error(t('common.deleteFailed'));
+      }
+    }
+  });
 }
 
 onMounted(() => {

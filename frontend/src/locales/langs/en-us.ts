@@ -450,14 +450,15 @@ const local: App.I18n.Schema = {
           succeeded: 'Succeeded',
           failed: 'Failed'
         },
-        actions: {
-          delete: 'Delete',
-          clear: 'Clear',
-          clearConfirm: 'Are you sure you want to clear all records?',
-          deleteConfirm: 'Are you sure you want to delete this record?'
-        }
-      }
-    },
+	        actions: {
+	          delete: 'Delete',
+	          clear: 'Clear',
+	          clearConfirm: 'Are you sure you want to clear all records?',
+	          deleteConfirm: 'Are you sure you want to delete this record?',
+	          batchDeleteConfirm: 'Are you sure you want to delete {count} selected records?'
+	        }
+	      }
+	    },
     userCenter: {
       profile: 'Profile',
       preferences: 'Preferences',

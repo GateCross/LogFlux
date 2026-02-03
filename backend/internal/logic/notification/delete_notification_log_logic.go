@@ -26,7 +26,9 @@ func NewDeleteNotificationLogLogic(ctx context.Context, svcCtx *svc.ServiceConte
 
 func (l *DeleteNotificationLogLogic) DeleteNotificationLog(req *types.IDReq) (resp *types.BaseResp, err error) {
 	// delete related job first
-	l.svcCtx.DB.Where("log_id = ?", req.ID).Delete(&model.NotificationJob{})
+	if err := l.svcCtx.DB.Where("log_id = ?", req.ID).Delete(&model.NotificationJob{}).Error; err != nil {
+		return nil, err
+	}
 
 	if err := l.svcCtx.DB.Delete(&model.NotificationLog{}, req.ID).Error; err != nil {
 		return nil, err

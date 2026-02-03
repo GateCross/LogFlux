@@ -115,9 +115,12 @@ type (
 	LogListReq {
 		Page      int  `form:"page,default=1"`
 		PageSize  int  `form:"pageSize,default=20"`
-		Status    int  `form:"status,optional"` // 0:pending, 1:sending, 2:success, 3:failed
+		// logs 维度过滤：不传/空=全部；0=pending, 1=sending, 2=success, 3=failed
+		Status    int  `form:"status,default=-1"`
 		ChannelID uint `form:"channelId,optional"`
 		RuleID    uint `form:"ruleId,optional"`
+		// jobs 维度过滤：queued/processing/succeeded/failed
+		JobStatus string `form:"jobStatus,optional"`
 	}
 	LogListResp {
 		List  []LogItem `json:"list"`
@@ -137,6 +140,15 @@ type (
 		RetryCount int    `json:"retryCount"`
 		SentAt     string `json:"sentAt"`
 		CreatedAt  string `json:"createdAt"`
+
+		// job 维度（队列状态）
+		JobStatus     string `json:"jobStatus"`
+		JobRetryCount int    `json:"jobRetryCount"`
+		NextRunAt     string `json:"nextRunAt"`
+		LastError     string `json:"lastError"`
+	}
+	BatchDeleteNotificationLogsReq {
+		IDs []uint `json:"ids"`
 	}
 )
 
@@ -202,4 +214,13 @@ service logflux-api {
 
 	@handler ReadAllNotifications
 	post /notification/read/all returns (BaseResp)
+
+	@handler DeleteNotificationLog
+	delete /notification/log/:id (IDReq) returns (BaseResp)
+
+	@handler BatchDeleteNotificationLogs
+	post /notification/log/batch-delete (BatchDeleteNotificationLogsReq) returns (BaseResp)
+
+	@handler ClearNotificationLogs
+	post /notification/log/clear returns (BaseResp)
 }

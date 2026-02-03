@@ -5,7 +5,6 @@ import (
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -35,5 +34,3 @@ func (l *ClearNotificationLogsLogic) ClearNotificationLogs() (resp *types.BaseRe
 
 	return &types.BaseResp{Code: 200, Msg: "success"}, nil
 }
-
-var _ = model.NotificationLog{}

@@ -34,7 +34,8 @@ func (l *GetCaddyConfigLogic) GetCaddyConfig(req *types.CaddyConfigReq) (resp *t
 	// Read from Database (Source of Truth)
 	if server.Config != "" {
 		return &types.CaddyConfigResp{
-			Config: server.Config,
+			Config:  server.Config,
+			Modules: server.Modules,
 		}, nil
 	}
 
@@ -44,7 +45,8 @@ func (l *GetCaddyConfigLogic) GetCaddyConfig(req *types.CaddyConfigReq) (resp *t
 # It will be saved to the database and pushed to Caddy.
 `
 	return &types.CaddyConfigResp{
-		Config: defaultConfig,
+		Config:  defaultConfig,
+		Modules: server.Modules,
 	}, nil
 
 }
