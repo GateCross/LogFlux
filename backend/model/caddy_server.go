@@ -15,6 +15,7 @@ type CaddyServer struct {
 	Username  string
 	Password  string
 	Config    string `gorm:"type:text"` // Store Caddyfile content
+	Modules   string `gorm:"type:jsonb"` // Store structured modules JSON
 }
 
 func (CaddyServer) TableName() string {

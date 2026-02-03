@@ -40,8 +40,8 @@ func (l *GetNotificationLogsLogic) GetNotificationLogs(req *types.LogListReq) (r
 		Joins("LEFT JOIN notification_jobs ON notification_jobs.log_id = notification_logs.id")
 
 	// 过滤条件
-	if req.Status != nil {
-		switch *req.Status {
+	if req.Status >= 0 {
+		switch req.Status {
 		case 0:
 			// 前端 0 = pending (排队/未发送)
 			db = db.Where("status = ?", model.NotificationStatusPending)

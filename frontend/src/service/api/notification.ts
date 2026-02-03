@@ -121,6 +121,18 @@ export function getLogList(params: any) {
     return request<any>({ url: '/api/notification/log', method: 'get', params });
 }
 
+export function deleteNotificationLog(id: number) {
+    return request<any>({ url: `/api/notification/log/${id}`, method: 'delete' });
+}
+
+export function batchDeleteNotificationLogs(ids: number[]) {
+    return request<any>({ url: '/api/notification/log/batch-delete', method: 'post', data: { ids } });
+}
+
+export function clearNotificationLogs() {
+    return request<any>({ url: '/api/notification/log/clear', method: 'post' });
+}
+
 export function getUnreadNotifications() {
     return request<any>({ url: '/api/notification/unread', method: 'get' });
 }

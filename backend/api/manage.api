@@ -124,9 +124,11 @@ type (
 	CaddyConfigUpdateReq {
 		ServerId uint   `path:"serverId"`
 		Config   string `json:"config"` // JSON string
+		Modules  string `json:"modules,optional"` // structured modules (JSON)
 	}
 	CaddyConfigResp {
 		Config string `json:"config"`
+		Modules string `json:"modules,optional"`
 	}
 )
 

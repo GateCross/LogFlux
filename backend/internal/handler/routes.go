@@ -205,6 +205,21 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Handler: notification.GetNotificationLogsHandler(serverCtx),
 			},
 			{
+				Method:  http.MethodDelete,
+				Path:    "/notification/log/:id",
+				Handler: notification.DeleteNotificationLogHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/notification/log/batch-delete",
+				Handler: notification.BatchDeleteNotificationLogsHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/notification/log/clear",
+				Handler: notification.ClearNotificationLogsHandler(serverCtx),
+			},
+			{
 				Method:  http.MethodPost,
 				Path:    "/notification/read/:id",
 				Handler: notification.ReadNotificationHandler(serverCtx),

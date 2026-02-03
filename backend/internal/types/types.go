@@ -14,17 +14,23 @@ type BaseResp struct {
 	Msg  string `json:"msg"`
 }
 
+type BatchDeleteNotificationLogsReq struct {
+	IDs []uint `json:"ids"`
+}
+
 type CaddyConfigReq struct {
 	ServerId uint `path:"serverId"`
 }
 
 type CaddyConfigResp struct {
-	Config string `json:"config"`
+	Config  string `json:"config"`
+	Modules string `json:"modules,optional"`
 }
 
 type CaddyConfigUpdateReq struct {
 	ServerId uint   `path:"serverId"`
-	Config   string `json:"config"` // JSON string
+	Config   string `json:"config"`           // JSON string
+	Modules  string `json:"modules,optional"` // structured modules (JSON)
 }
 
 type CaddyLogItem struct {
@@ -198,21 +204,19 @@ type IsRouteExistReq struct {
 }
 
 type LogItem struct {
-	ID         uint   `json:"id"`
-	EventID    string `json:"eventId"`
-	EventType  string `json:"eventType"`
-	Title      string `json:"title"`
-	Message    string `json:"message"`
-	Level      string `json:"level"`
-	ChannelID  uint   `json:"channelId"`
-	RuleID     uint   `json:"ruleId"`
-	Status     int    `json:"status"`
-	Error      string `json:"error"`
-	RetryCount int    `json:"retryCount"`
-	SentAt     string `json:"sentAt"`
-	CreatedAt  string `json:"createdAt"`
-
-	// job 维度（队列状态）
+	ID            uint   `json:"id"`
+	EventID       string `json:"eventId"`
+	EventType     string `json:"eventType"`
+	Title         string `json:"title"`
+	Message       string `json:"message"`
+	Level         string `json:"level"`
+	ChannelID     uint   `json:"channelId"`
+	RuleID        uint   `json:"ruleId"`
+	Status        int    `json:"status"`
+	Error         string `json:"error"`
+	RetryCount    int    `json:"retryCount"`
+	SentAt        string `json:"sentAt"`
+	CreatedAt     string `json:"createdAt"`
 	JobStatus     string `json:"jobStatus"`
 	JobRetryCount int    `json:"jobRetryCount"`
 	NextRunAt     string `json:"nextRunAt"`
@@ -220,13 +224,11 @@ type LogItem struct {
 }
 
 type LogListReq struct {
-	Page      int `form:"page,default=1"`
-	PageSize  int `form:"pageSize,default=20"`
-	Status    *int `form:"status,optional"` // 0=pending, 1=sending, 2=success, 3=failed; 不传/空=全部
-	ChannelID uint `form:"channelId,optional"`
-	RuleID    uint `form:"ruleId,optional"`
-
-	// jobStatus: queued/processing/succeeded/failed
+	Page      int    `form:"page,default=1"`
+	PageSize  int    `form:"pageSize,default=20"`
+	Status    int    `form:"status,default=-1"`
+	ChannelID uint   `form:"channelId,optional"`
+	RuleID    uint   `form:"ruleId,optional"`
 	JobStatus string `form:"jobStatus,optional"`
 }
 
