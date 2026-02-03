@@ -10,7 +10,7 @@
     </template>
     <n-empty v-if="!site" description="请选择一个站点" />
     <div v-else class="flex flex-col gap-4">
-      <n-tabs type="line" size="small">
+      <n-tabs v-model:value="activeTab" type="line" size="small">
         <n-tab-pane name="basic" tab="基础">
           <n-form label-placement="left" label-width="80">
             <n-form-item label="名称">
@@ -37,7 +37,7 @@
           </div>
         </n-tab-pane>
         <n-tab-pane name="routes" tab="路由">
-          <SiteRoutesEditor v-model:routes="site.routes" />
+          <SiteRoutesEditor v-model:routes="site.routes" :focus-route-id="focusRouteId" />
         </n-tab-pane>
         <n-tab-pane name="advanced" tab="高级">
           <div class="flex flex-col gap-4">
@@ -62,10 +62,14 @@
 
 <script setup lang="ts">
 import { watchEffect } from 'vue';
+import { toRefs } from 'vue';
 import SiteRoutesEditor from './SiteRoutesEditor.vue';
 import type { Site } from '../types';
 
 const site = defineModel<Site | null>('site', { required: true });
+const activeTab = defineModel<'basic' | 'routes' | 'advanced'>('tab', { default: 'basic' });
+const props = defineProps<{ focusRouteId?: string | null }>();
+const { focusRouteId } = toRefs(props);
 const tlsOptions = [
   { label: 'auto', value: 'auto' },
   { label: 'off', value: 'off' },

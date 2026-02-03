@@ -64,6 +64,16 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Path:    "/caddy/server/:serverId/config",
 				Handler: caddy.UpdateCaddyConfigHandler(serverCtx),
 			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/caddy/server/:serverId/config/history",
+				Handler: caddy.GetCaddyConfigHistoryHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/caddy/server/:serverId/config/rollback",
+				Handler: caddy.RollbackCaddyConfigHandler(serverCtx),
+			},
 		},
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
 		rest.WithPrefix("/api"),

@@ -11,10 +11,11 @@
         <n-button size="tiny" type="primary" @click="$emit('add')">新增</n-button>
       </div>
     </template>
-    <n-empty v-if="sites.length === 0" description="暂无站点" />
+    <n-input v-model:value="search" size="small" placeholder="搜索站点/域名" class="mb-3" clearable />
+    <n-empty v-if="filteredSites.length === 0" :description="sites.length === 0 ? '暂无站点' : '无匹配结果'" />
     <div v-else class="flex-1 min-h-0 overflow-auto flex flex-col gap-2">
       <div
-        v-for="site in sites"
+        v-for="site in filteredSites"
         :key="site.id"
         class="border rounded-md p-2 cursor-pointer"
         :class="activeId === site.id ? 'border-primary-500 bg-primary-50' : 'border-gray-200'"
@@ -24,6 +25,7 @@
           <div class="min-w-0">
             <div class="font-medium truncate">{{ site.name }}</div>
             <div class="text-xs text-gray-500 truncate">{{ site.domains.join(', ') || '-' }}</div>
+            <div class="text-xs text-gray-400 mt-1">域名 {{ site.domains.length }} · 路由 {{ site.routes.length }}</div>
           </div>
           <n-tag size="small" :type="site.enabled ? 'success' : 'default'">{{ site.enabled ? '启用' : '停用' }}</n-tag>
         </div>
@@ -39,12 +41,14 @@
 </template>
 
 <script setup lang="ts">
+import { computed, ref, toRefs } from 'vue';
 import type { Site } from '../types';
 
-defineProps<{
+const props = defineProps<{
   sites: Site[];
   activeId: string | null;
 }>();
+const { sites } = toRefs(props);
 
 defineEmits<{
   (e: 'select', id: string): void;
@@ -53,4 +57,15 @@ defineEmits<{
   (e: 'remove', id: string): void;
   (e: 'move', id: string, direction: 'up' | 'down'): void;
 }>();
+
+const search = ref('');
+const filteredSites = computed(() => {
+  const keyword = search.value.trim().toLowerCase();
+  if (!keyword) return sites.value;
+  return sites.value.filter(site => {
+    const nameMatch = site.name?.toLowerCase().includes(keyword);
+    const domainMatch = site.domains.some(domain => domain.toLowerCase().includes(keyword));
+    return nameMatch || domainMatch;
+  });
+});
 </script>

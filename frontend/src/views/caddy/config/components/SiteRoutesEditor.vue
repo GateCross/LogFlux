@@ -6,7 +6,12 @@
     </div>
     <n-empty v-if="routes.length === 0" description="暂无路由" />
     <VueDraggable v-else v-model="routes" item-key="id" :animation="150" handle=".drag-handle">
-      <div v-for="route in routes" :key="route.id" class="rounded border border-gray-200 p-3">
+      <div
+        v-for="route in routes"
+        :key="route.id"
+        class="rounded border border-gray-200 p-3"
+        :data-route-id="route.id"
+      >
         <div class="flex items-center justify-between gap-2">
           <div class="flex items-center gap-2">
             <icon-mdi-drag class="drag-handle cursor-move text-icon" />
@@ -19,6 +24,7 @@
             </n-button>
           </div>
         </div>
+        <div class="mt-1 text-xs text-gray-500">{{ routeSummary(route) }}</div>
         <n-collapse-transition :show="isExpanded(route.id)">
           <div class="mt-3 flex flex-col gap-3">
             <n-input v-model:value="route.name" placeholder="路由名称" />
@@ -178,11 +184,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, watch, nextTick } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
 import type { Handle, HandleType, HeaderRule, KeyValue, Route } from '../types';
 
 const routes = defineModel<Route[]>('routes', { required: true });
+const props = defineProps<{ focusRouteId?: string | null }>();
 
 const handleOptions = [
   { label: 'reverse_proxy', value: 'reverse_proxy' },
@@ -238,6 +245,19 @@ function invalidPaths(paths: string[]) {
 
 function invalidMethods(methods: string[]) {
   return methods.filter(m => m && !methodAllowList.includes(m.toUpperCase()));
+}
+
+function routeSummary(route: Route) {
+  const parts: string[] = [];
+  if (route.match.host.length) parts.push(`Host:${route.match.host.length}`);
+  if (route.match.path.length) parts.push(`Path:${route.match.path.length}`);
+  if (route.match.method.length) parts.push(`Method:${route.match.method.length}`);
+  const handlers = route.handles.map(h => h.type).filter(Boolean);
+  const handlerText = handlers.length
+    ? `Handlers:${handlers.slice(0, 3).join(',')}${handlers.length > 3 ? '…' : ''}`
+    : 'Handlers:0';
+  parts.push(handlerText);
+  return parts.join(' · ');
 }
 
 function addRoute() {
@@ -325,4 +345,19 @@ function handleTypeChange(handle: Handle, value: HandleType) {
     handle.uri = handle.uri ?? '';
   }
 }
+
+watch(
+  () => props.focusRouteId,
+  async (id) => {
+    if (!id) return;
+    if (!expanded.value.includes(id)) {
+      expanded.value = [...expanded.value, id];
+    }
+    await nextTick();
+    const el = document.querySelector(`[data-route-id="${id}"]`);
+    if (el instanceof HTMLElement) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+);
 </script>

@@ -6,6 +6,10 @@ type (
 		Page     int    `form:"page,default=1"`
 		PageSize int    `form:"pageSize,default=20"`
 		Keyword  string `form:"keyword,optional"` // Search in host, uri, ip
+		Host     string `form:"host,optional"`
+		Status   int    `form:"status,default=-1"`
+		StartTime string `form:"startTime,optional"`
+		EndTime   string `form:"endTime,optional"`
 	}
 	CaddyLogItem {
 		ID        uint   `json:"id"`

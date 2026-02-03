@@ -39,6 +39,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		&model.Role{},
 		&model.Menu{},
 		&model.CaddyServer{},
+		&model.CaddyConfigHistory{},
 		// 通知相关表
 		&model.NotificationChannel{},
 		&model.NotificationRule{},

@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue';
-import { useMessage, useDialog } from 'naive-ui';
+import { ref, onMounted, computed, watch, onBeforeUnmount, h, nextTick } from 'vue';
+import { useMessage, useDialog, NTag, NButton } from 'naive-ui';
+import type { DataTableColumns } from 'naive-ui';
 import { VueMonacoEditor, loader } from '@guolao/vue-monaco-editor';
-import { fetchCaddyServers, fetchCaddyConfig, updateCaddyConfig, addCaddyServer, updateCaddyServer, deleteCaddyServer } from '@/service/api/caddy';
+import { fetchCaddyServers, fetchCaddyConfig, updateCaddyConfig, addCaddyServer, updateCaddyServer, deleteCaddyServer, fetchCaddyConfigHistory, rollbackCaddyConfig } from '@/service/api/caddy';
 import SiteListPanel from './components/SiteListPanel.vue';
 import SiteEditorPanel from './components/SiteEditorPanel.vue';
 import UpstreamManager from './components/UpstreamManager.vue';
@@ -24,6 +25,31 @@ interface CaddyServer {
   token?: string;
 }
 
+interface CaddyConfigHistoryItem {
+  id: number;
+  serverId: number;
+  action: string;
+  hash: string;
+  createdAt: string;
+}
+
+type ValidationError = {
+  id: string;
+  message: string;
+  siteId?: string;
+  routeId?: string;
+  tab?: 'basic' | 'routes' | 'advanced';
+};
+
+type DiffRow = {
+  left: string | null;
+  right: string | null;
+  type: 'same' | 'added' | 'removed' | 'changed';
+  leftNo: number | null;
+  rightNo: number | null;
+  key: string;
+};
+
 const message = useMessage();
 const dialog = useDialog();
 const loading = ref(false);
@@ -36,11 +62,30 @@ const configContent = ref('');
 const showSiteModal = ref(false);
 const formModel = ref<CaddyFormModel>({
   schemaVersion: 1,
-  global: {},
+  global: { raw: '' },
   upstreams: [],
   sites: []
 });
 const activeSiteId = ref<string | null>(null);
+const activeSiteTab = ref<'basic' | 'routes' | 'advanced'>('basic');
+const focusRouteId = ref<string | null>(null);
+const sidebarWidth = ref<number>(Number(localStorage.getItem('logflux:caddy.sidebarWidth')) || 288);
+const resizing = ref(false);
+let resizeStartX = 0;
+let resizeStartWidth = 0;
+
+const showHistoryModal = ref(false);
+const historyLoading = ref(false);
+const historyList = ref<CaddyConfigHistoryItem[]>([]);
+const historyPagination = ref({ page: 1, pageSize: 10, itemCount: 0 });
+const showGlobalModal = ref(false);
+const showGlobalCompareModal = ref(false);
+const initialGlobalRaw = ref('');
+const globalPreviewExpanded = ref(false);
+const showGlobalDiffOnly = ref(false);
+const diffLeftRef = ref<HTMLElement | null>(null);
+const diffRightRef = ref<HTMLElement | null>(null);
+let diffSyncing = false;
 
 // Server Management Modal
 const showServerModal = ref(false);
@@ -80,9 +125,19 @@ const previewModel = computed(() => {
   return { ...formModel.value, sites: [site] };
 });
 const generatedCaddyfile = computed(() => buildCaddyfile(formModel.value));
-const previewCaddyfile = computed(() => buildCaddyfile(previewModel.value, { includeDisabled: true }));
-const previewCaddyJSON = computed(() => JSON.stringify(previewModel.value, null, 2));
+const previewCaddyfile = computed(() => buildCaddyfile(previewModel.value, { includeDisabled: true, includeGlobal: false }));
+const previewCaddyJSON = computed(() => JSON.stringify(stripGlobalFromPreview(previewModel.value), null, 2));
 const currentServer = computed(() => servers.value.find(s => s.id === currentServerId.value) || null);
+const validationErrors = computed<ValidationError[]>(() => (configMode.value === 'structured' ? validateStructuredConfig() : []));
+const globalRawChanged = computed(
+  () => (formModel.value.global?.raw ?? '').trim() !== (initialGlobalRaw.value ?? '').trim()
+);
+const globalDiffRows = computed<DiffRow[]>(() => {
+  const rows = buildLineDiff(initialGlobalRaw.value ?? '', formModel.value.global?.raw ?? '');
+  if (!showGlobalDiffOnly.value) return rows;
+  return rows.filter(row => row.type !== 'same');
+});
+const globalPreviewText = computed(() => formatGlobalPreview(formModel.value.global?.raw ?? ''));
 
 // Methods
 async function getServers() {
@@ -122,7 +177,7 @@ async function getConfig() {
     if (data.modules) {
       try {
         const parsed = JSON.parse(data.modules);
-        if (parsed?.sites) {
+        if (parsed?.sites || parsed?.global) {
           formModel.value = normalizeModules(parsed);
           activeSiteId.value = formModel.value.sites?.[0]?.id || null;
           configMode.value = 'structured';
@@ -134,14 +189,17 @@ async function getConfig() {
     }
     if (!structuredLoaded) {
       const parsed = parseCaddyfileToModules(configContent.value);
-      if (parsed.sites.length > 0) {
+      if (parsed.sites.length > 0 || parsed.global?.raw) {
         formModel.value = parsed;
-        activeSiteId.value = parsed.sites[0].id;
+        activeSiteId.value = parsed.sites[0]?.id || null;
         configMode.value = 'structured';
       } else {
         configMode.value = 'raw';
       }
     }
+    activeSiteTab.value = 'basic';
+    focusRouteId.value = null;
+    initialGlobalRaw.value = formModel.value.global?.raw ?? '';
   }
 }
 
@@ -151,7 +209,7 @@ async function handleSaveConfig() {
   saving.value = true;
   let modules: string | undefined;
   const parsed = parseCaddyfileToModules(configContent.value);
-  if (parsed.sites.length > 0) {
+  if (parsed.sites.length > 0 || parsed.global?.raw) {
     modules = JSON.stringify(parsed);
   }
   const { error } = await updateCaddyConfig(currentServerId.value, configContent.value, modules);
@@ -162,6 +220,7 @@ async function handleSaveConfig() {
     return;
   }
   message.success('配置已保存');
+  initialGlobalRaw.value = parsed.global?.raw ?? '';
   mode.value = 'preview';
 }
 
@@ -190,39 +249,78 @@ function downloadText(filename: string, content: string) {
   URL.revokeObjectURL(url);
 }
 
-function validateStructuredConfig(): string[] {
-  const errors: string[] = [];
+function startResize(event: MouseEvent) {
+  resizing.value = true;
+  resizeStartX = event.clientX;
+  resizeStartWidth = sidebarWidth.value;
+  window.addEventListener('mousemove', handleResize);
+  window.addEventListener('mouseup', stopResize);
+}
+
+function handleResize(event: MouseEvent) {
+  if (!resizing.value) return;
+  const delta = event.clientX - resizeStartX;
+  const next = Math.min(420, Math.max(220, resizeStartWidth + delta));
+  sidebarWidth.value = next;
+}
+
+function stopResize() {
+  if (!resizing.value) return;
+  resizing.value = false;
+  localStorage.setItem('logflux:caddy.sidebarWidth', String(sidebarWidth.value));
+  window.removeEventListener('mousemove', handleResize);
+  window.removeEventListener('mouseup', stopResize);
+}
+
+function validateStructuredConfig(): ValidationError[] {
+  const errors: ValidationError[] = [];
+  const pushError = (
+    message: string,
+    siteId?: string,
+    routeId?: string,
+    tab?: 'basic' | 'routes' | 'advanced'
+  ) => {
+    errors.push({
+      id: `${siteId ?? 'global'}-${routeId ?? 'none'}-${errors.length}`,
+      message,
+      siteId,
+      routeId,
+      tab
+    });
+  };
   const domainRe = /^(\*\.)?([a-zA-Z0-9-]+\.)+[a-zA-Z0-9-]+$/;
   const portOnlyRe = /^:\d+$/;
   const methodAllowList = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
-  if (formModel.value.sites.length === 0) {
-    errors.push('至少需要一个站点');
+  const hasSites = formModel.value.sites.length > 0;
+  const hasGlobalRaw = !!formModel.value.global?.raw?.trim();
+  if (!hasSites && !hasGlobalRaw) {
+    pushError('至少需要一个站点或全局配置');
   }
   const upstreamNames = new Set<string>();
   for (const up of formModel.value.upstreams) {
-    if (!up.name) errors.push('上游名称不能为空');
-    if (upstreamNames.has(up.name)) errors.push(`上游名称重复: ${up.name}`);
+    if (!up.name) pushError('上游名称不能为空');
+    if (upstreamNames.has(up.name)) pushError(`上游名称重复: ${up.name}`);
     upstreamNames.add(up.name);
-    if (up.targets.length === 0) errors.push(`上游 ${up.name} 至少配置一个目标`);
+    if (up.targets.length === 0) pushError(`上游 ${up.name} 至少配置一个目标`);
   }
   for (const site of formModel.value.sites) {
-    if (!site.name) errors.push('站点名称不能为空');
-    if (site.domains.length === 0) errors.push(`站点 ${site.name || site.id} 至少配置一个域名`);
+    if (!site.name) pushError('站点名称不能为空', site.id, undefined, 'basic');
+    if (site.domains.length === 0) pushError(`站点 ${site.name || site.id} 至少配置一个域名`, site.id, undefined, 'basic');
     const invalidDomains = site.domains.filter(d => d && !(domainRe.test(d) || portOnlyRe.test(d)));
-    if (invalidDomains.length) errors.push(`站点 ${site.name || site.id} 域名格式不合法: ${invalidDomains.join(', ')}`);
+    if (invalidDomains.length) pushError(`站点 ${site.name || site.id} 域名格式不合法: ${invalidDomains.join(', ')}`, site.id, undefined, 'basic');
     if (site.tls?.mode === 'manual' && (!site.tls.certFile || !site.tls.keyFile)) {
-      errors.push(`站点 ${site.name || site.id} TLS 手动模式需填写证书和私钥`);
+      pushError(`站点 ${site.name || site.id} TLS 手动模式需填写证书和私钥`, site.id, undefined, 'basic');
     }
     for (const route of site.routes) {
-      if (!route.name) errors.push(`站点 ${site.name || site.id} 有未命名路由`);
-      if (route.handles.length === 0) errors.push(`路由 ${route.name || route.id} 至少一个 Handler`);
+      if (!route.name) pushError(`站点 ${site.name || site.id} 有未命名路由`, site.id, route.id, 'routes');
+      if (route.handles.length === 0) pushError(`路由 ${route.name || route.id} 至少一个 Handler`, site.id, route.id, 'routes');
       const invalidPaths = route.match.path.filter(p => p && !p.startsWith('/'));
-      if (invalidPaths.length) errors.push(`路由 ${route.name || route.id} Path 需以 / 开头: ${invalidPaths.join(', ')}`);
+      if (invalidPaths.length) pushError(`路由 ${route.name || route.id} Path 需以 / 开头: ${invalidPaths.join(', ')}`, site.id, route.id, 'routes');
       const invalidMethods = route.match.method.filter(m => m && !methodAllowList.includes(m.toUpperCase()));
-      if (invalidMethods.length) errors.push(`路由 ${route.name || route.id} Method 非法: ${invalidMethods.join(', ')}`);
+      if (invalidMethods.length) pushError(`路由 ${route.name || route.id} Method 非法: ${invalidMethods.join(', ')}`, site.id, route.id, 'routes');
       for (const handle of route.handles) {
         if (handle.type === 'reverse_proxy' && !handle.upstream) {
-          errors.push(`路由 ${route.name || route.id} 的 reverse_proxy 未选择上游`);
+          pushError(`路由 ${route.name || route.id} 的 reverse_proxy 未选择上游`, site.id, route.id, 'routes');
         }
       }
     }
@@ -239,7 +337,7 @@ async function saveStructuredConfig() {
   }
   const errors = validateStructuredConfig();
   if (errors.length > 0) {
-    message.error(`校验失败：${errors[0]}`);
+    message.error(`校验失败：${errors[0].message}`);
     return;
   }
   saving.value = true;
@@ -251,13 +349,19 @@ async function saveStructuredConfig() {
     return;
   }
   message.success('配置已保存');
+  initialGlobalRaw.value = formModel.value.global?.raw ?? '';
   mode.value = 'preview';
 }
 
-function buildCaddyfile(model: CaddyFormModel, options?: { includeDisabled?: boolean }): string {
+function buildCaddyfile(model: CaddyFormModel, options?: { includeDisabled?: boolean; includeGlobal?: boolean }): string {
   const lines: string[] = [];
+  const globalRaw = model.global?.raw?.trim();
+  if (globalRaw && options?.includeGlobal !== false) {
+    lines.push(globalRaw);
+    lines.push('');
+  }
   if (!model.sites || model.sites.length === 0) {
-    return '# No sites defined';
+    return lines.length ? lines.join('\n').trim() : '# No sites defined';
   }
   const upstreamMap = new Map(model.upstreams.map(u => [u.name, u]));
   const includeDisabled = options?.includeDisabled ?? false;
@@ -473,24 +577,90 @@ function genId() {
   return (crypto as any).randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+const siteDomainRe = /^(\*\.)?([a-zA-Z0-9-]+\.)+[a-zA-Z0-9-]+$/;
+const siteIpv4Re = /^(?:\d{1,3}\.){3}\d{1,3}$/;
+
+function isSiteToken(token: string) {
+  if (!token) return false;
+  if (token.startsWith('(') || token.endsWith(')') || token.includes('(') || token.includes(')')) return false;
+  if (token.startsWith(':') && /^\:\d+$/.test(token)) return true;
+  const [host, port] = token.split(':');
+  if (port) {
+    if (!/^\d+$/.test(port)) return false;
+    return siteDomainRe.test(host) || siteIpv4Re.test(host) || host === 'localhost';
+  }
+  return siteDomainRe.test(token);
+}
+
+function extractGlobalOptionsBlock(content: string): { raw: string; rest: string } {
+  const lines = content.split('\n');
+  const globalLines: string[] = [];
+  const restLines: string[] = [];
+  let depth = 0;
+  let currentBlock: 'global' | 'site' | null = null;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const sanitized = line.replace(/#.*/, '');
+    const openCount = (sanitized.match(/{/g) || []).length;
+    const closeCount = (sanitized.match(/}/g) || []).length;
+
+    if (depth === 0 && openCount > 0) {
+      const before = sanitized.split('{')[0].trim();
+      let blockType: 'global' | 'site' = 'global';
+      if (trimmed.startsWith('{')) {
+        blockType = 'global';
+      } else if (before.startsWith('(')) {
+        blockType = 'global';
+      } else {
+        const tokens = before.replace(/,/g, ' ').split(/\s+/).filter(Boolean);
+        const hasSiteToken = tokens.some(t => isSiteToken(t));
+        blockType = hasSiteToken ? 'site' : 'global';
+      }
+      currentBlock = blockType;
+    }
+
+    if (depth === 0 && openCount === 0 && currentBlock === null) {
+      if (trimmed.length > 0) {
+        globalLines.push(line);
+      } else {
+        restLines.push(line);
+      }
+      continue;
+    }
+
+    if (currentBlock === 'site') {
+      restLines.push(line);
+    } else {
+      globalLines.push(line);
+    }
+
+    depth += openCount - closeCount;
+    if (depth <= 0) {
+      depth = 0;
+      currentBlock = null;
+    }
+  }
+
+  return {
+    raw: globalLines.join('\n').trim(),
+    rest: restLines.join('\n')
+  };
+}
+
+function stripGlobalFromPreview(model: CaddyFormModel) {
+  return {
+    ...model,
+    global: {}
+  };
+}
+
 function parseCaddyfileToModules(content: string): CaddyFormModel {
+  const { raw: globalRaw, rest } = extractGlobalOptionsBlock(content);
   const sites: Site[] = [];
   const matchers: Record<string, RouteMatch> = {};
-  const lines = content.split('\n');
+  const lines = rest.split('\n');
   let depth = 0;
-  const domainRe = /^(\*\.)?([a-zA-Z0-9-]+\.)+[a-zA-Z0-9-]+$/;
-  const ipv4Re = /^(?:\d{1,3}\.){3}\d{1,3}$/;
-  function isSiteToken(token: string) {
-    if (!token) return false;
-    if (token.startsWith('(') || token.endsWith(')') || token.includes('(') || token.includes(')')) return false;
-    if (token.startsWith(':') && /^\:\d+$/.test(token)) return true;
-    const [host, port] = token.split(':');
-    if (port) {
-      if (!/^\d+$/.test(port)) return false;
-      return domainRe.test(host) || ipv4Re.test(host) || host === 'localhost';
-    }
-    return domainRe.test(token);
-  }
   let currentSite: Site | null = null;
   let currentRoute: Route | null = null;
   let currentHandleBlock = false;
@@ -725,11 +895,82 @@ function parseCaddyfileToModules(content: string): CaddyFormModel {
   }
   return normalizeModules({
     schemaVersion: 1,
-    global: {},
+    global: { raw: globalRaw },
     upstreams: [],
     sites
   });
 }
+
+function buildLineDiff(leftRaw: string, rightRaw: string): DiffRow[] {
+  const left = leftRaw.split('\n');
+  const right = rightRaw.split('\n');
+  const m = left.length;
+  const n = right.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (left[i - 1] === right[j - 1]) dp[i][j] = dp[i - 1][j - 1] + 1;
+      else dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+    }
+  }
+  const ops: Array<{ left: string | null; right: string | null; type: 'same' | 'added' | 'removed' }> = [];
+  let i = m;
+  let j = n;
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && left[i - 1] === right[j - 1]) {
+      ops.push({ left: left[i - 1], right: right[j - 1], type: 'same' });
+      i--;
+      j--;
+    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+      ops.push({ left: null, right: right[j - 1], type: 'added' });
+      j--;
+    } else if (i > 0) {
+      ops.push({ left: left[i - 1], right: null, type: 'removed' });
+      i--;
+    }
+  }
+  ops.reverse();
+
+  const rows: Array<{ left: string | null; right: string | null; type: 'same' | 'added' | 'removed' | 'changed' }> = [];
+  let k = 0;
+  while (k < ops.length) {
+    const current = ops[k];
+    const next = ops[k + 1];
+    if (current.type === 'removed' && next?.type === 'added') {
+      rows.push({ left: current.left, right: next.right, type: 'changed' });
+      k += 2;
+      continue;
+    }
+    rows.push({ left: current.left, right: current.right, type: current.type });
+    k += 1;
+  }
+
+  let leftLine = 0;
+  let rightLine = 0;
+  return rows.map((row, index) => {
+    if (row.left !== null) leftLine += 1;
+    if (row.right !== null) rightLine += 1;
+    return {
+      ...row,
+      leftNo: row.left !== null ? leftLine : null,
+      rightNo: row.right !== null ? rightLine : null,
+      key: `${index}-${row.type}`
+    };
+  });
+}
+
+function formatGlobalPreview(raw: string) {
+  const trimmed = raw.trim();
+  if (!trimmed) return '';
+  const lines = trimmed.split('\n');
+  const indents = lines
+    .filter(line => line.trim().length > 0)
+    .map(line => (line.match(/^[\t ]*/)?.[0]?.length ?? 0));
+  const minIndent = indents.length ? Math.min(...indents) : 0;
+  if (minIndent === 0) return trimmed;
+  return lines.map(line => line.slice(minIndent)).join('\n');
+}
+
 
 function addSite() {
   const id = genId();
@@ -818,9 +1059,10 @@ function applyPreset() {
 const importInputRef = ref<HTMLInputElement | null>(null);
 
 function normalizeModules(raw: any): CaddyFormModel {
+  const globalRaw = typeof raw?.global?.raw === 'string' ? raw.global.raw : '';
   const normalized: CaddyFormModel = {
     schemaVersion: raw.schemaVersion ?? 1,
-    global: raw.global ?? {},
+    global: { ...(raw.global ?? {}), raw: globalRaw },
     upstreams: (raw.upstreams ?? []).map((u: any) => ({
       name: u.name || `upstream-${genId().slice(0, 6)}`,
       targets: Array.isArray(u.targets) ? u.targets : [],
@@ -903,7 +1145,7 @@ function extractSiteBlock(content: string, domains: string[]): string {
 }
 
 function exportModules() {
-  const content = JSON.stringify(formModel.value, null, 2);
+  const content = JSON.stringify(stripGlobalFromPreview(formModel.value), null, 2);
   const serverTag = currentServer.value?.name || `server-${currentServerId.value || 'unknown'}`;
   downloadText(`caddy-modules-${serverTag}.json`, content);
 }
@@ -920,8 +1162,8 @@ function onImportChange(event: Event) {
   reader.onload = () => {
     try {
       const parsed = JSON.parse(String(reader.result || ''));
-      if (!parsed?.sites) {
-        message.error('结构化文件不包含 sites 字段');
+      if (!parsed?.sites && !parsed?.global) {
+        message.error('结构化文件不包含 sites/global 字段');
         return;
       }
       if (parsed.schemaVersion && parsed.schemaVersion !== 1) {
@@ -930,6 +1172,7 @@ function onImportChange(event: Event) {
       formModel.value = normalizeModules(parsed);
       activeSiteId.value = formModel.value.sites?.[0]?.id || null;
       configMode.value = 'structured';
+      initialGlobalRaw.value = formModel.value.global?.raw ?? '';
       message.success('导入成功');
     } catch {
       message.error('导入失败：JSON 格式不正确');
@@ -1021,6 +1264,150 @@ async function handleSaveServer() {
   await getServers();
 }
 
+function openGlobalCompare() {
+  showGlobalCompareModal.value = true;
+}
+
+function openGlobalModal() {
+  showGlobalModal.value = true;
+}
+
+function toggleGlobalPreview() {
+  globalPreviewExpanded.value = !globalPreviewExpanded.value;
+}
+
+function restoreGlobalRaw() {
+  dialog.warning({
+    title: '恢复确认',
+    content: '确定将全局配置恢复为已保存版本吗？',
+    positiveText: '确认',
+    negativeText: '取消',
+    onPositiveClick: () => {
+      formModel.value.global.raw = initialGlobalRaw.value ?? '';
+    }
+  });
+}
+
+function syncDiffScroll(side: 'left' | 'right') {
+  if (diffSyncing) return;
+  const source = side === 'left' ? diffLeftRef.value : diffRightRef.value;
+  const target = side === 'left' ? diffRightRef.value : diffLeftRef.value;
+  if (!source || !target) return;
+  diffSyncing = true;
+  target.scrollTop = source.scrollTop;
+  target.scrollLeft = source.scrollLeft;
+  requestAnimationFrame(() => {
+    diffSyncing = false;
+  });
+}
+
+async function focusValidationError(item: ValidationError) {
+  if (item.siteId) {
+    activeSiteId.value = item.siteId;
+  }
+  if (item.tab) {
+    activeSiteTab.value = item.tab;
+  }
+  if (item.routeId) {
+    focusRouteId.value = null;
+    await nextTick();
+    focusRouteId.value = item.routeId;
+  }
+}
+
+const historyColumns: DataTableColumns<CaddyConfigHistoryItem> = [
+  {
+    title: '时间',
+    key: 'createdAt',
+    width: 180
+  },
+  {
+    title: '动作',
+    key: 'action',
+    width: 100,
+    render(row) {
+      const label = row.action === 'rollback' ? '回滚' : '更新';
+      const type = row.action === 'rollback' ? 'warning' : 'info';
+      return h(
+        NTag,
+        {
+          type,
+          size: 'small'
+        },
+        { default: () => label }
+      );
+    }
+  },
+  {
+    title: 'Hash',
+    key: 'hash'
+  },
+  {
+    title: '操作',
+    key: 'actions',
+    width: 100,
+    render(row) {
+      return h(
+        NButton,
+        {
+          size: 'tiny',
+          type: 'primary',
+          onClick: () => handleRollback(row.id)
+        },
+        { default: () => '回滚' }
+      );
+    }
+  }
+];
+
+async function openHistoryModal() {
+  if (!currentServerId.value) return;
+  showHistoryModal.value = true;
+  historyPagination.value.page = 1;
+  await fetchHistory();
+}
+
+async function fetchHistory() {
+  if (!currentServerId.value) return;
+  historyLoading.value = true;
+  const { data, error } = await fetchCaddyConfigHistory(currentServerId.value, {
+    page: historyPagination.value.page,
+    pageSize: historyPagination.value.pageSize
+  });
+  historyLoading.value = false;
+  if (error) {
+    message.error('获取历史版本失败');
+    return;
+  }
+  historyList.value = data?.list || [];
+  historyPagination.value.itemCount = data?.total || 0;
+}
+
+function handleHistoryPageChange(page: number) {
+  historyPagination.value.page = page;
+  fetchHistory();
+}
+
+async function handleRollback(historyId: number) {
+  if (!currentServerId.value) return;
+  dialog.warning({
+    title: '确认回滚',
+    content: '确定要回滚到该版本吗？',
+    positiveText: '确认',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      const { error } = await rollbackCaddyConfig(currentServerId.value!, historyId);
+      if (error) {
+        message.error('回滚失败');
+        return;
+      }
+      message.success('回滚成功');
+      await getConfig();
+      await fetchHistory();
+    }
+  });
+}
+
 // Watchers
 watch(currentServerId, () => {
   if (currentServerId.value) {
@@ -1031,15 +1418,20 @@ watch(currentServerId, () => {
 watch(configMode, () => {
   if (configMode.value === 'structured' && formModel.value.sites.length === 0 && configContent.value) {
     const parsed = parseCaddyfileToModules(configContent.value);
-    if (parsed.sites.length > 0) {
+    if (parsed.sites.length > 0 || parsed.global?.raw) {
       formModel.value = parsed;
-      activeSiteId.value = parsed.sites[0].id;
+      activeSiteId.value = parsed.sites[0]?.id || null;
     }
   }
 });
 
 onMounted(() => {
   getServers();
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('mousemove', handleResize);
+  window.removeEventListener('mouseup', stopResize);
 });
 </script>
 
@@ -1076,6 +1468,12 @@ onMounted(() => {
                <div class="flex items-center gap-1">
                  <span class="i-carbon-trash-can" />
                  <span>删除</span>
+               </div>
+             </NButton>
+             <NButton size="small" :disabled="!currentServerId" @click="openHistoryModal">
+               <div class="flex items-center gap-1">
+                 <span class="i-carbon-time" />
+                 <span>历史版本</span>
                </div>
              </NButton>
            </div>
@@ -1149,8 +1547,8 @@ onMounted(() => {
               class="absolute inset-0"
             />
           </div>
-          <div v-else class="h-full flex flex-col lg:flex-row gap-4 overflow-hidden min-w-0">
-            <div class="w-full lg:w-72 flex-shrink-0 min-w-0">
+          <div v-else class="h-full flex flex-col lg:flex-row overflow-hidden min-w-0 caddy-split" :style="{ '--sidebar-width': sidebarWidth + 'px' }">
+            <div class="caddy-sidebar flex-shrink-0 min-w-0">
               <SiteListPanel
                 class="h-full"
                 :sites="formModel.sites"
@@ -1162,6 +1560,7 @@ onMounted(() => {
                 @move="moveSite"
               />
             </div>
+            <div class="caddy-resizer hidden lg:block" @mousedown="startResize"></div>
             <div class="flex-1 min-w-0 flex flex-col gap-3 overflow-auto">
               <div class="flex flex-wrap gap-2 items-center">
                 <n-button size="small" @click="applyPreset">应用默认模板</n-button>
@@ -1170,7 +1569,40 @@ onMounted(() => {
                 <n-button size="small" @click="openPreviewModal">预览 Caddyfile</n-button>
                 <input ref="importInputRef" type="file" accept="application/json" class="hidden" @change="onImportChange" />
               </div>
-              <SiteEditorPanel v-model:site="activeSiteModel" />
+              <n-card size="small" :bordered="false" class="bg-white">
+                <template #header>全局配置（原样保留）</template>
+                <template #header-extra>
+                  <div class="flex items-center gap-2">
+                    <n-tag v-if="globalRawChanged" type="warning" size="small">未保存</n-tag>
+                    <n-button size="tiny" @click="toggleGlobalPreview">
+                      {{ globalPreviewExpanded ? '收起' : '展开' }}
+                    </n-button>
+                    <n-button size="tiny" @click="openGlobalModal">查看/编辑</n-button>
+                  </div>
+                </template>
+                <pre
+                  class="global-preview cursor-pointer"
+                  :class="{ expanded: globalPreviewExpanded }"
+                  @click="openGlobalModal"
+                  v-text="globalPreviewText || '未配置全局 options 块'"
+                />
+                <div class="text-xs text-gray-500 mt-2">该区域将原样拼接到生成的 Caddyfile 顶部。</div>
+              </n-card>
+              <n-alert v-if="validationErrors.length" type="error" title="配置校验错误" class="mb-2">
+                <ul class="list-disc pl-4">
+                  <li v-for="item in validationErrors" :key="item.id">
+                    <a
+                      v-if="item.siteId"
+                      class="text-blue-600 hover:underline cursor-pointer"
+                      @click.prevent="focusValidationError(item)"
+                    >
+                      {{ item.message }}
+                    </a>
+                    <span v-else>{{ item.message }}</span>
+                  </li>
+                </ul>
+              </n-alert>
+              <SiteEditorPanel v-model:site="activeSiteModel" v-model:tab="activeSiteTab" :focus-route-id="focusRouteId" />
               <n-collapse class="mt-2">
                 <n-collapse-item title="上游池管理" name="upstreams">
                   <UpstreamManager :upstreams="formModel.upstreams" />
@@ -1239,6 +1671,78 @@ onMounted(() => {
         </NSpin>
       </div>
     </NCard>
+
+    <NModal v-model:show="showHistoryModal" preset="card" title="配置历史" class="w-[90vw] max-w-3xl">
+      <n-data-table
+        :columns="historyColumns"
+        :data="historyList"
+        :loading="historyLoading"
+        :pagination="{
+          page: historyPagination.page,
+          pageSize: historyPagination.pageSize,
+          itemCount: historyPagination.itemCount,
+          onUpdatePage: handleHistoryPageChange
+        }"
+        size="small"
+      />
+    </NModal>
+
+    <NModal v-model:show="showGlobalModal" preset="card" title="全局配置" class="w-[90vw] max-w-4xl">
+      <div class="flex items-center justify-between mb-3">
+        <div class="text-sm text-gray-500">原样保留最外层 options 块</div>
+        <n-space>
+          <n-button size="tiny" secondary @click="restoreGlobalRaw" :disabled="!initialGlobalRaw">
+            恢复已保存
+          </n-button>
+          <n-button size="tiny" @click="openGlobalCompare" :disabled="!formModel.global.raw && !initialGlobalRaw">
+            对比
+          </n-button>
+        </n-space>
+      </div>
+      <div class="relative h-[45vh]">
+        <VueMonacoEditor
+          v-model:value="formModel.global.raw"
+          language="shell"
+          theme="vs"
+          :options="{
+            automaticLayout: true,
+            fixedOverflowWidgets: true,
+            readOnly: isPreview,
+            minimap: { enabled: false },
+            scrollBeyondLastLine: false,
+            wordWrap: 'on'
+          }"
+          class="absolute inset-0"
+        />
+      </div>
+    </NModal>
+
+    <NModal v-model:show="showGlobalCompareModal" preset="card" title="全局配置对比" class="w-[90vw] max-w-4xl">
+      <div class="diff-head">
+        <div>已保存</div>
+        <div class="flex items-center justify-between">
+          <span>当前</span>
+          <n-switch v-model:value="showGlobalDiffOnly" size="small">
+            <template #checked>仅差异</template>
+            <template #unchecked>全部</template>
+          </n-switch>
+        </div>
+      </div>
+      <div class="diff-body diff-two">
+        <div ref="diffLeftRef" class="diff-column" @scroll="syncDiffScroll('left')">
+          <div v-for="row in globalDiffRows" :key="row.key" class="diff-line-row" :class="row.type">
+            <span class="diff-no">{{ row.leftNo ?? '' }}</span>
+            <span class="diff-line">{{ row.left !== null ? row.left : '' }}</span>
+          </div>
+        </div>
+        <div ref="diffRightRef" class="diff-column" @scroll="syncDiffScroll('right')">
+          <div v-for="row in globalDiffRows" :key="row.key" class="diff-line-row" :class="row.type">
+            <span class="diff-no">{{ row.rightNo ?? '' }}</span>
+            <span class="diff-line">{{ row.right !== null ? row.right : '' }}</span>
+          </div>
+        </div>
+      </div>
+    </NModal>
 
     <!-- Server Management Modal -->
     <!-- ... modal content ... -->
@@ -1346,5 +1850,112 @@ onMounted(() => {
 /* Ensure Monaco widgets (like search) are on top */
 :deep(.monaco-editor-overlay) {
   z-index: 1000 !important;
+}
+
+.caddy-split {
+  gap: 12px;
+}
+
+.global-preview {
+  max-height: 140px;
+  overflow: hidden;
+  white-space: pre-wrap;
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: #475569;
+}
+
+.global-preview.expanded {
+  max-height: 520px;
+  overflow: auto;
+}
+
+.diff-head {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+
+.diff-body {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  max-height: 60vh;
+  background: #ffffff;
+}
+
+.diff-two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.diff-column {
+  overflow: auto;
+  max-height: 60vh;
+}
+
+.diff-column + .diff-column {
+  border-left: 1px solid #e2e8f0;
+}
+
+.diff-line-row {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  gap: 8px;
+  padding: 6px 10px;
+  border-top: 1px solid #f1f5f9;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  white-space: pre-wrap;
+}
+
+.diff-line-row:first-child {
+  border-top: none;
+}
+
+.diff-line-row.added {
+  background: #ecfdf3;
+}
+
+.diff-line-row.removed {
+  background: #fef2f2;
+}
+
+.diff-line-row.changed {
+  background: #fff7ed;
+}
+
+.diff-line {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.diff-no {
+  color: #94a3b8;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.caddy-sidebar {
+  width: 100%;
+}
+
+@media (min-width: 1024px) {
+  .caddy-sidebar {
+    width: var(--sidebar-width);
+  }
+
+  .caddy-resizer {
+    width: 6px;
+    cursor: col-resize;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #e2e8f0, #cbd5f5, #e2e8f0);
+    align-self: stretch;
+  }
 }
 </style>

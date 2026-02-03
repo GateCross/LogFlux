@@ -18,6 +18,25 @@ type BatchDeleteNotificationLogsReq struct {
 	IDs []uint `json:"ids"`
 }
 
+type CaddyConfigHistoryItem struct {
+	ID        uint   `json:"id"`
+	ServerId  uint   `json:"serverId"`
+	Action    string `json:"action"`
+	Hash      string `json:"hash"`
+	CreatedAt string `json:"createdAt"`
+}
+
+type CaddyConfigHistoryListReq struct {
+	ServerId uint `path:"serverId"`
+	Page     int  `form:"page,default=1"`
+	PageSize int  `form:"pageSize,default=20"`
+}
+
+type CaddyConfigHistoryListResp struct {
+	List  []CaddyConfigHistoryItem `json:"list"`
+	Total int64                    `json:"total"`
+}
+
 type CaddyConfigReq struct {
 	ServerId uint `path:"serverId"`
 }
@@ -25,6 +44,11 @@ type CaddyConfigReq struct {
 type CaddyConfigResp struct {
 	Config  string `json:"config"`
 	Modules string `json:"modules,optional"`
+}
+
+type CaddyConfigRollbackReq struct {
+	ServerId  uint `path:"serverId"`
+	HistoryId uint `json:"historyId"`
 }
 
 type CaddyConfigUpdateReq struct {
@@ -49,9 +73,13 @@ type CaddyLogItem struct {
 }
 
 type CaddyLogReq struct {
-	Page     int    `form:"page,default=1"`
-	PageSize int    `form:"pageSize,default=20"`
-	Keyword  string `form:"keyword,optional"` // Search in host, uri, ip
+	Page      int    `form:"page,default=1"`
+	PageSize  int    `form:"pageSize,default=20"`
+	Keyword   string `form:"keyword,optional"` // Search in host, uri, ip
+	Host      string `form:"host,optional"`
+	Status    int    `form:"status,default=-1"`
+	StartTime string `form:"startTime,optional"`
+	EndTime   string `form:"endTime,optional"`
 }
 
 type CaddyLogResp struct {

@@ -10,6 +10,7 @@ export type GlobalConfig = {
   headers?: HeaderRule[];
   gzip?: boolean;
   rateLimit?: RateLimit;
+  raw?: string;
 };
 
 export type Site = {
