@@ -32,9 +32,24 @@ type CaddyConfigHistoryListReq struct {
 	PageSize int  `form:"pageSize,default=20"`
 }
 
+type CaddyConfigHistoryDetailReq struct {
+	ServerId  uint `path:"serverId"`
+	HistoryId uint `path:"historyId"`
+}
+
 type CaddyConfigHistoryListResp struct {
 	List  []CaddyConfigHistoryItem `json:"list"`
 	Total int64                    `json:"total"`
+}
+
+type CaddyConfigHistoryDetailResp struct {
+	ID        uint   `json:"id"`
+	ServerId  uint   `json:"serverId"`
+	Action    string `json:"action"`
+	Hash      string `json:"hash"`
+	Config    string `json:"config"`
+	Modules   string `json:"modules,optional"`
+	CreatedAt string `json:"createdAt"`
 }
 
 type CaddyConfigReq struct {

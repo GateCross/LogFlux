@@ -19,7 +19,7 @@
             <n-form-item label="启用">
               <n-switch v-model:value="site.enabled" />
             </n-form-item>
-            <n-form-item label="域名">
+            <n-form-item :label="domainLabel">
               <n-dynamic-tags v-model:value="site.domains" />
             </n-form-item>
             <n-form-item label="TLS">
@@ -61,7 +61,7 @@
 </template>
 
 <script setup lang="ts">
-import { watchEffect } from 'vue';
+import { watchEffect, computed } from 'vue';
 import { toRefs } from 'vue';
 import SiteRoutesEditor from './SiteRoutesEditor.vue';
 import type { Site } from '../types';
@@ -76,6 +76,13 @@ const tlsOptions = [
   { label: 'internal', value: 'internal' },
   { label: 'manual', value: 'manual' }
 ];
+
+const domainLabel = computed(() => {
+  if (!site.value) return '域名';
+  const values = site.value.domains.filter(Boolean);
+  if (values.length > 0 && values.every(v => /^:\d+$/.test(v))) return '端口';
+  return '域名';
+});
 
 watchEffect(() => {
   if (!site.value) return;

@@ -70,6 +70,11 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Handler: caddy.GetCaddyConfigHistoryHandler(serverCtx),
 			},
 			{
+				Method:  http.MethodGet,
+				Path:    "/caddy/server/:serverId/config/history/:historyId",
+				Handler: caddy.GetCaddyConfigHistoryDetailHandler(serverCtx),
+			},
+			{
 				Method:  http.MethodPost,
 				Path:    "/caddy/server/:serverId/config/rollback",
 				Handler: caddy.RollbackCaddyConfigHandler(serverCtx),

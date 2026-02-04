@@ -20,7 +20,15 @@ export function fetchCaddyConfig(serverId: number) {
     return request<any>({ url: `/api/caddy/server/${serverId}/config` });
 }
 
-export function updateCaddyConfig(serverId: number, config: string, modules?: string) {
+export function updateCaddyConfigRaw(serverId: number, config: string) {
+    return request<any>({
+        url: `/api/caddy/server/${serverId}/config`,
+        method: 'post',
+        data: { config }
+    });
+}
+
+export function updateCaddyConfigStructured(serverId: number, config: string, modules: string) {
     return request<any>({
         url: `/api/caddy/server/${serverId}/config`,
         method: 'post',
@@ -34,6 +42,10 @@ export function fetchCaddyLogs(params: { page: number; pageSize: number; keyword
 
 export function fetchCaddyConfigHistory(serverId: number, params: { page: number; pageSize: number }) {
     return request<any>({ url: `/api/caddy/server/${serverId}/config/history`, params });
+}
+
+export function fetchCaddyConfigHistoryDetail(serverId: number, historyId: number) {
+    return request<any>({ url: `/api/caddy/server/${serverId}/config/history/${historyId}` });
 }
 
 export function rollbackCaddyConfig(serverId: number, historyId: number) {
