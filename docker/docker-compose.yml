@@ -7,6 +7,9 @@ services:
       args:
         HTTP_PROXY: ${HTTP_PROXY}
         HTTPS_PROXY: ${HTTPS_PROXY}
+        NO_PROXY: ${NO_PROXY}
+        GOPROXY: ${GOPROXY}
+        GOSUMDB: ${GOSUMDB}
     container_name: logflux-app
     restart: unless-stopped
     ports:
