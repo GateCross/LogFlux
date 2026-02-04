@@ -2,6 +2,10 @@
 # Stage 1: Build Frontend
 # ==========================================
 FROM node:20-alpine AS frontend-builder
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+ENV HTTP_PROXY=$HTTP_PROXY HTTPS_PROXY=$HTTPS_PROXY NO_PROXY=$NO_PROXY
 
 WORKDIR /app
 
@@ -28,6 +32,13 @@ RUN pnpm run build
 # Stage 2: Build Caddy with custom modules
 # ==========================================
 FROM caddy:builder AS caddy-builder
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+ARG GOPROXY=https://goproxy.cn,direct
+ARG GOSUMDB=off
+ENV HTTP_PROXY=$HTTP_PROXY HTTPS_PROXY=$HTTPS_PROXY NO_PROXY=$NO_PROXY \
+    GOPROXY=$GOPROXY GOSUMDB=$GOSUMDB
 
 RUN xcaddy build \
     --with github.com/zhangjiayin/caddy-geoip2 \
@@ -38,6 +49,13 @@ RUN xcaddy build \
 # Stage 3: Build Backend
 # ==========================================
 FROM golang:1.25.3-alpine AS backend-builder
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+ARG GOPROXY=https://goproxy.cn,direct
+ARG GOSUMDB=off
+ENV HTTP_PROXY=$HTTP_PROXY HTTPS_PROXY=$HTTPS_PROXY NO_PROXY=$NO_PROXY \
+    GOPROXY=$GOPROXY GOSUMDB=$GOSUMDB
 
 WORKDIR /app
 
