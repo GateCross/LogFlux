@@ -16,8 +16,9 @@ ENV VITE_SERVICE_BASE_URL=$VITE_SERVICE_BASE_URL
 # 启用 pnpm
 RUN corepack enable pnpm
 
-# 复制依赖文件
-COPY frontend/package.json frontend/pnpm-lock.yaml ./
+# 复制依赖文件（包含 workspace 定义与子包清单）
+COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
+COPY frontend/packages/*/package.json ./packages/*/package.json
 
 # 安装依赖（利用缓存）
 RUN pnpm install --frozen-lockfile
