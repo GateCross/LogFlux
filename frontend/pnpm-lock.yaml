@@ -35,9 +35,6 @@ importers:
       '@types/crypto-js':
         specifier: 4.2.2
         version: 4.2.2
-      '@vicons/carbon':
-        specifier: ^0.13.0
-        version: 0.13.0
       '@vueuse/core':
         specifier: 14.1.0
         version: 14.1.0(vue@3.5.27(typescript@5.9.3))
@@ -147,6 +144,9 @@ importers:
       '@iconify/json':
         specifier: 2.2.430
         version: 2.2.430
+      '@iconify/utils':
+        specifier: 3.1.0
+        version: 3.1.0
       '@sa/scripts':
         specifier: workspace:*
         version: link:packages/scripts

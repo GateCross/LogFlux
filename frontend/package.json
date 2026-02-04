@@ -94,6 +94,7 @@
     "@iconify/icons-mdi": "^1.2.48",
     "@iconify/icons-ph": "^1.2.5",
     "@iconify/json": "2.2.430",
+    "@iconify/utils": "3.1.0",
     "@sa/scripts": "workspace:*",
     "@sa/uno-preset": "workspace:*",
     "@soybeanjs/eslint-config": "1.7.5",
