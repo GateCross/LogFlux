@@ -239,6 +239,9 @@ service logflux-api {
 	@handler GetCaddyConfigHistory
 	get /caddy/server/:serverId/config/history (CaddyConfigHistoryListReq) returns (CaddyConfigHistoryListResp)
 
+	@handler GetCaddyConfigHistoryDetail
+	get /caddy/server/:serverId/config/history/:historyId (CaddyConfigHistoryDetailReq) returns (CaddyConfigHistoryDetailResp)
+
 	@handler RollbackCaddyConfig
 	post /caddy/server/:serverId/config/rollback (CaddyConfigRollbackReq) returns (BaseResp)
 }

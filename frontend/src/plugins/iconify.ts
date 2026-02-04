@@ -25,6 +25,10 @@ import DocumentDownload from '@iconify/icons-carbon/document-download';
 import Add from '@iconify/icons-carbon/add';
 import Edit from '@iconify/icons-carbon/edit';
 import TrashCan from '@iconify/icons-carbon/trash-can';
+import Time from '@iconify/icons-carbon/time';
+import DirectionStraightRight from '@iconify/icons-carbon/direction-straight-right';
+import Save from '@iconify/icons-carbon/save';
+import SaveSeries from '@iconify/icons-carbon/save-series';
 
 // IC
 import RoundManageAccounts from '@iconify/icons-ic/round-manage-accounts';
@@ -91,6 +95,10 @@ export function setupIconifyOffline() {
   addIcon('carbon:add', Add);
   addIcon('carbon:edit', Edit);
   addIcon('carbon:trash-can', TrashCan);
+  addIcon('carbon:time', Time);
+  addIcon('carbon:direction-straight-right', DirectionStraightRight);
+  addIcon('carbon:save', Save);
+  addIcon('carbon:save-series', SaveSeries);
 
   // IC
   addIcon('ic:round-manage-accounts', RoundManageAccounts);

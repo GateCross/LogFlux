@@ -25,7 +25,9 @@
           <div class="min-w-0">
             <div class="font-medium truncate">{{ site.name }}</div>
             <div class="text-xs text-gray-500 truncate">{{ site.domains.join(', ') || '-' }}</div>
-            <div class="text-xs text-gray-400 mt-1">域名 {{ site.domains.length }} · 路由 {{ site.routes.length }}</div>
+            <div class="text-xs text-gray-400 mt-1">
+              {{ domainCountLabel(site.domains) }} {{ site.domains.length }} · 路由 {{ site.routes.length }}
+            </div>
           </div>
           <n-tag size="small" :type="site.enabled ? 'success' : 'default'">{{ site.enabled ? '启用' : '停用' }}</n-tag>
         </div>
@@ -59,6 +61,11 @@ defineEmits<{
 }>();
 
 const search = ref('');
+const domainCountLabel = (domains: string[]) => {
+  const values = domains.filter(Boolean);
+  if (values.length > 0 && values.every(v => /^:\d+$/.test(v))) return '端口';
+  return '域名';
+};
 const filteredSites = computed(() => {
   const keyword = search.value.trim().toLowerCase();
   if (!keyword) return sites.value;

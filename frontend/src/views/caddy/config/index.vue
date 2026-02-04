@@ -2,11 +2,12 @@
 import { ref, onMounted, computed, watch, onBeforeUnmount, h, nextTick } from 'vue';
 import { useMessage, useDialog, NTag, NButton } from 'naive-ui';
 import type { DataTableColumns } from 'naive-ui';
-import { VueMonacoEditor, loader } from '@guolao/vue-monaco-editor';
-import { fetchCaddyServers, fetchCaddyConfig, updateCaddyConfig, addCaddyServer, updateCaddyServer, deleteCaddyServer, fetchCaddyConfigHistory, rollbackCaddyConfig } from '@/service/api/caddy';
-import SiteListPanel from './components/SiteListPanel.vue';
-import SiteEditorPanel from './components/SiteEditorPanel.vue';
-import UpstreamManager from './components/UpstreamManager.vue';
+import { VueMonacoEditor, VueMonacoDiffEditor, loader } from '@guolao/vue-monaco-editor';
+import { fetchCaddyServers, fetchCaddyConfig, updateCaddyConfigRaw, updateCaddyConfigStructured, addCaddyServer, updateCaddyServer, deleteCaddyServer, fetchCaddyConfigHistory, fetchCaddyConfigHistoryDetail, rollbackCaddyConfig } from '@/service/api/caddy';
+import ConfigPreviewPanel from './components/ConfigPreviewPanel.vue';
+import RawEditorPanel from './components/RawEditorPanel.vue';
+import StructuredEditorPanel from './components/StructuredEditorPanel.vue';
+import SvgIcon from '@/components/custom/svg-icon.vue';
 import type { CaddyFormModel, Route, RouteMatch, Site } from './types';
 
 // Configure Monaco Editor loader to use npmmirror for better performance in China
@@ -56,16 +57,18 @@ const loading = ref(false);
 const saving = ref(false);
 const servers = ref<CaddyServer[]>([]);
 const currentServerId = ref<number | null>(null);
-const mode = ref<'preview' | 'edit'>('preview');
-const configMode = ref<'raw' | 'structured'>('raw');
+const viewMode = ref<'preview' | 'edit'>('preview');
+const editMode = ref<'raw' | 'structured'>('raw');
 const configContent = ref('');
 const showSiteModal = ref(false);
-const formModel = ref<CaddyFormModel>({
+const structuredAvailable = ref(false);
+const createEmptyFormModel = (): CaddyFormModel => ({
   schemaVersion: 1,
   global: { raw: '' },
   upstreams: [],
   sites: []
 });
+const formModel = ref<CaddyFormModel>(createEmptyFormModel());
 const activeSiteId = ref<string | null>(null);
 const activeSiteTab = ref<'basic' | 'routes' | 'advanced'>('basic');
 const focusRouteId = ref<string | null>(null);
@@ -78,6 +81,17 @@ const showHistoryModal = ref(false);
 const historyLoading = ref(false);
 const historyList = ref<CaddyConfigHistoryItem[]>([]);
 const historyPagination = ref({ page: 1, pageSize: 10, itemCount: 0 });
+const showHistoryDetailModal = ref(false);
+const showHistoryCompareModal = ref(false);
+const historyDetail = ref<{
+  id: number;
+  createdAt: string;
+  action: string;
+  hash: string;
+  config: string;
+} | null>(null);
+const historyCompareLeft = ref('');
+const historyDiffOnly = ref(false);
 const showGlobalModal = ref(false);
 const showGlobalCompareModal = ref(false);
 const initialGlobalRaw = ref('');
@@ -98,7 +112,7 @@ const serverFormModel = ref<Omit<CaddyServer, 'id'> & { id?: number }>({
 });
 
 // Computed
-const isPreview = computed(() => mode.value === 'preview');
+const isPreview = computed(() => viewMode.value === 'preview');
 const serverOptions = computed(() => 
   servers.value.map(s => ({ label: s.name, value: s.id }))
 );
@@ -118,17 +132,18 @@ const rawSiteContent = computed(() => {
   if (!activeSite.value || !configContent.value) return configContent.value;
   return extractSiteBlock(configContent.value, activeSite.value.domains) || configContent.value;
 });
-const previewModel = computed(() => {
-  if (!activeSiteId.value) return formModel.value;
-  const site = formModel.value.sites.find(s => s.id === activeSiteId.value);
-  if (!site) return formModel.value;
-  return { ...formModel.value, sites: [site] };
-});
+const formattedConfigContent = computed(() => formatCaddyfile(configContent.value));
+const formattedRawSiteContent = computed(() => formatCaddyfile(rawSiteContent.value));
 const generatedCaddyfile = computed(() => buildCaddyfile(formModel.value));
-const previewCaddyfile = computed(() => buildCaddyfile(previewModel.value, { includeDisabled: true, includeGlobal: false }));
-const previewCaddyJSON = computed(() => JSON.stringify(stripGlobalFromPreview(previewModel.value), null, 2));
 const currentServer = computed(() => servers.value.find(s => s.id === currentServerId.value) || null);
-const validationErrors = computed<ValidationError[]>(() => (configMode.value === 'structured' ? validateStructuredConfig() : []));
+const structuredReady = computed(() => {
+  if (structuredAvailable.value) return true;
+  const model = formModel.value;
+  if (model.sites?.length) return true;
+  if (model.upstreams?.length) return true;
+  return Boolean(model.global?.raw?.trim());
+});
+const validationErrors = computed<ValidationError[]>(() => (editMode.value === 'structured' ? validateStructuredConfig() : []));
 const globalRawChanged = computed(
   () => (formModel.value.global?.raw ?? '').trim() !== (initialGlobalRaw.value ?? '').trim()
 );
@@ -138,6 +153,9 @@ const globalDiffRows = computed<DiffRow[]>(() => {
   return rows.filter(row => row.type !== 'same');
 });
 const globalPreviewText = computed(() => formatGlobalPreview(formModel.value.global?.raw ?? ''));
+const historyDetailFormattedConfig = computed(() => (historyDetail.value ? formatCaddyfile(historyDetail.value.config) : ''));
+const historyCompareLeftFormatted = computed(() => formatCaddyfile(historyCompareLeft.value));
+const historyCompareRight = computed(() => formattedConfigContent.value);
 
 // Methods
 async function getServers() {
@@ -173,46 +191,38 @@ async function getConfig() {
   }
   if (data) {
     configContent.value = data.config || '';
-    let structuredLoaded = false;
+    structuredAvailable.value = false;
+    formModel.value = createEmptyFormModel();
+    activeSiteId.value = null;
     if (data.modules) {
       try {
         const parsed = JSON.parse(data.modules);
         if (parsed?.sites || parsed?.global) {
           formModel.value = normalizeModules(parsed);
           activeSiteId.value = formModel.value.sites?.[0]?.id || null;
-          configMode.value = 'structured';
-          structuredLoaded = true;
+          structuredAvailable.value = true;
         }
       } catch {
         message.warning('结构化配置解析失败，已忽略');
-      }
-    }
-    if (!structuredLoaded) {
-      const parsed = parseCaddyfileToModules(configContent.value);
-      if (parsed.sites.length > 0 || parsed.global?.raw) {
-        formModel.value = parsed;
-        activeSiteId.value = parsed.sites[0]?.id || null;
-        configMode.value = 'structured';
-      } else {
-        configMode.value = 'raw';
+        formModel.value = createEmptyFormModel();
+        activeSiteId.value = null;
+        structuredAvailable.value = false;
       }
     }
     activeSiteTab.value = 'basic';
     focusRouteId.value = null;
     initialGlobalRaw.value = formModel.value.global?.raw ?? '';
+    if (viewMode.value === 'edit' && editMode.value === 'structured') {
+      ensureStructuredForEdit();
+    }
   }
 }
 
-async function handleSaveConfig() {
+async function saveRawConfig() {
   if (!currentServerId.value) return;
 
   saving.value = true;
-  let modules: string | undefined;
-  const parsed = parseCaddyfileToModules(configContent.value);
-  if (parsed.sites.length > 0 || parsed.global?.raw) {
-    modules = JSON.stringify(parsed);
-  }
-  const { error } = await updateCaddyConfig(currentServerId.value, configContent.value, modules);
+  const { error } = await updateCaddyConfigRaw(currentServerId.value, configContent.value);
   saving.value = false;
 
   if (error) {
@@ -220,14 +230,61 @@ async function handleSaveConfig() {
     return;
   }
   message.success('配置已保存');
-  initialGlobalRaw.value = parsed.global?.raw ?? '';
-  mode.value = 'preview';
+  structuredAvailable.value = false;
+  viewMode.value = 'preview';
 }
 
 function applyStructuredToRaw() {
   configContent.value = generatedCaddyfile.value;
-  configMode.value = 'raw';
-  mode.value = 'edit';
+  editMode.value = 'raw';
+  viewMode.value = 'edit';
+}
+
+function applyStructuredParsed(parsed: CaddyFormModel, notify?: boolean) {
+  formModel.value = parsed;
+  activeSiteId.value = parsed.sites[0]?.id || null;
+  structuredAvailable.value = true;
+  editMode.value = 'structured';
+  viewMode.value = 'edit';
+  initialGlobalRaw.value = parsed.global?.raw ?? '';
+  if (notify) message.success('已从原始配置解析');
+}
+
+function confirmOverwriteStructured(actionLabel: string, onConfirm: () => void) {
+  if (!structuredReady.value) {
+    onConfirm();
+    return;
+  }
+  dialog.warning({
+    title: '覆盖确认',
+    content: `${actionLabel}将覆盖当前结构化配置，未保存内容会丢失，是否继续？`,
+    positiveText: '继续',
+    negativeText: '取消',
+    onPositiveClick: onConfirm
+  });
+}
+
+function importRawToStructured() {
+  if (!configContent.value.trim()) {
+    message.error('原始配置为空，无法解析');
+    return;
+  }
+  confirmOverwriteStructured('从原始配置解析', () => {
+    const parsed = parseCaddyfileToModules(configContent.value);
+    if (parsed.sites.length === 0 && !parsed.global?.raw) {
+      message.error('未解析到可用结构化配置');
+      return;
+    }
+    applyStructuredParsed(parsed, true);
+  });
+}
+
+function ensureStructuredForEdit() {
+  if (structuredReady.value) return;
+  if (!configContent.value.trim()) return;
+  const parsed = parseCaddyfileToModules(configContent.value);
+  if (parsed.sites.length === 0 && !parsed.global?.raw) return;
+  applyStructuredParsed(parsed, false);
 }
 
 async function copyText(content: string) {
@@ -291,7 +348,15 @@ function validateStructuredConfig(): ValidationError[] {
   const domainRe = /^(\*\.)?([a-zA-Z0-9-]+\.)+[a-zA-Z0-9-]+$/;
   const portOnlyRe = /^:\d+$/;
   const methodAllowList = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
-  const hasSites = formModel.value.sites.length > 0;
+  const isValidPathPattern = (value: string) => {
+    if (!value) return false;
+    if (value.startsWith('/')) return true;
+    if (value.startsWith('*')) return true;
+    if (value.startsWith('{') && value.endsWith('}')) return true;
+    return false;
+  };
+  const enabledSites = formModel.value.sites.filter(s => s.enabled);
+  const hasSites = enabledSites.length > 0;
   const hasGlobalRaw = !!formModel.value.global?.raw?.trim();
   if (!hasSites && !hasGlobalRaw) {
     pushError('至少需要一个站点或全局配置');
@@ -304,21 +369,30 @@ function validateStructuredConfig(): ValidationError[] {
     if (up.targets.length === 0) pushError(`上游 ${up.name} 至少配置一个目标`);
   }
   for (const site of formModel.value.sites) {
+    if (!site.enabled) continue;
     if (!site.name) pushError('站点名称不能为空', site.id, undefined, 'basic');
     if (site.domains.length === 0) pushError(`站点 ${site.name || site.id} 至少配置一个域名`, site.id, undefined, 'basic');
+    if (site.enabled && site.routes.length === 0) {
+      pushError(`站点 ${site.name || site.id} 至少配置一个路由`, site.id, undefined, 'routes');
+    }
     const invalidDomains = site.domains.filter(d => d && !(domainRe.test(d) || portOnlyRe.test(d)));
     if (invalidDomains.length) pushError(`站点 ${site.name || site.id} 域名格式不合法: ${invalidDomains.join(', ')}`, site.id, undefined, 'basic');
     if (site.tls?.mode === 'manual' && (!site.tls.certFile || !site.tls.keyFile)) {
       pushError(`站点 ${site.name || site.id} TLS 手动模式需填写证书和私钥`, site.id, undefined, 'basic');
     }
     for (const route of site.routes) {
+      if (!route.enabled) continue;
       if (!route.name) pushError(`站点 ${site.name || site.id} 有未命名路由`, site.id, route.id, 'routes');
       if (route.handles.length === 0) pushError(`路由 ${route.name || route.id} 至少一个 Handler`, site.id, route.id, 'routes');
-      const invalidPaths = route.match.path.filter(p => p && !p.startsWith('/'));
-      if (invalidPaths.length) pushError(`路由 ${route.name || route.id} Path 需以 / 开头: ${invalidPaths.join(', ')}`, site.id, route.id, 'routes');
+      if (route.handles.every(h => !h.enabled)) {
+        pushError(`路由 ${route.name || route.id} 至少启用一个 Handler`, site.id, route.id, 'routes');
+      }
+      const invalidPaths = route.match.path.filter(p => p && !isValidPathPattern(p));
+      if (invalidPaths.length) pushError(`路由 ${route.name || route.id} Path 格式不合法: ${invalidPaths.join(', ')}`, site.id, route.id, 'routes');
       const invalidMethods = route.match.method.filter(m => m && !methodAllowList.includes(m.toUpperCase()));
       if (invalidMethods.length) pushError(`路由 ${route.name || route.id} Method 非法: ${invalidMethods.join(', ')}`, site.id, route.id, 'routes');
       for (const handle of route.handles) {
+        if (!handle.enabled) continue;
         if (handle.type === 'reverse_proxy' && !handle.upstream) {
           pushError(`路由 ${route.name || route.id} 的 reverse_proxy 未选择上游`, site.id, route.id, 'routes');
         }
@@ -342,15 +416,17 @@ async function saveStructuredConfig() {
   }
   saving.value = true;
   const modules = JSON.stringify(formModel.value);
-  const { error } = await updateCaddyConfig(currentServerId.value, content, modules);
+  const { error } = await updateCaddyConfigStructured(currentServerId.value, content, modules);
   saving.value = false;
   if (error) {
     message.error('保存配置失败');
     return;
   }
   message.success('配置已保存');
+  configContent.value = content;
   initialGlobalRaw.value = formModel.value.global?.raw ?? '';
-  mode.value = 'preview';
+  structuredAvailable.value = true;
+  viewMode.value = 'preview';
 }
 
 function buildCaddyfile(model: CaddyFormModel, options?: { includeDisabled?: boolean; includeGlobal?: boolean }): string {
@@ -366,6 +442,7 @@ function buildCaddyfile(model: CaddyFormModel, options?: { includeDisabled?: boo
   const upstreamMap = new Map(model.upstreams.map(u => [u.name, u]));
   const includeDisabled = options?.includeDisabled ?? false;
   for (const site of model.sites.filter(s => includeDisabled || s.enabled)) {
+    const usedMatcherNames = new Set<string>();
     const hosts = site.domains.join(' ');
     if (!hosts) continue;
     lines.push(`${hosts} {`);
@@ -387,12 +464,9 @@ function buildCaddyfile(model: CaddyFormModel, options?: { includeDisabled?: boo
       else if (site.tls.mode === 'internal') lines.push(`  tls internal`);
       else if (site.tls.mode === 'manual' && site.tls.certFile && site.tls.keyFile) {
         lines.push(`  tls ${site.tls.certFile} ${site.tls.keyFile}`);
-      } else if (site.tls.mode === 'auto') {
-        lines.push(`  tls`);
       }
     }
     for (const route of site.routes.filter(r => includeDisabled || r.enabled)) {
-      const matcherName = `@m_${route.id.slice(0, 6)}`;
       const matcherLines: string[] = [];
       if (route.match.host.length) matcherLines.push(`host ${route.match.host.join(' ')}`);
       if (route.match.path.length) matcherLines.push(`path ${route.match.path.join(' ')}`);
@@ -410,16 +484,69 @@ function buildCaddyfile(model: CaddyFormModel, options?: { includeDisabled?: boo
       if (route.match.expression) {
         matcherLines.push(`expression ${route.match.expression}`);
       }
+
+      let matcherName = '';
+      const rawRouteName = route.name?.trim() ?? '';
+      if (rawRouteName.startsWith('@')) {
+        const token = rawRouteName.slice(1);
+        if (/^[a-zA-Z0-9_-]+$/.test(token)) matcherName = rawRouteName;
+      }
+      if (!matcherName) {
+        const base = `@m_${route.id.slice(0, 6)}`;
+        matcherName = base;
+        let idx = 1;
+        while (usedMatcherNames.has(matcherName)) {
+          matcherName = `${base}_${idx}`;
+          idx += 1;
+        }
+      }
+      if (matcherLines.length) {
+        usedMatcherNames.add(matcherName);
+      }
+
+      const enabledHandles = route.handles.filter(hd => includeDisabled || hd.enabled);
+      const headerOnly =
+        enabledHandles.length > 0 &&
+        enabledHandles.every(h => h.type === 'header') &&
+        !(route.logAppend?.length);
+      const fileServerOnly =
+        enabledHandles.length > 0 &&
+        enabledHandles.every(h => h.type === 'file_server') &&
+        !(route.logAppend?.length);
+
       if (matcherLines.length) {
         lines.push(`  ${matcherName} {`);
         matcherLines.forEach(l => lines.push(`    ${l}`));
         lines.push(`  }`);
+        if (headerOnly) {
+          for (const h of enabledHandles) {
+            for (const r of h.rules ?? []) {
+              if (r.op === 'delete') lines.push(`  header ${matcherName} -${r.key}`);
+              else lines.push(`  header ${matcherName} ${r.key} ${r.value ?? ''}`.replace(/\s+$/, ''));
+            }
+          }
+          continue;
+        }
         lines.push(`  handle ${matcherName} {`);
+      } else if (headerOnly) {
+        for (const h of enabledHandles) {
+          for (const r of h.rules ?? []) {
+            if (r.op === 'delete') lines.push(`  header -${r.key}`);
+            else lines.push(`  header ${r.key} ${r.value ?? ''}`.replace(/\s+$/, ''));
+          }
+        }
+        continue;
+      } else if (fileServerOnly) {
+        for (const h of enabledHandles) {
+          if (h.root) lines.push(`  root * ${h.root}`);
+          lines.push(`  file_server${h.browse ? ' browse' : ''}`);
+        }
+        continue;
       } else {
         lines.push(`  handle {`);
       }
 
-      for (const h of route.handles.filter(hd => includeDisabled || hd.enabled)) {
+      for (const h of enabledHandles) {
         if (h.type === 'reverse_proxy') {
           const up = h.upstream ? upstreamMap.get(h.upstream) : undefined;
           const targets = up?.targets.length
@@ -452,7 +579,7 @@ function buildCaddyfile(model: CaddyFormModel, options?: { includeDisabled?: boo
         } else if (h.type === 'header') {
           for (const r of h.rules ?? []) {
             if (r.op === 'delete') lines.push(`    header -${r.key}`);
-            else lines.push(`    header ${r.key} ${r.value ?? ''}`.trim());
+            else lines.push(`    header ${r.key} ${r.value ?? ''}`.replace(/\s+$/, ''));
           }
         } else if (h.type === 'rewrite') {
           lines.push(`    rewrite * ${h.uri ?? '/'}`);
@@ -461,7 +588,7 @@ function buildCaddyfile(model: CaddyFormModel, options?: { includeDisabled?: boo
       if (route.logAppend?.length) {
         for (const item of route.logAppend) {
           if (!item.key) continue;
-          lines.push(`    log_append ${item.key} ${item.value ?? ''}`.trim());
+          lines.push(`    log_append ${item.key} ${item.value ?? ''}`.replace(/\s+$/, ''));
         }
       }
 
@@ -472,105 +599,6 @@ function buildCaddyfile(model: CaddyFormModel, options?: { includeDisabled?: boo
   }
   const result = lines.join('\n').trim();
   return result || '# No routes defined';
-}
-
-function buildCaddyJSON(model: CaddyFormModel, options?: { includeDisabled?: boolean }) {
-  const upstreamMap = new Map(model.upstreams.map(u => [u.name, u]));
-  const includeDisabled = options?.includeDisabled ?? false;
-  const routes = model.sites
-    .filter(s => includeDisabled || s.enabled)
-    .flatMap(site =>
-      site.routes
-        .filter(r => includeDisabled || r.enabled)
-        .map(r => {
-          const match: Record<string, any> = {};
-          if (r.match.host.length) match.host = r.match.host;
-          if (r.match.path.length) match.path = r.match.path;
-          if (r.match.method.length) match.method = r.match.method;
-          if (r.match.header.length) {
-            match.header = Object.fromEntries(r.match.header.map(h => [h.key, [h.value]]));
-          }
-          if (r.match.query.length) {
-            match.query = Object.fromEntries(r.match.query.map(q => [q.key, [q.value]]));
-          }
-          if (r.match.expression) {
-            match.expression = [r.match.expression];
-          }
-          const handlers = r.handles.filter(h => includeDisabled || h.enabled).map(h => {
-            if (h.type === 'reverse_proxy') {
-              const up = h.upstream ? upstreamMap.get(h.upstream) : undefined;
-              const rawTargets = h.upstream ? h.upstream.split(/\s+/).filter(Boolean) : [];
-              const transport = h.transportProtocol || (h.tlsInsecureSkipVerify ? 'http' : undefined);
-              return {
-                handler: 'reverse_proxy',
-                upstreams: (up?.targets?.length ? up.targets : rawTargets.length ? rawTargets : ['localhost:8080']).map(t => ({ dial: t })),
-                lb_policy: h.lbPolicy,
-                transport: transport
-                  ? {
-                      protocol: transport,
-                      tls: h.tlsInsecureSkipVerify ? { insecure_skip_verify: true } : undefined
-                    }
-                  : undefined
-              };
-            }
-            if (h.type === 'file_server') {
-              return { handler: 'file_server', root: h.root, browse: h.browse ? {} : undefined };
-            }
-            if (h.type === 'respond') {
-              return { handler: 'respond', status_code: h.status ?? 200, body: h.body ?? '' };
-            }
-            if (h.type === 'redirect') {
-              return {
-                handler: 'static_response',
-                status_code: h.code ?? 302,
-                headers: { Location: [h.to ?? '/'] }
-              };
-            }
-            if (h.type === 'header') {
-              return {
-                handler: 'headers',
-                header: (h.rules || []).reduce((acc: Record<string, string[]>, item) => {
-                  if (item.op === 'delete') acc[item.key] = [];
-                  else acc[item.key] = [item.value ?? ''];
-                  return acc;
-                }, {})
-              };
-            }
-            if (h.type === 'rewrite') {
-              return { handler: 'rewrite', uri: h.uri ?? '/' };
-            }
-            return { handler: h.type };
-          });
-          const handleList = site.encode?.length
-            ? [
-                {
-                  handler: 'encode',
-                  encodings: site.encode.reduce((acc: Record<string, any>, name) => {
-                    acc[name] = {};
-                    return acc;
-                  }, {})
-                },
-                ...handlers
-              ]
-            : handlers;
-          const route: Record<string, any> = { handle: handleList };
-          if (Object.keys(match).length) route.match = [match];
-          return route;
-        })
-    );
-
-  return {
-    apps: {
-      http: {
-        servers: {
-          srv0: {
-            listen: [':80'],
-            routes
-          }
-        }
-      }
-    }
-  };
 }
 
 function genId() {
@@ -648,13 +676,6 @@ function extractGlobalOptionsBlock(content: string): { raw: string; rest: string
   };
 }
 
-function stripGlobalFromPreview(model: CaddyFormModel) {
-  return {
-    ...model,
-    global: {}
-  };
-}
-
 function parseCaddyfileToModules(content: string): CaddyFormModel {
   const { raw: globalRaw, rest } = extractGlobalOptionsBlock(content);
   const sites: Site[] = [];
@@ -664,9 +685,12 @@ function parseCaddyfileToModules(content: string): CaddyFormModel {
   let currentSite: Site | null = null;
   let currentRoute: Route | null = null;
   let currentHandleBlock = false;
+  let handleDepth: number | null = null;
   let currentMatcherName: string | null = null;
+  let matcherDepth: number | null = null;
   let reverseProxyDepth: number | null = null;
   let currentReverseProxy: any | null = null;
+  let currentSiteRoot = '';
 
   function ensureDefaultRoute() {
     if (!currentSite) return;
@@ -681,6 +705,37 @@ function parseCaddyfileToModules(content: string): CaddyFormModel {
       };
       currentSite.routes.push(currentRoute);
     }
+  }
+
+  function cloneMatcher(matcher?: RouteMatch): RouteMatch {
+    if (!matcher) return { host: [], path: [], method: [], header: [], query: [], expression: '' };
+    return {
+      host: [...(matcher.host ?? [])],
+      path: [...(matcher.path ?? [])],
+      method: [...(matcher.method ?? [])],
+      header: [...(matcher.header ?? [])],
+      query: [...(matcher.query ?? [])],
+      expression: matcher.expression ?? ''
+    };
+  }
+
+  function createRouteForMatcher(matcherName?: string): Route | null {
+    if (!currentSite) return null;
+    if (!matcherName) {
+      ensureDefaultRoute();
+      return currentRoute;
+    }
+    const match = cloneMatcher(matchers[matcherName]);
+    const route: Route = {
+      id: genId(),
+      name: `@${matcherName}`,
+      enabled: true,
+      match,
+      logAppend: [],
+      handles: []
+    };
+    currentSite.routes.push(route);
+    return route;
   }
 
   for (const raw of lines) {
@@ -724,6 +779,14 @@ function parseCaddyfileToModules(content: string): CaddyFormModel {
             routes: []
           };
           sites.push(currentSite);
+          currentSiteRoot = '';
+          currentRoute = null;
+          currentHandleBlock = false;
+          handleDepth = null;
+          currentMatcherName = null;
+          matcherDepth = null;
+          reverseProxyDepth = null;
+          currentReverseProxy = null;
         }
       }
     }
@@ -735,6 +798,7 @@ function parseCaddyfileToModules(content: string): CaddyFormModel {
         if (name) {
           matchers[name] = { host: [], path: [], method: [], header: [], query: [], expression: '' };
           currentMatcherName = name;
+          matcherDepth = depth + openCount;
         }
       } else if (currentMatcherName) {
         const matcher = matchers[currentMatcherName];
@@ -780,6 +844,160 @@ function parseCaddyfileToModules(content: string): CaddyFormModel {
           } else if (parts.length >= 3) {
             currentSite.tls = { mode: 'manual', certFile: parts[1], keyFile: parts[2] };
           }
+        } else if (line.startsWith('root ')) {
+          const parts = line.split(/\s+/).filter(Boolean);
+          if (parts.length >= 3) {
+            let idx = 1;
+            if (parts[idx] === '*' || parts[idx].startsWith('@')) idx += 1;
+            const rootPath = parts.slice(idx).join(' ');
+            if (rootPath) {
+              currentSiteRoot = rootPath;
+              for (const route of currentSite.routes) {
+                for (const h of route.handles) {
+                  if (h.type === 'file_server' && !h.root) {
+                    h.root = rootPath;
+                  }
+                }
+              }
+            }
+          }
+        } else if (line.startsWith('file_server')) {
+          const parts = line.split(/\s+/).filter(Boolean);
+          const matcherName = parts[1]?.startsWith('@') ? parts[1].slice(1) : '';
+          const browse = parts.includes('browse');
+          const route = createRouteForMatcher(matcherName);
+          if (route) {
+            route.handles.push({
+              id: genId(),
+              type: 'file_server',
+              enabled: true,
+              root: currentSiteRoot || undefined,
+              browse
+            });
+          }
+        } else if (line.startsWith('reverse_proxy ')) {
+          const parts = line.split(/\s+/).filter(Boolean);
+          let matcherName = '';
+          let idx = 1;
+          if (parts[1]?.startsWith('@')) {
+            matcherName = parts[1].slice(1);
+            idx = 2;
+          }
+          const rawTargets = parts.slice(idx);
+          const targets: string[] = [];
+          for (const t of rawTargets) {
+            if (t === '{') break;
+            if (t.endsWith('{')) {
+              const cleaned = t.slice(0, -1);
+              if (cleaned) targets.push(cleaned);
+              break;
+            }
+            targets.push(t);
+          }
+          const route = createRouteForMatcher(matcherName);
+          if (route) {
+            const handle = {
+              id: genId(),
+              type: 'reverse_proxy',
+              enabled: true,
+              upstream: targets.join(' ').trim(),
+              transportProtocol: '',
+              tlsInsecureSkipVerify: false
+            };
+            route.handles.push(handle);
+            if (line.includes('{')) {
+              reverseProxyDepth = depth + openCount;
+              currentReverseProxy = handle;
+            }
+          }
+        } else if (line.startsWith('respond ')) {
+          const rest = line.replace('respond ', '').trim();
+          const parts = rest.split(/\s+/);
+          let matcherName = '';
+          if (parts[0]?.startsWith('@')) {
+            matcherName = parts.shift()!.slice(1);
+          }
+          const payload = parts.join(' ');
+          const match = payload.match(/^"?(.*?)"?\s+(\d+)?$/);
+          const route = createRouteForMatcher(matcherName);
+          if (route) {
+            route.handles.push({
+              id: genId(),
+              type: 'respond',
+              enabled: true,
+              body: match?.[1] ?? '',
+              status: match?.[2] ? Number(match[2]) : 200
+            });
+          }
+        } else if (line.startsWith('redir ')) {
+          const parts = line.replace('redir ', '').trim().split(/\s+/);
+          let matcherName = '';
+          if (parts[0]?.startsWith('@')) {
+            matcherName = parts.shift()!.slice(1);
+          }
+          let code: number | undefined;
+          if (parts[1]) {
+            if (parts[1] === 'permanent') code = 308;
+            else if (parts[1] === 'temporary') code = 302;
+            else if (!Number.isNaN(Number(parts[1]))) code = Number(parts[1]);
+          }
+          const route = createRouteForMatcher(matcherName);
+          if (route) {
+            route.handles.push({
+              id: genId(),
+              type: 'redirect',
+              enabled: true,
+              to: parts[0] ?? '/',
+              code: code ?? 302
+            });
+          }
+        } else if (line.startsWith('rewrite ')) {
+          const parts = line.replace('rewrite ', '').trim().split(/\s+/);
+          let matcherName = '';
+          if (parts[0]?.startsWith('@')) {
+            matcherName = parts.shift()!.slice(1);
+          }
+          const route = createRouteForMatcher(matcherName);
+          if (route) {
+            route.handles.push({
+              id: genId(),
+              type: 'rewrite',
+              enabled: true,
+              uri: parts[1] ?? parts[0]
+            });
+          }
+        } else if (line.startsWith('header ')) {
+          let rest = line.replace('header ', '').trim();
+          const tokens = rest.split(/\s+/);
+          let matcherName = '';
+          if (tokens[0]?.startsWith('@')) {
+            matcherName = tokens.shift()!.slice(1);
+            rest = tokens.join(' ');
+          }
+          const isDelete = rest.startsWith('-');
+          const kv = rest.replace(/^-/, '').split(/\s+/);
+          const route = createRouteForMatcher(matcherName);
+          if (route) {
+            route.handles.push({
+              id: genId(),
+              type: 'header',
+              enabled: true,
+              rules: [{ op: isDelete ? 'delete' : 'set', key: kv[0] ?? '', value: kv.slice(1).join(' ') }]
+            });
+          }
+        } else if (line.startsWith('log_append ')) {
+          const parts = line.replace('log_append ', '').trim().split(/\s+/);
+          let matcherName = '';
+          if (parts[0]?.startsWith('@')) {
+            matcherName = parts.shift()!.slice(1);
+          }
+          if (parts[0]) {
+            const route = createRouteForMatcher(matcherName);
+            if (route) {
+              route.logAppend = route.logAppend || [];
+              route.logAppend.push({ key: parts[0], value: parts.slice(1).join(' ') });
+            }
+          }
         }
       }
 
@@ -794,6 +1012,7 @@ function parseCaddyfileToModules(content: string): CaddyFormModel {
         };
         currentSite.routes.push(currentRoute);
         currentHandleBlock = true;
+        handleDepth = depth + openCount;
         const matchName = line.startsWith('handle ')
           ? line.replace('handle', '').replace('{', '').trim().replace(/^@/, '')
           : '';
@@ -890,8 +1109,15 @@ function parseCaddyfileToModules(content: string): CaddyFormModel {
 
     depth += openCount - closeCount;
     if (depth < 0) depth = 0;
-    if (currentMatcherName && depth === 0) currentMatcherName = null;
-    if (currentHandleBlock && closeCount > 0 && line.includes('}')) currentHandleBlock = false;
+    if (matcherDepth !== null && depth < matcherDepth) {
+      matcherDepth = null;
+      currentMatcherName = null;
+    }
+    if (handleDepth !== null && depth < handleDepth) {
+      handleDepth = null;
+      currentHandleBlock = false;
+      currentRoute = null;
+    }
   }
   return normalizeModules({
     schemaVersion: 1,
@@ -971,6 +1197,65 @@ function formatGlobalPreview(raw: string) {
   return lines.map(line => line.slice(minIndent)).join('\n');
 }
 
+function formatCaddyfile(content: string) {
+  if (!content.trim()) return content;
+  const lines = content.split('\n');
+  const out: string[] = [];
+  let indent = 0;
+  const indentUnit = '  ';
+
+  const stripComment = (line: string) => {
+    let inQuote = false;
+    let escaped = false;
+    let result = '';
+    for (const ch of line) {
+      if (!escaped && ch === '"') inQuote = !inQuote;
+      if (!inQuote && ch === '#') break;
+      result += ch;
+      escaped = ch === '\\' && !escaped;
+      if (ch !== '\\') escaped = false;
+    }
+    return result;
+  };
+
+  const countBraces = (line: string) => {
+    let openCount = 0;
+    let closeCount = 0;
+    let inQuote = false;
+    let escaped = false;
+    const sanitized = stripComment(line);
+    const isBoundary = (ch?: string) => !ch || /\s/.test(ch);
+    for (let i = 0; i < sanitized.length; i += 1) {
+      const ch = sanitized[i];
+      if (!escaped && ch === '"') inQuote = !inQuote;
+      if (!inQuote && (ch === '{' || ch === '}')) {
+        const prev = sanitized[i - 1];
+        const next = sanitized[i + 1];
+        if (isBoundary(prev) && isBoundary(next)) {
+          if (ch === '{') openCount += 1;
+          if (ch === '}') closeCount += 1;
+        }
+      }
+      escaped = ch === '\\' && !escaped;
+      if (ch !== '\\') escaped = false;
+    }
+    return { openCount, closeCount };
+  };
+
+  for (const raw of lines) {
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      out.push('');
+      continue;
+    }
+    const { openCount, closeCount } = countBraces(raw);
+    const nextIndent = Math.max(indent - closeCount, 0);
+    out.push(`${indentUnit.repeat(nextIndent)}${trimmed}`);
+    indent = nextIndent + openCount;
+  }
+  return out.join('\n').trim();
+}
+
 
 function addSite() {
   const id = genId();
@@ -1016,47 +1301,50 @@ function openPreviewModal() {
 }
 
 function applyPreset() {
-  const upstreamName = 'default-upstream';
-  formModel.value.schemaVersion = 1;
-  formModel.value.upstreams = [
-    { name: upstreamName, targets: ['localhost:8080'], lbPolicy: 'round_robin' }
-  ];
-  const siteId = genId();
-  formModel.value.sites = [
-    {
-      id: siteId,
-      name: '默认站点',
-      enabled: true,
-      domains: ['example.com'],
-      imports: [],
-      geoip2Vars: [],
-      encode: [],
-      tls: { mode: 'auto' },
-      routes: [
-        {
-          id: genId(),
-          name: '默认路由',
-          enabled: true,
-          match: { host: [], path: [], method: [], header: [], query: [], expression: '' },
-          logAppend: [],
-          handles: [
-            {
-              id: genId(),
-            type: 'reverse_proxy',
+  confirmOverwriteStructured('应用默认模板', () => {
+    const upstreamName = 'default-upstream';
+    structuredAvailable.value = true;
+    editMode.value = 'structured';
+    viewMode.value = 'edit';
+    formModel.value.schemaVersion = 1;
+    formModel.value.upstreams = [
+      { name: upstreamName, targets: ['localhost:8080'], lbPolicy: 'round_robin' }
+    ];
+    const siteId = genId();
+    formModel.value.sites = [
+      {
+        id: siteId,
+        name: '默认站点',
+        enabled: true,
+        domains: ['example.com'],
+        imports: [],
+        geoip2Vars: [],
+        encode: [],
+        tls: { mode: 'auto' },
+        routes: [
+          {
+            id: genId(),
+            name: '默认路由',
             enabled: true,
-            upstream: upstreamName,
-            lbPolicy: 'round_robin',
-            tlsInsecureSkipVerify: false
+            match: { host: [], path: [], method: [], header: [], query: [], expression: '' },
+            logAppend: [],
+            handles: [
+              {
+                id: genId(),
+                type: 'reverse_proxy',
+                enabled: true,
+                upstream: upstreamName,
+                lbPolicy: 'round_robin',
+                tlsInsecureSkipVerify: false
+              }
+            ]
           }
         ]
       }
-      ]
-    }
-  ];
-  activeSiteId.value = siteId;
+    ];
+    activeSiteId.value = siteId;
+  });
 }
-
-const importInputRef = ref<HTMLInputElement | null>(null);
 
 function normalizeModules(raw: any): CaddyFormModel {
   const globalRaw = typeof raw?.global?.raw === 'string' ? raw.global.raw : '';
@@ -1142,44 +1430,6 @@ function extractSiteBlock(content: string, domains: string[]): string {
     if (capturing && depth === 0 && closeCount > 0) break;
   }
   return result.join('\n').trim();
-}
-
-function exportModules() {
-  const content = JSON.stringify(stripGlobalFromPreview(formModel.value), null, 2);
-  const serverTag = currentServer.value?.name || `server-${currentServerId.value || 'unknown'}`;
-  downloadText(`caddy-modules-${serverTag}.json`, content);
-}
-
-function triggerImport() {
-  importInputRef.value?.click();
-}
-
-function onImportChange(event: Event) {
-  const input = event.target as HTMLInputElement;
-  const file = input.files?.[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    try {
-      const parsed = JSON.parse(String(reader.result || ''));
-      if (!parsed?.sites && !parsed?.global) {
-        message.error('结构化文件不包含 sites/global 字段');
-        return;
-      }
-      if (parsed.schemaVersion && parsed.schemaVersion !== 1) {
-        message.warning(`结构化版本不匹配：当前 v1，导入 v${parsed.schemaVersion}`);
-      }
-      formModel.value = normalizeModules(parsed);
-      activeSiteId.value = formModel.value.sites?.[0]?.id || null;
-      configMode.value = 'structured';
-      initialGlobalRaw.value = formModel.value.global?.raw ?? '';
-      message.success('导入成功');
-    } catch {
-      message.error('导入失败：JSON 格式不正确');
-    }
-  };
-  reader.readAsText(file);
-  input.value = '';
 }
 
 function duplicateSite(id: string) {
@@ -1301,6 +1551,7 @@ function syncDiffScroll(side: 'left' | 'right') {
   });
 }
 
+
 async function focusValidationError(item: ValidationError) {
   if (item.siteId) {
     activeSiteId.value = item.siteId;
@@ -1315,6 +1566,10 @@ async function focusValidationError(item: ValidationError) {
   }
 }
 
+function formatHistoryAction(action: string) {
+  return action === 'rollback' ? '回滚' : '更新';
+}
+
 const historyColumns: DataTableColumns<CaddyConfigHistoryItem> = [
   {
     title: '时间',
@@ -1326,7 +1581,7 @@ const historyColumns: DataTableColumns<CaddyConfigHistoryItem> = [
     key: 'action',
     width: 100,
     render(row) {
-      const label = row.action === 'rollback' ? '回滚' : '更新';
+      const label = formatHistoryAction(row.action);
       const type = row.action === 'rollback' ? 'warning' : 'info';
       return h(
         NTag,
@@ -1339,22 +1594,42 @@ const historyColumns: DataTableColumns<CaddyConfigHistoryItem> = [
     }
   },
   {
-    title: 'Hash',
-    key: 'hash'
-  },
-  {
     title: '操作',
     key: 'actions',
-    width: 100,
+    width: 220,
     render(row) {
       return h(
-        NButton,
+        'div',
         {
-          size: 'tiny',
-          type: 'primary',
-          onClick: () => handleRollback(row.id)
+          class: 'flex gap-2'
         },
-        { default: () => '回滚' }
+        [
+          h(
+            NButton,
+            {
+              size: 'tiny',
+              onClick: () => openHistoryDetail(row.id)
+            },
+            { default: () => '查看' }
+          ),
+          h(
+            NButton,
+            {
+              size: 'tiny',
+              onClick: () => openHistoryCompare(row.id)
+            },
+            { default: () => '对比' }
+          ),
+          h(
+            NButton,
+            {
+              size: 'tiny',
+              type: 'primary',
+              onClick: () => handleRollback(row.id)
+            },
+            { default: () => '回滚' }
+          )
+        ]
       );
     }
   }
@@ -1381,6 +1656,37 @@ async function fetchHistory() {
   }
   historyList.value = data?.list || [];
   historyPagination.value.itemCount = data?.total || 0;
+}
+
+async function fetchHistoryDetail(historyId: number) {
+  if (!currentServerId.value) return null;
+  const { data, error } = await fetchCaddyConfigHistoryDetail(currentServerId.value, historyId);
+  if (error) {
+    message.error('获取历史配置失败');
+    return null;
+  }
+  return data;
+}
+
+async function openHistoryDetail(historyId: number) {
+  const detail = await fetchHistoryDetail(historyId);
+  if (!detail) return;
+  historyDetail.value = {
+    id: detail.id,
+    createdAt: detail.createdAt,
+    action: detail.action,
+    hash: detail.hash,
+    config: detail.config || ''
+  };
+  showHistoryDetailModal.value = true;
+}
+
+async function openHistoryCompare(historyId: number) {
+  const detail = await fetchHistoryDetail(historyId);
+  if (!detail) return;
+  historyCompareLeft.value = detail.config || '';
+  historyDiffOnly.value = false;
+  showHistoryCompareModal.value = true;
 }
 
 function handleHistoryPageChange(page: number) {
@@ -1415,18 +1721,14 @@ watch(currentServerId, () => {
   }
 });
 
-watch(configMode, () => {
-  if (configMode.value === 'structured' && formModel.value.sites.length === 0 && configContent.value) {
-    const parsed = parseCaddyfileToModules(configContent.value);
-    if (parsed.sites.length > 0 || parsed.global?.raw) {
-      formModel.value = parsed;
-      activeSiteId.value = parsed.sites[0]?.id || null;
-    }
-  }
-});
-
 onMounted(() => {
   getServers();
+});
+
+watch([viewMode, editMode], ([nextView, nextEdit]) => {
+  if (nextView === 'edit' && nextEdit === 'structured') {
+    ensureStructuredForEdit();
+  }
 });
 
 onBeforeUnmount(() => {
@@ -1438,89 +1740,112 @@ onBeforeUnmount(() => {
 <template>
   <div class="h-full overflow-hidden flex flex-col">
     <NCard 
-      title="Caddy配置" 
       class="h-full card-wrapper" 
       :content-style="{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }"
     >
-      <template #header-extra>
-        <div class="flex flex-wrap items-center gap-2 max-w-full">
-           <NSelect
-              v-model:value="currentServerId"
-              :options="serverOptions"
-              placeholder="选择服务器"
-              class="w-48"
-              size="small"
-           />
-           <div class="flex items-center gap-2">
-             <NButton size="small" @click="openAddServerModal">
-               <div class="flex items-center gap-1">
-                 <span class="i-carbon-add" />
-                 <span>新增</span>
-               </div>
-             </NButton>
-             <NButton size="small" :disabled="!currentServerId" @click="openEditServerModal">
-               <div class="flex items-center gap-1">
-                 <span class="i-carbon-edit" />
-                 <span>编辑</span>
-               </div>
-             </NButton>
-             <NButton size="small" :disabled="!currentServerId" @click="handleDeleteServer" type="error" ghost>
-               <div class="flex items-center gap-1">
-                 <span class="i-carbon-trash-can" />
-                 <span>删除</span>
-               </div>
-             </NButton>
-             <NButton size="small" :disabled="!currentServerId" @click="openHistoryModal">
-               <div class="flex items-center gap-1">
-                 <span class="i-carbon-time" />
-                 <span>历史版本</span>
-               </div>
-             </NButton>
-           </div>
-           
-           <div class="w-1px h-4 bg-gray-200 mx-2"></div>
-
-           <NRadioGroup v-model:value="mode" size="small">
-             <NRadioButton value="preview">预览</NRadioButton>
-             <NRadioButton value="edit">编辑</NRadioButton>
-           </NRadioGroup>
-           <NRadioGroup v-model:value="configMode" size="small" class="ml-2">
-             <NRadioButton value="raw">原始配置</NRadioButton>
-             <NRadioButton value="structured">结构化编辑</NRadioButton>
-           </NRadioGroup>
-           <NButton 
-             v-if="!isPreview" 
-             type="primary" 
-             size="small" 
-             :loading="saving"
-             :disabled="!currentServerId || configMode === 'structured'"
-             @click="handleSaveConfig"
-           >
-             保存配置
-           </NButton>
-           <NButton
-             v-if="configMode === 'structured'"
-             size="small"
-             type="primary"
-             :disabled="!currentServerId"
-             @click="applyStructuredToRaw"
-           >
-             生成到原始配置
-           </NButton>
-           <NPopover v-if="configMode === 'structured' && !isPreview" trigger="hover">
-             <template #trigger>
-               <NButton
-                 size="small"
-                 type="primary"
-                 :loading="saving"
-                 :disabled="!currentServerId"
-                 @click="saveStructuredConfig"
-               >
-                 直接保存
-               </NButton>
-             </template>
-             <div class="text-xs">保存前会进行结构化校验</div>
-           </NPopover>
+      <template #header>
+        <div class="caddy-header">
+          <div class="caddy-header-title">
+            <div class="caddy-title-text">Caddy配置</div>
+            <div class="caddy-title-sub">服务器与配置管理</div>
+          </div>
+          <div class="caddy-header-panels">
+            <div class="caddy-header-panel">
+              <div class="caddy-panel-label">服务器</div>
+              <div class="caddy-panel-controls">
+                <NSelect
+                  v-model:value="currentServerId"
+                  :options="serverOptions"
+                  placeholder="选择服务器"
+                  class="w-48"
+                  size="small"
+                />
+                <NButton size="small" @click="openAddServerModal">
+                  <div class="flex items-center gap-1">
+                    <SvgIcon icon="carbon:add" class="caddy-icon" />
+                    <span>新增</span>
+                  </div>
+                </NButton>
+                <NButton size="small" :disabled="!currentServerId" @click="openEditServerModal">
+                  <div class="flex items-center gap-1">
+                    <SvgIcon icon="carbon:edit" class="caddy-icon" />
+                    <span>编辑</span>
+                  </div>
+                </NButton>
+                <NButton size="small" :disabled="!currentServerId" @click="handleDeleteServer" type="error" ghost>
+                  <div class="flex items-center gap-1">
+                    <SvgIcon icon="carbon:trash-can" class="caddy-icon" />
+                    <span>删除</span>
+                  </div>
+                </NButton>
+                <NButton size="small" :disabled="!currentServerId" @click="openHistoryModal">
+                  <div class="flex items-center gap-1">
+                    <SvgIcon icon="carbon:time" class="caddy-icon" />
+                    <span>历史版本</span>
+                  </div>
+                </NButton>
+              </div>
+            </div>
+            <div class="caddy-header-panel caddy-header-panel--flat">
+              <div class="caddy-panel-label">模式</div>
+              <div class="caddy-panel-controls">
+                <NRadioGroup v-model:value="viewMode" size="small">
+                  <NRadioButton value="preview">预览模式</NRadioButton>
+                  <NRadioButton value="edit">编辑模式</NRadioButton>
+                </NRadioGroup>
+                <NRadioGroup v-if="viewMode === 'edit'" v-model:value="editMode" size="small">
+                  <NRadioButton value="raw">原始编辑</NRadioButton>
+                  <NRadioButton value="structured">结构化编辑</NRadioButton>
+                </NRadioGroup>
+              </div>
+            </div>
+          </div>
+          <div class="caddy-header-save">
+            <NTooltip v-if="viewMode === 'edit' && editMode === 'structured'">
+              <template #trigger>
+                <NButton
+                  size="small"
+                  secondary
+                  circle
+                  :disabled="!currentServerId"
+                  @click="applyStructuredToRaw"
+                >
+                  <SvgIcon icon="carbon:direction-straight-right" class="caddy-icon" />
+                </NButton>
+              </template>
+              生成到原始配置
+            </NTooltip>
+            <NTooltip v-if="viewMode === 'edit' && editMode === 'raw'">
+              <template #trigger>
+                <NButton 
+                  type="primary" 
+                  size="small" 
+                  circle
+                  :loading="saving"
+                  :disabled="!currentServerId"
+                  @click="saveRawConfig"
+                >
+                  <SvgIcon icon="carbon:save" class="caddy-icon" />
+                </NButton>
+              </template>
+              保存原始配置
+            </NTooltip>
+            <NTooltip v-if="viewMode === 'edit' && editMode === 'structured'">
+              <template #trigger>
+                <NButton
+                  size="small"
+                  type="primary"
+                  circle
+                  :loading="saving"
+                  :disabled="!currentServerId"
+                  @click="saveStructuredConfig"
+                >
+                  <SvgIcon icon="carbon:save-series" class="caddy-icon" />
+                </NButton>
+              </template>
+              保存结构化配置
+            </NTooltip>
+          </div>
         </div>
       </template>
       
@@ -1531,143 +1856,36 @@ onBeforeUnmount(() => {
         </div>
         
         <NSpin :show="loading" class="h-full" content-class="h-full" v-else>
-          <div class="h-full relative" v-if="configMode === 'raw'">
-            <VueMonacoEditor
-              v-model:value="configContent"
-              language="shell"
-              theme="vs"
-              :options="{
-                automaticLayout: true,
-                fixedOverflowWidgets: true,
-                readOnly: isPreview,
-                minimap: { enabled: false },
-                scrollBeyondLastLine: false,
-                wordWrap: 'on'
-              }"
-              class="absolute inset-0"
-            />
-          </div>
-          <div v-else class="h-full flex flex-col lg:flex-row overflow-hidden min-w-0 caddy-split" :style="{ '--sidebar-width': sidebarWidth + 'px' }">
-            <div class="caddy-sidebar flex-shrink-0 min-w-0">
-              <SiteListPanel
-                class="h-full"
-                :sites="formModel.sites"
-                :active-id="activeSiteId"
-                @select="activeSiteId = $event"
-                @add="addSite"
-                @duplicate="duplicateSite"
-                @remove="removeSite"
-                @move="moveSite"
-              />
-            </div>
-            <div class="caddy-resizer hidden lg:block" @mousedown="startResize"></div>
-            <div class="flex-1 min-w-0 flex flex-col gap-3 overflow-auto">
-              <div class="flex flex-wrap gap-2 items-center">
-                <n-button size="small" @click="applyPreset">应用默认模板</n-button>
-                <n-button size="small" @click="exportModules">导出结构化 JSON</n-button>
-                <n-button size="small" @click="triggerImport">导入结构化 JSON</n-button>
-                <n-button size="small" @click="openPreviewModal">预览 Caddyfile</n-button>
-                <input ref="importInputRef" type="file" accept="application/json" class="hidden" @change="onImportChange" />
-              </div>
-              <n-card size="small" :bordered="false" class="bg-white">
-                <template #header>全局配置（原样保留）</template>
-                <template #header-extra>
-                  <div class="flex items-center gap-2">
-                    <n-tag v-if="globalRawChanged" type="warning" size="small">未保存</n-tag>
-                    <n-button size="tiny" @click="toggleGlobalPreview">
-                      {{ globalPreviewExpanded ? '收起' : '展开' }}
-                    </n-button>
-                    <n-button size="tiny" @click="openGlobalModal">查看/编辑</n-button>
-                  </div>
-                </template>
-                <pre
-                  class="global-preview cursor-pointer"
-                  :class="{ expanded: globalPreviewExpanded }"
-                  @click="openGlobalModal"
-                  v-text="globalPreviewText || '未配置全局 options 块'"
-                />
-                <div class="text-xs text-gray-500 mt-2">该区域将原样拼接到生成的 Caddyfile 顶部。</div>
-              </n-card>
-              <n-alert v-if="validationErrors.length" type="error" title="配置校验错误" class="mb-2">
-                <ul class="list-disc pl-4">
-                  <li v-for="item in validationErrors" :key="item.id">
-                    <a
-                      v-if="item.siteId"
-                      class="text-blue-600 hover:underline cursor-pointer"
-                      @click.prevent="focusValidationError(item)"
-                    >
-                      {{ item.message }}
-                    </a>
-                    <span v-else>{{ item.message }}</span>
-                  </li>
-                </ul>
-              </n-alert>
-              <SiteEditorPanel v-model:site="activeSiteModel" v-model:tab="activeSiteTab" :focus-route-id="focusRouteId" />
-              <n-collapse class="mt-2">
-                <n-collapse-item title="上游池管理" name="upstreams">
-                  <UpstreamManager :upstreams="formModel.upstreams" />
-                </n-collapse-item>
-                <n-collapse-item title="结构化预览" name="preview">
-                  <n-tabs type="line" size="small">
-                    <n-tab-pane name="caddyfile" tab="Caddyfile">
-                      <div class="flex gap-2 mb-2">
-                        <n-button size="tiny" @click="copyText(previewCaddyfile)">复制</n-button>
-                        <n-button
-                          size="tiny"
-                          @click="downloadText(`Caddyfile-structured-${currentServer?.name || currentServer?.id || 'server'}`, previewCaddyfile)"
-                        >
-                          下载
-                        </n-button>
-                      </div>
-                      <div class="relative h-64">
-                        <VueMonacoEditor
-                          :value="previewCaddyfile"
-                          language="shell"
-                          theme="vs"
-                          :options="{
-                            automaticLayout: true,
-                            fixedOverflowWidgets: true,
-                            readOnly: true,
-                            minimap: { enabled: false },
-                            scrollBeyondLastLine: false,
-                            wordWrap: 'on'
-                          }"
-                          class="absolute inset-0"
-                        />
-                      </div>
-                    </n-tab-pane>
-                    <n-tab-pane name="json" tab="JSON">
-                      <div class="flex gap-2 mb-2">
-                        <n-button size="tiny" @click="copyText(previewCaddyJSON)">复制</n-button>
-                        <n-button
-                          size="tiny"
-                          @click="downloadText(`caddy-${currentServer?.name || currentServer?.id || 'server'}.json`, previewCaddyJSON)"
-                        >
-                          下载
-                        </n-button>
-                      </div>
-                      <div class="relative h-64">
-                        <VueMonacoEditor
-                          :value="previewCaddyJSON"
-                          language="json"
-                          theme="vs"
-                          :options="{
-                            automaticLayout: true,
-                            fixedOverflowWidgets: true,
-                            readOnly: true,
-                            minimap: { enabled: false },
-                            scrollBeyondLastLine: false,
-                            wordWrap: 'on'
-                          }"
-                          class="absolute inset-0"
-                        />
-                      </div>
-                    </n-tab-pane>
-                  </n-tabs>
-                </n-collapse-item>
-              </n-collapse>
-            </div>
-          </div>
+          <ConfigPreviewPanel
+            v-if="viewMode === 'preview'"
+            :config-content="formattedConfigContent"
+          />
+          <RawEditorPanel v-else-if="editMode === 'raw'" v-model="configContent" />
+          <StructuredEditorPanel
+            v-else
+            v-model:active-site-id="activeSiteId"
+            v-model:active-site="activeSiteModel"
+            v-model:active-tab="activeSiteTab"
+            :form-model="formModel"
+            :focus-route-id="focusRouteId"
+            :sidebar-width="sidebarWidth"
+            :structured-available="structuredReady"
+            :validation-errors="validationErrors"
+            :global-raw-changed="globalRawChanged"
+            :global-preview-expanded="globalPreviewExpanded"
+            :global-preview-text="globalPreviewText"
+            :on-apply-preset="applyPreset"
+            :on-import-raw-to-structured="importRawToStructured"
+            :on-open-preview-modal="openPreviewModal"
+            :on-toggle-global-preview="toggleGlobalPreview"
+            :on-open-global-modal="openGlobalModal"
+            :on-focus-validation-error="focusValidationError"
+            :on-start-resize="startResize"
+            :on-add-site="addSite"
+            :on-duplicate-site="duplicateSite"
+            :on-remove-site="removeSite"
+            :on-move-site="moveSite"
+          />
         </NSpin>
       </div>
     </NCard>
@@ -1685,6 +1903,65 @@ onBeforeUnmount(() => {
         }"
         size="small"
       />
+    </NModal>
+
+    <NModal
+      v-model:show="showHistoryDetailModal"
+      preset="card"
+      :title="historyDetail ? `历史配置预览 - ${historyDetail.createdAt}` : '历史配置预览'"
+      class="w-[90vw] max-w-5xl"
+    >
+      <div class="flex flex-wrap items-center gap-3 text-xs text-gray-500 mb-3">
+        <span>动作：{{ historyDetail ? formatHistoryAction(historyDetail.action) : '-' }}</span>
+        <span>时间：{{ historyDetail?.createdAt ?? '-' }}</span>
+      </div>
+      <div class="relative h-[60vh]">
+        <VueMonacoEditor
+          :value="historyDetailFormattedConfig"
+          language="shell"
+          theme="vs"
+          :options="{
+            automaticLayout: true,
+            fixedOverflowWidgets: true,
+            readOnly: true,
+            minimap: { enabled: false },
+            scrollBeyondLastLine: false,
+            wordWrap: 'on'
+          }"
+          class="absolute inset-0"
+        />
+      </div>
+    </NModal>
+
+    <NModal v-model:show="showHistoryCompareModal" preset="card" title="历史配置对比" class="w-[90vw] max-w-5xl">
+      <div class="diff-head">
+        <div>历史版本</div>
+        <div class="flex items-center justify-between">
+          <span>当前配置</span>
+          <n-switch v-model:value="historyDiffOnly" size="small">
+            <template #checked>仅差异</template>
+            <template #unchecked>全部</template>
+          </n-switch>
+        </div>
+      </div>
+      <div class="relative h-[65vh]">
+        <VueMonacoDiffEditor
+          :original="historyCompareLeftFormatted"
+          :modified="historyCompareRight"
+          language="shell"
+          theme="vs"
+          :options="{
+            automaticLayout: true,
+            readOnly: true,
+            renderSideBySide: true,
+            minimap: { enabled: false },
+            scrollBeyondLastLine: false,
+            wordWrap: 'on',
+            hideUnchangedRegions: { enabled: historyDiffOnly }
+          }"
+          class="absolute inset-0"
+        />
+      </div>
     </NModal>
 
     <NModal v-model:show="showGlobalModal" preset="card" title="全局配置" class="w-[90vw] max-w-4xl">
@@ -1773,62 +2050,31 @@ onBeforeUnmount(() => {
 
     <NModal v-model:show="showSiteModal" preset="card" :title="activeSiteTitle" class="w-[90vw] max-w-5xl">
       <div class="h-[75vh] flex flex-col">
-        <n-tabs type="line" size="small" class="h-full" style="display: flex; flex-direction: column; min-height: 0;">
-          <n-tab-pane name="raw" tab="原始Caddyfile" class="h-full flex flex-col" style="flex: 1; min-height: 0;">
-            <div class="flex gap-2 mb-2">
-              <n-button size="tiny" @click="copyText(rawSiteContent)">复制</n-button>
-              <n-button
-                size="tiny"
-                @click="downloadText(`Caddyfile-${currentServer?.name || currentServer?.id || 'server'}`, rawSiteContent)"
-              >
-                下载
-              </n-button>
-            </div>
-            <div class="relative flex-1 min-h-0">
-              <VueMonacoEditor
-                :value="rawSiteContent"
-                language="shell"
-                theme="vs"
-                :options="{
-                  automaticLayout: true,
-                  fixedOverflowWidgets: true,
-                  readOnly: true,
-                  minimap: { enabled: false },
-                  scrollBeyondLastLine: false,
-                  wordWrap: 'on'
-                }"
-                class="absolute inset-0"
-              />
-            </div>
-          </n-tab-pane>
-          <n-tab-pane name="caddyfile" tab="结构化Caddyfile" class="h-full flex flex-col" style="flex: 1; min-height: 0;">
-            <div class="flex gap-2 mb-2">
-              <n-button size="tiny" @click="copyText(previewCaddyfile)">复制</n-button>
-              <n-button
-                size="tiny"
-                @click="downloadText(`Caddyfile-structured-${currentServer?.name || currentServer?.id || 'server'}`, previewCaddyfile)"
-              >
-                下载
-              </n-button>
-            </div>
-            <div class="relative flex-1 min-h-0">
-              <VueMonacoEditor
-                :value="previewCaddyfile"
-                language="shell"
-                theme="vs"
-                :options="{
-                  automaticLayout: true,
-                  fixedOverflowWidgets: true,
-                  readOnly: true,
-                  minimap: { enabled: false },
-                  scrollBeyondLastLine: false,
-                  wordWrap: 'on'
-                }"
-                class="absolute inset-0"
-              />
-            </div>
-          </n-tab-pane>
-        </n-tabs>
+        <div class="flex gap-2 mb-2">
+          <n-button size="tiny" @click="copyText(formattedRawSiteContent)">复制</n-button>
+          <n-button
+            size="tiny"
+            @click="downloadText(`Caddyfile-${currentServer?.name || currentServer?.id || 'server'}`, formattedRawSiteContent)"
+          >
+            下载
+          </n-button>
+        </div>
+        <div class="relative flex-1 min-h-0">
+          <VueMonacoEditor
+            :value="formattedRawSiteContent"
+            language="shell"
+            theme="vs"
+            :options="{
+              automaticLayout: true,
+              fixedOverflowWidgets: true,
+              readOnly: true,
+              minimap: { enabled: false },
+              scrollBeyondLastLine: false,
+              wordWrap: 'on'
+            }"
+            class="absolute inset-0"
+          />
+        </div>
         <div class="flex justify-end gap-2 mt-2">
           <n-button @click="showSiteModal = false">关闭</n-button>
         </div>
@@ -1852,25 +2098,90 @@ onBeforeUnmount(() => {
   z-index: 1000 !important;
 }
 
-.caddy-split {
-  gap: 12px;
+.caddy-header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 16px;
+  align-items: start;
 }
 
-.global-preview {
-  max-height: 140px;
-  overflow: hidden;
-  white-space: pre-wrap;
-  background: #f8fafc;
-  border-radius: 8px;
-  padding: 10px 12px;
+.caddy-header-title {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 2px;
+}
+
+.caddy-title-text {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.caddy-title-sub {
   font-size: 12px;
-  color: #475569;
+  color: #64748b;
 }
 
-.global-preview.expanded {
-  max-height: 520px;
-  overflow: auto;
+.caddy-header-panels {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
+
+.caddy-header-panel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.caddy-panel-label {
+  font-size: 12px;
+  color: #64748b;
+  min-width: 52px;
+}
+
+.caddy-panel-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.caddy-header-save {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding-top: 8px;
+  gap: 8px;
+}
+
+.caddy-icon {
+  display: inline-block;
+  font-size: 16px;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+@media (max-width: 900px) {
+  .caddy-header {
+    grid-template-columns: 1fr;
+  }
+  .caddy-header-panel {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .caddy-panel-label {
+    min-width: auto;
+  }
+  .caddy-header-save {
+    justify-content: flex-start;
+    padding-top: 0;
+  }
+}
+
 
 .diff-head {
   display: grid;
@@ -1908,14 +2219,9 @@ onBeforeUnmount(() => {
   grid-template-columns: 32px 1fr;
   gap: 8px;
   padding: 6px 10px;
-  border-top: 1px solid #f1f5f9;
   font-size: 12px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   white-space: pre-wrap;
-}
-
-.diff-line-row:first-child {
-  border-top: none;
 }
 
 .diff-line-row.added {
@@ -1941,21 +2247,4 @@ onBeforeUnmount(() => {
   font-variant-numeric: tabular-nums;
 }
 
-.caddy-sidebar {
-  width: 100%;
-}
-
-@media (min-width: 1024px) {
-  .caddy-sidebar {
-    width: var(--sidebar-width);
-  }
-
-  .caddy-resizer {
-    width: 6px;
-    cursor: col-resize;
-    border-radius: 999px;
-    background: linear-gradient(180deg, #e2e8f0, #cbd5f5, #e2e8f0);
-    align-self: stretch;
-  }
-}
 </style>
