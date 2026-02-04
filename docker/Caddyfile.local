@@ -1,0 +1,67 @@
+# 本地开发：Caddy 作为前端代理（指向宿主机 Vite Dev Server）
+
+# ==================================
+# 通用配置片段 (Snippets)
+# ==================================
+
+# 压缩编码
+(compression) {
+  encode zstd gzip
+}
+
+# 日志配置
+(logging) {
+  log {
+    output file /var/log/caddy/access.log
+    format json
+    level INFO
+  }
+}
+
+# 健康检查端点
+(health_check) {
+  handle /api/health {
+    respond "OK" 200
+  }
+}
+
+# API 反向代理
+(api_proxy) {
+  handle /api/* {
+    reverse_proxy localhost:8888 {
+      header_up Host {host}
+      header_up X-Real-IP {remote_host}
+      header_up X-Forwarded-For {remote_host}
+      header_up X-Forwarded-Proto {scheme}
+    }
+  }
+}
+
+# 前端代理（Vite Dev Server）
+(frontend_proxy) {
+  handle {
+    reverse_proxy host.docker.internal:9527
+  }
+}
+
+# 安全响应头
+(security_headers) {
+  header {
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "SAMEORIGIN"
+    X-XSS-Protection "1; mode=block"
+    Referrer-Policy "strict-origin-when-cross-origin"
+  }
+}
+
+# ==================================
+# HTTP 服务（本地开发）
+# ==================================
+:80 {
+  import compression
+  import logging
+  import health_check
+  import api_proxy
+  import frontend_proxy
+  import security_headers
+}

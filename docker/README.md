@@ -13,7 +13,7 @@
 
 - **基础镜像**: Alpine Linux 3.21 (稳定版)
 - **前端服务器**: Caddy 2 (带 GeoIP2、Cloudflare DNS、Transform Encoder 模块)
-- **后端**: Go-Zero API (Go 1.23)
+- **后端**: Go-Zero API (Go 1.25.3)
 - **前端**: Vue 3 (自动构建)
 - **进程管理**: Supervisor
 
