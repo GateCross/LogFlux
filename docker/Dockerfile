@@ -5,6 +5,10 @@ FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app
 
+# 让前端在 Docker 内通过 Caddy 反代访问后端
+ARG VITE_SERVICE_BASE_URL=/api
+ENV VITE_SERVICE_BASE_URL=$VITE_SERVICE_BASE_URL
+
 # 启用 pnpm
 RUN corepack enable pnpm
 
@@ -33,7 +37,7 @@ RUN xcaddy build \
 # ==========================================
 # Stage 3: Build Backend
 # ==========================================
-FROM golang:1.23-alpine AS backend-builder
+FROM golang:1.25.3-alpine AS backend-builder
 
 WORKDIR /app
 
@@ -83,8 +87,9 @@ COPY --from=frontend-builder /app/dist /app/frontend
 # 复制后端二进制文件
 COPY --from=backend-builder /app/logflux-api /app/logflux-api
 
-# 复制 Caddyfile
-COPY docker/Caddyfile /etc/caddy/Caddyfile
+# 复制 Caddyfile（可通过构建参数切换本地代理版）
+ARG CADDYFILE=docker/Caddyfile
+COPY ${CADDYFILE} /etc/caddy/Caddyfile
 
 # 复制 supervisor 配置
 COPY docker/supervisord.conf /etc/supervisord.conf
@@ -103,8 +108,9 @@ RUN mkdir -p \
     /config/caddy \
     /var/log/supervisor
 
-# 复制后端配置（构建时）
-COPY backend/etc/config.yaml /app/etc/config.yaml
+# 复制后端配置（构建时，可通过构建参数切换）
+ARG CONFIG_FILE=docker/config.example.yaml
+COPY ${CONFIG_FILE} /app/etc/config.yaml
 
 # 修改配置文件权限
 RUN chown ${APP_USER}:${APP_GROUP} /app/etc/config.yaml

@@ -898,7 +898,7 @@ function parseCaddyfileToModules(content: string): CaddyFormModel {
           if (route) {
             const handle = {
               id: genId(),
-              type: 'reverse_proxy',
+              type: 'reverse_proxy' as const,
               enabled: true,
               upstream: targets.join(' ').trim(),
               transportProtocol: '',
@@ -1037,7 +1037,7 @@ function parseCaddyfileToModules(content: string): CaddyFormModel {
           }
           const handle = {
             id: genId(),
-            type: 'reverse_proxy',
+            type: 'reverse_proxy' as const,
             enabled: true,
             upstream: targets.join(' ').trim(),
             transportProtocol: '',
