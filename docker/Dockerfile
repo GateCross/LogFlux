@@ -38,23 +38,10 @@ COPY frontend/ ./
 RUN pnpm run build
 
 # ==========================================
-# Stage 2: Build Caddy with custom modules
+# Stage 2: Caddy binary (prebuilt)
 # ==========================================
-FROM --platform=${TARGETPLATFORM} caddy:builder AS caddy-builder
-ARG HTTP_PROXY
-ARG HTTPS_PROXY
-ARG NO_PROXY
-ARG GOPROXY=https://proxy.golang.org,direct
-ARG GOSUMDB=sum.golang.org
-ENV HTTP_PROXY=$HTTP_PROXY HTTPS_PROXY=$HTTPS_PROXY NO_PROXY=$NO_PROXY \
-    GOPROXY=$GOPROXY GOSUMDB=$GOSUMDB
-
-RUN apk add --no-cache git
-
-RUN xcaddy build \
-    --with github.com/zhangjiayin/caddy-geoip2 \
-    --with github.com/caddy-dns/cloudflare \
-    --with github.com/caddyserver/transform-encoder
+ARG CADDY_IMAGE=ghcr.io/gatecross/logflux-caddy:latest
+FROM ${CADDY_IMAGE} AS caddy-binary
 
 # ==========================================
 # Stage 3: Build Backend
@@ -109,7 +96,7 @@ RUN apk --no-cache add \
 WORKDIR /app
 
 # 复制 Caddy 二进制文件
-COPY --from=caddy-builder /usr/bin/caddy /usr/bin/caddy
+COPY --from=caddy-binary /usr/bin/caddy /usr/bin/caddy
 
 # 复制前端构建产物
 COPY --from=frontend-builder /app/dist /app/frontend
