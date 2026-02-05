@@ -36,7 +36,7 @@ export function updateCaddyConfigStructured(serverId: number, config: string, mo
     });
 }
 
-export function fetchCaddyLogs(params: { page: number; pageSize: number; keyword?: string; host?: string; status?: number; startTime?: string; endTime?: string }) {
+export function fetchCaddyLogs(params: { page: number; pageSize: number; keyword?: string; host?: string; status?: number; startTime?: string; endTime?: string; sortBy?: string; order?: string }) {
     return request<any>({ url: '/api/caddy/logs', params });
 }
 
