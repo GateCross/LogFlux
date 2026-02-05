@@ -26,7 +26,7 @@ RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
 
 # 复制依赖文件（包含 workspace 定义与子包清单）
 COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
-COPY frontend/packages/*/package.json ./packages/*/package.json
+COPY frontend/packages/*/package.json ./packages/
 
 # 安装依赖（利用缓存）
 RUN pnpm install --frozen-lockfile
