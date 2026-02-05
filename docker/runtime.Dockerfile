@@ -58,6 +58,5 @@ EXPOSE 80 443 8888
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
   CMD curl -f http://localhost/api/health || exit 1
 
-USER ${APP_USER}
-
+# supervisord needs root to drop privileges to APP_USER for child processes.
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]
