@@ -17,13 +17,6 @@ if ! command -v docker-compose &> /dev/null; then
     exit 1
 fi
 
-# 检查前端是否已构建
-if [ ! -d "frontend/dist" ]; then
-    echo "错误: 前端未构建,请先运行:"
-    echo "  cd frontend && pnpm install && pnpm run build"
-    exit 1
-fi
-
 # 检查配置文件
 if [ ! -f "backend/etc/config.yaml" ]; then
     echo "错误: 配置文件不存在: backend/etc/config.yaml"
@@ -35,7 +28,6 @@ echo ""
 echo "部署前检查清单:"
 echo "  [√] Docker 已安装"
 echo "  [√] Docker Compose 已安装"
-echo "  [√] 前端已构建"
 echo "  [√] 配置文件存在"
 echo ""
 echo "请确认以下配置是否正确:"

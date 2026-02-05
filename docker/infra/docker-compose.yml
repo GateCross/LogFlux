@@ -1,0 +1,71 @@
+services:
+  gitea:
+    image: gitea/gitea:1.25.1
+    container_name: logflux-gitea
+    platform: linux/amd64
+    restart: unless-stopped
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+      - GITEA__server__DOMAIN=${GITEA_DOMAIN:-localhost}
+      - GITEA__server__ROOT_URL=${GITEA_ROOT_URL:-http://localhost:3000/}
+      - GITEA__server__HTTP_PORT=3000
+      - GITEA__server__SSH_DOMAIN=${GITEA_DOMAIN:-localhost}
+      - GITEA__server__SSH_PORT=${GITEA_SSH_PORT:-2222}
+      - GITEA__actions__ENABLED=true
+      - GITEA__service__DISABLE_REGISTRATION=${GITEA_DISABLE_REGISTRATION:-true}
+    ports:
+      - "${GITEA_HTTP_PORT:-3000}:3000"
+      - "${GITEA_SSH_PORT:-2222}:22"
+    volumes:
+      - gitea_data:/data
+    networks:
+      - infra
+
+  registry:
+    image: registry:2
+    container_name: logflux-registry
+    platform: linux/amd64
+    restart: unless-stopped
+    environment:
+      - REGISTRY_HTTP_ADDR=0.0.0.0:5000
+    ports:
+      - "127.0.0.1:${REGISTRY_PORT:-5000}:5000"
+    volumes:
+      - registry_data:/var/lib/registry
+      - ./registry/config.yml:/etc/docker/registry/config.yml:ro
+    networks:
+      - infra
+
+  act_runner:
+    image: ${ACT_RUNNER_IMAGE:-gitea/act_runner:latest}
+    container_name: logflux-act-runner
+    platform: linux/amd64
+    restart: unless-stopped
+    depends_on:
+      - gitea
+      - registry
+    profiles:
+      - runner
+    environment:
+      - GITEA_INSTANCE_URL=${GITEA_INSTANCE_URL:-http://gitea:3000/}
+      - GITEA_RUNNER_REGISTRATION_TOKEN=${GITEA_RUNNER_REGISTRATION_TOKEN:-}
+      - GITEA_RUNNER_NAME=${GITEA_RUNNER_NAME:-logflux-runner}
+      - GITEA_RUNNER_LABELS=${GITEA_RUNNER_LABELS:-linux,amd64,docker}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - runner_data:/data
+    networks:
+      - infra
+
+networks:
+  infra:
+    driver: bridge
+
+volumes:
+  gitea_data:
+    driver: local
+  registry_data:
+    driver: local
+  runner_data:
+    driver: local

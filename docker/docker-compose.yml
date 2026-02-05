@@ -1,6 +1,7 @@
 services:
   # LogFlux Application (Frontend + Backend + Caddy)
   logflux:
+    image: ${LOGFLUX_IMAGE:-logflux:local}
     build:
       context: ..
       dockerfile: docker/Dockerfile
@@ -10,11 +11,12 @@ services:
         NO_PROXY: ${NO_PROXY}
         GOPROXY: ${GOPROXY}
         GOSUMDB: ${GOSUMDB}
+    platform: linux/amd64
     container_name: logflux-app
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
+      - "${LOGFLUX_HTTP_PORT:-80}:80"
+      - "${LOGFLUX_HTTPS_PORT:-443}:443"
     volumes:
       # Caddy 数据持久化
       - caddy_data:/data/caddy
@@ -30,7 +32,7 @@ services:
       - ./GeoLite2-City.mmdb:/usr/share/GeoIP/GeoLite2-City.mmdb:ro
       
     environment:
-      - TZ=Asia/Shanghai
+      - TZ=${TZ:-Asia/Shanghai}
     networks:
       - logflux-network
     healthcheck:

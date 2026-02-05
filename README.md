@@ -37,7 +37,7 @@ make down      # 停止服务
 make clean     # 清理所有
 ```
 
-详细部署文档请查看 [deploy/README.md](deploy/README.md)
+详细部署文档请查看 [docker/README.md](docker/README.md)
 
 ## 功能特性
 
