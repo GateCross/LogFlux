@@ -5,7 +5,7 @@
 - **平台**: 仅 `linux/amd64` (x86_64)
 - **后端**: Go
 - **前端**: Node
-- **反向代理**: Caddy
+- **反向代理**: Caddy（自定义模块通过独立镜像构建）
 - **构建方式**: GitHub Actions + GHCR（默认）
 
 ## 目录结构
@@ -13,6 +13,8 @@
 ```
 docker/
   Dockerfile                 # 应用镜像构建（Go + Node + Caddy）
+  caddy.Dockerfile           # Caddy 自定义模块构建
+  caddy.modules.txt          # Caddy 模块清单
   docker-compose.yml          # 应用部署
   Caddyfile                   # Caddy 前端反向代理
   supervisord.conf            # 进程管理
@@ -65,7 +67,8 @@ docker/
 
 ### 1.1 工作流文件
 
-工作流文件已提供：`.github/workflows/build-and-push.yml`
+- 主应用镜像：`.github/workflows/build-and-push.yml`
+- Caddy 镜像：`.github/workflows/build-caddy.yml`（仅在 Caddy 相关文件变更时触发）
 
 ### 1.2 可选变量（GitHub Repo Variables）
 
@@ -74,6 +77,7 @@ docker/
 - `REGISTRY`（默认 `ghcr.io`）
 - `IMAGE_NAME`（默认 `owner/repo`）
 - `PLATFORM`（默认 `linux/amd64`）
+- `CADDY_IMAGE_NAME`（默认 `gatecross/logflux-caddy`）
 
 ### 1.3 镜像标签
 
@@ -87,6 +91,9 @@ docker/
 ```bash
 cp docker/.env.example docker/.env
 
+# 若需要本地构建 Caddy 自定义镜像（可选）
+docker build -f docker/caddy.Dockerfile -t logflux-caddy:local .
+
 docker compose -f docker/docker-compose.yml build
 
 docker compose -f docker/docker-compose.yml up -d
@@ -98,6 +105,12 @@ docker compose -f docker/docker-compose.yml up -d
 
 ```
 LOGFLUX_IMAGE=ghcr.io/<owner>/<repo>:latest
+```
+
+如需自定义 Caddy 镜像（可选），构建时传入：
+
+```
+CADDY_IMAGE=ghcr.io/gatecross/logflux-caddy:latest
 ```
 
 若镜像为私有，需要先登录：

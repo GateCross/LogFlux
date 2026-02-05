@@ -11,6 +11,7 @@ services:
         NO_PROXY: ${NO_PROXY}
         GOPROXY: ${GOPROXY}
         GOSUMDB: ${GOSUMDB}
+        CADDY_IMAGE: ${CADDY_IMAGE}
     platform: linux/amd64
     container_name: logflux-app
     restart: unless-stopped

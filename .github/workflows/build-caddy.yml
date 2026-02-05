@@ -1,9 +1,13 @@
-name: build-and-push
+name: build-caddy
 
 on:
   push:
     branches:
       - main
+    paths:
+      - docker/Caddyfile
+      - docker/caddy.modules.txt
+      - docker/caddy.Dockerfile
   workflow_dispatch:
 
 permissions:
@@ -11,14 +15,13 @@ permissions:
   packages: write
 
 concurrency:
-  group: build-and-push-${{ github.ref }}
+  group: build-caddy-${{ github.ref }}
   cancel-in-progress: true
 
 env:
   REGISTRY: ${{ vars.REGISTRY || 'ghcr.io' }}
-  IMAGE_NAME: ${{ vars.IMAGE_NAME || github.repository }}
+  IMAGE_NAME: ${{ vars.CADDY_IMAGE_NAME || 'gatecross/logflux-caddy' }}
   PLATFORM: ${{ vars.PLATFORM || 'linux/amd64' }}
-  CADDY_IMAGE: ${{ vars.CADDY_IMAGE || 'ghcr.io/gatecross/logflux-caddy:latest' }}
 
 jobs:
   build:
@@ -50,11 +53,9 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: docker/Dockerfile
+          file: docker/caddy.Dockerfile
           platforms: ${{ env.PLATFORM }}
           push: true
-          build-args: |
-            CADDY_IMAGE=${{ env.CADDY_IMAGE }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
