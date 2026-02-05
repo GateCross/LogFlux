@@ -1,7 +1,7 @@
 <template>
-  <div class="h-full overflow-hidden">
+  <div class="h-full">
     <n-card title="Caddy 访问日志" :bordered="false" class="h-full rounded-8px shadow-sm">
-      <div class="flex-col h-full">
+      <div class="flex-col h-full min-h-0">
         <div class="mb-4 flex flex-wrap items-end gap-3">
           <n-input
             v-model:value="searchParams.keyword"
@@ -57,7 +57,8 @@
           :loading="loading"
           :pagination="pagination"
           :row-key="row => row.id"
-          class="flex-1-hidden"
+          class="h-full"
+          flex-height
           @update:page="handlePageChange"
           @update:page-size="handlePageSizeChange"
           size="small"
