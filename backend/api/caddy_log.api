@@ -10,6 +10,8 @@ type (
 		Status   int    `form:"status,default=-1"`
 		StartTime string `form:"startTime,optional"`
 		EndTime   string `form:"endTime,optional"`
+		SortBy   string `form:"sortBy,optional"`   // logTime
+		Order    string `form:"order,optional"`    // asc|desc
 	}
 	CaddyLogItem {
 		ID        uint   `json:"id"`

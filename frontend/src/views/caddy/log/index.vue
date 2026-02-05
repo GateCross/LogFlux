@@ -54,6 +54,7 @@
           flex-height
           :scroll-x="1200"
           :resizable="true"
+          @update:sorter="handleSorterChange"
           @update:page="handlePageChange"
           @update:page-size="handlePageSizeChange"
           size="small"
@@ -61,27 +62,29 @@
       </div>
     </n-card>
 
-    <n-modal v-model:show="showDetail" preset="card" title="日志详情" class="w-720px">
-      <n-descriptions bordered size="small" :column="1" v-if="selectedLog">
-        <n-descriptions-item label="时间">{{ selectedLog.logTime }}</n-descriptions-item>
-        <n-descriptions-item label="方法">{{ selectedLog.method }}</n-descriptions-item>
-        <n-descriptions-item label="状态">{{ selectedLog.status }}</n-descriptions-item>
-        <n-descriptions-item label="域名">{{ selectedLog.host }}</n-descriptions-item>
-        <n-descriptions-item label="路径">{{ selectedLog.uri }}</n-descriptions-item>
-        <n-descriptions-item label="大小">{{ selectedLog.size }}</n-descriptions-item>
-        <n-descriptions-item label="远端 IP">{{ selectedLog.remoteIp }}</n-descriptions-item>
-        <n-descriptions-item label="客户端 IP">{{ selectedLog.clientIp }}</n-descriptions-item>
-        <n-descriptions-item label="地区">{{ selectedLog.country }} {{ selectedLog.city }}</n-descriptions-item>
-        <n-descriptions-item label="User Agent">{{ selectedLog.userAgent || '-' }}</n-descriptions-item>
-        <n-descriptions-item label="原始日志">
-          <n-input
-            :value="rawLogText"
-            type="textarea"
-            readonly
-            autosize
-          />
-        </n-descriptions-item>
-      </n-descriptions>
+    <n-modal v-model:show="showDetail" preset="card" title="日志详情" class="w-720px max-h-85vh">
+      <div class="max-h-70vh overflow-auto">
+        <n-descriptions bordered size="small" :column="1" v-if="selectedLog">
+          <n-descriptions-item label="时间">{{ selectedLog.logTime }}</n-descriptions-item>
+          <n-descriptions-item label="方法">{{ selectedLog.method }}</n-descriptions-item>
+          <n-descriptions-item label="状态">{{ selectedLog.status }}</n-descriptions-item>
+          <n-descriptions-item label="域名">{{ selectedLog.host }}</n-descriptions-item>
+          <n-descriptions-item label="路径">{{ selectedLog.uri }}</n-descriptions-item>
+          <n-descriptions-item label="大小">{{ selectedLog.size }}</n-descriptions-item>
+          <n-descriptions-item label="远端 IP">{{ selectedLog.remoteIp }}</n-descriptions-item>
+          <n-descriptions-item label="客户端 IP">{{ selectedLog.clientIp }}</n-descriptions-item>
+          <n-descriptions-item label="地区">{{ selectedLog.country }} {{ selectedLog.city }}</n-descriptions-item>
+          <n-descriptions-item label="User Agent">{{ selectedLog.userAgent || '-' }}</n-descriptions-item>
+          <n-descriptions-item label="原始日志">
+            <n-input
+              :value="rawLogText"
+              type="textarea"
+              readonly
+              autosize
+            />
+          </n-descriptions-item>
+        </n-descriptions>
+      </div>
     </n-modal>
   </div>
 </template>
@@ -129,6 +132,10 @@ const searchParams = reactive({
   timeRange: null as string[] | null
 });
 
+const sortState = ref({
+  columnKey: 'logTime',
+  order: 'descend'
+});
 const pagination = reactive<PaginationProps>({
   page: 1,
   pageSize: 20,
@@ -149,12 +156,16 @@ const columns: DataTableColumns<CaddyLog> = [
     title: '时间',
     key: 'logTime',
     width: 160,
+    resizable: true,
+    sorter: 'default',
+    defaultSortOrder: 'descend',
     ellipsis: { tooltip: true }
   },
   {
     title: '方法',
     key: 'method',
     width: 80,
+    resizable: true,
     render(row) {
       const type = row.method === 'GET' ? 'info' : row.method === 'POST' ? 'success' : 'warning';
       return h(NTag, { type, size: 'small' }, { default: () => row.method });
@@ -164,6 +175,7 @@ const columns: DataTableColumns<CaddyLog> = [
     title: '状态',
     key: 'status',
     width: 80,
+    resizable: true,
     render(row) {
       let type: 'default' | 'success' | 'warning' | 'error' = 'default';
       if (row.status >= 200 && row.status < 300) type = 'success';
@@ -176,24 +188,28 @@ const columns: DataTableColumns<CaddyLog> = [
     title: '域名',
     key: 'host',
     width: 150,
+    resizable: true,
     ellipsis: { tooltip: true }
   },
   {
     title: '路径',
     key: 'uri',
     minWidth: 200,
+    resizable: true,
     ellipsis: { tooltip: true }
   },
   {
     title: '来源IP',
     key: 'clientIp',
     width: 130,
+    resizable: true,
     ellipsis: { tooltip: true }
   },
   {
     title: '地区',
     key: 'location',
     width: 150,
+    resizable: true,
     render(row) {
       if (!row.country && !row.city) return '-';
       return `${row.country || ''} ${row.city || ''}`;
@@ -203,6 +219,7 @@ const columns: DataTableColumns<CaddyLog> = [
     title: '操作',
     key: 'actions',
     width: 90,
+    resizable: true,
     render(row) {
       return h(
         NButton,
@@ -241,7 +258,9 @@ async function fetchData() {
       keyword: searchParams.keyword,
       status: searchParams.status,
       startTime,
-      endTime
+      endTime,
+      sortBy: sortState.value.order ? 'logTime' : undefined,
+      order: sortState.value.order === 'ascend' ? 'asc' : sortState.value.order === 'descend' ? 'desc' : undefined
     });
 
     if (error) {
@@ -275,6 +294,7 @@ function handleReset() {
   searchParams.status = -1;
   searchParams.timeRange = null;
   pagination.page = 1;
+  sortState.value = { columnKey: 'logTime', order: 'descend' };
   fetchData();
 }
 
@@ -290,6 +310,20 @@ function handlePageChange(page: number) {
 
 function handlePageSizeChange(pageSize: number) {
   pagination.pageSize = pageSize;
+  pagination.page = 1;
+  fetchData();
+}
+
+function handleSorterChange(sorter: any) {
+  const normalized = Array.isArray(sorter) ? sorter[0] : sorter;
+  if (!normalized) {
+    sortState.value = { columnKey: 'logTime', order: false };
+  } else {
+    sortState.value = {
+      columnKey: normalized.columnKey,
+      order: normalized.order
+    };
+  }
   pagination.page = 1;
   fetchData();
 }

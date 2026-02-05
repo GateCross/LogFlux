@@ -65,13 +65,21 @@ func (l *GetCaddyLogsLogic) GetCaddyLogs(req *types.CaddyLogReq) (resp *types.Ca
 		db = db.Where("log_time <= ?", *endTime)
 	}
 
+	orderBy := "log_time desc, id desc"
+	switch strings.ToLower(strings.TrimSpace(req.SortBy)) {
+	case "logtime", "log_time", "time":
+		if strings.ToLower(strings.TrimSpace(req.Order)) == "asc" {
+			orderBy = "log_time asc, id asc"
+		}
+	}
+
 	if err := db.Count(&total).Error; err != nil {
 		l.Error("Count error: ", err)
 		return nil, err
 	}
 
 	offset := (req.Page - 1) * req.PageSize
-	if err := db.Order("log_time desc, id desc").Limit(req.PageSize).Offset(offset).Find(&logs).Error; err != nil {
+	if err := db.Order(orderBy).Limit(req.PageSize).Offset(offset).Find(&logs).Error; err != nil {
 		l.Error("Find error: ", err)
 		return nil, err
 	}

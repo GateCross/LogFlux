@@ -96,6 +96,8 @@ type CaddyLogReq struct {
 	Status    int    `form:"status,default=-1"`
 	StartTime string `form:"startTime,optional"`
 	EndTime   string `form:"endTime,optional"`
+	SortBy    string `form:"sortBy,optional"`
+	Order     string `form:"order,optional"`
 }
 
 type CaddyLogResp struct {
