@@ -21,7 +21,7 @@ concurrency:
 env:
   REGISTRY: ${{ vars.REGISTRY || 'ghcr.io' }}
   IMAGE_NAME: ${{ vars.CADDY_IMAGE_NAME || 'gatecross/logflux-caddy' }}
-  PLATFORM: ${{ vars.PLATFORM || 'linux/amd64' }}
+  PLATFORM: ${{ vars.PLATFORM || 'linux/amd64,linux/arm64' }}
 
 jobs:
   build:

@@ -12,7 +12,7 @@ services:
         GOPROXY: ${GOPROXY}
         GOSUMDB: ${GOSUMDB}
         CADDY_IMAGE: ${CADDY_IMAGE}
-    platform: linux/amd64
+    platform: ${PLATFORM:-linux/amd64}
     container_name: logflux-app
     restart: unless-stopped
     ports:
