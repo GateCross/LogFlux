@@ -232,20 +232,20 @@ onUnmounted(() => {
             <NCard title="实时日志" class="flex-1 rounded-2xl shadow-sm">
                <div v-if="recentLogs.length === 0" class="text-xs text-gray-400">暂无日志</div>
                <div v-else class="flex flex-col gap-3 text-xs">
-                 <div
-                   v-for="item in recentLogs"
-                   :key="item.id"
-                   class="flex justify-between items-center border-b border-gray-100 pb-2"
-                 >
-                   <div class="flex gap-2 items-center min-w-0">
-                     <span :class="['px-1 rounded', methodClass(item.method)]">{{ item.method || 'N/A' }}</span>
-                     <span class="text-gray-600 truncate">{{ item.uri || '-' }}</span>
-                   </div>
-                   <div class="flex items-center gap-2">
-                     <span :class="statusClass(item.status)">{{ item.status }}</span>
-                     <span class="text-gray-400">{{ formatRecentMeta(item) }}</span>
-                   </div>
-                 </div>
+                <div
+                  v-for="item in recentLogs"
+                  :key="item.id"
+                  class="flex justify-between items-center border-b border-gray-100 pb-2 gap-3"
+                >
+                  <div class="flex gap-2 items-center min-w-0 flex-1">
+                    <span :class="['px-1 rounded', methodClass(item.method)]">{{ item.method || 'N/A' }}</span>
+                    <span class="text-gray-600 truncate">{{ item.uri || '-' }}</span>
+                  </div>
+                  <div class="flex items-center gap-2 shrink-0 whitespace-nowrap">
+                    <span :class="statusClass(item.status)">{{ item.status }}</span>
+                    <span class="text-gray-400 whitespace-nowrap">{{ formatRecentMeta(item) }}</span>
+                  </div>
+                </div>
                </div>
             </NCard>
          </NSpace>
