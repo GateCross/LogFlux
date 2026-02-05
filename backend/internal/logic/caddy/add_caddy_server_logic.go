@@ -35,6 +35,7 @@ func (l *AddCaddyServerLogic) AddCaddyServer(req *types.CaddyServerReq) (resp *t
 		Type:      req.Type,
 		Username:  req.Username,
 		Password:  req.Password,
+		Modules:   "{}",
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
