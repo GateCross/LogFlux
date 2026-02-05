@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"logflux/internal/ingest"
 	"logflux/internal/svc"
 	"logflux/model"
 
@@ -125,14 +126,15 @@ func syncCaddyLogSources(svcCtx *svc.ServiceContext, server *model.CaddyServer, 
 		err := svcCtx.DB.Where("path = ?", path).First(&source).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			newSource := model.LogSource{
-				Name:    fmt.Sprintf("Caddy Auto: %s", path),
-				Path:    path,
-				Type:    "caddy",
-				Enabled: true,
+				Name:         fmt.Sprintf("Caddy Auto: %s", path),
+				Path:         path,
+				Type:         "caddy",
+				Enabled:      true,
+				ScanInterval: ingest.DefaultScanIntervalSec(),
 			}
 			if err := svcCtx.DB.Create(&newSource).Error; err == nil {
 				logger.Infof("自动添加日志源: %s", path)
-				svcCtx.Ingestor.Start(path)
+				svcCtx.Ingestor.StartWithInterval(path, newSource.ScanInterval)
 			}
 			continue
 		}
@@ -143,7 +145,7 @@ func syncCaddyLogSources(svcCtx *svc.ServiceContext, server *model.CaddyServer, 
 		if !source.Enabled {
 			svcCtx.DB.Model(&model.LogSource{}).Where("id = ?", source.ID).Update("enabled", true)
 		}
-		svcCtx.Ingestor.Start(path)
+		svcCtx.Ingestor.StartWithInterval(path, source.ScanInterval)
 	}
 }
 

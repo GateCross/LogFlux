@@ -50,6 +50,12 @@ func (l *UpdateLogSourceLogic) UpdateLogSource(req *types.LogSourceUpdateReq) (r
 		}
 		source.Path = path
 	}
+	if req.ScanInterval < 0 {
+		return nil, errInvalidLogSourceScanInterval
+	}
+	if req.ScanInterval > 0 {
+		source.ScanInterval = req.ScanInterval
+	}
 	source.Enabled = req.Enabled
 	source.UpdatedAt = time.Now()
 
@@ -61,7 +67,7 @@ func (l *UpdateLogSourceLogic) UpdateLogSource(req *types.LogSourceUpdateReq) (r
 		l.svcCtx.Ingestor.Stop(oldPath)
 	}
 	if source.Enabled && source.Path != "" {
-		l.svcCtx.Ingestor.Start(source.Path)
+		l.svcCtx.Ingestor.StartWithInterval(source.Path, source.ScanInterval)
 	}
 
 	return &types.BaseResp{

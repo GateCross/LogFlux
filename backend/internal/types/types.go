@@ -18,6 +18,21 @@ type BatchDeleteNotificationLogsReq struct {
 	IDs []uint `json:"ids"`
 }
 
+type CaddyConfigHistoryDetailReq struct {
+	ServerId  uint `path:"serverId"`
+	HistoryId uint `path:"historyId"`
+}
+
+type CaddyConfigHistoryDetailResp struct {
+	ID        uint   `json:"id"`
+	ServerId  uint   `json:"serverId"`
+	Action    string `json:"action"`
+	Hash      string `json:"hash"`
+	Config    string `json:"config"`
+	Modules   string `json:"modules,optional"`
+	CreatedAt string `json:"createdAt"`
+}
+
 type CaddyConfigHistoryItem struct {
 	ID        uint   `json:"id"`
 	ServerId  uint   `json:"serverId"`
@@ -32,24 +47,9 @@ type CaddyConfigHistoryListReq struct {
 	PageSize int  `form:"pageSize,default=20"`
 }
 
-type CaddyConfigHistoryDetailReq struct {
-	ServerId  uint `path:"serverId"`
-	HistoryId uint `path:"historyId"`
-}
-
 type CaddyConfigHistoryListResp struct {
 	List  []CaddyConfigHistoryItem `json:"list"`
 	Total int64                    `json:"total"`
-}
-
-type CaddyConfigHistoryDetailResp struct {
-	ID        uint   `json:"id"`
-	ServerId  uint   `json:"serverId"`
-	Action    string `json:"action"`
-	Hash      string `json:"hash"`
-	Config    string `json:"config"`
-	Modules   string `json:"modules,optional"`
-	CreatedAt string `json:"createdAt"`
 }
 
 type CaddyConfigReq struct {
@@ -96,8 +96,8 @@ type CaddyLogReq struct {
 	Status    int    `form:"status,default=-1"`
 	StartTime string `form:"startTime,optional"`
 	EndTime   string `form:"endTime,optional"`
-	SortBy    string `form:"sortBy,optional"`
-	Order     string `form:"order,optional"`
+	SortBy    string `form:"sortBy,optional"` // logTime
+	Order     string `form:"order,optional"`  // asc|desc
 }
 
 type CaddyLogResp struct {
@@ -284,12 +284,13 @@ type LogListResp struct {
 }
 
 type LogSourceItem struct {
-	ID        uint   `json:"id"`
-	Name      string `json:"name"`
-	Path      string `json:"path"`
-	Type      string `json:"type"`
-	Enabled   bool   `json:"enabled"`
-	CreatedAt string `json:"createdAt"`
+	ID           uint   `json:"id"`
+	Name         string `json:"name"`
+	Path         string `json:"path"`
+	Type         string `json:"type"`
+	Enabled      bool   `json:"enabled"`
+	ScanInterval int    `json:"scanInterval"` // seconds, default 60
+	CreatedAt    string `json:"createdAt"`
 }
 
 type LogSourceListReq struct {
@@ -303,16 +304,18 @@ type LogSourceListResp struct {
 }
 
 type LogSourceReq struct {
-	Name string `json:"name"`
-	Path string `json:"path"`
-	Type string `json:"type,default=caddy"`
+	Name         string `json:"name"`
+	Path         string `json:"path"`
+	Type         string `json:"type,default=caddy"`
+	ScanInterval int    `json:"scanInterval,optional"` // seconds, for directory scanning, default 60
 }
 
 type LogSourceUpdateReq struct {
-	ID      uint   `path:"id"`
-	Name    string `json:"name,optional"`
-	Path    string `json:"path,optional"`
-	Enabled bool   `json:"enabled,optional"`
+	ID           uint   `path:"id"`
+	Name         string `json:"name,optional"`
+	Path         string `json:"path,optional"`
+	Enabled      bool   `json:"enabled,optional"`
+	ScanInterval int    `json:"scanInterval,optional"` // seconds, for directory scanning, default 60
 }
 
 type LoginReq struct {

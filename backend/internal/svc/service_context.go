@@ -95,7 +95,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	var sources []model.LogSource
 	db.Where("enabled = ?", true).Find(&sources)
 	for _, source := range sources {
-		ingestor.Start(source.Path)
+		ingestor.StartWithInterval(source.Path, source.ScanInterval)
 	}
 
 	// Legacy config support (migration)
@@ -105,12 +105,13 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		db.Model(&model.LogSource{}).Where("path = ?", c.CaddyLogPath).Count(&cnt)
 		if cnt == 0 {
 			db.Create(&model.LogSource{
-				Name:    "Default Config",
-				Path:    c.CaddyLogPath,
-				Type:    "caddy",
-				Enabled: true,
+				Name:         "Default Config",
+				Path:         c.CaddyLogPath,
+				Type:         "caddy",
+				Enabled:      true,
+				ScanInterval: ingest.DefaultScanIntervalSec(),
 			})
-			ingestor.Start(c.CaddyLogPath)
+			ingestor.StartWithInterval(c.CaddyLogPath, ingest.DefaultScanIntervalSec())
 		}
 	}
 

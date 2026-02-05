@@ -144,7 +144,7 @@ RUN chown ${APP_USER}:${APP_GROUP} /app/etc/config.yaml
 EXPOSE 80 443 8888
 
 # 健康检查
-HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+HEALTHCHECK --interval=60s --timeout=10s --start-period=10s --retries=3 \
   CMD curl -f http://localhost/api/health || exit 1
 
 # supervisord needs root to drop privileges to APP_USER for child processes.

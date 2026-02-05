@@ -65,12 +65,14 @@ type (
 		Name string `json:"name"`
 		Path string `json:"path"`
 		Type string `json:"type,default=caddy"`
+		ScanInterval int `json:"scanInterval,optional"` // seconds, for directory scanning, default 60
 	}
 	LogSourceUpdateReq {
 		ID      uint   `path:"id"`
 		Name    string `json:"name,optional"`
 		Path    string `json:"path,optional"`
 		Enabled bool   `json:"enabled,optional"`
+		ScanInterval int `json:"scanInterval,optional"` // seconds, for directory scanning, default 60
 	}
 	LogSourceListReq {
 		Page     int `form:"page,default=1"`
@@ -82,6 +84,7 @@ type (
 		Path      string `json:"path"`
 		Type      string `json:"type"`
 		Enabled   bool   `json:"enabled"`
+		ScanInterval int `json:"scanInterval"` // seconds, default 60
 		CreatedAt string `json:"createdAt"`
 	}
 	LogSourceListResp {
@@ -145,6 +148,19 @@ type (
 	CaddyConfigHistoryListResp {
 		List  []CaddyConfigHistoryItem `json:"list"`
 		Total int64                    `json:"total"`
+	}
+	CaddyConfigHistoryDetailReq {
+		ServerId  uint `path:"serverId"`
+		HistoryId uint `path:"historyId"`
+	}
+	CaddyConfigHistoryDetailResp {
+		ID        uint   `json:"id"`
+		ServerId  uint   `json:"serverId"`
+		Action    string `json:"action"`
+		Hash      string `json:"hash"`
+		Config    string `json:"config"`
+		Modules   string `json:"modules,optional"`
+		CreatedAt string `json:"createdAt"`
 	}
 	CaddyConfigRollbackReq {
 		ServerId  uint `path:"serverId"`

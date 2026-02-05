@@ -30,10 +30,14 @@
           <n-input v-model:value="formModel.name" placeholder="例如：本地 Caddy 日志" />
         </n-form-item>
         <n-form-item label="路径" path="path">
-          <n-input v-model:value="formModel.path" placeholder="/var/log/caddy/access.log" />
+          <n-input v-model:value="formModel.path" placeholder="/var/log/caddy/access.log 或 /var/log/caddy" />
         </n-form-item>
         <n-form-item label="类型" path="type">
           <n-select v-model:value="formModel.type" :options="typeOptions" :disabled="isEdit" />
+        </n-form-item>
+        <n-form-item label="扫描间隔(秒)" path="scanInterval">
+          <n-input-number v-model:value="formModel.scanInterval" :min="1" :max="3600" :step="1" />
+          <div class="text-xs text-gray-500 mt-1">默认 60 秒</div>
         </n-form-item>
         <n-form-item label="启用" path="enabled">
           <n-switch v-model:value="formModel.enabled" />
@@ -80,6 +84,7 @@ const formModel = ref({
   name: '',
   path: '',
   type: 'caddy',
+  scanInterval: 60,
   enabled: true
 });
 
@@ -87,7 +92,8 @@ const isEdit = computed(() => modalType.value === 'edit');
 const modalTitle = computed(() => (isEdit.value ? '编辑日志源' : '新增日志源'));
 
 const rules = computed(() => ({
-  path: { required: true, message: '请输入日志文件路径', trigger: 'blur' }
+  path: { required: true, message: '请输入日志文件/目录路径', trigger: 'blur' },
+  scanInterval: { type: 'number', min: 1, message: '请输入大于 0 的扫描间隔', trigger: 'blur' }
 }));
 
 const typeOptions = [
@@ -100,6 +106,7 @@ const columns: DataTableColumns<LogSourceItem> = [
   { title: 'ID', key: 'id', width: 80 },
   { title: '名称', key: 'name', minWidth: 140 },
   { title: '路径', key: 'path', minWidth: 260 },
+  { title: '扫描间隔(秒)', key: 'scanInterval', width: 140 },
   {
     title: '类型',
     key: 'type',
@@ -164,6 +171,7 @@ function handleAdd() {
     name: '',
     path: '',
     type: 'caddy',
+    scanInterval: 60,
     enabled: true
   };
   showModal.value = true;
@@ -176,6 +184,7 @@ function handleEdit(row: LogSourceItem) {
     name: row.name,
     path: row.path,
     type: row.type,
+    scanInterval: row.scanInterval,
     enabled: row.enabled
   };
   showModal.value = true;
@@ -189,7 +198,8 @@ async function handleSubmit() {
       const { error } = await createLogSource({
         name: formModel.value.name,
         path: formModel.value.path,
-        type: formModel.value.type
+        type: formModel.value.type,
+        scanInterval: formModel.value.scanInterval
       });
       if (!error) {
         message.success('新增成功');
@@ -202,6 +212,7 @@ async function handleSubmit() {
     const { error } = await updateLogSource(formModel.value.id, {
       name: formModel.value.name,
       path: formModel.value.path,
+      scanInterval: formModel.value.scanInterval,
       enabled: formModel.value.enabled
     });
     if (!error) {
