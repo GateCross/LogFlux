@@ -2,7 +2,7 @@
 
 ## 目标与约束
 
-- **平台**: 仅 `linux/amd64` (x86_64)
+- **平台**: `linux/amd64` 与 `linux/arm64`
 - **后端**: Go
 - **前端**: Node
 - **反向代理**: Caddy（自定义模块通过独立镜像构建）
@@ -76,7 +76,7 @@ docker/
 
 - `REGISTRY`（默认 `ghcr.io`）
 - `IMAGE_NAME`（默认 `owner/repo`）
-- `PLATFORM`（默认 `linux/amd64`）
+- `PLATFORM`（默认 `linux/amd64,linux/arm64`）
 - `CADDY_IMAGE_NAME`（默认 `gatecross/logflux-caddy`）
 
 ### 1.3 镜像标签
@@ -93,6 +93,9 @@ cp docker/.env.example docker/.env
 
 # 若需要本地构建 Caddy 自定义镜像（可选）
 docker build -f docker/caddy.Dockerfile -t logflux-caddy:local .
+
+# 在 ARM 设备上构建可设置:
+# PLATFORM=linux/arm64
 
 docker compose -f docker/docker-compose.yml build
 
@@ -148,3 +151,8 @@ wget https://git.io/GeoLite2-City.mmdb
 
 - Caddy 作为前端反向代理，配置见 `docker/Caddyfile`
 - Dockerfile 与 Compose 已固定 `linux/amd64` 平台，不支持 ARM
+如需在 ARM 设备上运行，可在 `docker/.env` 增加：
+
+```
+PLATFORM=linux/arm64
+```
