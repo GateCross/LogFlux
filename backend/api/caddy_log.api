@@ -24,6 +24,7 @@ type (
 		RemoteIP  string `json:"remoteIp"`
 		ClientIP  string `json:"clientIp"`
 		UserAgent string `json:"userAgent"`
+		RawLog    string `json:"rawLog"`
 	}
 	CaddyLogResp {
 		List  []CaddyLogItem `json:"list"`

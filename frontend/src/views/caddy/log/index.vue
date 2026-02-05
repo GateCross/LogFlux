@@ -5,7 +5,7 @@
         <div class="mb-4 flex flex-wrap items-end gap-3">
           <n-input
             v-model:value="searchParams.keyword"
-            placeholder="搜索 Host/URI/IP"
+            placeholder="搜索 域名/URI/IP"
             clearable
             class="w-56"
             @keyup.enter="handleSearch"
@@ -14,13 +14,6 @@
               <icon-ic-round-search class="text-16px" />
             </template>
           </n-input>
-          <n-input
-            v-model:value="searchParams.host"
-            placeholder="域名过滤"
-            clearable
-            class="w-44"
-            @keyup.enter="handleSearch"
-          />
           <n-select
             v-model:value="searchParams.status"
             :options="statusOptions"
@@ -79,6 +72,14 @@
           <n-descriptions-item label="客户端 IP">{{ selectedLog.clientIp }}</n-descriptions-item>
           <n-descriptions-item label="地区">{{ selectedLog.country }} {{ selectedLog.city }}</n-descriptions-item>
           <n-descriptions-item label="User Agent">{{ selectedLog.userAgent || '-' }}</n-descriptions-item>
+          <n-descriptions-item label="原始日志">
+            <n-input
+              :value="rawLogText"
+              type="textarea"
+              readonly
+              autosize
+            />
+          </n-descriptions-item>
         </n-descriptions>
       </n-drawer-content>
     </n-drawer>
@@ -86,7 +87,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, h } from 'vue';
+import { ref, reactive, onMounted, h, computed } from 'vue';
 import { NTag, NButton, useMessage } from 'naive-ui';
 import type { DataTableColumns, PaginationProps } from 'naive-ui';
 import { fetchCaddyLogs } from '@/service/api/caddy';
@@ -104,6 +105,7 @@ interface CaddyLog {
   remoteIp: string;
   clientIp: string;
   userAgent: string;
+  rawLog: string;
 }
 
 const message = useMessage();
@@ -111,9 +113,18 @@ const loading = ref(false);
 const tableData = ref<CaddyLog[]>([]);
 const selectedLog = ref<CaddyLog | null>(null);
 const showDetail = ref(false);
+const rawLogText = computed(() => {
+  if (!selectedLog.value?.rawLog) return '-';
+  try {
+    const parsed = JSON.parse(selectedLog.value.rawLog);
+    if (typeof parsed === 'string') return parsed;
+    return JSON.stringify(parsed, null, 2);
+  } catch {
+    return selectedLog.value.rawLog;
+  }
+});
 const searchParams = reactive({
   keyword: '',
-  host: '',
   status: -1,
   timeRange: null as string[] | null
 });
@@ -228,7 +239,6 @@ async function fetchData() {
       page: pagination.page || 1,
       pageSize: pagination.pageSize || 20,
       keyword: searchParams.keyword,
-      host: searchParams.host,
       status: searchParams.status,
       startTime,
       endTime
@@ -262,7 +272,6 @@ function handleRefresh() {
 
 function handleReset() {
   searchParams.keyword = '';
-  searchParams.host = '';
   searchParams.status = -1;
   searchParams.timeRange = null;
   pagination.page = 1;
