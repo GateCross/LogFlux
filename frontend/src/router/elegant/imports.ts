@@ -22,6 +22,7 @@ export const views: Record<LastLevelRouteKey, RouteComponent | (() => Promise<Ro
   login: () => import("@/views/_builtin/login/index.vue"),
   caddy_config: () => import("@/views/caddy/config/index.vue"),
   caddy_log: () => import("@/views/caddy/log/index.vue"),
+  caddy_source: () => import("@/views/caddy/source/index.vue"),
   cron: () => import("@/views/cron/index.vue"),
   dashboard: () => import("@/views/dashboard/index.vue"),
   manage_menu: () => import("@/views/manage/menu/index.vue"),

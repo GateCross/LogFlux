@@ -229,6 +229,13 @@ func initRBACData(db *gorm2.DB) {
 			RequiredRoles: []string{"admin", "analyst"},
 		},
 		{
+			Name:          "caddy_source",
+			Path:          "/caddy/source",
+			Component:     "view.caddy_source",
+			Meta:          `{"title":"caddy_source","i18nKey":"route.caddy_source","icon":"carbon:data-base"}`,
+			RequiredRoles: []string{"admin", "analyst"},
+		},
+		{
 			Name:          "manage_user",
 			Path:          "/manage/user",
 			Component:     "view.manage_user",
@@ -333,6 +340,7 @@ func initRBACData(db *gorm2.DB) {
 
 	setParent("caddy_config", "caddy")
 	setParent("caddy_log", "caddy")
+	setParent("caddy_source", "caddy")
 	setParent("manage_user", "manage")
 	setParent("manage_role", "manage")
 	setParent("manage_menu", "manage")
