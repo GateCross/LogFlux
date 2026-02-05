@@ -85,6 +85,7 @@ type CaddyLogItem struct {
 	RemoteIP  string `json:"remoteIp"`
 	ClientIP  string `json:"clientIp"`
 	UserAgent string `json:"userAgent"`
+	RawLog    string `json:"rawLog"`
 }
 
 type CaddyLogReq struct {

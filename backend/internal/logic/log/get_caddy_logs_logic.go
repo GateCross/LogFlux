@@ -91,6 +91,7 @@ func (l *GetCaddyLogsLogic) GetCaddyLogs(req *types.CaddyLogReq) (resp *types.Ca
 			RemoteIP:  logItem.RemoteIP,
 			ClientIP:  logItem.ClientIP,
 			UserAgent: logItem.UserAgent,
+			RawLog:    logItem.RawLog,
 		})
 	}
 
