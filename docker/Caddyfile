@@ -12,14 +12,6 @@
     editionID "GeoLite2-City"
   }
 
-  log {
-    output file /var/log/caddy/access.log {
-      roll_size 10MB
-      roll_keep 10
-      roll_keep_for 7d
-    }
-    format console
-  }
 }
 
 # ==================================
@@ -40,8 +32,10 @@
 (logging) {
   log {
     output file /var/log/caddy/access.log
-    format json
-    level INFO
+    format transform "[{ts}] \"{geoip2.country_names_zh-CN}\" \"{geoip2.subdivisions_1_names_zh-CN}\" \"{geoip2.city_names_zh-CN}\" \"{request>host}\" \"{request>method} {request>uri} {request>proto}\" {status} {size} \"{request>headers>User-Agent>[0]}\" \"{request>remote_ip}\" \"{request>client_ip}\"" {
+      time_format wall_milli
+      time_local
+    }
   }
 }
 
