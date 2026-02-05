@@ -36,12 +36,6 @@ const activeRange = computed(() => timeRanges.find(item => item.key === activeRa
 const activeInterval = computed(
   () => intervalOptions.find(item => item.key === activeIntervalKey.value) ?? intervalOptions[1]
 );
-const minIntervalSec = computed(() => {
-  const hours = activeRange.value.hours;
-  if (hours >= 24) return 300;
-  if (hours >= 12) return 60;
-  return 30;
-});
 
 const rangeText = computed(() => {
   if (!summary.value) {
@@ -101,7 +95,6 @@ function formatDateTime(value: Date) {
 
 async function loadSummary() {
   try {
-    syncIntervalForRange();
     const now = new Date();
     const start = new Date(now.getTime() - activeRange.value.hours * 3600 * 1000);
     const { data, error } = await fetchDashboardSummary({
@@ -123,7 +116,6 @@ function handleRangeChange(key: string) {
   }
   activeRangeKey.value = key;
   localStorage.setItem('logflux:dashboard.range', key);
-  syncIntervalForRange();
   loadSummary();
 }
 
@@ -131,24 +123,9 @@ function handleIntervalChange(key: string) {
   if (key === activeIntervalKey.value) {
     return;
   }
-  const selected = intervalOptions.find(item => item.key === key);
-  if (selected && selected.seconds < minIntervalSec.value) {
-    return;
-  }
   activeIntervalKey.value = key;
   localStorage.setItem('logflux:dashboard.interval', key);
   loadSummary();
-}
-
-function syncIntervalForRange() {
-  const minSec = minIntervalSec.value;
-  const current = activeInterval.value;
-  if (current.seconds >= minSec) {
-    return;
-  }
-  const fallback = intervalOptions.find(item => item.seconds >= minSec) ?? intervalOptions[intervalOptions.length - 1];
-  activeIntervalKey.value = fallback.key;
-  localStorage.setItem('logflux:dashboard.interval', fallback.key);
 }
 
 function methodClass(method: string) {
@@ -211,7 +188,6 @@ onUnmounted(() => {
               v-for="item in intervalOptions"
               :key="item.key"
               :type="item.key === activeIntervalKey ? 'primary' : 'default'"
-              :disabled="item.seconds < minIntervalSec"
               @click="handleIntervalChange(item.key)"
             >
               {{ item.label }}
