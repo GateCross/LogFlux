@@ -1,10 +1,18 @@
+{
+  order geoip2_vars first
+  geoip2 {
+    databaseDirectory "/usr/share/GeoIP"
+    editionID "GeoLite2-City"
+  }
+}
+
 # ==================================
 # 通用配置片段 (Snippets)
 # ==================================
 
-# GeoIP2 配置（如需使用，请在 docker-compose.yml 中映射数据库文件）
+# GeoIP2 变量注入
 (geoip) {
-  geoip2 /usr/share/GeoIP/GeoLite2-City.mmdb
+  geoip2_vars
 }
 
 # 压缩编码
