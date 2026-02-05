@@ -1,7 +1,10 @@
 # ==========================================
 # Stage 1: Build Frontend
 # ==========================================
-FROM node:20-alpine AS frontend-builder
+ARG TARGETPLATFORM=linux/amd64
+ARG TARGETARCH=amd64
+
+FROM --platform=${TARGETPLATFORM} node:20-alpine AS frontend-builder
 ARG HTTP_PROXY
 ARG HTTPS_PROXY
 ARG NO_PROXY
@@ -32,7 +35,7 @@ RUN pnpm run build
 # ==========================================
 # Stage 2: Build Caddy with custom modules
 # ==========================================
-FROM caddy:builder AS caddy-builder
+FROM --platform=${TARGETPLATFORM} caddy:builder AS caddy-builder
 ARG HTTP_PROXY
 ARG HTTPS_PROXY
 ARG NO_PROXY
@@ -49,7 +52,8 @@ RUN xcaddy build \
 # ==========================================
 # Stage 3: Build Backend
 # ==========================================
-FROM golang:1.25.3-alpine AS backend-builder
+FROM --platform=${TARGETPLATFORM} golang:1.25.3-alpine AS backend-builder
+ARG TARGETARCH
 ARG HTTP_PROXY
 ARG HTTPS_PROXY
 ARG NO_PROXY
@@ -71,12 +75,12 @@ RUN go mod download
 COPY backend/ ./
 
 # 构建后端
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags="-w -s" -o logflux-api .
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -a -installsuffix cgo -ldflags="-w -s" -o logflux-api .
 
 # ==========================================
 # Stage 4: Final Production Image
 # ==========================================
-FROM alpine:3.21
+FROM --platform=${TARGETPLATFORM} alpine:3.21
 
 # 设置环境变量
 ENV TZ=Asia/Shanghai \

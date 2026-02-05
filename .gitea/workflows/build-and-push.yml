@@ -1,0 +1,40 @@
+name: build-and-push
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  REGISTRY: localhost:5000
+  IMAGE_NAME: logflux
+  PLATFORM: linux/amd64
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare tags
+        run: |
+          echo "SHORT_SHA=$(echo ${GITHUB_SHA} | cut -c1-7)" >> $GITHUB_ENV
+          echo "IMAGE=${REGISTRY}/${IMAGE_NAME}" >> $GITHUB_ENV
+
+      - name: Build image
+        env:
+          DOCKER_BUILDKIT: "1"
+        run: |
+          docker build \
+            --platform=${PLATFORM} \
+            -f docker/Dockerfile \
+            -t ${IMAGE}:latest \
+            -t ${IMAGE}:${SHORT_SHA} \
+            .
+
+      - name: Push image
+        run: |
+          docker push ${IMAGE}:latest
+          docker push ${IMAGE}:${SHORT_SHA}
