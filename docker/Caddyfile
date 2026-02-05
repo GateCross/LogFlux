@@ -12,7 +12,7 @@
 
 # GeoIP2 变量注入
 (geoip) {
-  geoip2_vars
+  geoip2_vars trusted_proxies
 }
 
 # 压缩编码
