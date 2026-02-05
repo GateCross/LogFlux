@@ -1,8 +1,24 @@
 {
+  admin :2019
+  #debug
+  servers {
+    trusted_proxies static 127.0.0.1/24 192.168.50.0/24 172.17.0.1/24 172.19.0.1/24
+    client_ip_headers X-Forwarded-For X-Real-IP
+  }
+
   order geoip2_vars first
   geoip2 {
     databaseDirectory "/usr/share/GeoIP"
     editionID "GeoLite2-City"
+  }
+
+  log {
+    output file /var/log/caddy/access.log {
+      roll_size 10MB
+      roll_keep 10
+      roll_keep_for 7d
+    }
+    format console
   }
 }
 
