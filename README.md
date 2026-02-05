@@ -116,6 +116,32 @@ Archive:
   RetentionDay: 90  # 日志保留天数
 ```
 
+## API 示例
+
+日志源管理（目录扫描间隔默认 60 秒）：
+
+```bash
+# 新增日志源
+curl -X POST http://localhost:8080/api/source \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
+  -d '{"name":"Caddy Logs","path":"/var/log/caddy","type":"caddy","scanInterval":60}'
+
+# 更新日志源扫描间隔
+curl -X PUT http://localhost:8080/api/source/1 \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
+  -d '{"scanInterval":120}'
+
+# 查询日志源列表
+curl "http://localhost:8080/api/source?page=1&pageSize=20" \
+  -H "Authorization: Bearer <token>"
+
+# 删除日志源
+curl -X DELETE http://localhost:8080/api/source/1 \
+  -H "Authorization: Bearer <token>"
+```
+
 ## 开发
 
 ### 前端开发

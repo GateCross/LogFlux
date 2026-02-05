@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -22,16 +24,27 @@ import (
 
 var logRegex = regexp.MustCompile(`^\[(.*?)\] "(.*?)" "(.*?)" "(.*?)" "(.*?)" "(.*?) (.*?) (.*?)" (\d+) (\d+) "(.*?)" "(.*?)" "(.*?)"$`)
 
+const defaultScanIntervalSec = 60
+
+type dirWatcher struct {
+	stopCh   chan struct{}
+	interval time.Duration
+}
+
 type CaddyIngestor struct {
-	db    *gorm.DB
-	tails map[string]*tail.Tail
-	mu    sync.Mutex
+	db          *gorm.DB
+	tails       map[string]*tail.Tail
+	dirWatchers map[string]dirWatcher
+	dirFiles    map[string]map[string]struct{}
+	mu          sync.Mutex
 }
 
 func NewCaddyIngestor(db *gorm.DB) *CaddyIngestor {
 	return &CaddyIngestor{
-		db:    db,
-		tails: make(map[string]*tail.Tail),
+		db:          db,
+		tails:       make(map[string]*tail.Tail),
+		dirWatchers: make(map[string]dirWatcher),
+		dirFiles:    make(map[string]map[string]struct{}),
 	}
 }
 
@@ -111,31 +124,55 @@ func (i *CaddyIngestor) Ingest(line string) error {
 }
 
 func (i *CaddyIngestor) Start(filePath string) {
-	i.mu.Lock()
-	defer i.mu.Unlock()
+	i.StartWithInterval(filePath, 0)
+}
 
-	if _, exists := i.tails[filePath]; exists {
-		// Already runing
+func (i *CaddyIngestor) StartWithInterval(filePath string, scanIntervalSec int) {
+	filePath = strings.TrimSpace(filePath)
+	if filePath == "" {
+		return
+	}
+	filePath = filepath.Clean(filePath)
+
+	if info, err := os.Stat(filePath); err == nil && info.IsDir() {
+		i.startDir(filePath, scanIntervalSec)
 		return
 	}
 
-	go func() {
-		t, err := tail.TailFile(filePath, tail.Config{
-			Follow: true,
-			ReOpen: true,
-			Poll:   true,
-		})
-		if err != nil {
-			fmt.Printf("Error tailing file: %v\n", err)
-			return
-		}
+	i.startFile(filePath)
+}
 
-		i.mu.Lock()
-		i.tails[filePath] = t
+func (i *CaddyIngestor) startFile(filePath string) bool {
+	i.mu.Lock()
+	if _, exists := i.tails[filePath]; exists {
 		i.mu.Unlock()
+		return false
+	}
+	i.mu.Unlock()
 
-		fmt.Printf("Started monitoring: %s\n", filePath)
+	t, err := tail.TailFile(filePath, tail.Config{
+		Follow: true,
+		ReOpen: true,
+		Poll:   true,
+	})
+	if err != nil {
+		fmt.Printf("Error tailing file: %v\n", err)
+		return false
+	}
 
+	i.mu.Lock()
+	if _, exists := i.tails[filePath]; exists {
+		i.mu.Unlock()
+		t.Stop()
+		t.Cleanup()
+		return false
+	}
+	i.tails[filePath] = t
+	i.mu.Unlock()
+
+	fmt.Printf("Started monitoring: %s\n", filePath)
+
+	go func() {
 		for line := range t.Lines {
 			if err := i.Ingest(line.Text); err != nil {
 				// keep noisy errors in stdout for now
@@ -143,6 +180,139 @@ func (i *CaddyIngestor) Start(filePath string) {
 			}
 		}
 	}()
+
+	return true
+}
+
+func (i *CaddyIngestor) startDir(dirPath string, scanIntervalSec int) {
+	if scanIntervalSec <= 0 {
+		scanIntervalSec = defaultScanIntervalSec
+	}
+	interval := time.Duration(scanIntervalSec) * time.Second
+
+	var oldStopCh chan struct{}
+	i.mu.Lock()
+	if watcher, exists := i.dirWatchers[dirPath]; exists {
+		if watcher.interval == interval {
+			i.mu.Unlock()
+			return
+		}
+		oldStopCh = watcher.stopCh
+	}
+	stopCh := make(chan struct{})
+	i.dirWatchers[dirPath] = dirWatcher{stopCh: stopCh, interval: interval}
+	if _, ok := i.dirFiles[dirPath]; !ok {
+		i.dirFiles[dirPath] = make(map[string]struct{})
+	}
+	i.mu.Unlock()
+
+	if oldStopCh != nil {
+		close(oldStopCh)
+	}
+
+	i.scanDir(dirPath)
+
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				i.scanDir(dirPath)
+			case <-stopCh:
+				return
+			}
+		}
+	}()
+}
+
+func (i *CaddyIngestor) scanDir(dirPath string) {
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		fmt.Printf("Error reading dir: %v\n", err)
+		return
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !isLogFileName(name) {
+			continue
+		}
+		filePath := filepath.Join(dirPath, name)
+
+		i.mu.Lock()
+		dirFiles, ok := i.dirFiles[dirPath]
+		if !ok {
+			i.mu.Unlock()
+			return
+		}
+		_, tracked := dirFiles[filePath]
+		i.mu.Unlock()
+		if tracked {
+			continue
+		}
+
+		if i.startFile(filePath) {
+			i.mu.Lock()
+			if dirFiles, ok := i.dirFiles[dirPath]; ok {
+				dirFiles[filePath] = struct{}{}
+			}
+			i.mu.Unlock()
+		}
+	}
+}
+
+func (i *CaddyIngestor) Stop(filePath string) {
+	filePath = strings.TrimSpace(filePath)
+	if filePath == "" {
+		return
+	}
+	filePath = filepath.Clean(filePath)
+
+	i.mu.Lock()
+	watcher, isDir := i.dirWatchers[filePath]
+	files := i.dirFiles[filePath]
+	if isDir {
+		delete(i.dirWatchers, filePath)
+		delete(i.dirFiles, filePath)
+	}
+	i.mu.Unlock()
+
+	if isDir {
+		close(watcher.stopCh)
+		for file := range files {
+			i.stopFile(file)
+		}
+		return
+	}
+
+	i.stopFile(filePath)
+}
+
+func (i *CaddyIngestor) stopFile(filePath string) {
+	i.mu.Lock()
+	t, exists := i.tails[filePath]
+	if exists {
+		delete(i.tails, filePath)
+	}
+	i.mu.Unlock()
+
+	if exists {
+		t.Stop()
+		t.Cleanup()
+		fmt.Printf("Stopped monitoring: %s\n", filePath)
+	}
+}
+
+func isLogFileName(name string) bool {
+	return strings.EqualFold(filepath.Ext(name), ".log")
+}
+
+func DefaultScanIntervalSec() int {
+	return defaultScanIntervalSec
 }
 
 func (i *CaddyIngestor) parseJSONLine(line string) (*model.CaddyLog, error) {
@@ -290,16 +460,4 @@ func mustJSONRaw(line string) string {
 		return "\"\""
 	}
 	return string(raw)
-}
-
-func (i *CaddyIngestor) Stop(filePath string) {
-	i.mu.Lock()
-	defer i.mu.Unlock()
-
-	if t, exists := i.tails[filePath]; exists {
-		t.Stop()
-		t.Cleanup()
-		delete(i.tails, filePath)
-		fmt.Printf("Stopped monitoring: %s\n", filePath)
-	}
 }

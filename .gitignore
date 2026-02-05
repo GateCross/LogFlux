@@ -15,5 +15,8 @@ backend/logs
 backend/etc/*.yaml
 !backend/etc/*.sample.yaml
 
+# Docker
+docker/.env
+
 # System
 .gemini

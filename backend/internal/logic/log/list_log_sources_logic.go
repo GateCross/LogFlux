@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"logflux/internal/ingest"
 	"logflux/internal/svc"
 	"logflux/internal/types"
 	"logflux/model"
@@ -49,13 +50,18 @@ func (l *ListLogSourcesLogic) ListLogSources(req *types.LogSourceListReq) (resp 
 
 	list := make([]types.LogSourceItem, 0, len(sources))
 	for _, source := range sources {
+		scanInterval := source.ScanInterval
+		if scanInterval <= 0 {
+			scanInterval = ingest.DefaultScanIntervalSec()
+		}
 		list = append(list, types.LogSourceItem{
-			ID:        source.ID,
-			Name:      source.Name,
-			Path:      source.Path,
-			Type:      source.Type,
-			Enabled:   source.Enabled,
-			CreatedAt: source.CreatedAt.Format("2006-01-02 15:04:05"),
+			ID:           source.ID,
+			Name:         source.Name,
+			Path:         source.Path,
+			Type:         source.Type,
+			Enabled:      source.Enabled,
+			ScanInterval: scanInterval,
+			CreatedAt:    source.CreatedAt.Format("2006-01-02 15:04:05"),
 		})
 	}
 

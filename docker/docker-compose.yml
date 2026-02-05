@@ -2,17 +2,6 @@ services:
   # LogFlux Application (Frontend + Backend + Caddy)
   logflux:
     image: ${LOGFLUX_IMAGE:-logflux:local}
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-      args:
-        HTTP_PROXY: ${HTTP_PROXY}
-        HTTPS_PROXY: ${HTTPS_PROXY}
-        NO_PROXY: ${NO_PROXY}
-        GOPROXY: ${GOPROXY}
-        GOSUMDB: ${GOSUMDB}
-        CADDY_IMAGE: ${CADDY_IMAGE}
-    platform: ${PLATFORM:-linux/amd64}
     container_name: logflux-app
     restart: unless-stopped
     ports:
@@ -38,7 +27,7 @@ services:
       - logflux-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/api/health"]
-      interval: 30s
+      interval: 60s
       timeout: 10s
       retries: 3
       start_period: 15s

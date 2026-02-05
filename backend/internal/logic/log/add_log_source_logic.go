@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"logflux/internal/ingest"
 	"logflux/internal/svc"
 	"logflux/internal/types"
 	"logflux/model"
@@ -39,20 +40,28 @@ func (l *AddLogSourceLogic) AddLogSource(req *types.LogSourceReq) (resp *types.B
 	if path == "" {
 		return nil, errInvalidLogSourcePath
 	}
+	scanInterval := req.ScanInterval
+	if scanInterval < 0 {
+		return nil, errInvalidLogSourceScanInterval
+	}
+	if scanInterval <= 0 {
+		scanInterval = ingest.DefaultScanIntervalSec()
+	}
 
 	source := &model.LogSource{
-		Name:      name,
-		Path:      path,
-		Type:      sourceType,
-		Enabled:   true,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		Name:         name,
+		Path:         path,
+		Type:         sourceType,
+		Enabled:      true,
+		ScanInterval: scanInterval,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
 	}
 	if err := l.svcCtx.DB.Create(source).Error; err != nil {
 		return nil, err
 	}
 
-	l.svcCtx.Ingestor.Start(source.Path)
+	l.svcCtx.Ingestor.StartWithInterval(source.Path, source.ScanInterval)
 
 	return &types.BaseResp{
 		Code: 200,

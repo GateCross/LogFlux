@@ -6,6 +6,7 @@ export interface LogSourceItem {
     path: string;
     type: string;
     enabled: boolean;
+    scanInterval: number;
     createdAt: string;
 }
 
@@ -21,7 +22,9 @@ export function fetchLogSourceList(params: { page: number; pageSize: number }) {
     });
 }
 
-export function createLogSource(data: { name?: string; path: string; type?: string }) {
+export function createLogSource(
+    data: { name?: string; path: string; type?: string; scanInterval?: number }
+) {
     return request<any>({
         url: '/api/source',
         method: 'post',
@@ -29,7 +32,10 @@ export function createLogSource(data: { name?: string; path: string; type?: stri
     });
 }
 
-export function updateLogSource(id: number, data: { name?: string; path?: string; enabled: boolean }) {
+export function updateLogSource(
+    id: number,
+    data: { name?: string; path?: string; enabled?: boolean; scanInterval?: number }
+) {
     return request<any>({
         url: `/api/source/${id}`,
         method: 'put',
