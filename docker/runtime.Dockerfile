@@ -7,6 +7,7 @@ ARG TARGETARCH=amd64
 FROM ${CADDY_IMAGE} AS caddy-binary
 
 FROM --platform=${TARGETPLATFORM} alpine:3.21
+ARG TARGETARCH
 
 ENV TZ=Asia/Shanghai \
     APP_USER=logflux \
