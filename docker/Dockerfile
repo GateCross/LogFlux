@@ -1,8 +1,13 @@
 # ==========================================
-# Stage 1: Build Frontend
+# Global build args (must be before first FROM)
 # ==========================================
+ARG CADDY_IMAGE=ghcr.io/gatecross/logflux-caddy:latest
 ARG TARGETPLATFORM=linux/amd64
 ARG TARGETARCH=amd64
+
+# ==========================================
+# Stage 1: Build Frontend
+# ==========================================
 
 FROM --platform=${TARGETPLATFORM} node:20-alpine AS frontend-builder
 ARG HTTP_PROXY
@@ -40,7 +45,6 @@ RUN pnpm run build
 # ==========================================
 # Stage 2: Caddy binary (prebuilt)
 # ==========================================
-ARG CADDY_IMAGE=ghcr.io/gatecross/logflux-caddy:latest
 FROM ${CADDY_IMAGE} AS caddy-binary
 
 # ==========================================
