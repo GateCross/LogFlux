@@ -24,9 +24,9 @@ ENV SKIP_SIMPLE_GIT_HOOKS=1
 ARG PNPM_VERSION=9.15.4
 RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
 
-# 复制依赖文件（包含 workspace 定义与子包清单）
+# 复制依赖文件（包含 workspace 定义与子包）
 COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
-COPY frontend/packages/*/package.json ./packages/
+COPY frontend/packages/ ./packages/
 
 # 安装依赖（利用缓存）
 RUN pnpm install --frozen-lockfile
