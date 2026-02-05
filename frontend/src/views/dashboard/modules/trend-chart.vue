@@ -1,7 +1,13 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { watch } from 'vue';
 import { useEcharts } from '@/hooks/common/echarts';
-import { getTrendData } from '../data';
+
+interface Props {
+  times: string[];
+  values: number[];
+}
+
+const props = defineProps<Props>();
 
 const { domRef, updateOptions } = useEcharts(() => ({
   tooltip: {
@@ -35,32 +41,38 @@ const { domRef, updateOptions } = useEcharts(() => ({
   series: []
 }));
 
-const data = getTrendData();
+const syncChart = () => {
+  updateOptions(opts => {
+    opts.xAxis = { ...opts.xAxis, data: props.times };
+    opts.series = [
+      {
+        name: 'QPS',
+        type: 'line',
+        smooth: true,
+        showSymbol: false,
+        itemStyle: { color: '#06b6d4' },
+        areaStyle: {
+          color: {
+            type: 'linear',
+            x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [
+              { offset: 0, color: 'rgba(6, 182, 212, 0.4)' },
+              { offset: 1, color: 'rgba(6, 182, 212, 0.05)' }
+            ]
+          }
+        },
+        data: props.values
+      }
+    ];
+    return opts;
+  });
+};
 
-updateOptions(opts => {
-  opts.xAxis = { ...opts.xAxis, data: data.times };
-  opts.series = [
-    {
-      name: 'QPS',
-      type: 'line',
-      smooth: true,
-      showSymbol: false,
-      itemStyle: { color: '#06b6d4' },
-      areaStyle: {
-        color: {
-          type: 'linear',
-          x: 0, y: 0, x2: 0, y2: 1,
-          colorStops: [
-            { offset: 0, color: 'rgba(6, 182, 212, 0.4)' },
-            { offset: 1, color: 'rgba(6, 182, 212, 0.05)' }
-          ]
-        }
-      },
-      data: data.qps
-    }
-  ];
-  return opts;
-});
+watch(
+  () => [props.times, props.values],
+  () => syncChart(),
+  { immediate: true, deep: true }
+);
 </script>
 
 <template>

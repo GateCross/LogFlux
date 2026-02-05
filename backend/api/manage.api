@@ -92,6 +92,58 @@ type (
 		Total int64           `json:"total"`
 	}
 
+	// Dashboard
+	DashboardSummaryReq {
+		StartTime   string `form:"startTime,optional"`
+		EndTime     string `form:"endTime,optional"`
+		IntervalSec int    `form:"intervalSec,optional"` // seconds, default 60
+		TopN        int    `form:"topN,optional"`        // for geo/top lists
+		RecentLimit int    `form:"recentLimit,optional"`
+	}
+	DashboardRange {
+		StartTime   string `json:"startTime"`
+		EndTime     string `json:"endTime"`
+		IntervalSec int    `json:"intervalSec"`
+	}
+	DashboardStats {
+		Requests int64 `json:"requests"`
+		PV       int64 `json:"pv"`
+		UV       int64 `json:"uv"`
+		UniqueIP int64 `json:"uniqueIp"`
+		Blocked  int64 `json:"blocked"`
+		AttackIP int64 `json:"attackIp"`
+	}
+	DashboardErrorStats {
+		Error4xx   int64 `json:"error4xx"`
+		Blocked4xx int64 `json:"blocked4xx"`
+		Error5xx   int64 `json:"error5xx"`
+	}
+	DashboardTrendItem {
+		Time  string `json:"time"`
+		Value int64  `json:"value"`
+	}
+	DashboardGeoItem {
+		Name  string `json:"name"`
+		Value int64  `json:"value"`
+	}
+	DashboardRecentItem {
+		ID       uint   `json:"id"`
+		LogTime  string `json:"logTime"`
+		Method   string `json:"method"`
+		Uri      string `json:"uri"`
+		Status   int    `json:"status"`
+		RemoteIP string `json:"remoteIp"`
+		Country  string `json:"country"`
+	}
+	DashboardSummaryResp {
+		Stats      DashboardStats      `json:"stats"`
+		ErrorStats DashboardErrorStats `json:"errorStats"`
+		Trend      []DashboardTrendItem `json:"trend"`
+		Geo        []DashboardGeoItem  `json:"geo"`
+		Recent     []DashboardRecentItem `json:"recent"`
+		Range      DashboardRange      `json:"range"`
+	}
+
 	// Caddy Management
 	CaddyServerReq {
 		Name     string `json:"name"`
@@ -226,6 +278,16 @@ service logflux-api {
 
 	@handler DeleteLogSource
 	delete /source/:id (IDReq) returns (BaseResp)
+}
+
+@server (
+	prefix: /api
+	group:  dashboard
+	jwt:    Auth
+)
+service logflux-api {
+	@handler GetDashboardSummary
+	get /dashboard/summary (DashboardSummaryReq) returns (DashboardSummaryResp)
 }
 
 @server (

@@ -9,6 +9,7 @@ import (
 	auth "logflux/internal/handler/auth"
 	caddy "logflux/internal/handler/caddy"
 	cron "logflux/internal/handler/cron"
+	dashboard "logflux/internal/handler/dashboard"
 	log "logflux/internal/handler/log"
 	menu "logflux/internal/handler/menu"
 	notification "logflux/internal/handler/notification"
@@ -115,6 +116,18 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Method:  http.MethodPost,
 				Path:    "/cron/task/:id/trigger",
 				Handler: cron.TriggerCronTaskHandler(serverCtx),
+			},
+		},
+		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
+		rest.WithPrefix("/api"),
+	)
+
+	server.AddRoutes(
+		[]rest.Route{
+			{
+				Method:  http.MethodGet,
+				Path:    "/dashboard/summary",
+				Handler: dashboard.GetDashboardSummaryHandler(serverCtx),
 			},
 		},
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
