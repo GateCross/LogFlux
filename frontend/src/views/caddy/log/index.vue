@@ -52,6 +52,8 @@
           :row-key="row => row.id"
           class="h-full"
           flex-height
+          :scroll-x="1200"
+          :resizable="true"
           @update:page="handlePageChange"
           @update:page-size="handlePageSizeChange"
           size="small"
@@ -59,30 +61,28 @@
       </div>
     </n-card>
 
-    <n-drawer v-model:show="showDetail" width="520">
-      <n-drawer-content title="日志详情">
-        <n-descriptions bordered size="small" :column="1" v-if="selectedLog">
-          <n-descriptions-item label="时间">{{ selectedLog.logTime }}</n-descriptions-item>
-          <n-descriptions-item label="方法">{{ selectedLog.method }}</n-descriptions-item>
-          <n-descriptions-item label="状态">{{ selectedLog.status }}</n-descriptions-item>
-          <n-descriptions-item label="域名">{{ selectedLog.host }}</n-descriptions-item>
-          <n-descriptions-item label="路径">{{ selectedLog.uri }}</n-descriptions-item>
-          <n-descriptions-item label="大小">{{ selectedLog.size }}</n-descriptions-item>
-          <n-descriptions-item label="远端 IP">{{ selectedLog.remoteIp }}</n-descriptions-item>
-          <n-descriptions-item label="客户端 IP">{{ selectedLog.clientIp }}</n-descriptions-item>
-          <n-descriptions-item label="地区">{{ selectedLog.country }} {{ selectedLog.city }}</n-descriptions-item>
-          <n-descriptions-item label="User Agent">{{ selectedLog.userAgent || '-' }}</n-descriptions-item>
-          <n-descriptions-item label="原始日志">
-            <n-input
-              :value="rawLogText"
-              type="textarea"
-              readonly
-              autosize
-            />
-          </n-descriptions-item>
-        </n-descriptions>
-      </n-drawer-content>
-    </n-drawer>
+    <n-modal v-model:show="showDetail" preset="card" title="日志详情" class="w-720px">
+      <n-descriptions bordered size="small" :column="1" v-if="selectedLog">
+        <n-descriptions-item label="时间">{{ selectedLog.logTime }}</n-descriptions-item>
+        <n-descriptions-item label="方法">{{ selectedLog.method }}</n-descriptions-item>
+        <n-descriptions-item label="状态">{{ selectedLog.status }}</n-descriptions-item>
+        <n-descriptions-item label="域名">{{ selectedLog.host }}</n-descriptions-item>
+        <n-descriptions-item label="路径">{{ selectedLog.uri }}</n-descriptions-item>
+        <n-descriptions-item label="大小">{{ selectedLog.size }}</n-descriptions-item>
+        <n-descriptions-item label="远端 IP">{{ selectedLog.remoteIp }}</n-descriptions-item>
+        <n-descriptions-item label="客户端 IP">{{ selectedLog.clientIp }}</n-descriptions-item>
+        <n-descriptions-item label="地区">{{ selectedLog.country }} {{ selectedLog.city }}</n-descriptions-item>
+        <n-descriptions-item label="User Agent">{{ selectedLog.userAgent || '-' }}</n-descriptions-item>
+        <n-descriptions-item label="原始日志">
+          <n-input
+            :value="rawLogText"
+            type="textarea"
+            readonly
+            autosize
+          />
+        </n-descriptions-item>
+      </n-descriptions>
+    </n-modal>
   </div>
 </template>
 
