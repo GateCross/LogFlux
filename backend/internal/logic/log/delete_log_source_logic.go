@@ -2,11 +2,14 @@ package log
 
 import (
 	"context"
+	"fmt"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
+	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
+	"gorm.io/gorm"
 )
 
 type DeleteLogSourceLogic struct {
@@ -24,7 +27,24 @@ func NewDeleteLogSourceLogic(ctx context.Context, svcCtx *svc.ServiceContext) *D
 }
 
 func (l *DeleteLogSourceLogic) DeleteLogSource(req *types.IDReq) (resp *types.BaseResp, err error) {
-	// todo: add your logic here and delete this line
+	var source model.LogSource
+	if err := l.svcCtx.DB.First(&source, req.ID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, fmt.Errorf("log source not found")
+		}
+		return nil, err
+	}
 
-	return
+	if err := l.svcCtx.DB.Delete(&model.LogSource{}, req.ID).Error; err != nil {
+		return nil, err
+	}
+
+	if source.Path != "" {
+		l.svcCtx.Ingestor.Stop(source.Path)
+	}
+
+	return &types.BaseResp{
+		Code: 200,
+		Msg:  "success",
+	}, nil
 }
