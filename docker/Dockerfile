@@ -16,6 +16,9 @@ WORKDIR /app
 ARG VITE_SERVICE_BASE_URL=/api
 ENV VITE_SERVICE_BASE_URL=$VITE_SERVICE_BASE_URL
 
+# 安装前端构建依赖（部分包在 alpine 上需要编译）
+RUN apk add --no-cache python3 make g++
+
 # 跳过 git hooks，并固定 pnpm 版本（避免 corepack 拉取不确定版本）
 ENV SKIP_SIMPLE_GIT_HOOKS=1
 ARG PNPM_VERSION=9.15.4
