@@ -32,10 +32,7 @@
 (logging) {
   log {
     output file /var/log/caddy/access.log
-    format transform "[{ts}] \"{geoip2.country_names_zh-CN}\" \"{geoip2.subdivisions_1_names_zh-CN}\" \"{geoip2.city_names_zh-CN}\" \"{request>host}\" \"{request>method} {request>uri} {request>proto}\" {status} {size} \"{request>headers>User-Agent>[0]}\" \"{request>remote_ip}\" \"{request>client_ip}\"" {
-      time_format wall_milli
-      time_local
-    }
+    format json
   }
 }
 
@@ -49,6 +46,9 @@
 # API 反向代理
 (api_proxy) {
   handle /api/* {
+    log_append country {geoip2.country_names_zh-CN}
+    log_append province {geoip2.subdivisions_1_names_zh-CN}
+    log_append city {geoip2.city_names_zh-CN}
     reverse_proxy localhost:8888 {
       header_up Host {host}
       header_up X-Real-IP {remote_host}
@@ -77,6 +77,10 @@
       precompressed gzip br
     }
 
+    log_append country {geoip2.country_names_zh-CN}
+    log_append province {geoip2.subdivisions_1_names_zh-CN}
+    log_append city {geoip2.city_names_zh-CN}
+
     # 静态资源缓存
     @static {
       path *.js *.css *.png *.jpg *.jpeg *.gif *.ico *.svg *.woff *.woff2 *.ttf *.eot
@@ -101,6 +105,9 @@
     root * /app/frontend
     try_files {path} /index.html
     file_server
+    log_append country {geoip2.country_names_zh-CN}
+    log_append province {geoip2.subdivisions_1_names_zh-CN}
+    log_append city {geoip2.city_names_zh-CN}
   }
 }
 

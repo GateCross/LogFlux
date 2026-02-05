@@ -1,7 +1,9 @@
 package ingest
 
 import (
+	"encoding/json"
 	"fmt"
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -39,6 +41,12 @@ func (i *CaddyIngestor) ParseLine(line string) (*model.CaddyLog, error) {
 		return nil, fmt.Errorf("empty line")
 	}
 
+	if strings.HasPrefix(line, "{") {
+		if logEntry, err := i.parseJSONLine(line); err == nil {
+			return logEntry, nil
+		}
+	}
+
 	matches := logRegex.FindStringSubmatch(line)
 	if len(matches) != 14 {
 		return nil, fmt.Errorf("invalid log format: %s", line)
@@ -66,6 +74,8 @@ func (i *CaddyIngestor) ParseLine(line string) (*model.CaddyLog, error) {
 		UserAgent: matches[11],
 		RemoteIP:  matches[12],
 		ClientIP:  matches[13],
+		RawLog:    mustJSONRaw(line),
+		ExtraData: "{}",
 	}, nil
 }
 
@@ -93,7 +103,11 @@ func (i *CaddyIngestor) Ingest(line string) error {
 	if err != nil {
 		return err
 	}
-	return i.db.Create(logEntry).Error
+	if err := i.db.Create(logEntry).Error; err != nil {
+		fmt.Printf("DB insert failed: %v\n", err)
+		return err
+	}
+	return nil
 }
 
 func (i *CaddyIngestor) Start(filePath string) {
@@ -124,10 +138,158 @@ func (i *CaddyIngestor) Start(filePath string) {
 
 		for line := range t.Lines {
 			if err := i.Ingest(line.Text); err != nil {
-				// Verbose error logging might flood
+				// keep noisy errors in stdout for now
+				fmt.Printf("Log ingest failed: %v\n", err)
 			}
 		}
 	}()
+}
+
+func (i *CaddyIngestor) parseJSONLine(line string) (*model.CaddyLog, error) {
+	decoder := json.NewDecoder(strings.NewReader(line))
+	decoder.UseNumber()
+
+	var data map[string]any
+	if err := decoder.Decode(&data); err != nil {
+		return nil, err
+	}
+
+	entry := &model.CaddyLog{
+		RawLog:    line,
+		ExtraData: "{}",
+	}
+
+	if ts, ok := parseUnixTS(data["ts"]); ok {
+		entry.LogTime = ts
+	} else {
+		entry.LogTime = time.Now()
+	}
+
+	entry.Status = int(asFloat(data["status"]))
+	entry.Size = int64(asFloat(data["size"]))
+
+	if req, ok := data["request"].(map[string]any); ok {
+		entry.Host = asString(req["host"])
+		entry.Method = asString(req["method"])
+		entry.Uri = asString(req["uri"])
+		entry.Proto = asString(req["proto"])
+		entry.RemoteIP = asString(req["remote_ip"])
+		entry.ClientIP = asString(req["client_ip"])
+		entry.UserAgent = headerValue(req["headers"], "User-Agent")
+	}
+
+	entry.Country = pickString(data, "country", "country_name", "country_name_zh", "country_name_zh-CN", "geoip2.country_names_zh-CN")
+	entry.Province = pickString(data, "province", "province_name", "province_name_zh", "province_name_zh-CN", "geoip2.subdivisions_1_names_zh-CN")
+	entry.City = pickString(data, "city", "city_name", "city_name_zh", "city_name_zh-CN", "geoip2.city_names_zh-CN")
+
+	return entry, nil
+}
+
+func parseUnixTS(value any) (time.Time, bool) {
+	switch v := value.(type) {
+	case json.Number:
+		if f, err := v.Float64(); err == nil {
+			return unixFloatToTime(f), true
+		}
+	case float64:
+		return unixFloatToTime(v), true
+	case int64:
+		return time.Unix(v, 0), true
+	case int:
+		return time.Unix(int64(v), 0), true
+	case string:
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			return unixFloatToTime(f), true
+		}
+	}
+	return time.Time{}, false
+}
+
+func unixFloatToTime(v float64) time.Time {
+	sec, frac := math.Modf(v)
+	return time.Unix(int64(sec), int64(frac*1e9))
+}
+
+func asString(value any) string {
+	if value == nil {
+		return ""
+	}
+	switch v := value.(type) {
+	case string:
+		return v
+	case json.Number:
+		return v.String()
+	default:
+		return fmt.Sprintf("%v", v)
+	}
+}
+
+func asFloat(value any) float64 {
+	if value == nil {
+		return 0
+	}
+	switch v := value.(type) {
+	case float64:
+		return v
+	case float32:
+		return float64(v)
+	case int:
+		return float64(v)
+	case int64:
+		return float64(v)
+	case json.Number:
+		if f, err := v.Float64(); err == nil {
+			return f
+		}
+	case string:
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			return f
+		}
+	}
+	return 0
+}
+
+func headerValue(headers any, key string) string {
+	m, ok := headers.(map[string]any)
+	if !ok {
+		return ""
+	}
+	val, ok := m[key]
+	if !ok {
+		return ""
+	}
+	switch v := val.(type) {
+	case []any:
+		if len(v) > 0 {
+			return asString(v[0])
+		}
+	case []string:
+		if len(v) > 0 {
+			return v[0]
+		}
+	case string:
+		return v
+	}
+	return ""
+}
+
+func pickString(data map[string]any, keys ...string) string {
+	for _, key := range keys {
+		if v, ok := data[key]; ok {
+			if s := asString(v); s != "" {
+				return s
+			}
+		}
+	}
+	return ""
+}
+
+func mustJSONRaw(line string) string {
+	raw, err := json.Marshal(line)
+	if err != nil {
+		return "\"\""
+	}
+	return string(raw)
 }
 
 func (i *CaddyIngestor) Stop(filePath string) {
