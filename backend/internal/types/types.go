@@ -241,6 +241,64 @@ type CronTaskUpdateReq struct {
 	Timeout  int    `json:"timeout,optional"`
 }
 
+type DashboardErrorStats struct {
+	Error4xx   int64 `json:"error4xx"`
+	Blocked4xx int64 `json:"blocked4xx"`
+	Error5xx   int64 `json:"error5xx"`
+}
+
+type DashboardGeoItem struct {
+	Name  string `json:"name"`
+	Value int64  `json:"value"`
+}
+
+type DashboardRange struct {
+	StartTime   string `json:"startTime"`
+	EndTime     string `json:"endTime"`
+	IntervalSec int    `json:"intervalSec"`
+}
+
+type DashboardRecentItem struct {
+	ID       uint   `json:"id"`
+	LogTime  string `json:"logTime"`
+	Method   string `json:"method"`
+	Uri      string `json:"uri"`
+	Status   int    `json:"status"`
+	RemoteIP string `json:"remoteIp"`
+	Country  string `json:"country"`
+}
+
+type DashboardStats struct {
+	Requests int64 `json:"requests"`
+	PV       int64 `json:"pv"`
+	UV       int64 `json:"uv"`
+	UniqueIP int64 `json:"uniqueIp"`
+	Blocked  int64 `json:"blocked"`
+	AttackIP int64 `json:"attackIp"`
+}
+
+type DashboardSummaryReq struct {
+	StartTime   string `form:"startTime,optional"`
+	EndTime     string `form:"endTime,optional"`
+	IntervalSec int    `form:"intervalSec,optional"` // seconds, default 60
+	TopN        int    `form:"topN,optional"`        // for geo/top lists
+	RecentLimit int    `form:"recentLimit,optional"`
+}
+
+type DashboardSummaryResp struct {
+	Stats      DashboardStats        `json:"stats"`
+	ErrorStats DashboardErrorStats   `json:"errorStats"`
+	Trend      []DashboardTrendItem  `json:"trend"`
+	Geo        []DashboardGeoItem    `json:"geo"`
+	Recent     []DashboardRecentItem `json:"recent"`
+	Range      DashboardRange        `json:"range"`
+}
+
+type DashboardTrendItem struct {
+	Time  string `json:"time"`
+	Value int64  `json:"value"`
+}
+
 type IDReq struct {
 	ID uint `path:"id"`
 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, withDefaults } from 'vue';
 import { useAppStore } from '@/store/modules/app';
 import { useAuthStore } from '@/store/modules/auth';
 
@@ -11,26 +11,18 @@ const gap = computed(() => (appStore.isMobile ? 0 : 16));
 interface StatisticData {
   id: number;
   label: string;
-  value: string;
+  value: string | number;
 }
 
-const statisticData: StatisticData[] = [
-  {
-    id: 0,
-    label: '项目数',
-    value: '25'
-  },
-  {
-    id: 1,
-    label: '待办',
-    value: '4/16'
-  },
-  {
-    id: 2,
-    label: '消息',
-    value: '12'
-  }
-];
+interface Props {
+  rangeText: string;
+  stats: StatisticData[];
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  rangeText: '',
+  stats: () => []
+});
 </script>
 
 <template>
@@ -43,15 +35,15 @@ const statisticData: StatisticData[] = [
           </div>
           <div class="pl-12px">
             <h3 class="text-18px font-semibold">
-              早安，{{ authStore.userInfo.username }}，今天又是充满活力的一天！
+              欢迎回来，{{ authStore.userInfo.username }} 👋
             </h3>
-            <p class="leading-30px text-[#999]">今日多云转晴，20℃ - 25℃！</p>
+            <p class="leading-30px text-[#999]">统计范围：{{ props.rangeText }}</p>
           </div>
         </div>
       </NGridItem>
       <NGridItem span="24 s:24 m:6">
         <NSpace :size="24" justify="end">
-          <div v-for="item in statisticData" :key="item.id" class="flex flex-col items-center">
+          <div v-for="item in props.stats" :key="item.id" class="flex flex-col items-center">
             <span class="text-[#999]">{{ item.label }}</span>
             <span class="text-20px">{{ item.value }}</span>
           </div>
