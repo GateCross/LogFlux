@@ -232,20 +232,23 @@ onUnmounted(() => {
             <NCard title="实时日志" class="flex-1 rounded-2xl shadow-sm">
                <div v-if="recentLogs.length === 0" class="text-xs text-gray-400">暂无日志</div>
                <div v-else class="flex flex-col gap-3 text-xs">
-                <div
-                  v-for="item in recentLogs"
-                  :key="item.id"
-                  class="flex justify-between items-center border-b border-gray-100 pb-2 gap-3"
-                >
-                  <div class="flex gap-2 items-center min-w-0 flex-1">
-                    <span :class="['px-1 rounded', methodClass(item.method)]">{{ item.method || 'N/A' }}</span>
-                    <span class="text-gray-600 truncate">{{ item.uri || '-' }}</span>
-                  </div>
-                  <div class="flex items-center gap-2 shrink-0 whitespace-nowrap">
-                    <span :class="statusClass(item.status)">{{ item.status }}</span>
-                    <span class="text-gray-400 whitespace-nowrap">{{ formatRecentMeta(item) }}</span>
-                  </div>
-                </div>
+                 <div
+                   v-for="item in recentLogs"
+                   :key="item.id"
+                   class="log-row border-b border-gray-100 pb-2"
+                 >
+                   <div class="log-method">
+                     <span :class="['px-1 rounded', methodClass(item.method)]">{{ item.method || 'N/A' }}</span>
+                   </div>
+                   <NTooltip placement="top-start" :show-arrow="false">
+                     <template #trigger>
+                       <div class="log-path text-gray-600 truncate">{{ item.uri || '-' }}</div>
+                     </template>
+                     {{ item.uri || '-' }}
+                   </NTooltip>
+                   <div class="log-status" :class="statusClass(item.status)">{{ item.status }}</div>
+                   <div class="log-meta text-gray-400">{{ formatRecentMeta(item) }}</div>
+                 </div>
                </div>
             </NCard>
          </NSpace>
@@ -254,4 +257,35 @@ onUnmounted(() => {
   </NSpace>
 </template>
 
-<style scoped></style>
+<style scoped>
+.log-row {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) 60px 160px;
+  align-items: center;
+  column-gap: 12px;
+}
+
+.log-method,
+.log-status,
+.log-meta {
+  white-space: nowrap;
+}
+
+.log-path {
+  min-width: 0;
+}
+
+@media (max-width: 768px) {
+  .log-row {
+    grid-template-columns: 48px minmax(0, 1fr) 48px 120px;
+    column-gap: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .log-row {
+    grid-template-columns: 44px minmax(0, 1fr) 44px 96px;
+    column-gap: 6px;
+  }
+}
+</style>
