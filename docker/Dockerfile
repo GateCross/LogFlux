@@ -44,10 +44,12 @@ FROM --platform=${TARGETPLATFORM} caddy:builder AS caddy-builder
 ARG HTTP_PROXY
 ARG HTTPS_PROXY
 ARG NO_PROXY
-ARG GOPROXY=https://goproxy.cn,direct
-ARG GOSUMDB=off
+ARG GOPROXY=https://proxy.golang.org,direct
+ARG GOSUMDB=sum.golang.org
 ENV HTTP_PROXY=$HTTP_PROXY HTTPS_PROXY=$HTTPS_PROXY NO_PROXY=$NO_PROXY \
     GOPROXY=$GOPROXY GOSUMDB=$GOSUMDB
+
+RUN apk add --no-cache git
 
 RUN xcaddy build \
     --with github.com/zhangjiayin/caddy-geoip2 \
@@ -62,8 +64,8 @@ ARG TARGETARCH
 ARG HTTP_PROXY
 ARG HTTPS_PROXY
 ARG NO_PROXY
-ARG GOPROXY=https://goproxy.cn,direct
-ARG GOSUMDB=off
+ARG GOPROXY=https://proxy.golang.org,direct
+ARG GOSUMDB=sum.golang.org
 ENV HTTP_PROXY=$HTTP_PROXY HTTPS_PROXY=$HTTPS_PROXY NO_PROXY=$NO_PROXY \
     GOPROXY=$GOPROXY GOSUMDB=$GOSUMDB
 
