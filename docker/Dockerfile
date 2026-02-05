@@ -16,8 +16,10 @@ WORKDIR /app
 ARG VITE_SERVICE_BASE_URL=/api
 ENV VITE_SERVICE_BASE_URL=$VITE_SERVICE_BASE_URL
 
-# 启用 pnpm
-RUN corepack enable pnpm
+# 跳过 git hooks，并固定 pnpm 版本（避免 corepack 拉取不确定版本）
+ENV SKIP_SIMPLE_GIT_HOOKS=1
+ARG PNPM_VERSION=9.15.4
+RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
 
 # 复制依赖文件（包含 workspace 定义与子包清单）
 COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
