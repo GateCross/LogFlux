@@ -139,6 +139,13 @@ cd docker
 wget https://git.io/GeoLite2-City.mmdb
 ```
 
+## 常见错误
+
+### 1) Can't drop privilege as nonroot user
+
+该错误说明 `supervisord` 以非 root 用户启动，无法切换到配置中的 `user=logflux`。
+请确保容器主进程为 root（镜像默认如此），不要在 `docker-compose.yml` 中设置 `user:` 为非 root。
+
 不需要 GeoIP2 时：
 - 注释 `docker/docker-compose.yml` 中的 GeoIP2 volume
 - 注释 `docker/Caddyfile` 中的 `import geoip` 行
