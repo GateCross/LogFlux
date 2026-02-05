@@ -55,7 +55,101 @@ jobs:
           push: true
           build-args: |
             CADDY_IMAGE=${{ env.CADDY_IMAGE }}
+          provenance: false
+          sbom: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  cleanup:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Cleanup old image versions
+        uses: actions/github-script@v7
+        env:
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const imageName = process.env.IMAGE_NAME || '';
+            const packageName = (imageName.includes('/') ? imageName.split('/').slice(1).join('/') : imageName).toLowerCase();
+
+            if (!packageName) {
+              core.setFailed('PACKAGE_NAME is empty; cannot cleanup GHCR versions.');
+              return;
+            }
+
+            async function listVersions(page) {
+              try {
+                return await github.rest.packages.getAllPackageVersionsForPackageOwnedByOrg({
+                  org: owner,
+                  package_type: 'container',
+                  package_name: packageName,
+                  per_page: 100,
+                  page
+                });
+              } catch (err) {
+                if (err.status !== 404) throw err;
+                return await github.rest.packages.getAllPackageVersionsForPackageOwnedByUser({
+                  username: owner,
+                  package_type: 'container',
+                  package_name: packageName,
+                  per_page: 100,
+                  page
+                });
+              }
+            }
+
+            async function deleteVersion(id, isOrg) {
+              if (isOrg) {
+                return await github.rest.packages.deletePackageVersionForOrg({
+                  org: owner,
+                  package_type: 'container',
+                  package_name: packageName,
+                  package_version_id: id
+                });
+              }
+              return await github.rest.packages.deletePackageVersionForUser({
+                username: owner,
+                package_type: 'container',
+                package_name: packageName,
+                package_version_id: id
+              });
+            }
+
+            let versions = [];
+            let page = 1;
+            let isOrg = true;
+
+            while (true) {
+              const res = await listVersions(page);
+              versions = versions.concat(res.data);
+              if (res.data.length < 100) break;
+              page += 1;
+            }
+
+            if (versions.length <= 5) {
+              core.info(`No cleanup needed. ${versions.length} version(s) found.`);
+              return;
+            }
+
+            // Determine owner type for delete calls
+            try {
+              await github.rest.orgs.get({ org: owner });
+              isOrg = true;
+            } catch (err) {
+              isOrg = false;
+            }
+
+            versions.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            const toDelete = versions.slice(5);
+
+            for (const v of toDelete) {
+              await deleteVersion(v.id, isOrg);
+              core.info(`Deleted version id=${v.id}`);
+            }
