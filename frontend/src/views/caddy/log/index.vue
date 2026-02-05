@@ -220,6 +220,7 @@ const columns: DataTableColumns<CaddyLog> = [
     key: 'actions',
     width: 90,
     resizable: true,
+    fixed: 'right',
     render(row) {
       return h(
         NButton,
