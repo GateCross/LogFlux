@@ -73,7 +73,9 @@
           <n-descriptions-item label="大小">{{ selectedLog.size }}</n-descriptions-item>
           <n-descriptions-item label="远端 IP">{{ selectedLog.remoteIp }}</n-descriptions-item>
           <n-descriptions-item label="客户端 IP">{{ selectedLog.clientIp }}</n-descriptions-item>
-          <n-descriptions-item label="地区">{{ selectedLog.country }} {{ selectedLog.city }}</n-descriptions-item>
+          <n-descriptions-item label="地区">
+            {{ selectedLog.location || [selectedLog.country, selectedLog.province, selectedLog.city].filter(Boolean).join(' ') }}
+          </n-descriptions-item>
           <n-descriptions-item label="User Agent">{{ selectedLog.userAgent || '-' }}</n-descriptions-item>
           <n-descriptions-item label="原始日志">
             <n-input
@@ -99,7 +101,9 @@ interface CaddyLog {
   id: number;
   logTime: string;
   country: string;
+  province?: string;
   city: string;
+  location?: string;
   host: string;
   method: string;
   uri: string;
@@ -211,8 +215,9 @@ const columns: DataTableColumns<CaddyLog> = [
     width: 150,
     resizable: true,
     render(row) {
-      if (!row.country && !row.city) return '-';
-      return `${row.country || ''} ${row.city || ''}`;
+      const location = row.location || [row.country, row.province, row.city].filter(Boolean).join(' ');
+      if (!location) return '-';
+      return location;
     }
   },
   {

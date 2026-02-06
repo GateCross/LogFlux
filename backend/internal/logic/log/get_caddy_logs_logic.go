@@ -86,11 +86,18 @@ func (l *GetCaddyLogsLogic) GetCaddyLogs(req *types.CaddyLogReq) (resp *types.Ca
 
 	list := make([]types.CaddyLogItem, 0, len(logs))
 	for _, logItem := range logs {
+		location := strings.TrimSpace(strings.Join([]string{
+			strings.TrimSpace(logItem.Country),
+			strings.TrimSpace(logItem.Province),
+			strings.TrimSpace(logItem.City),
+		}, " "))
 		list = append(list, types.CaddyLogItem{
 			ID:        logItem.ID,
 			LogTime:   logItem.LogTime.Format("2006-01-02 15:04:05"),
 			Country:   logItem.Country,
+			Province:  logItem.Province,
 			City:      logItem.City,
+			Location:  location,
 			Host:      logItem.Host,
 			Method:    logItem.Method,
 			Uri:       logItem.Uri,
