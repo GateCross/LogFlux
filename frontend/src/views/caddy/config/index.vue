@@ -372,8 +372,10 @@ function validateStructuredConfig(): ValidationError[] {
     if (!site.enabled) continue;
     if (!site.name) pushError('站点名称不能为空', site.id, undefined, 'basic');
     if (site.domains.length === 0) pushError(`站点 ${site.name || site.id} 至少配置一个域名`, site.id, undefined, 'basic');
-    if (site.enabled && site.routes.length === 0) {
-      pushError(`站点 ${site.name || site.id} 至少配置一个路由`, site.id, undefined, 'routes');
+    const hasEnabledRoutes = site.routes.some(route => route.enabled);
+    const hasImports = (site.imports ?? []).some(item => item.trim().length > 0);
+    if (!hasEnabledRoutes && !hasImports) {
+      pushError(`站点 ${site.name || site.id} 至少配置一个路由或 import`, site.id, undefined, 'routes');
     }
     const invalidDomains = site.domains.filter(d => d && !(domainRe.test(d) || portOnlyRe.test(d)));
     if (invalidDomains.length) pushError(`站点 ${site.name || site.id} 域名格式不合法: ${invalidDomains.join(', ')}`, site.id, undefined, 'basic');
