@@ -2,7 +2,9 @@ package ingest
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -17,6 +19,7 @@ import (
 	"github.com/nxadm/tail"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // Log Format:
@@ -150,10 +153,13 @@ func (i *CaddyIngestor) startFile(filePath string) bool {
 	}
 	i.mu.Unlock()
 
+	startOffset := i.resolveStartOffset(filePath)
+
 	t, err := tail.TailFile(filePath, tail.Config{
-		Follow: true,
-		ReOpen: true,
-		Poll:   true,
+		Follow:   true,
+		ReOpen:   true,
+		Poll:     true,
+		Location: &tail.SeekInfo{Offset: startOffset, Whence: io.SeekStart},
 	})
 	if err != nil {
 		fmt.Printf("Error tailing file: %v\n", err)
@@ -172,16 +178,71 @@ func (i *CaddyIngestor) startFile(filePath string) bool {
 
 	fmt.Printf("Started monitoring: %s\n", filePath)
 
-	go func() {
+	go func(path string) {
 		for line := range t.Lines {
+			if line == nil {
+				continue
+			}
+			if line.Err != nil {
+				fmt.Printf("Tail read failed: %v\n", line.Err)
+				continue
+			}
 			if err := i.Ingest(line.Text); err != nil {
 				// keep noisy errors in stdout for now
 				fmt.Printf("Log ingest failed: %v\n", err)
+				continue
+			}
+			if err := i.saveOffset(path, line.SeekInfo.Offset); err != nil {
+				fmt.Printf("Save ingest cursor failed: %v\n", err)
 			}
 		}
-	}()
+	}(filePath)
 
 	return true
+}
+
+func (i *CaddyIngestor) resolveStartOffset(filePath string) int64 {
+	var cursor model.LogIngestCursor
+	if err := i.db.Where("file_path = ?", filePath).Take(&cursor).Error; err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			fmt.Printf("Load ingest cursor failed: %v\n", err)
+		}
+		return 0
+	}
+
+	offset := cursor.Offset
+	if offset < 0 {
+		return 0
+	}
+
+	info, err := os.Stat(filePath)
+	if err != nil {
+		return offset
+	}
+	if offset > info.Size() {
+		return 0
+	}
+
+	return offset
+}
+
+func (i *CaddyIngestor) saveOffset(filePath string, offset int64) error {
+	if offset < 0 {
+		offset = 0
+	}
+
+	cursor := model.LogIngestCursor{
+		FilePath: filePath,
+		Offset:   offset,
+	}
+
+	return i.db.Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "file_path"}},
+		DoUpdates: clause.Assignments(map[string]any{
+			"offset":     offset,
+			"updated_at": time.Now(),
+		}),
+	}).Create(&cursor).Error
 }
 
 func (i *CaddyIngestor) startDir(dirPath string, scanIntervalSec int) {

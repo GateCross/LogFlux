@@ -35,6 +35,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		&model.User{},
 		&model.CaddyLog{},
 		&model.CaddyLogArchive{}, // 归档表
+		&model.LogIngestCursor{},
 		&model.LogSource{},
 		&model.Role{},
 		&model.Menu{},
