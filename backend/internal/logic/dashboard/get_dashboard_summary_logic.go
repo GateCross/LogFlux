@@ -42,26 +42,28 @@ func (l *GetDashboardSummaryLogic) GetDashboardSummary(req *types.DashboardSumma
 		recentLimit = 6
 	}
 
-	base := l.svcCtx.DB.Model(&model.CaddyLog{}).Where("log_time >= ? AND log_time <= ?", startTime, endTime)
+	queryLogs := func() *gorm.DB {
+		return l.svcCtx.DB.Model(&model.CaddyLog{}).Where("log_time >= ? AND log_time <= ?", startTime, endTime)
+	}
 
 	var total int64
-	if err := base.Count(&total).Error; err != nil {
+	if err := queryLogs().Count(&total).Error; err != nil {
 		return nil, err
 	}
 
 	var blocked int64
 	blockedStatuses := []int{403, 429}
-	if err := base.Where("status IN ?", blockedStatuses).Count(&blocked).Error; err != nil {
+	if err := queryLogs().Where("status IN ?", blockedStatuses).Count(&blocked).Error; err != nil {
 		return nil, err
 	}
 
 	var err4xx int64
-	if err := base.Where("status >= ? AND status < ?", 400, 500).Count(&err4xx).Error; err != nil {
+	if err := queryLogs().Where("status >= ? AND status < ?", 400, 500).Count(&err4xx).Error; err != nil {
 		return nil, err
 	}
 
 	var err5xx int64
-	if err := base.Where("status >= ?", 500).Count(&err5xx).Error; err != nil {
+	if err := queryLogs().Where("status >= ? AND status < ?", 500, 600).Count(&err5xx).Error; err != nil {
 		return nil, err
 	}
 
