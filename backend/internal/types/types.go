@@ -76,7 +76,9 @@ type CaddyLogItem struct {
 	ID        uint   `json:"id"`
 	LogTime   string `json:"logTime"`
 	Country   string `json:"country"`
+	Province  string `json:"province"`
 	City      string `json:"city"`
+	Location  string `json:"location"`
 	Host      string `json:"host"`
 	Method    string `json:"method"`
 	Uri       string `json:"uri"`
