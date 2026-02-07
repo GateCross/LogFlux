@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
+	"logflux/internal/utils"
 	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -49,11 +49,11 @@ func (l *GetCaddyLogsLogic) GetCaddyLogs(req *types.CaddyLogReq) (resp *types.Ca
 		db = db.Where("status = ?", req.Status)
 	}
 
-	startTime, err := parseOptionalTime(req.StartTime)
+	startTime, err := utils.ParseOptionalTime(req.StartTime)
 	if err != nil {
 		return nil, fmt.Errorf("invalid startTime: %w", err)
 	}
-	endTime, err := parseOptionalTime(req.EndTime)
+	endTime, err := utils.ParseOptionalTime(req.EndTime)
 	if err != nil {
 		return nil, fmt.Errorf("invalid endTime: %w", err)
 	}
@@ -114,23 +114,4 @@ func (l *GetCaddyLogsLogic) GetCaddyLogs(req *types.CaddyLogReq) (resp *types.Ca
 		List:  list,
 		Total: total,
 	}, nil
-}
-
-func parseOptionalTime(value string) (*time.Time, error) {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return nil, nil
-	}
-
-	layouts := []string{
-		time.RFC3339,
-		"2006-01-02 15:04:05",
-		"2006-01-02",
-	}
-	for _, layout := range layouts {
-		if t, err := time.ParseInLocation(layout, value, time.Local); err == nil {
-			return &t, nil
-		}
-	}
-	return nil, fmt.Errorf("unsupported time format")
 }
