@@ -3,11 +3,11 @@ package dashboard
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
+	"logflux/internal/utils"
 	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -134,11 +134,11 @@ func (l *GetDashboardSummaryLogic) GetDashboardSummary(req *types.DashboardSumma
 }
 
 func normalizeDashboardRange(req *types.DashboardSummaryReq) (time.Time, time.Time, int, error) {
-	start, err := parseOptionalTime(req.StartTime)
+	start, err := utils.ParseOptionalTime(req.StartTime)
 	if err != nil {
 		return time.Time{}, time.Time{}, 0, fmt.Errorf("invalid startTime: %w", err)
 	}
-	end, err := parseOptionalTime(req.EndTime)
+	end, err := utils.ParseOptionalTime(req.EndTime)
 	if err != nil {
 		return time.Time{}, time.Time{}, 0, fmt.Errorf("invalid endTime: %w", err)
 	}
@@ -162,25 +162,6 @@ func normalizeDashboardRange(req *types.DashboardSummaryReq) (time.Time, time.Ti
 	}
 
 	return *start, *end, intervalSec, nil
-}
-
-func parseOptionalTime(value string) (*time.Time, error) {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return nil, nil
-	}
-
-	layouts := []string{
-		time.RFC3339,
-		"2006-01-02 15:04:05",
-		"2006-01-02",
-	}
-	for _, layout := range layouts {
-		if t, err := time.ParseInLocation(layout, value, time.Local); err == nil {
-			return &t, nil
-		}
-	}
-	return nil, fmt.Errorf("unsupported time format")
 }
 
 type trendRow struct {
