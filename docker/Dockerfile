@@ -2,27 +2,18 @@
 # Global build args (must be before first FROM)
 # ==========================================
 ARG CADDY_IMAGE=ghcr.io/gatecross/logflux-caddy:latest
-ARG TARGETPLATFORM=linux/amd64
-ARG TARGETARCH=amd64
 
 # ==========================================
 # Stage 1: Build Frontend
 # ==========================================
 
-FROM --platform=${TARGETPLATFORM} node:20-alpine AS frontend-builder
-ARG HTTP_PROXY
-ARG HTTPS_PROXY
-ARG NO_PROXY
-ENV HTTP_PROXY=$HTTP_PROXY HTTPS_PROXY=$HTTPS_PROXY NO_PROXY=$NO_PROXY
+FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app
 
 # 让前端在 Docker 内通过 Caddy 反代访问后端
 ARG VITE_SERVICE_BASE_URL=/api
 ENV VITE_SERVICE_BASE_URL=$VITE_SERVICE_BASE_URL
-
-# 安装前端构建依赖（部分包在 alpine 上需要编译）
-RUN apk add --no-cache python3 make g++
 
 # 跳过 git hooks，并固定 pnpm 版本（避免 corepack 拉取不确定版本）
 ENV SKIP_SIMPLE_GIT_HOOKS=1
@@ -50,20 +41,13 @@ FROM ${CADDY_IMAGE} AS caddy-binary
 # ==========================================
 # Stage 3: Build Backend
 # ==========================================
-FROM --platform=${TARGETPLATFORM} golang:1.25.3-alpine AS backend-builder
+FROM golang:1.25.3-alpine AS backend-builder
 ARG TARGETARCH
-ARG HTTP_PROXY
-ARG HTTPS_PROXY
-ARG NO_PROXY
+
 ARG GOPROXY=https://proxy.golang.org,direct
-ARG GOSUMDB=sum.golang.org
-ENV HTTP_PROXY=$HTTP_PROXY HTTPS_PROXY=$HTTPS_PROXY NO_PROXY=$NO_PROXY \
-    GOPROXY=$GOPROXY GOSUMDB=$GOSUMDB
+ENV GOPROXY=$GOPROXY
 
 WORKDIR /app
-
-# 安装依赖
-RUN apk add --no-cache git
 
 # 复制 go mod 文件并下载依赖（利用缓存）
 COPY backend/go.mod backend/go.sum ./
@@ -79,7 +63,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} \
 # ==========================================
 # Stage 4: Final Production Image
 # ==========================================
-FROM --platform=${TARGETPLATFORM} alpine:3.21
+FROM alpine:3.21
 
 # 设置环境变量
 ENV TZ=Asia/Shanghai \
@@ -88,13 +72,12 @@ ENV TZ=Asia/Shanghai \
     APP_UID=1000 \
     APP_GID=1000
 
-# 安装运行时依赖
+# 安装运行时依赖并创建用户
 RUN apk --no-cache add \
     ca-certificates \
     tzdata \
     curl \
     supervisor && \
-    # 创建应用用户和组
     addgroup -g ${APP_GID} ${APP_GROUP} && \
     adduser -D -u ${APP_UID} -G ${APP_GROUP} ${APP_USER}
 
@@ -116,6 +99,10 @@ COPY ${CADDYFILE} /etc/caddy/Caddyfile
 # 复制 supervisor 配置
 COPY docker/supervisord.conf /etc/supervisord.conf
 
+# 复制后端配置（构建时，可通过构建参数切换）
+ARG CONFIG_FILE=docker/config.example.yaml
+COPY ${CONFIG_FILE} /app/etc/config.yaml
+
 # 创建必要的目录并设置权限
 RUN mkdir -p \
     /var/log/caddy \
@@ -129,13 +116,6 @@ RUN mkdir -p \
     /data/caddy \
     /config/caddy \
     /var/log/supervisor
-
-# 复制后端配置（构建时，可通过构建参数切换）
-ARG CONFIG_FILE=docker/config.example.yaml
-COPY ${CONFIG_FILE} /app/etc/config.yaml
-
-# 修改配置文件权限
-RUN chown ${APP_USER}:${APP_GROUP} /app/etc/config.yaml
 
 # 暴露端口
 # 80 - HTTP
