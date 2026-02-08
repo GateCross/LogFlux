@@ -6,7 +6,6 @@ on:
       - main
     paths:
       - docker/Caddyfile
-      - docker/caddy.modules.txt
       - docker/caddy.Dockerfile
   workflow_dispatch:
 
@@ -29,6 +28,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -139,7 +141,6 @@ jobs:
               return;
             }
 
-            // Determine owner type for delete calls
             try {
               await github.rest.orgs.get({ org: owner });
               isOrg = true;
