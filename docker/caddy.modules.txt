@@ -1,7 +1,0 @@
-# One module per line
-# Example:
-# github.com/author/module
-
-github.com/zhangjiayin/caddy-geoip2
-github.com/caddy-dns/cloudflare
-github.com/caddyserver/transform-encoder

@@ -1,21 +1,14 @@
-ARG TARGETPLATFORM=linux/amd64
-FROM --platform=${TARGETPLATFORM} caddy:builder AS builder
+ARG CADDY_VERSION=2
 
-ARG HTTP_PROXY
-ARG HTTPS_PROXY
-ARG NO_PROXY
+FROM caddy:${CADDY_VERSION}-builder AS builder
+
 ARG GOPROXY=https://proxy.golang.org,direct
-ARG GOSUMDB=sum.golang.org
-ENV HTTP_PROXY=$HTTP_PROXY HTTPS_PROXY=$HTTPS_PROXY NO_PROXY=$NO_PROXY \
-    GOPROXY=$GOPROXY GOSUMDB=$GOSUMDB
+ENV GOPROXY=$GOPROXY
 
-RUN apk add --no-cache git
+RUN xcaddy build \
+    --with github.com/zhangjiayin/caddy-geoip2 \
+    --with github.com/caddy-dns/cloudflare \
+    --with github.com/caddyserver/transform-encoder
 
-COPY docker/caddy.modules.txt /tmp/caddy.modules.txt
-
-RUN set -eux; \
-    modules="$(sed '/^\s*#/d;/^\s*$/d' /tmp/caddy.modules.txt | xargs -I {} printf -- "--with %s " "{}")"; \
-    xcaddy build ${modules}
-
-FROM --platform=${TARGETPLATFORM} caddy:2-alpine
+FROM caddy:${CADDY_VERSION}-alpine
 COPY --from=builder /usr/bin/caddy /usr/bin/caddy
