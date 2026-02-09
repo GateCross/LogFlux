@@ -73,38 +73,15 @@ ENV TZ=Asia/Shanghai \
     APP_GID=1000
 
 # 安装运行时依赖并创建用户
+# 合并 mkdir 和 chown 操作减少层数
 RUN apk --no-cache add \
     ca-certificates \
     tzdata \
     curl \
     supervisor && \
     addgroup -g ${APP_GID} ${APP_GROUP} && \
-    adduser -D -u ${APP_UID} -G ${APP_GROUP} ${APP_USER}
-
-WORKDIR /app
-
-# 复制 Caddy 二进制文件
-COPY --from=caddy-binary /usr/bin/caddy /usr/bin/caddy
-
-# 复制前端构建产物
-COPY --from=frontend-builder /app/dist /app/frontend
-
-# 复制后端二进制文件
-COPY --from=backend-builder /app/logflux-api /app/logflux-api
-
-# 复制 Caddyfile（可通过构建参数切换本地代理版）
-ARG CADDYFILE=docker/Caddyfile
-COPY ${CADDYFILE} /etc/caddy/Caddyfile
-
-# 复制 supervisor 配置
-COPY docker/supervisord.conf /etc/supervisord.conf
-
-# 复制后端配置（构建时，可通过构建参数切换）
-ARG CONFIG_FILE=docker/config.example.yaml
-COPY ${CONFIG_FILE} /app/etc/config.yaml
-
-# 创建必要的目录并设置权限
-RUN mkdir -p \
+    adduser -D -u ${APP_UID} -G ${APP_GROUP} ${APP_USER} && \
+    mkdir -p \
     /var/log/caddy \
     /data/caddy \
     /config/caddy \
@@ -116,6 +93,29 @@ RUN mkdir -p \
     /data/caddy \
     /config/caddy \
     /var/log/supervisor
+
+WORKDIR /app
+
+# 使用 --chown 避免额外的 chown 层
+# 复制 Caddy 二进制文件
+COPY --from=caddy-binary --chown=${APP_USER}:${APP_GROUP} /usr/bin/caddy /usr/bin/caddy
+
+# 复制前端构建产物
+COPY --from=frontend-builder --chown=${APP_USER}:${APP_GROUP} /app/dist /app/frontend
+
+# 复制后端二进制文件
+COPY --from=backend-builder --chown=${APP_USER}:${APP_GROUP} /app/logflux-api /app/logflux-api
+
+# 复制 Caddyfile（可通过构建参数切换本地代理版）
+ARG CADDYFILE=docker/Caddyfile
+COPY ${CADDYFILE} /etc/caddy/Caddyfile
+
+# 复制 supervisor 配置
+COPY docker/supervisord.conf /etc/supervisord.conf
+
+# 复制后端配置（构建时，可通过构建参数切换）
+ARG CONFIG_FILE=docker/config.example.yaml
+COPY --chown=${APP_USER}:${APP_GROUP} ${CONFIG_FILE} /app/etc/config.yaml
 
 # 暴露端口
 # 80 - HTTP
