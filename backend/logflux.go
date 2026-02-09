@@ -10,6 +10,7 @@ import (
 	"logflux/internal/handler"
 	"logflux/internal/middleware"
 	"logflux/internal/svc"
+	"strings"
 
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -35,7 +36,12 @@ func main() {
 	defer server.Stop()
 
 	// 使用自定义控制台日志格式，统一输出风格
-	logx.SetWriter(logging.NewPlainConsoleWriter(nil, c.Log.TimeFormat))
+	plainWriter := logging.NewPlainConsoleWriter(nil, c.Log.TimeFormat)
+	if strings.EqualFold(c.Log.Mode, "file") || strings.EqualFold(c.Log.Mode, "volume") {
+		logx.AddWriter(plainWriter)
+	} else {
+		logx.SetWriter(plainWriter)
+	}
 
 	ctx := svc.NewServiceContext(c)
 	handler.RegisterHandlers(server, ctx)

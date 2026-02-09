@@ -25,8 +25,8 @@ const permissionGroups = [
   {
     label: '日志管理',
     options: [
-      { label: '日志模块', value: 'logs' },
-      { label: 'Caddy日志', value: 'logs_caddy' }
+      { label: '系统日志', value: 'logs' },
+      { label: 'Caddy代理日志', value: 'logs_caddy' }
     ]
   },
   {

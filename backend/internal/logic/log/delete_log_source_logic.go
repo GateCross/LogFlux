@@ -40,7 +40,7 @@ func (l *DeleteLogSourceLogic) DeleteLogSource(req *types.IDReq) (resp *types.Ba
 	}
 
 	if source.Path != "" {
-		l.svcCtx.Ingestor.Stop(source.Path)
+		l.svcCtx.Ingestor.Stop(source.Path, source.Type)
 	}
 
 	return &types.BaseResp{

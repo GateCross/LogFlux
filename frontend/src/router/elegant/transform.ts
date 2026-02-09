@@ -169,6 +169,7 @@ const routeMap: RouteMap = {
   "caddy": "/caddy",
   "caddy_config": "/caddy/config",
   "caddy_log": "/caddy/log",
+  "caddy_system_log": "/caddy/system-log",
   "caddy_source": "/caddy/source",
   "cron": "/cron",
   "dashboard": "/dashboard",

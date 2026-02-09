@@ -3,6 +3,7 @@ package svc
 import (
 	"context"
 	"logflux/common/gorm"
+	"logflux/common/logging"
 	redisClient "logflux/common/redis"
 	"logflux/internal/config"
 	"logflux/internal/ingest"
@@ -11,6 +12,7 @@ import (
 	"logflux/internal/notification/template"
 	"logflux/internal/tasks"
 	"logflux/model"
+	"strings"
 
 	"github.com/lib/pq"
 	"github.com/redis/go-redis/v9"
@@ -22,7 +24,7 @@ type ServiceContext struct {
 	Config          config.Config
 	DB              *gorm2.DB
 	Redis           *redis.Client
-	Ingestor        *ingest.CaddyIngestor
+	Ingestor        *ingest.IngestManager
 	ArchiveTask     *tasks.ArchiveTask
 	CronScheduler   *tasks.CronScheduler
 	NotificationMgr notification.NotificationManager
@@ -36,6 +38,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		&model.User{},
 		&model.CaddyLog{},
 		&model.CaddyLogArchive{}, // 归档表
+		&model.SystemLog{},
 		&model.LogIngestCursor{},
 		&model.LogSource{},
 		&model.Role{},
@@ -55,6 +58,11 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	// 创建归档存储过程（如果不存在）
 	createArchiveFunction(db)
+
+	// 后端日志直接写入数据库（异步）
+	if writer := logging.NewDBWriter(db, "backend"); writer != nil {
+		logx.AddWriter(writer)
+	}
 
 	// 初始化 Redis (可选)
 	var rdb *redis.Client
@@ -91,13 +99,13 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	}
 
 	// Init Ingestor
-	ingestor := ingest.NewCaddyIngestor(db)
+	ingestor := ingest.NewIngestManager(db)
 
 	// Load enabled sources from DB
 	var sources []model.LogSource
 	db.Where("enabled = ?", true).Find(&sources)
 	for _, source := range sources {
-		ingestor.StartWithInterval(source.Path, source.ScanInterval)
+		ingestor.StartSource(source)
 	}
 
 	// Legacy config support (migration)
@@ -113,7 +121,23 @@ func NewServiceContext(c config.Config) *ServiceContext {
 				Enabled:      true,
 				ScanInterval: ingest.DefaultScanIntervalSec(),
 			})
-			ingestor.StartWithInterval(c.CaddyLogPath, ingest.DefaultScanIntervalSec())
+			ingestor.StartWithInterval(c.CaddyLogPath, ingest.DefaultScanIntervalSec(), "caddy")
+		}
+	}
+
+	caddyRuntimeLogPath := strings.TrimSpace(c.CaddyRuntimeLogPath)
+	if caddyRuntimeLogPath != "" {
+		var cnt int64
+		db.Model(&model.LogSource{}).Where("path = ?", caddyRuntimeLogPath).Count(&cnt)
+		if cnt == 0 {
+			db.Create(&model.LogSource{
+				Name:         "Caddy Runtime",
+				Path:         caddyRuntimeLogPath,
+				Type:         "caddy_runtime",
+				Enabled:      true,
+				ScanInterval: ingest.DefaultScanIntervalSec(),
+			})
+			ingestor.StartWithInterval(caddyRuntimeLogPath, ingest.DefaultScanIntervalSec(), "caddy_runtime")
 		}
 	}
 
@@ -229,6 +253,13 @@ func initRBACData(db *gorm2.DB) {
 			Path:          "/caddy/log",
 			Component:     "view.caddy_log",
 			Meta:          `{"title":"caddy_log","i18nKey":"route.caddy_log","icon":"carbon:catalog"}`,
+			RequiredRoles: []string{"admin", "analyst"},
+		},
+		{
+			Name:          "caddy_system_log",
+			Path:          "/caddy/system-log",
+			Component:     "view.caddy_system_log",
+			Meta:          `{"title":"caddy_system_log","i18nKey":"route.caddy_system_log","icon":"carbon:terminal"}`,
 			RequiredRoles: []string{"admin", "analyst"},
 		},
 		{

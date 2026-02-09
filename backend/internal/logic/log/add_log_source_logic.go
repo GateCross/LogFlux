@@ -61,7 +61,7 @@ func (l *AddLogSourceLogic) AddLogSource(req *types.LogSourceReq) (resp *types.B
 		return nil, err
 	}
 
-	l.svcCtx.Ingestor.StartWithInterval(source.Path, source.ScanInterval)
+	l.svcCtx.Ingestor.StartWithInterval(source.Path, source.ScanInterval, source.Type)
 
 	return &types.BaseResp{
 		Code: 200,

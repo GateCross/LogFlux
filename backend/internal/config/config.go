@@ -16,6 +16,8 @@ type Config struct {
 	Database     DatabaseConf
 	Redis        RedisConf
 	CaddyLogPath string
+	BackendLogPath      string // 后端日志文件/目录（用于入库）
+	CaddyRuntimeLogPath string // Caddy 后台日志文件/目录（用于入库）
 	Archive      ArchiveConf
 	Notification NotificationConf
 }
