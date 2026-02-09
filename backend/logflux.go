@@ -4,6 +4,7 @@ import (
 	"flag"
 	"net/http"
 
+	"logflux/common/logging"
 	"logflux/common/result"
 	"logflux/internal/config"
 	"logflux/internal/handler"
@@ -32,6 +33,9 @@ func main() {
 		})
 	}))
 	defer server.Stop()
+
+	// 使用自定义控制台日志格式，统一输出风格
+	logx.SetWriter(logging.NewPlainConsoleWriter(nil, c.Log.TimeFormat))
 
 	ctx := svc.NewServiceContext(c)
 	handler.RegisterHandlers(server, ctx)
