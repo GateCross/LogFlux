@@ -76,9 +76,7 @@ type CaddyLogItem struct {
 	ID        uint   `json:"id"`
 	LogTime   string `json:"logTime"`
 	Country   string `json:"country"`
-	Province  string `json:"province"`
 	City      string `json:"city"`
-	Location  string `json:"location"`
 	Host      string `json:"host"`
 	Method    string `json:"method"`
 	Uri       string `json:"uri"`
@@ -488,6 +486,36 @@ type RuleUpdateReq struct {
 	Template        string  `json:"template,optional"`
 	SilenceDuration int     `json:"silenceDuration,optional"`
 	Description     string  `json:"description,optional"`
+}
+
+type SystemLogItem struct {
+	ID        uint   `json:"id"`
+	LogTime   string `json:"logTime"`
+	Level     string `json:"level"`
+	Message   string `json:"message"`
+	Caller    string `json:"caller"`
+	TraceID   string `json:"traceId"`
+	SpanID    string `json:"spanId"`
+	Source    string `json:"source"`
+	RawLog    string `json:"rawLog"`
+	ExtraData string `json:"extraData"`
+}
+
+type SystemLogReq struct {
+	Page      int    `form:"page,default=1"`
+	PageSize  int    `form:"pageSize,default=20"`
+	Keyword   string `form:"keyword,optional"` // Search in message/caller
+	Source    string `form:"source,optional"`  // backend | caddy_runtime
+	Level     string `form:"level,optional"`   // debug/info/error/slow/stat
+	StartTime string `form:"startTime,optional"`
+	EndTime   string `form:"endTime,optional"`
+	SortBy    string `form:"sortBy,optional"` // logTime
+	Order     string `form:"order,optional"`  // asc|desc
+}
+
+type SystemLogResp struct {
+	List  []SystemLogItem `json:"list"`
+	Total int64           `json:"total"`
 }
 
 type TemplateItem struct {

@@ -1,0 +1,41 @@
+syntax = "v1"
+
+type (
+	SystemLogReq {
+		Page      int    `form:"page,default=1"`
+		PageSize  int    `form:"pageSize,default=20"`
+		Keyword   string `form:"keyword,optional"` // Search in message/caller
+		Source    string `form:"source,optional"`  // backend | caddy_runtime
+		Level     string `form:"level,optional"`   // debug/info/error/slow/stat
+		StartTime string `form:"startTime,optional"`
+		EndTime   string `form:"endTime,optional"`
+		SortBy    string `form:"sortBy,optional"` // logTime
+		Order     string `form:"order,optional"`  // asc|desc
+	}
+	SystemLogItem {
+		ID       uint   `json:"id"`
+		LogTime  string `json:"logTime"`
+		Level    string `json:"level"`
+		Message  string `json:"message"`
+		Caller   string `json:"caller"`
+		TraceID  string `json:"traceId"`
+		SpanID   string `json:"spanId"`
+		Source   string `json:"source"`
+		RawLog   string `json:"rawLog"`
+		ExtraData string `json:"extraData"`
+	}
+	SystemLogResp {
+		List  []SystemLogItem `json:"list"`
+		Total int64           `json:"total"`
+	}
+)
+
+@server (
+	prefix: /api
+	group:  log
+	jwt:    Auth
+)
+service logflux-api {
+	@handler GetSystemLogs
+	get /system/logs (SystemLogReq) returns (SystemLogResp)
+}

@@ -120,18 +120,3 @@ func (w *PlainConsoleWriter) write(level string, v any, fields ...logx.LogField)
 	defer w.mu.Unlock()
 	_, _ = w.out.Write([]byte(payload))
 }
-
-func formatValue(val any) string {
-	switch v := val.(type) {
-	case string:
-		return v
-	case []byte:
-		return string(v)
-	case error:
-		return v.Error()
-	case fmt.Stringer:
-		return v.String()
-	default:
-		return fmt.Sprint(v)
-	}
-}

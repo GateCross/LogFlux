@@ -117,7 +117,7 @@ func syncCaddyLogSources(svcCtx *svc.ServiceContext, server *model.CaddyServer, 
 	for _, source := range autoSources {
 		if _, ok := pathSet[source.Path]; !ok {
 			svcCtx.DB.Model(&model.LogSource{}).Where("id = ?", source.ID).Update("enabled", false)
-			svcCtx.Ingestor.Stop(source.Path)
+			svcCtx.Ingestor.Stop(source.Path, source.Type)
 		}
 	}
 
@@ -134,7 +134,7 @@ func syncCaddyLogSources(svcCtx *svc.ServiceContext, server *model.CaddyServer, 
 			}
 			if err := svcCtx.DB.Create(&newSource).Error; err == nil {
 				logger.Infof("自动添加日志源: %s", path)
-				svcCtx.Ingestor.StartWithInterval(path, newSource.ScanInterval)
+				svcCtx.Ingestor.StartWithInterval(path, newSource.ScanInterval, newSource.Type)
 			}
 			continue
 		}
@@ -145,7 +145,7 @@ func syncCaddyLogSources(svcCtx *svc.ServiceContext, server *model.CaddyServer, 
 		if !source.Enabled {
 			svcCtx.DB.Model(&model.LogSource{}).Where("id = ?", source.ID).Update("enabled", true)
 		}
-		svcCtx.Ingestor.StartWithInterval(path, source.ScanInterval)
+		svcCtx.Ingestor.StartWithInterval(path, source.ScanInterval, source.Type)
 	}
 }
 

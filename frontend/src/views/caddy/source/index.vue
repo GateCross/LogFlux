@@ -97,9 +97,10 @@ const rules = computed(() => ({
 }));
 
 const typeOptions = [
-  { label: 'Caddy', value: 'caddy' },
+  { label: 'Caddy代理日志', value: 'caddy' },
+  { label: 'Caddy后台日志', value: 'caddy_runtime' },
   { label: 'Nginx', value: 'nginx' },
-  { label: 'Other', value: 'other' }
+  { label: '其他', value: 'other' }
 ];
 
 const columns: DataTableColumns<LogSourceItem> = [
@@ -112,7 +113,13 @@ const columns: DataTableColumns<LogSourceItem> = [
     key: 'type',
     width: 120,
     render(row) {
-      return h(NTag, { type: 'info', bordered: false }, { default: () => row.type });
+      const labelMap: Record<string, string> = {
+        caddy: 'Caddy代理日志',
+        caddy_runtime: 'Caddy后台日志',
+        nginx: 'Nginx',
+        other: '其他'
+      };
+      return h(NTag, { type: 'info', bordered: false }, { default: () => labelMap[row.type] || row.type });
     }
   },
   {

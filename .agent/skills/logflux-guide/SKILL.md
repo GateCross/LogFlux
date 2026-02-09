@@ -77,6 +77,9 @@ cd backend
 
 # 生成代码（使用 snake_case 风格）
 goctl api go -api api/logflux.api -dir . -style go_zero
+ 
+# 约束：必须使用 --style go_zero（下划线命名），禁止 gozero/goZero。
+# 若出现 addcaddyserverhandler.go 等无下划线文件，先删除再重新生成。
 
 # 生成后的目录结构
 internal/

@@ -64,10 +64,10 @@ func (l *UpdateLogSourceLogic) UpdateLogSource(req *types.LogSourceUpdateReq) (r
 	}
 
 	if oldEnabled && (source.Path != oldPath || !source.Enabled) && oldPath != "" {
-		l.svcCtx.Ingestor.Stop(oldPath)
+		l.svcCtx.Ingestor.Stop(oldPath, source.Type)
 	}
 	if source.Enabled && source.Path != "" {
-		l.svcCtx.Ingestor.StartWithInterval(source.Path, source.ScanInterval)
+		l.svcCtx.Ingestor.StartWithInterval(source.Path, source.ScanInterval, source.Type)
 	}
 
 	return &types.BaseResp{
