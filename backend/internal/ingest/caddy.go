@@ -17,6 +17,7 @@ import (
 	"logflux/model"
 
 	"github.com/nxadm/tail"
+	"github.com/zeromicro/go-zero/core/logx"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -70,7 +71,7 @@ func (i *CaddyIngestor) ParseLine(line string) (*model.CaddyLog, error) {
 
 	logTime, err := i.parseTime(matches[1])
 	if err != nil {
-		fmt.Printf("Time parse error: %v for %s\n", err, matches[1])
+		logx.Errorf("Time parse error: %v for %s", err, matches[1])
 	}
 
 	status, _ := strconv.Atoi(matches[9])
@@ -120,7 +121,7 @@ func (i *CaddyIngestor) Ingest(line string) error {
 		return err
 	}
 	if err := i.db.Create(logEntry).Error; err != nil {
-		fmt.Printf("DB insert failed: %v\n", err)
+		logx.Errorf("DB insert failed: %v", err)
 		return err
 	}
 	return nil
@@ -162,7 +163,7 @@ func (i *CaddyIngestor) startFile(filePath string) bool {
 		Location: &tail.SeekInfo{Offset: startOffset, Whence: io.SeekStart},
 	})
 	if err != nil {
-		fmt.Printf("Error tailing file: %v\n", err)
+		logx.Errorf("Error tailing file: %v", err)
 		return false
 	}
 
@@ -176,7 +177,7 @@ func (i *CaddyIngestor) startFile(filePath string) bool {
 	i.tails[filePath] = t
 	i.mu.Unlock()
 
-	fmt.Printf("Started monitoring: %s\n", filePath)
+	logx.Infof("Started monitoring: %s", filePath)
 
 	go func(path string) {
 		for line := range t.Lines {
@@ -184,16 +185,16 @@ func (i *CaddyIngestor) startFile(filePath string) bool {
 				continue
 			}
 			if line.Err != nil {
-				fmt.Printf("Tail read failed: %v\n", line.Err)
+				logx.Errorf("Tail read failed: %v", line.Err)
 				continue
 			}
 			if err := i.Ingest(line.Text); err != nil {
 				// keep noisy errors in stdout for now
-				fmt.Printf("Log ingest failed: %v\n", err)
+				logx.Errorf("Log ingest failed: %v", err)
 				continue
 			}
 			if err := i.saveOffset(path, line.SeekInfo.Offset); err != nil {
-				fmt.Printf("Save ingest cursor failed: %v\n", err)
+				logx.Errorf("Save ingest cursor failed: %v", err)
 			}
 		}
 	}(filePath)
@@ -205,7 +206,7 @@ func (i *CaddyIngestor) resolveStartOffset(filePath string) int64 {
 	var cursor model.LogIngestCursor
 	if err := i.db.Where("file_path = ?", filePath).Take(&cursor).Error; err != nil {
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
-			fmt.Printf("Load ingest cursor failed: %v\n", err)
+			logx.Errorf("Load ingest cursor failed: %v", err)
 		}
 		return 0
 	}
@@ -290,7 +291,7 @@ func (i *CaddyIngestor) startDir(dirPath string, scanIntervalSec int) {
 func (i *CaddyIngestor) scanDir(dirPath string) {
 	entries, err := os.ReadDir(dirPath)
 	if err != nil {
-		fmt.Printf("Error reading dir: %v\n", err)
+		logx.Errorf("Error reading dir: %v", err)
 		return
 	}
 
@@ -364,7 +365,7 @@ func (i *CaddyIngestor) stopFile(filePath string) {
 	if exists {
 		t.Stop()
 		t.Cleanup()
-		fmt.Printf("Stopped monitoring: %s\n", filePath)
+		logx.Infof("Stopped monitoring: %s", filePath)
 	}
 }
 

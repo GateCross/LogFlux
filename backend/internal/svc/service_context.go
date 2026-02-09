@@ -14,6 +14,7 @@ import (
 
 	"github.com/lib/pq"
 	"github.com/redis/go-redis/v9"
+	"github.com/zeromicro/go-zero/core/logx"
 	gorm2 "gorm.io/gorm"
 )
 
@@ -62,9 +63,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		rdb, err = redisClient.NewRedisClient(c.Redis.Addr(), c.Redis.Password, c.Redis.DB)
 		if err != nil {
 			// Redis 连接失败只打印警告，不中断启动
-			println("Warning: Failed to connect to Redis:", err.Error())
+			logx.Errorf("Warning: Failed to connect to Redis: %s", err.Error())
 		} else {
-			println("Redis connected successfully")
+			logx.Info("Redis connected successfully")
 		}
 	}
 
@@ -388,9 +389,9 @@ END;
 $$ LANGUAGE plpgsql;
 `
 	if err := db.Exec(sql).Error; err != nil {
-		println("Warning: Failed to create archive function:", err.Error())
+		logx.Errorf("Warning: Failed to create archive function: %s", err.Error())
 	} else {
-		println("Archive function created successfully")
+		logx.Info("Archive function created successfully")
 	}
 }
 
@@ -424,11 +425,11 @@ func initNotificationManager(db *gorm2.DB, rdb *redis.Client, c config.Config) n
 
 	// 启动通知管理器
 	if err := mgr.Start(context.Background()); err != nil {
-		println("Warning: Failed to start notification manager:", err.Error())
+		logx.Errorf("Warning: Failed to start notification manager: %s", err.Error())
 		return nil
 	}
 
-	println("Notification manager started successfully")
+	logx.Info("Notification manager started successfully")
 
 	// 发送系统启动通知
 	event := notification.NewEvent(
@@ -459,9 +460,9 @@ func syncChannelsFromConfig(db *gorm2.DB, channels []config.ChannelConf) {
 				Description: ch.Description,
 			}
 			if err := db.Create(&channel).Error; err != nil {
-				println("Warning: Failed to create notification channel:", ch.Name, err.Error())
+				logx.Errorf("Warning: Failed to create notification channel: %s, error: %s", ch.Name, err.Error())
 			} else {
-				println("Created notification channel:", ch.Name)
+				logx.Infof("Created notification channel: %s", ch.Name)
 			}
 		} else {
 			// 更新现有渠道
@@ -472,9 +473,9 @@ func syncChannelsFromConfig(db *gorm2.DB, channels []config.ChannelConf) {
 				Events:      ch.Events,
 				Description: ch.Description,
 			}).Error; err != nil {
-				println("Warning: Failed to update notification channel:", ch.Name, err.Error())
+				logx.Errorf("Warning: Failed to update notification channel: %s, error: %s", ch.Name, err.Error())
 			} else {
-				println("Updated notification channel:", ch.Name)
+				logx.Infof("Updated notification channel: %s", ch.Name)
 			}
 		}
 	}
@@ -510,9 +511,9 @@ func syncRulesFromConfig(db *gorm2.DB, rules []config.RuleConf) {
 				Description:     r.Description,
 			}
 			if err := db.Create(&rule).Error; err != nil {
-				println("Warning: Failed to create notification rule:", r.Name, err.Error())
+				logx.Errorf("Warning: Failed to create notification rule: %s, error: %s", r.Name, err.Error())
 			} else {
-				println("Created notification rule:", r.Name)
+				logx.Infof("Created notification rule: %s", r.Name)
 			}
 		} else {
 			// 更新现有规则
@@ -526,9 +527,9 @@ func syncRulesFromConfig(db *gorm2.DB, rules []config.RuleConf) {
 				SilenceDuration: r.SilenceDuration,
 				Description:     r.Description,
 			}).Error; err != nil {
-				println("Warning: Failed to update notification rule:", r.Name, err.Error())
+				logx.Errorf("Warning: Failed to update notification rule: %s, error: %s", r.Name, err.Error())
 			} else {
-				println("Updated notification rule:", r.Name)
+				logx.Infof("Updated notification rule: %s", r.Name)
 			}
 		}
 	}
