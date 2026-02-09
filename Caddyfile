@@ -1,3 +1,9 @@
+{
+    log {
+        format console
+    }
+}
+
 :9527 {
     # 1. 前端静态资源 (构建后的文件)
     # 请确保您已执行 cd frontend && pnpm build

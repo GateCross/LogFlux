@@ -7,6 +7,7 @@ import (
 	"logflux/model"
 	"time"
 
+	"github.com/zeromicro/go-zero/core/logx"
 	"gorm.io/gorm"
 )
 
@@ -31,11 +32,11 @@ func NewArchiveTask(db *gorm.DB, retentionDay int, enabled bool, nm notification
 // Start 启动归档任务（每天凌晨 2 点执行）
 func (t *ArchiveTask) Start(ctx context.Context) {
 	if !t.enabled {
-		fmt.Println("Archive task is disabled")
+		logx.Info("Archive task is disabled")
 		return
 	}
 
-	fmt.Printf("Archive task started, retention days: %d\n", t.retentionDay)
+	logx.Infof("Archive task started, retention days: %d", t.retentionDay)
 
 	// 立即执行一次归档（可选）
 	// t.runArchive()
@@ -55,7 +56,7 @@ func (t *ArchiveTask) Start(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			fmt.Println("Archive task stopped")
+			logx.Info("Archive task stopped")
 			return
 		case <-timer.C:
 			t.runArchive()
@@ -69,7 +70,7 @@ func (t *ArchiveTask) Start(ctx context.Context) {
 
 // runArchive 执行归档逻辑
 func (t *ArchiveTask) runArchive() {
-	fmt.Println("Starting log archiving...")
+	logx.Info("Starting log archiving...")
 	startTime := time.Now()
 
 	archiveDate := time.Now().AddDate(0, 0, -t.retentionDay)
@@ -79,7 +80,7 @@ func (t *ArchiveTask) runArchive() {
 	err := t.db.Raw("SELECT archive_old_logs(?)", t.retentionDay).Scan(&archivedCount).Error
 
 	if err != nil {
-		fmt.Printf("Archive failed: %v\n", err)
+		logx.Errorf("Archive failed: %v", err)
 		// 发送失败通知
 		if t.notificationMgr != nil {
 			t.notificationMgr.Notify(context.Background(), notification.NewEvent(
@@ -95,15 +96,15 @@ func (t *ArchiveTask) runArchive() {
 	// 清理过期的通知日志 (保留 30 天)
 	retentionDate := time.Now().AddDate(0, 0, -30)
 	if err := t.db.Where("created_at < ?", retentionDate).Delete(&model.NotificationLog{}).Error; err != nil {
-		fmt.Printf("Failed to clean up old notification logs: %v\n", err)
+		logx.Errorf("Failed to clean up old notification logs: %v", err)
 	} else {
-		fmt.Printf("Cleaned up notification logs older than %s\n", retentionDate.Format("2006-01-02"))
+		logx.Infof("Cleaned up notification logs older than %s", retentionDate.Format("2006-01-02"))
 	}
 
 	duration := time.Since(startTime)
-	msg := fmt.Sprintf("Archive completed: %d records moved to archive table (before %s), took %v\n",
+	msg := fmt.Sprintf("Archive completed: %d records moved to archive table (before %s), took %v",
 		archivedCount, archiveDate.Format("2006-01-02"), duration)
-	fmt.Printf("%s", msg)
+	logx.Info(msg)
 
 	// 发送成功通知 (仅当有数据归档或作为定期报告时)
 	if t.notificationMgr != nil {
