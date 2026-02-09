@@ -23,8 +23,8 @@ declare module "@elegant-router/types" {
     "caddy": "/caddy";
     "caddy_config": "/caddy/config";
     "caddy_log": "/caddy/log";
-    "caddy_system_log": "/caddy/system-log";
     "caddy_source": "/caddy/source";
+    "caddy_system-log": "/caddy/system-log";
     "cron": "/cron";
     "dashboard": "/dashboard";
     "iframe-page": "/iframe-page/:url";
@@ -105,8 +105,8 @@ declare module "@elegant-router/types" {
     | "login"
     | "caddy_config"
     | "caddy_log"
-    | "caddy_system_log"
     | "caddy_source"
+    | "caddy_system-log"
     | "cron"
     | "dashboard"
     | "manage_menu"

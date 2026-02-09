@@ -1,11 +1,12 @@
 import { computed, effectScope, nextTick, onScopeDispose, shallowRef, watch } from 'vue';
 import { useElementSize } from '@vueuse/core';
 import * as echarts from 'echarts/core';
-import { BarChart, GaugeChart, LineChart, PictorialBarChart, PieChart, RadarChart, ScatterChart } from 'echarts/charts';
+import { BarChart, GaugeChart, LineChart, MapChart, PictorialBarChart, PieChart, RadarChart, ScatterChart } from 'echarts/charts';
 import type {
   BarSeriesOption,
   GaugeSeriesOption,
   LineSeriesOption,
+  MapSeriesOption,
   PictorialBarSeriesOption,
   PieSeriesOption,
   RadarSeriesOption,
@@ -18,6 +19,7 @@ import {
   TitleComponent,
   ToolboxComponent,
   TooltipComponent,
+  VisualMapComponent,
   TransformComponent
 } from 'echarts/components';
 import type {
@@ -26,7 +28,8 @@ import type {
   LegendComponentOption,
   TitleComponentOption,
   ToolboxComponentOption,
-  TooltipComponentOption
+  TooltipComponentOption,
+  VisualMapComponentOption
 } from 'echarts/components';
 import { LabelLayout, UniversalTransition } from 'echarts/features';
 import { CanvasRenderer } from 'echarts/renderers';
@@ -35,6 +38,7 @@ import { useThemeStore } from '@/store/modules/theme';
 export type ECOption = echarts.ComposeOption<
   | BarSeriesOption
   | LineSeriesOption
+  | MapSeriesOption
   | PieSeriesOption
   | ScatterSeriesOption
   | PictorialBarSeriesOption
@@ -43,6 +47,7 @@ export type ECOption = echarts.ComposeOption<
   | TitleComponentOption
   | LegendComponentOption
   | TooltipComponentOption
+  | VisualMapComponentOption
   | GridComponentOption
   | ToolboxComponentOption
   | DatasetComponentOption
@@ -52,12 +57,14 @@ echarts.use([
   TitleComponent,
   LegendComponent,
   TooltipComponent,
+  VisualMapComponent,
   GridComponent,
   DatasetComponent,
   TransformComponent,
   ToolboxComponent,
   BarChart,
   LineChart,
+  MapChart,
   PieChart,
   ScatterChart,
   PictorialBarChart,

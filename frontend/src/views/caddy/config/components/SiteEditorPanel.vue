@@ -23,11 +23,11 @@
               <n-dynamic-tags v-model:value="site.domains" />
             </n-form-item>
             <n-form-item label="TLS">
-              <n-select v-model:value="site.tls.mode" :options="tlsOptions" class="w-40" />
+              <n-select v-model:value="site.tls!.mode" :options="tlsOptions" class="w-40" />
             </n-form-item>
-            <div v-if="site.tls.mode === 'manual'" class="grid grid-cols-2 gap-2">
-              <n-input v-model:value="site.tls.certFile" placeholder="证书路径" />
-              <n-input v-model:value="site.tls.keyFile" placeholder="私钥路径" />
+            <div v-if="site.tls?.mode === 'manual'" class="grid grid-cols-2 gap-2">
+              <n-input v-model:value="site.tls!.certFile" placeholder="证书路径" />
+              <n-input v-model:value="site.tls!.keyFile" placeholder="私钥路径" />
             </div>
           </n-form>
           <div v-if="!site.name" class="text-xs text-red-500 mt-2">站点名称不能为空</div>

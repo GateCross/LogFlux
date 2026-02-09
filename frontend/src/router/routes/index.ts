@@ -17,10 +17,11 @@ export function createStaticRoutes() {
   const authRoutes: ElegantRoute[] = [];
 
   [...customRoutes, ...generatedRoutes].forEach(item => {
+    const route = item as ElegantRoute;
     if (item.meta?.constant) {
-      constantRoutes.push(item);
+      constantRoutes.push(route);
     } else {
-      authRoutes.push(item);
+      authRoutes.push(route);
     }
   });
 

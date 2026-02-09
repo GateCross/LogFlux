@@ -114,11 +114,11 @@ export function getRouteIcons(route: App.Global.TabRoute) {
  * @param homeRouteName routeHome in useRouteStore
  */
 export function getDefaultHomeTab(router: Router, homeRouteName: LastLevelRouteKey) {
-  const homeRoutePath = getRoutePath(homeRouteName);
+  const homeRoutePath = (getRoutePath(homeRouteName) || '/dashboard') as RouteMap[LastLevelRouteKey];
   const i18nLabel = $t(`route.${homeRouteName}`);
 
   let homeTab: App.Global.Tab = {
-    id: getRoutePath(homeRouteName),
+    id: homeRoutePath,
     label: i18nLabel || homeRouteName,
     routeKey: homeRouteName,
     routePath: homeRoutePath,

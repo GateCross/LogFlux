@@ -58,11 +58,14 @@ function transformElegantRouteToVueRoute(
   function getViewName(component: string) {
     const view = component.replace(VIEW_PREFIX, '');
 
-    if(!views[view]) {
+    const compatibleViews = [view, view.replace(/_/g, '-'), view.replace(/-/g, '_')];
+    const matchedView = compatibleViews.find(item => Boolean(views[item]));
+
+    if(!matchedView) {
       throw new Error(`View component "${view}" not found`);
     }
 
-    return view;
+    return matchedView;
   }
 
   function isFirstLevelRoute(item: ElegantConstRoute) {
@@ -169,8 +172,8 @@ const routeMap: RouteMap = {
   "caddy": "/caddy",
   "caddy_config": "/caddy/config",
   "caddy_log": "/caddy/log",
-  "caddy_system_log": "/caddy/system-log",
   "caddy_source": "/caddy/source",
+  "caddy_system-log": "/caddy/system-log",
   "cron": "/cron",
   "dashboard": "/dashboard",
   "iframe-page": "/iframe-page/:url",
@@ -193,7 +196,17 @@ const routeMap: RouteMap = {
  * @param name route name
  */
 export function getRoutePath<T extends RouteKey>(name: T) {
-  return routeMap[name];
+  const rawName = String(name);
+  const compatibleNames = [rawName, rawName.replace(/_/g, '-'), rawName.replace(/-/g, '_')];
+
+  for (const key of compatibleNames) {
+    const path = routeMap[key as RouteKey];
+    if (path) {
+      return path;
+    }
+  }
+
+  return undefined;
 }
 
 /**
