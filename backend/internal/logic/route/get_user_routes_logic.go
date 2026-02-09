@@ -89,10 +89,10 @@ func (l *GetUserRoutesLogic) buildRoutesFromDB(permissions map[string]bool, user
 	// 重新构建：使用递归方法
 	// 让我们使用 ID 索引所有原始 model，然后递归构建。
 
-	return l.buildTree(allMenus, nil, userRoles)
+	return l.buildTree(allMenus, nil, userRoles, permissions)
 }
 
-func (l *GetUserRoutesLogic) buildTree(allMenus []model.Menu, parentID *uint, userRoles []model.Role) []types.MenuRoute {
+func (l *GetUserRoutesLogic) buildTree(allMenus []model.Menu, parentID *uint, userRoles []model.Role, permissions map[string]bool) []types.MenuRoute {
 	var routes []types.MenuRoute
 
 	for _, m := range allMenus {
@@ -110,7 +110,7 @@ func (l *GetUserRoutesLogic) buildTree(allMenus []model.Menu, parentID *uint, us
 
 		if isMatch {
 			// 权限检查
-			if !l.hasPermission(m, userRoles) {
+			if !l.hasPermission(m, userRoles, permissions) {
 				continue
 			}
 
@@ -122,7 +122,7 @@ func (l *GetUserRoutesLogic) buildTree(allMenus []model.Menu, parentID *uint, us
 				continue
 			}
 
-			children := l.buildTree(allMenus, &m.ID, userRoles)
+			children := l.buildTree(allMenus, &m.ID, userRoles, permissions)
 
 			route := types.MenuRoute{
 				Name:      m.Name,
@@ -142,22 +142,66 @@ func (l *GetUserRoutesLogic) buildTree(allMenus []model.Menu, parentID *uint, us
 }
 
 // hasPermission 检查用户是否拥有菜单所需的角色
-func (l *GetUserRoutesLogic) hasPermission(menu model.Menu, userRoles []model.Role) bool {
-	// 如果没有定义 RequiredRoles，则默认允许访问 (public)
-	if len(menu.RequiredRoles) == 0 {
-		return true
-	}
-
-	// 检查用户角色是否在 RequiredRoles 中
-	for _, userRole := range userRoles {
-		for _, requiredRole := range menu.RequiredRoles {
-			if userRole.Name == requiredRole {
-				return true
+func (l *GetUserRoutesLogic) hasPermission(menu model.Menu, userRoles []model.Role, permissions map[string]bool) bool {
+	if len(menu.RequiredRoles) > 0 {
+		hasRole := false
+		for _, userRole := range userRoles {
+			for _, requiredRole := range menu.RequiredRoles {
+				if userRole.Name == requiredRole {
+					hasRole = true
+					break
+				}
 			}
+			if hasRole {
+				break
+			}
+		}
+		if !hasRole {
+			return false
 		}
 	}
 
-	return false
+	permissionKey := menuPermissionKey(menu.Name)
+	if permissionKey == "" {
+		return true
+	}
+
+	return permissions[permissionKey]
+}
+
+func menuPermissionKey(menuName string) string {
+	switch menuName {
+	case "dashboard":
+		return "dashboard"
+	case "manage":
+		return "manage"
+	case "manage_user":
+		return "manage_user"
+	case "manage_role":
+		return "manage_role"
+	case "manage_menu":
+		return "manage_menu"
+	case "notification":
+		return "notification"
+	case "notification_channel":
+		return "notification_channel"
+	case "notification_rule":
+		return "notification_rule"
+	case "notification_template":
+		return "notification_template"
+	case "notification_log":
+		return "notification_log"
+	case "caddy_system_log":
+		fallthrough
+	case "caddy_system-log":
+		return "logs"
+	case "caddy_log":
+		return "logs_caddy"
+	case "user_center":
+		return "user_center"
+	default:
+		return ""
+	}
 }
 
 // parseMenuMeta 解析菜单元数据

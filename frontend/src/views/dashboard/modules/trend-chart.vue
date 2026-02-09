@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { watch } from 'vue';
 import { useEcharts } from '@/hooks/common/echarts';
+import type { ECOption } from '@/hooks/common/echarts';
 
 interface Props {
   times: string[];
@@ -9,7 +10,7 @@ interface Props {
 
 const props = defineProps<Props>();
 
-const { domRef, updateOptions } = useEcharts(() => ({
+const { domRef, updateOptions } = useEcharts((): ECOption => ({
   tooltip: {
     trigger: 'axis',
     axisPointer: { type: 'line' }

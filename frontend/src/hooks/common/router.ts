@@ -21,8 +21,13 @@ export function useRouterPush(inSetup = true) {
   async function routerPushByKey(key: RouteKey, options?: App.Global.RouterPushOptions) {
     const { query, params } = options || {};
 
+    const rawName = String(key);
+    const routeCandidates = [rawName, rawName.replace(/_/g, '-'), rawName.replace(/-/g, '_')];
+    const allRoutes = router.getRoutes();
+    const matchedName = routeCandidates.find(candidate => allRoutes.some(item => item.name === candidate)) || rawName;
+
     const routeLocation: RouteLocationRaw = {
-      name: key
+      name: matchedName
     };
 
     if (Object.keys(query || {}).length) {

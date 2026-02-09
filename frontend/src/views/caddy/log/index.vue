@@ -20,7 +20,7 @@
             class="w-36"
           />
           <n-date-picker
-            v-model:value="searchParams.timeRange"
+            v-model:formatted-value="searchParams.timeRange"
             type="datetimerange"
             value-format="yyyy-MM-dd HH:mm:ss"
             clearable
@@ -133,10 +133,12 @@ const rawLogText = computed(() => {
 const searchParams = reactive({
   keyword: '',
   status: -1,
-  timeRange: null as string[] | null
+  timeRange: null as [string, string] | null
 });
 
-const sortState = ref({
+type SortOrder = 'ascend' | 'descend' | false;
+
+const sortState = ref<{ columnKey: string; order: SortOrder }>({
   columnKey: 'logTime',
   order: 'descend'
 });
@@ -325,9 +327,10 @@ function handleSorterChange(sorter: any) {
   if (!normalized) {
     sortState.value = { columnKey: 'logTime', order: false };
   } else {
+    const order: SortOrder = normalized.order === 'ascend' || normalized.order === 'descend' ? normalized.order : false;
     sortState.value = {
-      columnKey: normalized.columnKey,
-      order: normalized.order
+      columnKey: normalized.columnKey ? String(normalized.columnKey) : 'logTime',
+      order
     };
   }
   pagination.page = 1;

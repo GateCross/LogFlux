@@ -56,7 +56,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, h, computed } from 'vue';
 import { NButton, NTag, NSwitch, useMessage, useDialog } from 'naive-ui';
-import type { DataTableColumns, PaginationProps } from 'naive-ui';
+import type { DataTableColumns, FormInst, FormRules, PaginationProps } from 'naive-ui';
 import { createLogSource, deleteLogSource, fetchLogSourceList, updateLogSource } from '@/service/api/log-source';
 import type { LogSourceItem } from '@/service/api/log-source';
 
@@ -77,7 +77,7 @@ const pagination = reactive<PaginationProps>({
 const showModal = ref(false);
 const modalType = ref<'add' | 'edit'>('add');
 const submitting = ref(false);
-const formRef = ref();
+const formRef = ref<FormInst | null>(null);
 
 const formModel = ref({
   id: 0,
@@ -91,10 +91,10 @@ const formModel = ref({
 const isEdit = computed(() => modalType.value === 'edit');
 const modalTitle = computed(() => (isEdit.value ? '编辑日志源' : '新增日志源'));
 
-const rules = computed(() => ({
+const rules: FormRules = {
   path: { required: true, message: '请输入日志文件/目录路径', trigger: 'blur' },
   scanInterval: { type: 'number', min: 1, message: '请输入大于 0 的扫描间隔', trigger: 'blur' }
-}));
+};
 
 const typeOptions = [
   { label: 'Caddy代理日志', value: 'caddy' },

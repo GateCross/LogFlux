@@ -186,7 +186,7 @@ func initRBACData(db *gorm2.DB) {
 		{
 			Name:        "analyst",
 			DisplayName: "分析师",
-			Description: "数据分析师，可以查看和分析日志",
+			Description: "数据分析师，可访问系统日志（logs）与 Caddy 访问日志（logs_caddy）",
 			Permissions: []string{"dashboard", "logs", "logs_caddy"},
 		},
 		{
@@ -258,8 +258,8 @@ func initRBACData(db *gorm2.DB) {
 		{
 			Name:          "caddy_system_log",
 			Path:          "/caddy/system-log",
-			Component:     "view.caddy_system_log",
-			Meta:          `{"title":"caddy_system_log","i18nKey":"route.caddy_system_log","icon":"carbon:terminal"}`,
+			Component:     "view.caddy_system-log",
+			Meta:          `{"title":"caddy_system-log","i18nKey":"route.caddy_system-log","icon":"carbon:terminal"}`,
 			RequiredRoles: []string{"admin", "analyst"},
 		},
 		{
@@ -358,6 +358,12 @@ func initRBACData(db *gorm2.DB) {
 		}
 	}
 
+	// 兼容历史菜单数据：统一系统日志菜单的组件与 i18nKey
+	db.Model(&model.Menu{}).Where("name = ?", "caddy_system_log").Updates(map[string]interface{}{
+		"component": "view.caddy_system-log",
+		"meta":      `{"title":"caddy_system-log","i18nKey":"route.caddy_system-log","icon":"carbon:terminal"}`,
+	})
+
 	// 第二步：建立父子关系
 	setParent := func(childName, parentName string) {
 		// 仅对新创建的菜单设置默认父级，避免覆盖用户的层级调整
@@ -365,6 +371,14 @@ func initRBACData(db *gorm2.DB) {
 			return
 		}
 
+		var child, parent model.Menu
+		if db.Where("name = ?", childName).First(&child).Error == nil &&
+			db.Where("name = ?", parentName).First(&parent).Error == nil {
+			db.Model(&child).Update("parent_id", parent.ID)
+		}
+	}
+
+	setParentForce := func(childName, parentName string) {
 		var child, parent model.Menu
 		if db.Where("name = ?", childName).First(&child).Error == nil &&
 			db.Where("name = ?", parentName).First(&parent).Error == nil {
@@ -385,6 +399,7 @@ func initRBACData(db *gorm2.DB) {
 	setParent("notification_log", "notification")
 	setParent("notification_log", "notification")
 	setParent("user_center", "user")
+	setParentForce("caddy_system_log", "manage")
 	// setParent("cron", "manage") // moved to top level
 
 	// 清理遗留数据

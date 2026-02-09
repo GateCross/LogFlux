@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue';
 import { useEcharts } from '@/hooks/common/echarts';
+import type { ECOption } from '@/hooks/common/echarts';
 
 interface GeoItem {
   name: string;
@@ -13,7 +14,7 @@ interface Props {
 
 const props = defineProps<Props>();
 
-const { domRef, updateOptions } = useEcharts(() => ({
+const { domRef, updateOptions } = useEcharts((): ECOption => ({
   tooltip: {
     show: true,
     formatter: '{b}: {c}'
