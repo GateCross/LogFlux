@@ -20,21 +20,19 @@ RUN apk --no-cache add \
     ca-certificates \
     tzdata \
     curl \
-    supervisor && \
+    su-exec && \
     addgroup -g ${APP_GID} ${APP_GROUP} && \
     adduser -D -u ${APP_UID} -G ${APP_GROUP} ${APP_USER} && \
     mkdir -p \
     /var/log/caddy \
     /data/caddy \
     /config/caddy \
-    /app/etc \
-    /var/log/supervisor && \
+    /app/etc && \
     chown -R ${APP_USER}:${APP_GROUP} \
     /app \
     /var/log/caddy \
     /data/caddy \
-    /config/caddy \
-    /var/log/supervisor
+    /config/caddy
 
 WORKDIR /app
 
@@ -47,7 +45,8 @@ RUN chmod +x /app/logflux-api
 ARG CADDYFILE=docker/Caddyfile
 COPY --chown=${APP_USER}:${APP_GROUP} ${CADDYFILE} /etc/caddy/Caddyfile
 
-COPY docker/supervisord.conf /etc/supervisord.conf
+# 复制 entrypoint
+COPY --chmod=755 docker/entrypoint.sh /app/entrypoint.sh
 
 ARG CONFIG_FILE=docker/config.example.yaml
 COPY --chown=${APP_USER}:${APP_GROUP} ${CONFIG_FILE} /app/etc/config.yaml
@@ -57,5 +56,4 @@ EXPOSE 80 443 8888
 HEALTHCHECK --interval=60s --timeout=10s --start-period=10s --retries=3 \
   CMD curl -f http://localhost/api/health || exit 1
 
-# supervisord needs root to drop privileges to APP_USER for child processes.
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]
+ENTRYPOINT ["/app/entrypoint.sh"]
