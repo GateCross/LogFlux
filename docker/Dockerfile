@@ -74,25 +74,24 @@ ENV TZ=Asia/Shanghai \
 
 # 安装运行时依赖并创建用户
 # 合并 mkdir 和 chown 操作减少层数
+# 移除 supervisor, 添加 su-exec
 RUN apk --no-cache add \
     ca-certificates \
     tzdata \
     curl \
-    supervisor && \
+    su-exec && \
     addgroup -g ${APP_GID} ${APP_GROUP} && \
     adduser -D -u ${APP_UID} -G ${APP_GROUP} ${APP_USER} && \
     mkdir -p \
     /var/log/caddy \
     /data/caddy \
     /config/caddy \
-    /app/etc \
-    /var/log/supervisor && \
+    /app/etc && \
     chown -R ${APP_USER}:${APP_GROUP} \
     /app \
     /var/log/caddy \
     /data/caddy \
-    /config/caddy \
-    /var/log/supervisor
+    /config/caddy
 
 WORKDIR /app
 
@@ -108,10 +107,10 @@ COPY --from=backend-builder --chown=${APP_USER}:${APP_GROUP} /app/logflux-api /a
 
 # 复制 Caddyfile（可通过构建参数切换本地代理版）
 ARG CADDYFILE=docker/Caddyfile
-COPY ${CADDYFILE} /etc/caddy/Caddyfile
+COPY --chown=${APP_USER}:${APP_GROUP} ${CADDYFILE} /etc/caddy/Caddyfile
 
-# 复制 supervisor 配置
-COPY docker/supervisord.conf /etc/supervisord.conf
+# 复制 entrypoint
+COPY --chmod=755 docker/entrypoint.sh /app/entrypoint.sh
 
 # 复制后端配置（构建时，可通过构建参数切换）
 ARG CONFIG_FILE=docker/config.example.yaml
@@ -127,5 +126,4 @@ EXPOSE 80 443 8888
 HEALTHCHECK --interval=60s --timeout=10s --start-period=10s --retries=3 \
   CMD curl -f http://localhost/api/health || exit 1
 
-# supervisord needs root to drop privileges to APP_USER for child processes.
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]
+ENTRYPOINT ["/app/entrypoint.sh"]
