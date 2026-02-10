@@ -9,6 +9,10 @@
 - [deploy/README.md](../deploy/README.md) - Docker 部署指南
 - [deploy/config.example.yaml](../deploy/config.example.yaml) - 配置文件示例
 
+### 安全与防护
+- [plans/caddy-coraza-crs-full-cutover-plan.md](./plans/caddy-coraza-crs-full-cutover-plan.md) - Caddy + Coraza WAF + OWASP CRS 一次性全面引入执行计划（阻断模式）
+- [plans/waf-update-management-design.md](./plans/waf-update-management-design.md) - WAF 规则更新管理设计（源地址下载 + 手动上传，不依赖 compose 额外挂载）
+
 ## 功能设计文档
 
 ### 通知功能 (Notification Feature)
@@ -67,6 +71,8 @@
 
 ### 更新记录
 - 2026-01-28: 创建通知功能完整文档体系
+- 2026-02-10: 新增 Caddy + Coraza WAF + OWASP CRS 一次性全面引入执行计划
+- 2026-02-10: 新增 WAF 更新管理设计（自动下载 + 手动上传）
 
 ### 贡献指南
 如需更新文档,请确保:

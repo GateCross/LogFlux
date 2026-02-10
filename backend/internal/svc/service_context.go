@@ -14,7 +14,6 @@ import (
 	"logflux/model"
 	"strings"
 
-	"github.com/lib/pq"
 	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
 	gorm2 "gorm.io/gorm"
@@ -80,23 +79,8 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	// 初始化 RBAC 数据
 	initRBACData(db)
 
-	// Create default admin user if not exists
-	var count int64
-	db.Model(&model.User{}).Where("username = ?", "admin").Count(&count)
-	if count == 0 {
-		db.Create(&model.User{
-			Username: "admin",
-			Password: "123456", // In real app, use hash
-			Roles:    []string{"admin"},
-		})
-	} else {
-		// 确保 admin 用户拥有 admin 角色（修复旧数据问题）
-		var user model.User
-		db.Where("username = ?", "admin").First(&user)
-		if len(user.Roles) == 0 {
-			db.Model(&user).Update("roles", pq.StringArray{"admin"})
-		}
-	}
+	// 初始化默认管理员账号（自动生成随机复杂密码并仅在首次初始化时明文输出）
+	ensureAdminUser(db)
 
 	// Init Ingestor
 	ingestor := ingest.NewIngestManager(db)
