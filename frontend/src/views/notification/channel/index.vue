@@ -99,7 +99,7 @@ const typeOptions = [
   { label: 'Telegram', value: 'telegram' },
   { label: 'Slack', value: 'slack' },
   { label: '企业微信', value: 'wecom' },
-  { label: '微信公众号', value: 'wechat_mp' },
+  { label: '企业微信应用消息', value: 'wechat_mp' },
   { label: 'Discord', value: 'discord' },
   { label: 'Email', value: 'email' },
   { label: 'In-App', value: 'in_app' }

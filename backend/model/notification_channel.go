@@ -196,11 +196,15 @@ type WeComConfig struct {
 	WebhookURL string `json:"webhook_url"`
 }
 
-// WechatMP 配置结构（公众号客服消息）
+// WechatMP 配置结构（企业微信应用消息）
 type WechatMPConfig struct {
-	AppID     string `json:"app_id"`
-	AppSecret string `json:"app_secret"`
-	ToUser    string `json:"to_user"` // 接收消息用户的 openid
+	CorpID     string `json:"corp_id"`
+	CorpSecret string `json:"corp_secret"`
+	AgentID    int64  `json:"agent_id"`
+	ToUser     string `json:"to_user,omitempty"`  // 接收者，多个使用 | 分隔；留空时默认 @all
+	ToParty    string `json:"to_party,omitempty"` // 接收部门，多个使用 | 分隔
+	ToTag      string `json:"to_tag,omitempty"`   // 接收标签，多个使用 | 分隔
+	MsgType    string `json:"msg_type,omitempty"` // text 或 markdown
 }
 
 // DingTalk 配置结构
