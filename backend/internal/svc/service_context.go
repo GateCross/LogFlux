@@ -134,11 +134,8 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		}
 	}
 
-	// 初始化通知管理器
-	var notificationMgr notification.NotificationManager
-	if c.Notification.Enabled {
-		notificationMgr = initNotificationManager(db, rdb, c)
-	}
+	// 初始化通知管理器（仅依赖数据库配置）
+	notificationMgr := initNotificationManager(db, rdb)
 
 	// 初始化归档任务
 	archiveTask := tasks.NewArchiveTask(db, c.Archive.RetentionDay, c.Archive.Enabled, notificationMgr)
@@ -452,8 +449,8 @@ $$ LANGUAGE plpgsql;
 	}
 }
 
-// initNotificationManager 初始化通知管理器
-func initNotificationManager(db *gorm2.DB, rdb *redis.Client, c config.Config) notification.NotificationManager {
+// initNotificationManager 初始化通知管理器（仅从数据库加载配置）
+func initNotificationManager(db *gorm2.DB, rdb *redis.Client) notification.NotificationManager {
 	// 初始化模板管理器
 	templateMgr := template.NewTemplateManager(db)
 	// 加载模板 (忽略错误，因为初始可能为空)
@@ -472,17 +469,7 @@ func initNotificationManager(db *gorm2.DB, rdb *redis.Client, c config.Config) n
 	_ = mgr.RegisterProvider(providers.NewDiscordProvider())
 	_ = mgr.RegisterProvider(providers.NewInAppProvider())
 
-	// 从配置文件同步通知渠道到数据库
-	if len(c.Notification.Channels) > 0 {
-		syncChannelsFromConfig(db, c.Notification.Channels)
-	}
-
-	// 从配置文件同步告警规则到数据库
-	if len(c.Notification.Rules) > 0 {
-		syncRulesFromConfig(db, c.Notification.Rules)
-	}
-
-	// 启动通知管理器
+	// 启动通知管理器（渠道/规则均从数据库加载）
 	if err := mgr.Start(context.Background()); err != nil {
 		logx.Errorf("Warning: Failed to start notification manager: %s", err.Error())
 		return nil
@@ -500,96 +487,4 @@ func initNotificationManager(db *gorm2.DB, rdb *redis.Client, c config.Config) n
 	go mgr.Notify(context.Background(), event)
 
 	return mgr
-}
-
-// syncChannelsFromConfig 从配置文件同步通知渠道到数据库
-func syncChannelsFromConfig(db *gorm2.DB, channels []config.ChannelConf) {
-	for _, ch := range channels {
-		var existing model.NotificationChannel
-		result := db.Where("name = ?", ch.Name).First(&existing)
-
-		if result.Error == gorm2.ErrRecordNotFound {
-			// 创建新渠道
-			channel := model.NotificationChannel{
-				Name:        ch.Name,
-				Type:        ch.Type,
-				Enabled:     ch.Enabled,
-				Config:      model.JSONMap(ch.Config),
-				Events:      ch.Events,
-				Description: ch.Description,
-			}
-			if err := db.Create(&channel).Error; err != nil {
-				logx.Errorf("Warning: Failed to create notification channel: %s, error: %s", ch.Name, err.Error())
-			} else {
-				logx.Infof("Created notification channel: %s", ch.Name)
-			}
-		} else {
-			// 更新现有渠道
-			if err := db.Model(&existing).Select("Type", "Enabled", "Config", "Events", "Description").Updates(model.NotificationChannel{
-				Type:        ch.Type,
-				Enabled:     ch.Enabled,
-				Config:      model.JSONMap(ch.Config),
-				Events:      ch.Events,
-				Description: ch.Description,
-			}).Error; err != nil {
-				logx.Errorf("Warning: Failed to update notification channel: %s, error: %s", ch.Name, err.Error())
-			} else {
-				logx.Infof("Updated notification channel: %s", ch.Name)
-			}
-		}
-	}
-}
-
-// syncRulesFromConfig 从配置文件同步告警规则到数据库
-func syncRulesFromConfig(db *gorm2.DB, rules []config.RuleConf) {
-	for _, r := range rules {
-		var existing model.NotificationRule
-		result := db.Where("name = ?", r.Name).First(&existing)
-
-		// 将渠道名称转换为渠道 ID
-		var channelIDs []int64
-		if len(r.ChannelNames) > 0 {
-			var channels []model.NotificationChannel
-			db.Where("name IN ?", r.ChannelNames).Find(&channels)
-			for _, ch := range channels {
-				channelIDs = append(channelIDs, int64(ch.ID))
-			}
-		}
-
-		if result.Error == gorm2.ErrRecordNotFound {
-			// 创建新规则
-			rule := model.NotificationRule{
-				Name:            r.Name,
-				Enabled:         r.Enabled,
-				RuleType:        r.RuleType,
-				EventType:       r.EventType,
-				Condition:       model.JSONMap(r.Condition),
-				ChannelIDs:      channelIDs,
-				Template:        r.Template,
-				SilenceDuration: r.SilenceDuration,
-				Description:     r.Description,
-			}
-			if err := db.Create(&rule).Error; err != nil {
-				logx.Errorf("Warning: Failed to create notification rule: %s, error: %s", r.Name, err.Error())
-			} else {
-				logx.Infof("Created notification rule: %s", r.Name)
-			}
-		} else {
-			// 更新现有规则
-			if err := db.Model(&existing).Select("Enabled", "RuleType", "EventType", "Condition", "ChannelIDs", "Template", "SilenceDuration", "Description").Updates(model.NotificationRule{
-				Enabled:         r.Enabled,
-				RuleType:        r.RuleType,
-				EventType:       r.EventType,
-				Condition:       model.JSONMap(r.Condition),
-				ChannelIDs:      channelIDs,
-				Template:        r.Template,
-				SilenceDuration: r.SilenceDuration,
-				Description:     r.Description,
-			}).Error; err != nil {
-				logx.Errorf("Warning: Failed to update notification rule: %s, error: %s", r.Name, err.Error())
-			} else {
-				logx.Infof("Updated notification rule: %s", r.Name)
-			}
-		}
-	}
 }
