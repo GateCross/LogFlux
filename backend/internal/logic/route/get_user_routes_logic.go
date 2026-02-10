@@ -84,7 +84,7 @@ func (l *GetUserRoutesLogic) GetUserRoutes() (resp *types.UserRouteResp, err err
 func (l *GetUserRoutesLogic) buildRoutesFromDB(permissions map[string]bool, userRoles []model.Role) []types.MenuRoute {
 	var allMenus []model.Menu
 	// 获取所有菜单，按 Order 排序
-	l.svcCtx.DB.Order("\"order\" asc").Find(&allMenus)
+	l.svcCtx.DB.Order("\"order\" asc, id asc").Find(&allMenus)
 
 	// 重新构建：使用递归方法
 	// 让我们使用 ID 索引所有原始 model，然后递归构建。
@@ -116,6 +116,9 @@ func (l *GetUserRoutesLogic) buildTree(allMenus []model.Menu, parentID *uint, us
 
 			// 解析 meta 并检查 hideInMenu
 			meta := l.parseMenuMeta(m.Meta)
+			if meta.Order == 0 && m.Order != 0 {
+				meta.Order = m.Order
+			}
 			if meta.HideInMenu {
 				// 跳过隐藏的菜单项（如 403、404、500、login 等错误页面）
 				logx.Infof("过滤隐藏菜单: name=%s, path=%s, hideInMenu=%v", m.Name, m.Path, meta.HideInMenu)
