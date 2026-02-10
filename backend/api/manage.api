@@ -238,6 +238,9 @@ service logflux-api {
 	@handler UpdateUser
 	put /user/:id (UpdateUserReq) returns (BaseResp)
 
+	@handler ToggleUserStatus
+	put /user/:id/status (IDReq) returns (BaseResp)
+
 	@handler DeleteUser
 	delete /user/:id (IDReq) returns (BaseResp)
 
