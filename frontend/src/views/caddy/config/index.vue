@@ -229,7 +229,7 @@ async function saveRawConfig() {
     message.error('保存配置失败');
     return;
   }
-  message.success('配置已保存');
+  message.success('配置已保存并自动热重载 Caddy');
   structuredAvailable.value = false;
   viewMode.value = 'preview';
 }
@@ -424,7 +424,7 @@ async function saveStructuredConfig() {
     message.error('保存配置失败');
     return;
   }
-  message.success('配置已保存');
+  message.success('配置已保存并自动热重载 Caddy');
   configContent.value = content;
   initialGlobalRaw.value = formModel.value.global?.raw ?? '';
   structuredAvailable.value = true;

@@ -28,7 +28,15 @@ export XDG_DATA_HOME="/data"
 export HOME="/data"
 
 echo "Starting Caddy..."
-su-exec logflux /usr/bin/caddy run --config /etc/caddy/Caddyfile --adapter caddyfile &
+AUTOSAVE_PATH="${XDG_CONFIG_HOME}/caddy/autosave.json"
+
+if [ -f "$AUTOSAVE_PATH" ]; then
+  echo "Found Caddy autosave config at $AUTOSAVE_PATH, starting with --resume..."
+  su-exec logflux /usr/bin/caddy run --resume &
+else
+  echo "No Caddy autosave config found, falling back to /etc/caddy/Caddyfile..."
+  su-exec logflux /usr/bin/caddy run --config /etc/caddy/Caddyfile --adapter caddyfile &
+fi
 PID_CADDY=$!
 
 # 等待任意一个子进程退出
