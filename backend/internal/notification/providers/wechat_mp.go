@@ -15,19 +15,24 @@ import (
 	"time"
 )
 
-// WeChatMPProvider 微信公众号通知提供者（客服消息）
+// WeChatMPProvider 企业微信应用消息提供者
 type WeChatMPProvider struct {
 	client *http.Client
 
-	mu          sync.Mutex
-	cachedToken string
-	tokenExpire time.Time
+	mu         sync.Mutex
+	tokenCache map[string]tokenCacheItem
 }
 
-// NewWeChatMPProvider 创建微信公众号通知提供者
+type tokenCacheItem struct {
+	token    string
+	expireAt time.Time
+}
+
+// NewWeChatMPProvider 创建企业微信应用消息提供者
 func NewWeChatMPProvider() *WeChatMPProvider {
 	return &WeChatMPProvider{
-		client: &http.Client{Timeout: 10 * time.Second},
+		client:     &http.Client{Timeout: 10 * time.Second},
+		tokenCache: make(map[string]tokenCacheItem),
 	}
 }
 
@@ -47,12 +52,42 @@ func (w *WeChatMPProvider) Send(ctx context.Context, config map[string]interface
 		return err
 	}
 
+	msgType := strings.ToLower(strings.TrimSpace(wechatConfig.MsgType))
+	if msgType == "" {
+		msgType = "text"
+	}
+
+	touser := strings.TrimSpace(wechatConfig.ToUser)
+	toparty := strings.TrimSpace(wechatConfig.ToParty)
+	totag := strings.TrimSpace(wechatConfig.ToTag)
+	if touser == "" && toparty == "" && totag == "" {
+		touser = "@all"
+	}
+
 	payload := map[string]interface{}{
-		"touser":  wechatConfig.ToUser,
-		"msgtype": "text",
-		"text": map[string]string{
-			"content": formatWeChatMPMessage(event),
-		},
+		"msgtype": msgType,
+		"agentid": wechatConfig.AgentID,
+		"safe":    0,
+	}
+	if touser != "" {
+		payload["touser"] = touser
+	}
+	if toparty != "" {
+		payload["toparty"] = toparty
+	}
+	if totag != "" {
+		payload["totag"] = totag
+	}
+
+	if msgType == "markdown" {
+		payload["markdown"] = map[string]string{
+			"content": formatWeComAppMarkdownMessage(event),
+		}
+	} else {
+		payload["msgtype"] = "text"
+		payload["text"] = map[string]string{
+			"content": formatWeComAppTextMessage(event),
+		}
 	}
 
 	jsonData, err := json.Marshal(payload)
@@ -60,7 +95,7 @@ func (w *WeChatMPProvider) Send(ctx context.Context, config map[string]interface
 		return fmt.Errorf("failed to marshal wechat_mp payload: %w", err)
 	}
 
-	sendURL := fmt.Sprintf("https://api.weixin.qq.com/cgi-bin/message/custom/send?access_token=%s", url.QueryEscape(accessToken))
+	sendURL := fmt.Sprintf("https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token=%s", url.QueryEscape(accessToken))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, sendURL, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
@@ -69,13 +104,13 @@ func (w *WeChatMPProvider) Send(ctx context.Context, config map[string]interface
 
 	resp, err := w.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to send request to wechat mp: %w", err)
+		return fmt.Errorf("failed to send request to wecom app: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("wechat mp returned status: %d, body: %s", resp.StatusCode, string(body))
+		return fmt.Errorf("wecom app returned status: %d, body: %s", resp.StatusCode, string(body))
 	}
 
 	var result struct {
@@ -83,10 +118,10 @@ func (w *WeChatMPProvider) Send(ctx context.Context, config map[string]interface
 		ErrMsg  string `json:"errmsg"`
 	}
 	if err := json.Unmarshal(body, &result); err != nil {
-		return fmt.Errorf("failed to parse wechat mp response: %w", err)
+		return fmt.Errorf("failed to parse wecom app response: %w", err)
 	}
 	if result.ErrCode != 0 {
-		return fmt.Errorf("wechat mp api error: errcode=%d errmsg=%s", result.ErrCode, result.ErrMsg)
+		return fmt.Errorf("wecom app api error: errcode=%d errmsg=%s", result.ErrCode, result.ErrMsg)
 	}
 
 	return nil
@@ -108,31 +143,39 @@ func (w *WeChatMPProvider) Type() string {
 }
 
 func validateWeChatMPConfig(config *model.WechatMPConfig) error {
-	if strings.TrimSpace(config.AppID) == "" {
-		return fmt.Errorf("app_id is required")
+	if strings.TrimSpace(config.CorpID) == "" {
+		return fmt.Errorf("corp_id is required")
 	}
-	if strings.TrimSpace(config.AppSecret) == "" {
-		return fmt.Errorf("app_secret is required")
+	if strings.TrimSpace(config.CorpSecret) == "" {
+		return fmt.Errorf("corp_secret is required")
 	}
-	if strings.TrimSpace(config.ToUser) == "" {
-		return fmt.Errorf("to_user is required")
+	if config.AgentID <= 0 {
+		return fmt.Errorf("agent_id must be greater than 0")
+	}
+
+	msgType := strings.ToLower(strings.TrimSpace(config.MsgType))
+	if msgType != "" && msgType != "text" && msgType != "markdown" {
+		return fmt.Errorf("msg_type must be text or markdown")
 	}
 
 	return nil
 }
 
 func (w *WeChatMPProvider) getAccessToken(ctx context.Context, config *model.WechatMPConfig) (string, error) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
+	cacheKey := fmt.Sprintf("%s|%s", config.CorpID, config.CorpSecret)
 
-	if w.cachedToken != "" && time.Now().Before(w.tokenExpire) {
-		return w.cachedToken, nil
+	w.mu.Lock()
+	if item, ok := w.tokenCache[cacheKey]; ok && item.token != "" && time.Now().Before(item.expireAt) {
+		token := item.token
+		w.mu.Unlock()
+		return token, nil
 	}
+	w.mu.Unlock()
 
 	tokenURL := fmt.Sprintf(
-		"https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=%s&secret=%s",
-		url.QueryEscape(config.AppID),
-		url.QueryEscape(config.AppSecret),
+		"https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid=%s&corpsecret=%s",
+		url.QueryEscape(config.CorpID),
+		url.QueryEscape(config.CorpSecret),
 	)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, tokenURL, nil)
@@ -142,13 +185,13 @@ func (w *WeChatMPProvider) getAccessToken(ctx context.Context, config *model.Wec
 
 	resp, err := w.client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("failed to get wechat mp access token: %w", err)
+		return "", fmt.Errorf("failed to get wecom app access token: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("wechat mp token api status: %d, body: %s", resp.StatusCode, string(body))
+		return "", fmt.Errorf("wecom app token api status: %d, body: %s", resp.StatusCode, string(body))
 	}
 
 	var tokenResp struct {
@@ -162,10 +205,10 @@ func (w *WeChatMPProvider) getAccessToken(ctx context.Context, config *model.Wec
 	}
 
 	if tokenResp.ErrCode != 0 {
-		return "", fmt.Errorf("wechat mp token api error: errcode=%d errmsg=%s", tokenResp.ErrCode, tokenResp.ErrMsg)
+		return "", fmt.Errorf("wecom app token api error: errcode=%d errmsg=%s", tokenResp.ErrCode, tokenResp.ErrMsg)
 	}
 	if tokenResp.AccessToken == "" {
-		return "", fmt.Errorf("wechat mp access token is empty")
+		return "", fmt.Errorf("wecom app access token is empty")
 	}
 
 	expiresIn := tokenResp.ExpiresIn
@@ -176,20 +219,40 @@ func (w *WeChatMPProvider) getAccessToken(ctx context.Context, config *model.Wec
 		expiresIn = 600
 	}
 
-	w.cachedToken = tokenResp.AccessToken
+	token := tokenResp.AccessToken
 	// 留 5 分钟余量避免临界过期
-	w.tokenExpire = time.Now().Add(time.Duration(expiresIn-300) * time.Second)
+	expireAt := time.Now().Add(time.Duration(expiresIn-300) * time.Second)
 
-	return w.cachedToken, nil
+	w.mu.Lock()
+	w.tokenCache[cacheKey] = tokenCacheItem{token: token, expireAt: expireAt}
+	w.mu.Unlock()
+
+	return token, nil
 }
 
-func formatWeChatMPMessage(event *notification.Event) string {
+func formatWeComAppTextMessage(event *notification.Event) string {
 	var builder strings.Builder
 	builder.WriteString(fmt.Sprintf("[%s] %s\n", strings.ToUpper(event.Level), event.Title))
 	builder.WriteString(event.Message)
 	builder.WriteString("\n")
 	builder.WriteString(fmt.Sprintf("事件: %s\n", event.Type))
 	builder.WriteString(fmt.Sprintf("时间: %s", event.Timestamp.Format(time.DateTime)))
+
+	if renderedContent, ok := event.Data["rendered_content"].(string); ok && strings.TrimSpace(renderedContent) != "" {
+		builder.WriteString("\n\n")
+		builder.WriteString(renderedContent)
+	}
+
+	return builder.String()
+}
+
+func formatWeComAppMarkdownMessage(event *notification.Event) string {
+	var builder strings.Builder
+	builder.WriteString(fmt.Sprintf("### [%s] %s\n", strings.ToUpper(event.Level), event.Title))
+	builder.WriteString(event.Message)
+	builder.WriteString("\n")
+	builder.WriteString(fmt.Sprintf("> 事件: %s\n", event.Type))
+	builder.WriteString(fmt.Sprintf("> 时间: %s", event.Timestamp.Format(time.DateTime)))
 
 	if renderedContent, ok := event.Data["rendered_content"].(string); ok && strings.TrimSpace(renderedContent) != "" {
 		builder.WriteString("\n\n")
