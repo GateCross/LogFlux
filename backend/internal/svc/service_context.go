@@ -2,6 +2,7 @@ package svc
 
 import (
 	"context"
+	"fmt"
 	"logflux/common/gorm"
 	"logflux/common/logging"
 	redisClient "logflux/common/redis"
@@ -12,6 +13,8 @@ import (
 	"logflux/internal/notification/template"
 	"logflux/internal/tasks"
 	"logflux/model"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/redis/go-redis/v9"
@@ -53,7 +56,13 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		// 定时任务表
 		&model.CronTask{},
 		&model.CronTaskLog{},
+		// WAF 更新管理
+		&model.WAFSource{},
+		&model.WAFRelease{},
+		&model.WAFUpdateJob{},
 	)
+
+	initWAFWorkspace(c)
 
 	// 创建归档存储过程（如果不存在）
 	createArchiveFunction(db)
@@ -150,6 +159,24 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		CronScheduler:   cronScheduler,
 		NotificationMgr: notificationMgr,
 	}
+}
+
+func initWAFWorkspace(c config.Config) {
+	baseDir := strings.TrimSpace(c.WAF.WorkDir)
+	if baseDir == "" {
+		baseDir = "/config/caddy/waf"
+	}
+
+	subDirs := []string{"", "tmp", "packages", "releases"}
+	for _, subDir := range subDirs {
+		target := filepath.Join(baseDir, subDir)
+		if err := os.MkdirAll(target, 0o755); err != nil {
+			logx.Errorf("初始化 WAF 工作目录失败: %s, err=%v", target, err)
+			continue
+		}
+	}
+
+	logx.Infof("WAF 工作目录已初始化: %s", fmt.Sprintf("%s/{tmp,packages,releases}", baseDir))
 }
 
 // initRBACData 初始化 RBAC 角色和菜单数据

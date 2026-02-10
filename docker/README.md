@@ -29,6 +29,22 @@ docker/
 可选变量（GitHub Repo Variables）：
 `REGISTRY`、`IMAGE_NAME`、`PLATFORM`、`CADDY_IMAGE_NAME`
 
+### WAF 模块版本（Coraza + CRS）
+
+`docker/caddy.Dockerfile` 已内置 WAF 模块构建参数：
+
+- `CORAZA_CADDY_VERSION`（默认：`v2.1.0`）
+- `CORAZA_CRS_VERSION`（默认：`v4.23.0`）
+
+如需升级，可在构建时覆盖：
+
+```bash
+docker build -f docker/caddy.Dockerfile \
+  --build-arg CORAZA_CADDY_VERSION=v2.1.0 \
+  --build-arg CORAZA_CRS_VERSION=v4.23.0 \
+  -t logflux-caddy:local .
+```
+
 ## 部署应用
 
 ### 本地构建
@@ -80,6 +96,26 @@ docker compose -f docker/docker-compose.yml up -d --no-build
 
 - 仅在升级 Caddy 二进制、插件变更等场景才建议重启容器。
 - 可执行：`docker compose -f docker/docker-compose.yml restart`（或项目根目录 `make restart`）。
+
+## WAF（Coraza + OWASP CRS）说明
+
+当前 `docker/Caddyfile` 已启用全站 WAF 防护：
+
+- 全局执行顺序：`order coraza_waf first`
+- 防护引擎：`coraza_waf`
+- 规则集：`load_owasp_crs`
+- 运行模式：`SecRuleEngine On`（阻断模式）
+
+审计日志路径：
+
+- `/var/log/caddy/waf_audit.log`
+
+快速验证（容器内）：
+
+```bash
+caddy list-modules | rg -i "coraza|crs"
+tail -n 100 /var/log/caddy/waf_audit.log
+```
 
 ### 平台说明
 

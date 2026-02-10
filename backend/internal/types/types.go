@@ -151,7 +151,7 @@ type ChannelListResp struct {
 
 type ChannelReq struct {
 	Name        string `json:"name"`
-	Type        string `json:"type"` // email, webhook, telegram
+	Type        string `json:"type"` // email, webhook, telegram, slack, wecom(机器人), wechat_mp(企业微信应用消息), discord, in_app
 	Enabled     bool   `json:"enabled"`
 	Config      string `json:"config"` // JSON string
 	Events      string `json:"events"` // JSON string array ["*"]
@@ -625,4 +625,145 @@ type UserPreferencesReq struct {
 type UserRouteResp struct {
 	Home   string      `json:"home"`
 	Routes []MenuRoute `json:"routes"`
+}
+
+type WAFJobItem struct {
+	ID          uint   `json:"id"`
+	SourceId    uint   `json:"sourceId"`
+	ReleaseId   uint   `json:"releaseId"`
+	Action      string `json:"action"`
+	TriggerMode string `json:"triggerMode"`
+	Operator    string `json:"operator"`
+	Status      string `json:"status"`
+	Message     string `json:"message"`
+	StartedAt   string `json:"startedAt"`
+	FinishedAt  string `json:"finishedAt"`
+	CreatedAt   string `json:"createdAt"`
+}
+
+type WAFJobListReq struct {
+	Page     int    `form:"page,default=1"`
+	PageSize int    `form:"pageSize,default=20"`
+	Status   string `form:"status,optional"`
+	Action   string `form:"action,optional"`
+}
+
+type WAFJobListResp struct {
+	List  []WAFJobItem `json:"list"`
+	Total int64        `json:"total"`
+}
+
+type WAFReleaseActivateReq struct {
+	ID uint `path:"id"`
+}
+
+type WAFReleaseItem struct {
+	ID           uint   `json:"id"`
+	SourceId     uint   `json:"sourceId"`
+	Kind         string `json:"kind"`
+	Version      string `json:"version"`
+	ArtifactType string `json:"artifactType"`
+	Checksum     string `json:"checksum"`
+	SizeBytes    int64  `json:"sizeBytes"`
+	StoragePath  string `json:"storagePath"`
+	Status       string `json:"status"`
+	CreatedAt    string `json:"createdAt"`
+	UpdatedAt    string `json:"updatedAt"`
+}
+
+type WAFReleaseListReq struct {
+	Page     int    `form:"page,default=1"`
+	PageSize int    `form:"pageSize,default=20"`
+	Kind     string `form:"kind,optional"`
+	Status   string `form:"status,optional"`
+}
+
+type WAFReleaseListResp struct {
+	List  []WAFReleaseItem `json:"list"`
+	Total int64            `json:"total"`
+}
+
+type WAFReleaseRollbackReq struct {
+	Target  string `json:"target,optional"` // last_good | version
+	Version string `json:"version,optional"`
+}
+
+type WAFSourceActionReq struct {
+	ID uint `path:"id"`
+}
+
+type WAFSourceItem struct {
+	ID           uint   `json:"id"`
+	Name         string `json:"name"`
+	Kind         string `json:"kind"`
+	Mode         string `json:"mode"`
+	Url          string `json:"url"`
+	ChecksumUrl  string `json:"checksumUrl"`
+	AuthType     string `json:"authType"`
+	Schedule     string `json:"schedule"`
+	Enabled      bool   `json:"enabled"`
+	AutoCheck    bool   `json:"autoCheck"`
+	AutoDownload bool   `json:"autoDownload"`
+	AutoActivate bool   `json:"autoActivate"`
+	LastRelease  string `json:"lastRelease"`
+	LastError    string `json:"lastError"`
+	CreatedAt    string `json:"createdAt"`
+	UpdatedAt    string `json:"updatedAt"`
+}
+
+type WAFSourceListReq struct {
+	Page     int    `form:"page,default=1"`
+	PageSize int    `form:"pageSize,default=20"`
+	Kind     string `form:"kind,optional"`
+	Name     string `form:"name,optional"`
+}
+
+type WAFSourceListResp struct {
+	List  []WAFSourceItem `json:"list"`
+	Total int64           `json:"total"`
+}
+
+type WAFSourceReq struct {
+	Name         string `json:"name"`
+	Kind         string `json:"kind,default=crs"`    // crs | coraza_engine
+	Mode         string `json:"mode,default=remote"` // remote | manual
+	Url          string `json:"url,optional"`
+	ChecksumUrl  string `json:"checksumUrl,optional"`
+	AuthType     string `json:"authType,default=none"` // none | token | basic
+	AuthSecret   string `json:"authSecret,optional"`
+	Schedule     string `json:"schedule,optional"`
+	Enabled      bool   `json:"enabled,optional"`
+	AutoCheck    bool   `json:"autoCheck,optional"`
+	AutoDownload bool   `json:"autoDownload,optional"`
+	AutoActivate bool   `json:"autoActivate,optional"`
+	Meta         string `json:"meta,optional"` // JSON string
+}
+
+type WAFSourceSyncReq struct {
+	ID          uint `path:"id"`
+	ActivateNow bool `json:"activateNow,optional"`
+}
+
+type WAFSourceUpdateReq struct {
+	ID           uint   `path:"id"`
+	Name         string `json:"name,optional"`
+	Kind         string `json:"kind,optional"`
+	Mode         string `json:"mode,optional"`
+	Url          string `json:"url,optional"`
+	ChecksumUrl  string `json:"checksumUrl,optional"`
+	AuthType     string `json:"authType,optional"`
+	AuthSecret   string `json:"authSecret,optional"`
+	Schedule     string `json:"schedule,optional"`
+	Enabled      bool   `json:"enabled,optional"`
+	AutoCheck    bool   `json:"autoCheck,optional"`
+	AutoDownload bool   `json:"autoDownload,optional"`
+	AutoActivate bool   `json:"autoActivate,optional"`
+	Meta         string `json:"meta,optional"` // JSON string
+}
+
+type WAFUploadReq struct {
+	Kind        string `json:"kind,default=crs"`
+	Version     string `json:"version"`
+	Checksum    string `json:"checksum,optional"`
+	ActivateNow bool   `json:"activateNow,optional"`
 }
