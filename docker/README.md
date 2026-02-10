@@ -65,6 +65,22 @@ docker compose -f docker/docker-compose.yml pull
 docker compose -f docker/docker-compose.yml up -d --no-build
 ```
 
+## Caddy 启动与配置生效
+
+- 容器启动时，`docker/entrypoint.sh` 会优先尝试 `caddy run --resume`。
+- 若不存在恢复文件（`/config/caddy/autosave.json`），则自动回退到 `/etc/caddy/Caddyfile`。
+
+### 配置页面保存后如何生效
+
+- 前端保存会调用：`POST /api/caddy/server/:serverId/config`。
+- 后端会先调用 Caddy Admin API `/adapt` 校验，再调用 `/load` 下发配置。
+- 这属于 **热重载**（无须手动重启容器），新配置会立即生效。
+
+### 什么时候需要“真正重启”
+
+- 仅在升级 Caddy 二进制、插件变更等场景才建议重启容器。
+- 可执行：`docker compose -f docker/docker-compose.yml restart`（或项目根目录 `make restart`）。
+
 ### 平台说明
 
 默认 `linux/amd64`。如需 `arm64`，在 `docker/.env` 增加：

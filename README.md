@@ -39,6 +39,12 @@ make clean     # 清理所有
 
 详细部署文档请查看 [docker/README.md](docker/README.md)
 
+### Caddy 配置保存生效说明
+
+- 在“Caddy 配置”页面保存后，后端会调用 Caddy Admin API 进行 `/adapt` 校验并通过 `/load` 热重载。
+- 因此保存后会自动生效，通常**不需要**手动重启容器。
+- 仅在升级 Caddy 二进制或插件变更时，才建议执行 `make restart`。
+
 ## 功能特性
 
 - 基于 Caddy 的日志收集和分析
