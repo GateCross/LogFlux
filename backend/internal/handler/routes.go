@@ -387,6 +387,11 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Handler: user.DeleteUserHandler(serverCtx),
 			},
 			{
+				Method:  http.MethodPut,
+				Path:    "/user/:id/status",
+				Handler: user.ToggleUserStatusHandler(serverCtx),
+			},
+			{
 				Method:  http.MethodPost,
 				Path:    "/user/change_password",
 				Handler: user.ChangePasswordHandler(serverCtx),
