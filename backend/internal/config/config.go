@@ -13,13 +13,13 @@ type Config struct {
 		AccessExpire int64
 		AESKey       string
 	}
-	Database     DatabaseConf
-	Redis        RedisConf
+	Database            DatabaseConf
+	Redis               RedisConf
 	CaddyLogPath        string `json:",optional"`
 	BackendLogPath      string `json:",optional"` // 后端日志文件/目录（用于入库）
 	CaddyRuntimeLogPath string `json:",optional"` // Caddy 后台日志文件/目录（用于入库）
-	Archive      ArchiveConf
-	Notification NotificationConf
+	Archive             ArchiveConf
+	Notification        NotificationConf
 }
 
 type DatabaseConf struct {
@@ -64,7 +64,7 @@ type NotificationConf struct {
 // ChannelConf 通知渠道配置
 type ChannelConf struct {
 	Name        string                 // 渠道名称
-	Type        string                 // 渠道类型: webhook, email, telegram, slack, wecom, dingtalk
+	Type        string                 // 渠道类型: webhook, email, telegram, slack, wecom, wechat_mp, dingtalk
 	Enabled     bool                   // 是否启用
 	Config      map[string]interface{} // 渠道配置 (根据类型不同而不同)
 	Events      []string               // 订阅的事件类型 (支持通配符)

@@ -456,6 +456,8 @@ func initNotificationManager(db *gorm2.DB, rdb *redis.Client, c config.Config) n
 	_ = mgr.RegisterProvider(providers.NewEmailProvider())
 	_ = mgr.RegisterProvider(providers.NewTelegramProvider())
 	_ = mgr.RegisterProvider(providers.NewSlackProvider())
+	_ = mgr.RegisterProvider(providers.NewWeComProvider())
+	_ = mgr.RegisterProvider(providers.NewWeChatMPProvider())
 	_ = mgr.RegisterProvider(providers.NewDiscordProvider())
 	_ = mgr.RegisterProvider(providers.NewInAppProvider())
 
