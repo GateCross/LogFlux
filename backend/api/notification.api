@@ -4,7 +4,7 @@ type (
 	// Notification Channel
 	ChannelReq {
 		Name        string `json:"name"`
-		Type        string `json:"type"` // email, webhook, telegram
+		Type        string `json:"type"` // email, webhook, telegram, slack, wecom, wechat_mp, discord, in_app
 		Enabled     bool   `json:"enabled"`
 		Config      string `json:"config"` // JSON string
 		Events      string `json:"events"` // JSON string array ["*"]

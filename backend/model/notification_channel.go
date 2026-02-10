@@ -17,7 +17,7 @@ type NotificationChannel struct {
 
 	// 基本信息
 	Name        string `gorm:"size:100;uniqueIndex;not null" json:"name"`
-	Type        string `gorm:"size:50;index;not null" json:"type"` // webhook, email, telegram, slack, wecom, dingtalk
+	Type        string `gorm:"size:50;index;not null" json:"type"` // webhook, email, telegram, slack, wecom, wechat_mp, dingtalk
 	Enabled     bool   `gorm:"default:true;index;not null" json:"enabled"`
 	Description string `gorm:"type:text" json:"description,omitempty"`
 
@@ -158,6 +158,7 @@ const (
 	ChannelTypeTelegram = "telegram"
 	ChannelTypeSlack    = "slack"
 	ChannelTypeWeCom    = "wecom"
+	ChannelTypeWeChatMP = "wechat_mp"
 	ChannelTypeDingTalk = "dingtalk"
 	ChannelTypeDiscord  = "discord"
 )
@@ -193,6 +194,13 @@ type SlackConfig struct {
 // WeCom 配置结构
 type WeComConfig struct {
 	WebhookURL string `json:"webhook_url"`
+}
+
+// WechatMP 配置结构（公众号客服消息）
+type WechatMPConfig struct {
+	AppID     string `json:"app_id"`
+	AppSecret string `json:"app_secret"`
+	ToUser    string `json:"to_user"` // 接收消息用户的 openid
 }
 
 // DingTalk 配置结构
