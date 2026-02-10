@@ -21,3 +21,11 @@ Archive:
   Enabled: true
   RetentionDay: 90
   ArchiveTable: "caddy_logs_archive"
+
+WAF:
+  WorkDir: "/config/caddy/waf"
+  MaxPackageBytes: 104857600
+  AllowedDomains: ["github.com", "api.github.com"]
+  ExtractMaxFiles: 5000
+  ExtractMaxTotalBytes: 536870912
+  ActivateTimeoutSec: 30

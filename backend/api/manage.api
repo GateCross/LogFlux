@@ -218,6 +218,133 @@ type (
 		ServerId  uint `path:"serverId"`
 		HistoryId uint `json:"historyId"`
 	}
+
+	// WAF Update Management
+	WAFSourceReq {
+		Name         string `json:"name"`
+		Kind         string `json:"kind,default=crs"`      // crs | coraza_engine
+		Mode         string `json:"mode,default=remote"`   // remote | manual
+		Url          string `json:"url,optional"`
+		ChecksumUrl  string `json:"checksumUrl,optional"`
+		AuthType     string `json:"authType,default=none"` // none | token | basic
+		AuthSecret   string `json:"authSecret,optional"`
+		Schedule     string `json:"schedule,optional"`
+		Enabled      bool   `json:"enabled,optional"`
+		AutoCheck    bool   `json:"autoCheck,optional"`
+		AutoDownload bool   `json:"autoDownload,optional"`
+		AutoActivate bool   `json:"autoActivate,optional"`
+		Meta         string `json:"meta,optional"` // JSON string
+	}
+	WAFSourceUpdateReq {
+		ID           uint   `path:"id"`
+		Name         string `json:"name,optional"`
+		Kind         string `json:"kind,optional"`
+		Mode         string `json:"mode,optional"`
+		Url          string `json:"url,optional"`
+		ChecksumUrl  string `json:"checksumUrl,optional"`
+		AuthType     string `json:"authType,optional"`
+		AuthSecret   string `json:"authSecret,optional"`
+		Schedule     string `json:"schedule,optional"`
+		Enabled      bool   `json:"enabled,optional"`
+		AutoCheck    bool   `json:"autoCheck,optional"`
+		AutoDownload bool   `json:"autoDownload,optional"`
+		AutoActivate bool   `json:"autoActivate,optional"`
+		Meta         string `json:"meta,optional"` // JSON string
+	}
+	WAFSourceListReq {
+		Page     int    `form:"page,default=1"`
+		PageSize int    `form:"pageSize,default=20"`
+		Kind     string `form:"kind,optional"`
+		Name     string `form:"name,optional"`
+	}
+	WAFSourceItem {
+		ID           uint   `json:"id"`
+		Name         string `json:"name"`
+		Kind         string `json:"kind"`
+		Mode         string `json:"mode"`
+		Url          string `json:"url"`
+		ChecksumUrl  string `json:"checksumUrl"`
+		AuthType     string `json:"authType"`
+		Schedule     string `json:"schedule"`
+		Enabled      bool   `json:"enabled"`
+		AutoCheck    bool   `json:"autoCheck"`
+		AutoDownload bool   `json:"autoDownload"`
+		AutoActivate bool   `json:"autoActivate"`
+		LastRelease  string `json:"lastRelease"`
+		LastError    string `json:"lastError"`
+		CreatedAt    string `json:"createdAt"`
+		UpdatedAt    string `json:"updatedAt"`
+	}
+	WAFSourceListResp {
+		List  []WAFSourceItem `json:"list"`
+		Total int64           `json:"total"`
+	}
+	WAFSourceActionReq {
+		ID uint `path:"id"`
+	}
+	WAFSourceSyncReq {
+		ID          uint `path:"id"`
+		ActivateNow bool `json:"activateNow,optional"`
+	}
+	WAFUploadReq {
+		Kind        string `json:"kind,default=crs"`
+		Version     string `json:"version"`
+		Checksum    string `json:"checksum,optional"`
+		ActivateNow bool   `json:"activateNow,optional"`
+	}
+	WAFReleaseListReq {
+		Page     int    `form:"page,default=1"`
+		PageSize int    `form:"pageSize,default=20"`
+		Kind     string `form:"kind,optional"`
+		Status   string `form:"status,optional"`
+	}
+	WAFReleaseItem {
+		ID          uint   `json:"id"`
+		SourceId    uint   `json:"sourceId"`
+		Kind        string `json:"kind"`
+		Version     string `json:"version"`
+		ArtifactType string `json:"artifactType"`
+		Checksum    string `json:"checksum"`
+		SizeBytes   int64  `json:"sizeBytes"`
+		StoragePath string `json:"storagePath"`
+		Status      string `json:"status"`
+		CreatedAt   string `json:"createdAt"`
+		UpdatedAt   string `json:"updatedAt"`
+	}
+	WAFReleaseListResp {
+		List  []WAFReleaseItem `json:"list"`
+		Total int64            `json:"total"`
+	}
+	WAFReleaseActivateReq {
+		ID uint `path:"id"`
+	}
+	WAFReleaseRollbackReq {
+		Target string `json:"target,optional"` // last_good | version
+		Version string `json:"version,optional"`
+	}
+	WAFJobListReq {
+		Page     int    `form:"page,default=1"`
+		PageSize int    `form:"pageSize,default=20"`
+		Status   string `form:"status,optional"`
+		Action   string `form:"action,optional"`
+	}
+	WAFJobItem {
+		ID         uint   `json:"id"`
+		SourceId   uint   `json:"sourceId"`
+		ReleaseId  uint   `json:"releaseId"`
+		Action     string `json:"action"`
+		TriggerMode string `json:"triggerMode"`
+		Operator   string `json:"operator"`
+		Status     string `json:"status"`
+		Message    string `json:"message"`
+		StartedAt  string `json:"startedAt"`
+		FinishedAt string `json:"finishedAt"`
+		CreatedAt  string `json:"createdAt"`
+	}
+	WAFJobListResp {
+		List  []WAFJobItem `json:"list"`
+		Total int64        `json:"total"`
+	}
 )
 
 @server (
@@ -325,6 +452,39 @@ service logflux-api {
 
 	@handler RollbackCaddyConfig
 	post /caddy/server/:serverId/config/rollback (CaddyConfigRollbackReq) returns (BaseResp)
+
+	@handler ListWAFSources
+	get /caddy/waf/source (WAFSourceListReq) returns (WAFSourceListResp)
+
+	@handler AddWAFSource
+	post /caddy/waf/source (WAFSourceReq) returns (BaseResp)
+
+	@handler UpdateWAFSource
+	put /caddy/waf/source/:id (WAFSourceUpdateReq) returns (BaseResp)
+
+	@handler DeleteWAFSource
+	delete /caddy/waf/source/:id (IDReq) returns (BaseResp)
+
+	@handler CheckWAFSource
+	post /caddy/waf/source/:id/check (WAFSourceActionReq) returns (BaseResp)
+
+	@handler SyncWAFSource
+	post /caddy/waf/source/:id/sync (WAFSourceSyncReq) returns (BaseResp)
+
+	@handler UploadWAFPackage
+	post /caddy/waf/upload (WAFUploadReq) returns (BaseResp)
+
+	@handler ListWAFReleases
+	get /caddy/waf/release (WAFReleaseListReq) returns (WAFReleaseListResp)
+
+	@handler ActivateWAFRelease
+	post /caddy/waf/release/:id/activate (WAFReleaseActivateReq) returns (BaseResp)
+
+	@handler RollbackWAFRelease
+	post /caddy/waf/release/rollback (WAFReleaseRollbackReq) returns (BaseResp)
+
+	@handler ListWAFJobs
+	get /caddy/waf/job (WAFJobListReq) returns (WAFJobListResp)
 }
 
 @server (

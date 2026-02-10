@@ -80,6 +80,61 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Path:    "/caddy/server/:serverId/config/rollback",
 				Handler: caddy.RollbackCaddyConfigHandler(serverCtx),
 			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/caddy/waf/job",
+				Handler: caddy.ListWAFJobsHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/caddy/waf/release",
+				Handler: caddy.ListWAFReleasesHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/caddy/waf/release/:id/activate",
+				Handler: caddy.ActivateWAFReleaseHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/caddy/waf/release/rollback",
+				Handler: caddy.RollbackWAFReleaseHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/caddy/waf/source",
+				Handler: caddy.ListWAFSourcesHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/caddy/waf/source",
+				Handler: caddy.AddWAFSourceHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPut,
+				Path:    "/caddy/waf/source/:id",
+				Handler: caddy.UpdateWAFSourceHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodDelete,
+				Path:    "/caddy/waf/source/:id",
+				Handler: caddy.DeleteWAFSourceHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/caddy/waf/source/:id/check",
+				Handler: caddy.CheckWAFSourceHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/caddy/waf/source/:id/sync",
+				Handler: caddy.SyncWAFSourceHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/caddy/waf/upload",
+				Handler: caddy.UploadWAFPackageHandler(serverCtx),
+			},
 		},
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
 		rest.WithPrefix("/api"),
@@ -137,6 +192,30 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 	server.AddRoutes(
 		[]rest.Route{
 			{
+				Method:  http.MethodGet,
+				Path:    "/caddy/logs",
+				Handler: log.GetCaddyLogsHandler(serverCtx),
+			},
+		},
+		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
+		rest.WithPrefix("/api"),
+	)
+
+	server.AddRoutes(
+		[]rest.Route{
+			{
+				Method:  http.MethodGet,
+				Path:    "/system/logs",
+				Handler: log.GetSystemLogsHandler(serverCtx),
+			},
+		},
+		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
+		rest.WithPrefix("/api"),
+	)
+
+	server.AddRoutes(
+		[]rest.Route{
+			{
 				Method:  http.MethodPost,
 				Path:    "/source",
 				Handler: log.AddLogSourceHandler(serverCtx),
@@ -155,30 +234,6 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Method:  http.MethodDelete,
 				Path:    "/source/:id",
 				Handler: log.DeleteLogSourceHandler(serverCtx),
-			},
-		},
-		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
-		rest.WithPrefix("/api"),
-	)
-
-	server.AddRoutes(
-		[]rest.Route{
-			{
-				Method:  http.MethodGet,
-				Path:    "/caddy/logs",
-				Handler: log.GetCaddyLogsHandler(serverCtx),
-			},
-		},
-		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
-		rest.WithPrefix("/api"),
-	)
-
-	server.AddRoutes(
-		[]rest.Route{
-			{
-				Method:  http.MethodGet,
-				Path:    "/system/logs",
-				Handler: log.GetSystemLogsHandler(serverCtx),
 			},
 		},
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),

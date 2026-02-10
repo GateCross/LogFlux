@@ -12,6 +12,9 @@
 ### 安全与防护
 - [plans/caddy-coraza-crs-full-cutover-plan.md](./plans/caddy-coraza-crs-full-cutover-plan.md) - Caddy + Coraza WAF + OWASP CRS 一次性全面引入执行计划（阻断模式）
 - [plans/waf-update-management-design.md](./plans/waf-update-management-design.md) - WAF 规则更新管理设计（源地址下载 + 手动上传，不依赖 compose 额外挂载）
+- [plans/waf-update-p0-implementation-plan.md](./plans/waf-update-p0-implementation-plan.md) - WAF 更新管理 P0 开发实施细化计划（文件级）
+- [plans/waf-update-task-checklist.md](./plans/waf-update-task-checklist.md) - WAF 更新管理实施任务清单（P0/P1/P2 + 里程碑）
+- [plans/waf-update-operations-guide.md](./plans/waf-update-operations-guide.md) - WAF 更新管理操作指南（API 示例 + 运维 SOP）
 
 ## 功能设计文档
 
@@ -73,6 +76,8 @@
 - 2026-01-28: 创建通知功能完整文档体系
 - 2026-02-10: 新增 Caddy + Coraza WAF + OWASP CRS 一次性全面引入执行计划
 - 2026-02-10: 新增 WAF 更新管理设计（自动下载 + 手动上传）
+- 2026-02-10: 新增 WAF 更新任务清单与运维操作指南
+- 2026-02-10: 新增 WAF 更新管理 P0 实施细化计划
 
 ### 贡献指南
 如需更新文档,请确保:
@@ -162,6 +167,6 @@ docs/
 
 ---
 
-**文档版本**: 1.0.0
-**最后更新**: 2026-01-28
+**文档版本**: 1.1.0
+**最后更新**: 2026-02-10
 **维护者**: LogFlux Team

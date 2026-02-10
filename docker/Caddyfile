@@ -7,6 +7,7 @@
   }
 
   order geoip2_vars first
+  order coraza_waf first
   geoip2 {
     databaseDirectory "/usr/share/GeoIP"
     editionID "GeoLite2-City"
@@ -33,6 +34,27 @@
   log {
     output file /var/log/caddy/access.log
     format json
+  }
+}
+
+# WAF 配置（Coraza + OWASP CRS）
+(waf_protect) {
+  coraza_waf {
+    load_owasp_crs
+    directives `
+      Include @coraza.conf-recommended
+      Include @crs-setup.conf.example
+      Include @owasp_crs/*.conf
+
+      SecRuleEngine On
+      SecAuditEngine RelevantOnly
+      SecAuditLogFormat JSON
+      SecAuditLog /var/log/caddy/waf_audit.log
+
+      SecRequestBodyAccess On
+      SecRequestBodyLimit 10485760
+      SecRequestBodyNoFilesLimit 1048576
+    `
   }
 }
 
@@ -128,6 +150,7 @@
 # ==================================
 :443 {
   # 导入通用配置
+  import waf_protect
   import geoip
   import compression
   import logging
@@ -142,6 +165,7 @@
 # ==================================
 :80 {
   # 导入通用配置
+  import waf_protect
   import geoip
   import compression
   import logging

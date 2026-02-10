@@ -1,0 +1,91 @@
+package caddy
+
+import (
+	"context"
+	"fmt"
+	"path/filepath"
+	"strings"
+
+	"logflux/internal/svc"
+	"logflux/internal/types"
+	"logflux/model"
+
+	"github.com/zeromicro/go-zero/core/logx"
+	"gorm.io/gorm"
+)
+
+type RollbackWAFReleaseLogic struct {
+	logx.Logger
+	ctx    context.Context
+	svcCtx *svc.ServiceContext
+}
+
+func NewRollbackWAFReleaseLogic(ctx context.Context, svcCtx *svc.ServiceContext) *RollbackWAFReleaseLogic {
+	return &RollbackWAFReleaseLogic{
+		Logger: logx.WithContext(ctx),
+		ctx:    ctx,
+		svcCtx: svcCtx,
+	}
+}
+
+func (l *RollbackWAFReleaseLogic) RollbackWAFRelease(req *types.WAFReleaseRollbackReq) (resp *types.BaseResp, err error) {
+	helper := newWAFLogicHelper(l.ctx, l.svcCtx, l.Logger)
+
+	if err := helper.ensureStoreDirs(); err != nil {
+		return nil, err
+	}
+
+	targetRelease, err := l.resolveRollbackTarget(helper, req)
+	if err != nil {
+		return nil, err
+	}
+
+	job := helper.startJob(targetRelease.SourceID, targetRelease.ID, "rollback", "manual")
+
+	if err := helper.activateRelease(targetRelease); err != nil {
+		helper.markReleaseFailed(targetRelease, err.Error())
+		helper.finishJob(job, wafJobStatusFailed, err.Error(), targetRelease.ID)
+		return nil, err
+	}
+
+	if err := helper.markReleaseActive(targetRelease); err != nil {
+		helper.finishJob(job, wafJobStatusFailed, err.Error(), targetRelease.ID)
+		return nil, fmt.Errorf("mark rollback active failed: %w", err)
+	}
+
+	helper.finishJob(job, wafJobStatusSuccess, "rollback success", targetRelease.ID)
+	return &types.BaseResp{Code: 200, Msg: "success"}, nil
+}
+
+func (l *RollbackWAFReleaseLogic) resolveRollbackTarget(helper *wafLogicHelper, req *types.WAFReleaseRollbackReq) (*model.WAFRelease, error) {
+	if version := strings.TrimSpace(req.Version); version != "" {
+		return l.findReleaseByVersion(helper, version)
+	}
+
+	if strings.EqualFold(strings.TrimSpace(req.Target), "version") {
+		return nil, fmt.Errorf("version is required when target=version")
+	}
+
+	lastGoodPath, err := helper.store.LinkTarget(helper.store.LastGoodLinkPath())
+	if err != nil {
+		return nil, fmt.Errorf("last_good link not found")
+	}
+
+	version := filepath.Base(lastGoodPath)
+	if version == "" || version == "." || version == "/" {
+		return nil, fmt.Errorf("invalid last_good target")
+	}
+	return l.findReleaseByVersion(helper, version)
+}
+
+func (l *RollbackWAFReleaseLogic) findReleaseByVersion(helper *wafLogicHelper, version string) (*model.WAFRelease, error) {
+	var release model.WAFRelease
+	err := helper.svcCtx.DB.Where("version = ?", strings.TrimSpace(version)).Order("id desc").First(&release).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, fmt.Errorf("target release not found")
+		}
+		return nil, fmt.Errorf("query target release failed: %w", err)
+	}
+	return &release, nil
+}
