@@ -15,7 +15,9 @@ import (
 
 const (
 	defaultAdminUsername = "admin"
-	defaultPasswordLen   = 20
+	defaultPasswordLen   = 12
+	minPasswordLen       = 6
+	maxPasswordLen       = 18
 )
 
 func ensureAdminUser(db *gorm.DB) {
@@ -102,18 +104,20 @@ func ensureAdminRole(db *gorm.DB, admin *model.User) {
 }
 
 func generateComplexPassword(length int) (string, error) {
-	if length < 12 {
-		length = 12
+	if length < minPasswordLen {
+		length = minPasswordLen
+	}
+	if length > maxPasswordLen {
+		length = maxPasswordLen
 	}
 
-	lowerChars := "abcdefghijklmnopqrstuvwxyz"
-	upperChars := "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	letterChars := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	digitChars := "0123456789"
-	symbolChars := "!@#$%^&*()-_=+[]{}:,.?"
-	allChars := lowerChars + upperChars + digitChars + symbolChars
+	underscoreChars := "_"
+	allChars := letterChars + digitChars + underscoreChars
 
 	passwordChars := make([]byte, 0, length)
-	requiredSets := []string{lowerChars, upperChars, digitChars, symbolChars}
+	requiredSets := []string{letterChars, digitChars, underscoreChars}
 
 	for _, charset := range requiredSets {
 		char, err := randomCharFrom(charset)
@@ -165,10 +169,20 @@ func secureShuffle(data []byte) error {
 }
 
 func validateComplexity(password string) bool {
-	hasLower := strings.IndexAny(password, "abcdefghijklmnopqrstuvwxyz") >= 0
-	hasUpper := strings.IndexAny(password, "ABCDEFGHIJKLMNOPQRSTUVWXYZ") >= 0
-	hasDigit := strings.IndexAny(password, "0123456789") >= 0
-	hasSymbol := strings.IndexAny(password, "!@#$%^&*()-_=+[]{}:,.?") >= 0
+	if len(password) < minPasswordLen || len(password) > maxPasswordLen {
+		return false
+	}
 
-	return hasLower && hasUpper && hasDigit && hasSymbol
+	hasLetter := strings.IndexAny(password, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ") >= 0
+	hasDigit := strings.IndexAny(password, "0123456789") >= 0
+	hasUnderscore := strings.Contains(password, "_")
+
+	for _, char := range password {
+		if (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9') || char == '_' {
+			continue
+		}
+		return false
+	}
+
+	return hasLetter && hasDigit && hasUnderscore
 }
