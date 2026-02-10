@@ -20,7 +20,7 @@ type Config struct {
 	CaddyRuntimeLogPath string `json:",optional"` // Caddy 后台日志文件/目录（用于入库）
 	Archive             ArchiveConf
 	WAF                 WAFConf
-	Notification        NotificationConf
+	Notification        NotificationConf `json:",optional"`
 }
 
 type DatabaseConf struct {
