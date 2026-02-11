@@ -643,7 +643,7 @@ const sourceColumns: DataTableColumns<WafSourceItem> = [
 
 const releaseColumns: DataTableColumns<WafReleaseItem> = [
   { title: 'ID', key: 'id', width: 80 },
-  { title: '来源ID', key: 'sourceId', width: 90 },
+  { title: '更新源', key: 'sourceName', minWidth: 160, render: row => mapSourceNameById(row.sourceId) },
   { title: '版本', key: 'version', minWidth: 180, ellipsis: { tooltip: true } },
   { title: '包类型', key: 'artifactType', width: 110 },
   {
@@ -801,21 +801,25 @@ function mapJobTriggerModeLabel(triggerMode: string) {
   }
 }
 
-function mapJobSourceName(row: WafJobItem) {
-  if (row.action === 'engine_check') {
-    return 'Coraza 引擎';
-  }
-
-  if (!row.sourceId || row.sourceId <= 0) {
+function mapSourceNameById(sourceId: number) {
+  if (!sourceId || sourceId <= 0) {
     return '-';
   }
 
-  const sourceName = jobSourceNameMap.value[row.sourceId];
+  const sourceName = jobSourceNameMap.value[sourceId];
   if (sourceName && sourceName.trim()) {
     return sourceName.trim();
   }
 
   return '未知更新源';
+}
+
+function mapJobSourceName(row: WafJobItem) {
+  if (row.action === 'engine_check') {
+    return 'Coraza 引擎';
+  }
+
+  return mapSourceNameById(Number(row.sourceId || 0));
 }
 
 function mergeJobSourceNameMap(sourceList: WafSourceItem[]) {
@@ -834,7 +838,7 @@ function mergeJobSourceNameMap(sourceList: WafSourceItem[]) {
   jobSourceNameMap.value = nextMap;
 }
 
-async function ensureJobSourceNames(sourceIds: number[]) {
+async function ensureSourceNamesByIds(sourceIds: number[]) {
   const pendingIds = Array.from(new Set(sourceIds.filter(sourceId => sourceId > 0 && !jobSourceNameMap.value[sourceId])));
   if (pendingIds.length === 0) {
     return;
@@ -1212,7 +1216,9 @@ async function fetchReleases() {
       status: releaseQuery.status
     });
     if (!error && data) {
-      releaseTable.value = data.list || [];
+      const list = data.list || [];
+      await ensureSourceNamesByIds(list.map(item => Number(item.sourceId || 0)));
+      releaseTable.value = list;
       releasePagination.itemCount = data.total || 0;
     }
   } finally {
@@ -1376,7 +1382,7 @@ async function fetchJobs() {
     });
     if (!error && data) {
       const list = data.list || [];
-      await ensureJobSourceNames(list.map(item => Number(item.sourceId || 0)));
+      await ensureSourceNamesByIds(list.map(item => Number(item.sourceId || 0)));
       jobTable.value = list;
       jobPagination.itemCount = data.total || 0;
     }
