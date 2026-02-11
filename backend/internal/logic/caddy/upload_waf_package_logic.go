@@ -47,7 +47,6 @@ func (l *UploadWafPackageLogic) UploadWafPackage(req *types.WafUploadReq) (resp 
 		return nil, fmt.Errorf("version is required")
 	}
 	version = sanitizeToken(version)
-	version = ensureUniqueReleaseVersion(helper.svcCtx.DB, 0, version)
 
 	tempPath, _ := l.ctx.Value(wafUploadTempPathCtxKey).(string)
 	tempPath = strings.TrimSpace(tempPath)
@@ -60,12 +59,28 @@ func (l *UploadWafPackageLogic) UploadWafPackage(req *types.WafUploadReq) (resp 
 		fileName = basenameSafe(tempPath)
 	}
 
-	job := helper.startJob(0, 0, "verify", "upload")
 	defer func() {
 		if strings.TrimSpace(tempPath) != "" {
 			_ = os.Remove(tempPath)
 		}
 	}()
+
+	job := helper.startJob(0, 0, "verify", "upload")
+	existingRelease, err := findLatestReleaseByKindAndVersion(helper.svcCtx.DB, kind, version)
+	if err != nil {
+		helper.finishJob(job, wafJobStatusFailed, err.Error(), 0)
+		return nil, err
+	}
+	if existingRelease != nil {
+		helper.finishJob(job, wafJobStatusSuccess, "版本已存在，复用已有版本", existingRelease.ID)
+		if req.ActivateNow {
+			activateLogic := NewActivateWafReleaseLogic(l.ctx, l.svcCtx)
+			if _, activateErr := activateLogic.ActivateWafRelease(&types.WafReleaseActivateReq{ID: existingRelease.ID}); activateErr != nil {
+				return nil, activateErr
+			}
+		}
+		return &types.BaseResp{Code: 200, Msg: "success"}, nil
+	}
 
 	verifyResult, err := waf.VerifyPackage(tempPath, waf.VerifyOptions{
 		AllowedExt:      []string{".tar.gz", ".zip"},

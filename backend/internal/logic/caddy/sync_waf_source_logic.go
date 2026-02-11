@@ -56,7 +56,27 @@ func (l *SyncWafSourceLogic) SyncWafSource(req *types.WafSourceSyncReq) (resp *t
 		fetchTimeoutSec = 180
 	}
 
+	version := deriveVersionFromURL(source.URL)
 	job := helper.startJob(source.ID, 0, "download", "manual")
+	existingRelease, err := findLatestReleaseByKindAndVersion(helper.svcCtx.DB, source.Kind, version)
+	if err != nil {
+		helper.updateSourceLastCheck(source.ID, version, err.Error())
+		helper.finishJob(job, wafJobStatusFailed, err.Error(), 0)
+		return nil, err
+	}
+	if existingRelease != nil {
+		helper.updateSourceLastCheck(source.ID, existingRelease.Version, "")
+		helper.finishJob(job, wafJobStatusSuccess, "版本已存在，复用已有版本", existingRelease.ID)
+
+		if req.ActivateNow || source.AutoActivate {
+			activateLogic := NewActivateWafReleaseLogic(l.ctx, l.svcCtx)
+			if _, activateErr := activateLogic.ActivateWafRelease(&types.WafReleaseActivateReq{ID: existingRelease.ID}); activateErr != nil {
+				return nil, activateErr
+			}
+		}
+
+		return &types.BaseResp{Code: 200, Msg: "success"}, nil
+	}
 
 	ext := detectPackageExt(source.URL)
 	if ext == "" {
@@ -105,7 +125,6 @@ func (l *SyncWafSourceLogic) SyncWafSource(req *types.WafSourceSyncReq) (resp *t
 		return nil, err
 	}
 
-	version := ensureUniqueReleaseVersion(helper.svcCtx.DB, source.ID, deriveVersionFromURL(source.URL))
 	packageName := fmt.Sprintf("%s_%s%s", sanitizeToken(source.Name), sanitizeToken(version), verifyResult.Ext)
 	packagePath := helper.store.PackagePath(packageName)
 	if err := os.Rename(fetchResult.SavedPath, packagePath); err != nil {

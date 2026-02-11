@@ -494,22 +494,24 @@ func deriveVersionFromURL(downloadURL string) string {
 	return version
 }
 
-func ensureUniqueReleaseVersion(db *gorm.DB, sourceID uint, version string) string {
-	candidate := strings.TrimSpace(version)
-	if candidate == "" {
-		candidate = time.Now().Format("20060102_150405")
+func findLatestReleaseByKindAndVersion(db *gorm.DB, kind, version string) (*model.WafRelease, error) {
+	candidateKind := normalizeWafKind(kind)
+	candidateVersion := strings.TrimSpace(version)
+	if candidateVersion == "" {
+		return nil, fmt.Errorf("version is required")
 	}
 
-	var count int64
-	if err := db.Model(&model.WafRelease{}).
-		Where("source_id = ? AND version = ?", sourceID, candidate).
-		Count(&count).Error; err != nil {
-		return candidate
+	var release model.WafRelease
+	err := db.Where("kind = ? AND version = ?", candidateKind, candidateVersion).
+		Order("id desc").
+		First(&release).Error
+	if err == nil {
+		return &release, nil
 	}
-	if count == 0 {
-		return candidate
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
 	}
-	return fmt.Sprintf("%s_%d", candidate, time.Now().Unix())
+	return nil, fmt.Errorf("query release version failed: %w", err)
 }
 
 func basenameSafe(pathValue string) string {
