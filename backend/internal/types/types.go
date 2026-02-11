@@ -787,3 +787,97 @@ type WafUploadReq struct {
 	Checksum    string `json:"checksum,optional"`
 	ActivateNow bool   `json:"activateNow,optional"`
 }
+
+type WafPolicyActionReq struct {
+	ID uint `path:"id"`
+}
+
+type WafPolicyItem struct {
+	ID                      uint   `json:"id"`
+	Name                    string `json:"name"`
+	Description             string `json:"description"`
+	Enabled                 bool   `json:"enabled"`
+	IsDefault               bool   `json:"isDefault"`
+	EngineMode              string `json:"engineMode"`
+	AuditEngine             string `json:"auditEngine"`
+	AuditLogFormat          string `json:"auditLogFormat"`
+	AuditRelevantStatus     string `json:"auditRelevantStatus"`
+	RequestBodyAccess       bool   `json:"requestBodyAccess"`
+	RequestBodyLimit        int64  `json:"requestBodyLimit"`
+	RequestBodyNoFilesLimit int64  `json:"requestBodyNoFilesLimit"`
+	Config                  string `json:"config"`
+	CreatedAt               string `json:"createdAt"`
+	UpdatedAt               string `json:"updatedAt"`
+}
+
+type WafPolicyListReq struct {
+	Page     int    `form:"page,default=1"`
+	PageSize int    `form:"pageSize,default=20"`
+	Name     string `form:"name,optional"`
+}
+
+type WafPolicyListResp struct {
+	List  []WafPolicyItem `json:"list"`
+	Total int64           `json:"total"`
+}
+
+type WafPolicyPreviewResp struct {
+	Directives string `json:"directives"`
+}
+
+type WafPolicyReq struct {
+	Name                    string `json:"name"`
+	Description             string `json:"description,optional"`
+	Enabled                 bool   `json:"enabled,optional"`
+	IsDefault               bool   `json:"isDefault,optional"`
+	EngineMode              string `json:"engineMode,default=on"`           // on | off | detectiononly
+	AuditEngine             string `json:"auditEngine,default=relevantonly"` // off | on | relevantonly
+	AuditLogFormat          string `json:"auditLogFormat,default=json"`      // json | native
+	AuditRelevantStatus     string `json:"auditRelevantStatus,optional"`
+	RequestBodyAccess       bool   `json:"requestBodyAccess,optional"`
+	RequestBodyLimit        int64  `json:"requestBodyLimit,optional"`
+	RequestBodyNoFilesLimit int64  `json:"requestBodyNoFilesLimit,optional"`
+	Config                  string `json:"config,optional"` // JSON string
+}
+
+type WafPolicyRevisionItem struct {
+	ID        uint   `json:"id"`
+	PolicyId  uint   `json:"policyId"`
+	Version   uint   `json:"version"`
+	Status    string `json:"status"`
+	Operator  string `json:"operator"`
+	Message   string `json:"message"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
+}
+
+type WafPolicyRevisionListReq struct {
+	Page     int  `form:"page,default=1"`
+	PageSize int  `form:"pageSize,default=20"`
+	PolicyId uint `form:"policyId,optional"`
+}
+
+type WafPolicyRevisionListResp struct {
+	List  []WafPolicyRevisionItem `json:"list"`
+	Total int64                   `json:"total"`
+}
+
+type WafPolicyRollbackReq struct {
+	RevisionId uint `json:"revisionId"`
+}
+
+type WafPolicyUpdateReq struct {
+	ID                      uint   `path:"id"`
+	Name                    string `json:"name,optional"`
+	Description             string `json:"description,optional"`
+	Enabled                 bool   `json:"enabled,optional"`
+	IsDefault               bool   `json:"isDefault,optional"`
+	EngineMode              string `json:"engineMode,optional"`
+	AuditEngine             string `json:"auditEngine,optional"`
+	AuditLogFormat          string `json:"auditLogFormat,optional"`
+	AuditRelevantStatus     string `json:"auditRelevantStatus,optional"`
+	RequestBodyAccess       bool   `json:"requestBodyAccess,optional"`
+	RequestBodyLimit        int64  `json:"requestBodyLimit,optional"`
+	RequestBodyNoFilesLimit int64  `json:"requestBodyNoFilesLimit,optional"`
+	Config                  string `json:"config,optional"` // JSON string
+}

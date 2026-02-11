@@ -359,6 +359,89 @@ type (
 		Source         string `json:"source,optional"`
 		Message        string `json:"message,optional"`
 	}
+	WafPolicyReq {
+		Name                     string `json:"name"`
+		Description              string `json:"description,optional"`
+		Enabled                  bool   `json:"enabled,optional"`
+		IsDefault                bool   `json:"isDefault,optional"`
+		EngineMode               string `json:"engineMode,default=on"`                    // on | off | detectiononly
+		AuditEngine              string `json:"auditEngine,default=relevantonly"`          // off | on | relevantonly
+		AuditLogFormat           string `json:"auditLogFormat,default=json"`               // json | native
+		AuditRelevantStatus      string `json:"auditRelevantStatus,optional"`
+		RequestBodyAccess        bool   `json:"requestBodyAccess,optional"`
+		RequestBodyLimit         int64  `json:"requestBodyLimit,optional"`
+		RequestBodyNoFilesLimit  int64  `json:"requestBodyNoFilesLimit,optional"`
+		Config                   string `json:"config,optional"` // JSON string
+	}
+	WafPolicyUpdateReq {
+		ID                       uint   `path:"id"`
+		Name                     string `json:"name,optional"`
+		Description              string `json:"description,optional"`
+		Enabled                  bool   `json:"enabled,optional"`
+		IsDefault                bool   `json:"isDefault,optional"`
+		EngineMode               string `json:"engineMode,optional"`
+		AuditEngine              string `json:"auditEngine,optional"`
+		AuditLogFormat           string `json:"auditLogFormat,optional"`
+		AuditRelevantStatus      string `json:"auditRelevantStatus,optional"`
+		RequestBodyAccess        bool   `json:"requestBodyAccess,optional"`
+		RequestBodyLimit         int64  `json:"requestBodyLimit,optional"`
+		RequestBodyNoFilesLimit  int64  `json:"requestBodyNoFilesLimit,optional"`
+		Config                   string `json:"config,optional"` // JSON string
+	}
+	WafPolicyActionReq {
+		ID uint `path:"id"`
+	}
+	WafPolicyRollbackReq {
+		RevisionId uint `json:"revisionId"`
+	}
+	WafPolicyItem {
+		ID                       uint   `json:"id"`
+		Name                     string `json:"name"`
+		Description              string `json:"description"`
+		Enabled                  bool   `json:"enabled"`
+		IsDefault                bool   `json:"isDefault"`
+		EngineMode               string `json:"engineMode"`
+		AuditEngine              string `json:"auditEngine"`
+		AuditLogFormat           string `json:"auditLogFormat"`
+		AuditRelevantStatus      string `json:"auditRelevantStatus"`
+		RequestBodyAccess        bool   `json:"requestBodyAccess"`
+		RequestBodyLimit         int64  `json:"requestBodyLimit"`
+		RequestBodyNoFilesLimit  int64  `json:"requestBodyNoFilesLimit"`
+		Config                   string `json:"config"`
+		CreatedAt                string `json:"createdAt"`
+		UpdatedAt                string `json:"updatedAt"`
+	}
+	WafPolicyListReq {
+		Page     int    `form:"page,default=1"`
+		PageSize int    `form:"pageSize,default=20"`
+		Name     string `form:"name,optional"`
+	}
+	WafPolicyListResp {
+		List  []WafPolicyItem `json:"list"`
+		Total int64           `json:"total"`
+	}
+	WafPolicyPreviewResp {
+		Directives string `json:"directives"`
+	}
+	WafPolicyRevisionItem {
+		ID         uint   `json:"id"`
+		PolicyId   uint   `json:"policyId"`
+		Version    uint   `json:"version"`
+		Status     string `json:"status"`
+		Operator   string `json:"operator"`
+		Message    string `json:"message"`
+		CreatedAt  string `json:"createdAt"`
+		UpdatedAt  string `json:"updatedAt"`
+	}
+	WafPolicyRevisionListReq {
+		Page      int  `form:"page,default=1"`
+		PageSize  int  `form:"pageSize,default=20"`
+		PolicyId  uint `form:"policyId,optional"`
+	}
+	WafPolicyRevisionListResp {
+		List  []WafPolicyRevisionItem `json:"list"`
+		Total int64                   `json:"total"`
+	}
 )
 
 @server (
@@ -511,6 +594,33 @@ service logflux-api {
 
 	@handler ClearWafJobs
 	post /caddy/waf/job/clear returns (BaseResp)
+
+	@handler ListWafPolicies
+	get /caddy/waf/policy (WafPolicyListReq) returns (WafPolicyListResp)
+
+	@handler CreateWafPolicy
+	post /caddy/waf/policy (WafPolicyReq) returns (BaseResp)
+
+	@handler UpdateWafPolicy
+	put /caddy/waf/policy/:id (WafPolicyUpdateReq) returns (BaseResp)
+
+	@handler DeleteWafPolicy
+	delete /caddy/waf/policy/:id (IDReq) returns (BaseResp)
+
+	@handler PreviewWafPolicy
+	post /caddy/waf/policy/:id/preview (WafPolicyActionReq) returns (WafPolicyPreviewResp)
+
+	@handler ValidateWafPolicy
+	post /caddy/waf/policy/:id/validate (WafPolicyActionReq) returns (BaseResp)
+
+	@handler PublishWafPolicy
+	post /caddy/waf/policy/:id/publish (WafPolicyActionReq) returns (BaseResp)
+
+	@handler RollbackWafPolicy
+	post /caddy/waf/policy/rollback (WafPolicyRollbackReq) returns (BaseResp)
+
+	@handler ListWafPolicyRevisions
+	get /caddy/waf/policy/revision (WafPolicyRevisionListReq) returns (WafPolicyRevisionListResp)
 }
 
 @server (

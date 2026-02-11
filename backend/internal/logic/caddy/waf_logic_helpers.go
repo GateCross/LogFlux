@@ -46,6 +46,7 @@ const (
 	wafUploadTempPathCtxKey = "waf_upload_temp_path"
 	wafUploadFileNameCtxKey = "waf_upload_file_name"
 	wafSourceBoolMaskCtxKey = "waf_source_bool_mask"
+	wafPolicyBoolMaskCtxKey = "waf_policy_bool_mask"
 )
 
 type wafLogicHelper struct {
@@ -263,6 +264,26 @@ func (helper *wafLogicHelper) sourceBoolMask() map[string]bool {
 
 func (helper *wafLogicHelper) hasSourceBoolField(field string) bool {
 	mask := helper.sourceBoolMask()
+	if len(mask) == 0 {
+		return false
+	}
+	return mask[field]
+}
+
+func (helper *wafLogicHelper) policyBoolMask() map[string]bool {
+	rawMask := helper.ctx.Value(wafPolicyBoolMaskCtxKey)
+	if rawMask == nil {
+		return nil
+	}
+	mask, ok := rawMask.(map[string]bool)
+	if !ok {
+		return nil
+	}
+	return mask
+}
+
+func (helper *wafLogicHelper) hasPolicyBoolField(field string) bool {
+	mask := helper.policyBoolMask()
 	if len(mask) == 0 {
 		return false
 	}

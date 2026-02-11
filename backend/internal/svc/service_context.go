@@ -61,6 +61,8 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		&model.WafSource{},
 		&model.WafRelease{},
 		&model.WafUpdateJob{},
+		&model.WafPolicy{},
+		&model.WafPolicyRevision{},
 	)
 
 	initWafWorkspace(&c)
@@ -89,6 +91,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	// 初始化 RBAC 数据
 	initRBACData(db)
 	initWafDefaultSources(db)
+	initWafDefaultPolicies(db)
 
 	// 初始化默认管理员账号（自动生成随机复杂密码并仅在首次初始化时明文输出）
 	ensureAdminUser(db)
@@ -262,6 +265,57 @@ func initWafDefaultSources(db *gorm2.DB) {
 		} else if err != nil {
 			logx.Errorf("查询默认 WAF 源失败: name=%s err=%v", source.Name, err)
 		}
+	}
+}
+
+func initWafDefaultPolicies(db *gorm2.DB) {
+	if db == nil {
+		return
+	}
+
+	var total int64
+	if err := db.Model(&model.WafPolicy{}).Count(&total).Error; err != nil {
+		logx.Errorf("统计 WAF 策略数量失败: %v", err)
+		return
+	}
+	if total > 0 {
+		return
+	}
+
+	defaultPolicy := model.WafPolicy{
+		Name:                    "default-global-policy",
+		Description:             "默认全局策略",
+		Enabled:                 true,
+		IsDefault:               true,
+		EngineMode:              "on",
+		AuditEngine:             "relevantonly",
+		AuditLogFormat:          "json",
+		AuditRelevantStatus:     "^(?:5|4(?!04))",
+		RequestBodyAccess:       true,
+		RequestBodyLimit:        10 * 1024 * 1024,
+		RequestBodyNoFilesLimit: 1024 * 1024,
+		Config: model.JSONMap{
+			"scope": "global",
+		},
+	}
+
+	if err := db.Create(&defaultPolicy).Error; err != nil {
+		logx.Errorf("初始化默认 WAF 策略失败: %v", err)
+		return
+	}
+
+	directives := "SecRuleEngine On\nSecAuditEngine RelevantOnly\nSecAuditLogFormat JSON\nSecAuditLogRelevantStatus ^(?:5|4(?!04))\nSecRequestBodyAccess On\nSecRequestBodyLimit 10485760\nSecRequestBodyNoFilesLimit 1048576"
+	revision := model.WafPolicyRevision{
+		PolicyID:           defaultPolicy.ID,
+		Version:            1,
+		Status:             "published",
+		ConfigSnapshot:     defaultPolicy.Config,
+		DirectivesSnapshot: directives,
+		Operator:           "system",
+		Message:            "init default policy",
+	}
+	if err := db.Create(&revision).Error; err != nil {
+		logx.Errorf("初始化默认 WAF 策略版本失败: %v", err)
 	}
 }
 
