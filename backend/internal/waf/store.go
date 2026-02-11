@@ -22,7 +22,7 @@ type Store struct {
 func NewStore(baseDir string) *Store {
 	baseDir = strings.TrimSpace(baseDir)
 	if baseDir == "" {
-		baseDir = "/config/caddy/waf"
+		baseDir = "/config/security"
 	}
 	baseDir = filepath.Clean(baseDir)
 	return &Store{

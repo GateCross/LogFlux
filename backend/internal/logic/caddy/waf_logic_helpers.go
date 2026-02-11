@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -56,7 +57,7 @@ type wafLogicHelper struct {
 func newWafLogicHelper(ctx context.Context, svcCtx *svc.ServiceContext, logger logx.Logger) *wafLogicHelper {
 	workDir := strings.TrimSpace(svcCtx.Config.Waf.WorkDir)
 	if workDir == "" {
-		workDir = "/config/caddy/waf"
+		workDir = "/config/security"
 	}
 	return &wafLogicHelper{
 		ctx:    ctx,
@@ -180,9 +181,10 @@ func (helper *wafLogicHelper) finishJob(job *model.WafUpdateJob, status, message
 	}
 
 	now := time.Now()
+	localizedMessage := localizeWafJobMessage(strings.TrimSpace(message))
 	updates := map[string]interface{}{
 		"status":      strings.ToLower(strings.TrimSpace(status)),
-		"message":     strings.TrimSpace(message),
+		"message":     localizedMessage,
 		"finished_at": &now,
 	}
 	if releaseID > 0 {
@@ -191,6 +193,59 @@ func (helper *wafLogicHelper) finishJob(job *model.WafUpdateJob, status, message
 	if err := helper.svcCtx.DB.Model(job).Updates(updates).Error; err != nil {
 		helper.logger.Errorf("finish waf job failed: %v", err)
 	}
+}
+
+func localizeWafJobMessage(rawMessage string) string {
+	messageText := strings.TrimSpace(rawMessage)
+	if messageText == "" {
+		return ""
+	}
+
+	exactMap := map[string]string{
+		"check success":               "检查成功",
+		"sync success":                "同步成功",
+		"upload success":              "上传成功",
+		"activate success":            "激活成功",
+		"rollback success":            "回滚成功",
+		"engine source check success": "引擎源检查成功",
+	}
+	if localized, ok := exactMap[messageText]; ok {
+		return localized
+	}
+
+	replacementRules := []struct {
+		pattern     *regexp.Regexp
+		replacement string
+	}{
+		{regexp.MustCompile(`(?i)context deadline exceeded`), "请求超时"},
+		{regexp.MustCompile(`(?i)i/o timeout`), "网络超时"},
+		{regexp.MustCompile(`(?i)invalid proxy url:`), "代理地址不合法："},
+		{regexp.MustCompile(`(?i)invalid url:`), "无效地址："},
+		{regexp.MustCompile(`(?i)only https url is allowed`), "仅支持 HTTPS 地址"},
+		{regexp.MustCompile(`(?i)only https scheme is allowed`), "仅允许 HTTPS 协议"},
+		{regexp.MustCompile(`(?i)proxy url scheme must be http or https`), "代理地址协议仅支持 http/https"},
+		{regexp.MustCompile(`(?i)source not found`), "未找到更新源"},
+		{regexp.MustCompile(`(?i)source is disabled`), "更新源已禁用"},
+		{regexp.MustCompile(`(?i)source mode is not remote`), "更新源模式不是 remote"},
+		{regexp.MustCompile(`(?i)source url is empty`), "更新源地址为空"},
+		{regexp.MustCompile(`(?i)move package failed:`), "移动安装包失败："},
+		{regexp.MustCompile(`(?i)create release dir failed:`), "创建版本目录失败："},
+		{regexp.MustCompile(`(?i)create release failed:`), "创建版本记录失败："},
+		{regexp.MustCompile(`(?i)fetch failed:`), "下载失败："},
+		{regexp.MustCompile(`(?i)host not allowed:`), "源域名不在允许列表："},
+		{regexp.MustCompile(`(?i)unexpected status code:`), "下载返回异常状态码："},
+		{regexp.MustCompile(`(?i)write temp file failed:`), "写入临时文件失败："},
+		{regexp.MustCompile(`(?i)close temp file failed:`), "关闭临时文件失败："},
+		{regexp.MustCompile(`(?i)move temp file failed:`), "移动临时文件失败："},
+		{regexp.MustCompile(`(?i)prepare waf store failed:`), "准备 Waf 存储目录失败："},
+	}
+
+	localized := messageText
+	for _, rule := range replacementRules {
+		localized = rule.pattern.ReplaceAllString(localized, rule.replacement)
+	}
+
+	return strings.TrimSpace(localized)
 }
 
 func (helper *wafLogicHelper) sourceBoolMask() map[string]bool {

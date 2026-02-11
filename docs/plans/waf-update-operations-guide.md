@@ -16,7 +16,7 @@
 - API 前缀：`/api`
 - 鉴权：`Authorization: Bearer <token>`
 - 返回结构：`{ code, msg, data }`
-- WAF 工作目录：`/config/caddy/waf`
+- WAF 工作目录：`/config/security`
 
 ## 3. 常用 API 操作示例
 
@@ -194,10 +194,10 @@ curl "http://localhost:8888/api/caddy/waf/job?page=1&pageSize=50&status=failed" 
 
 ```bash
 # 1) 查看 current/last_good 指向
-ls -l /config/caddy/waf/current /config/caddy/waf/last_good
+ls -l /config/security/current /config/security/last_good
 
 # 2) 查看 release 目录
-ls -lah /config/caddy/waf/releases
+ls -lah /config/security/releases
 
 # 3) 查看审计日志
 tail -n 200 /var/log/caddy/waf_audit.log

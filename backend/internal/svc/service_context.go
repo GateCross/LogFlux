@@ -166,8 +166,8 @@ func initWafWorkspace(c *config.Config) {
 	}
 
 	configuredDir := strings.TrimSpace(c.Waf.WorkDir)
-	defaultDir := "/config/caddy/waf"
-	fallbackDir := filepath.Join(os.TempDir(), "logflux", "waf")
+	defaultDir := "/config/security"
+	fallbackDir := filepath.Join(os.TempDir(), "logflux", "security")
 
 	candidates := make([]string, 0, 3)
 	if configuredDir != "" {

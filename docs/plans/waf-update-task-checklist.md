@@ -24,7 +24,7 @@
 - [x] `P0-A04` 在 `backend/internal/svc/service_context.go` 加入 AutoMigrate
 - [x] `P0-A05` 增加配置结构：`backend/internal/config/config.go` 的 `WAF` 节
 - [x] `P0-A06` 在 `backend/etc/config.yaml` 增加默认 WAF 配置
-- [x] `P0-A07` 启动时确保目录存在：`/config/caddy/waf/{tmp,packages,releases}`
+- [x] `P0-A07` 启动时确保目录存在：`/config/security/{tmp,packages,releases}`
 
 **验收标准**
 - [x] 新表自动创建成功

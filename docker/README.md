@@ -106,6 +106,20 @@ docker compose -f docker/docker-compose.yml up -d --no-build
 - 规则集：`load_owasp_crs`
 - 运行模式：`SecRuleEngine On`（阻断模式）
 
+Waf/CRS 文件默认目录（后端更新源下载、解压、版本切换）：
+
+- 工作目录：`/config/security`
+- 关键子目录：`/config/security/{tmp,packages,releases}`
+- Docker 持久化：`docker/docker-compose.yml` 已挂载 `security_data:/config/security`
+- 如需映射宿主机目录：可改为 `./data/security:/config/security`
+
+旧版本迁移（历史数据在 `/config/caddy/waf`）：
+
+```bash
+docker compose -f docker/docker-compose.yml run --rm logflux \
+  sh -c "mkdir -p /config/security && cp -a /config/caddy/waf/. /config/security/ || true"
+```
+
 审计日志路径：
 
 - `/var/log/caddy/waf_audit.log`
