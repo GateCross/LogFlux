@@ -12,22 +12,22 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-type ListWAFJobsLogic struct {
+type ListWafJobsLogic struct {
 	logx.Logger
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
 }
 
-func NewListWAFJobsLogic(ctx context.Context, svcCtx *svc.ServiceContext) *ListWAFJobsLogic {
-	return &ListWAFJobsLogic{
+func NewListWafJobsLogic(ctx context.Context, svcCtx *svc.ServiceContext) *ListWafJobsLogic {
+	return &ListWafJobsLogic{
 		Logger: logx.WithContext(ctx),
 		ctx:    ctx,
 		svcCtx: svcCtx,
 	}
 }
 
-func (l *ListWAFJobsLogic) ListWAFJobs(req *types.WAFJobListReq) (resp *types.WAFJobListResp, err error) {
-	helper := newWAFLogicHelper(l.ctx, l.svcCtx, l.Logger)
+func (l *ListWafJobsLogic) ListWafJobs(req *types.WafJobListReq) (resp *types.WafJobListResp, err error) {
+	helper := newWafLogicHelper(l.ctx, l.svcCtx, l.Logger)
 
 	page := req.Page
 	if page <= 0 {
@@ -38,7 +38,7 @@ func (l *ListWAFJobsLogic) ListWAFJobs(req *types.WAFJobListReq) (resp *types.WA
 		pageSize = 20
 	}
 
-	db := helper.svcCtx.DB.Model(&model.WAFUpdateJob{})
+	db := helper.svcCtx.DB.Model(&model.WafUpdateJob{})
 	if status := strings.TrimSpace(req.Status); status != "" {
 		db = db.Where("status = ?", strings.ToLower(status))
 	}
@@ -51,15 +51,15 @@ func (l *ListWAFJobsLogic) ListWAFJobs(req *types.WAFJobListReq) (resp *types.WA
 		return nil, fmt.Errorf("count jobs failed: %w", err)
 	}
 
-	var jobs []model.WAFUpdateJob
+	var jobs []model.WafUpdateJob
 	offset := (page - 1) * pageSize
 	if err := db.Order("created_at desc, id desc").Limit(pageSize).Offset(offset).Find(&jobs).Error; err != nil {
 		return nil, fmt.Errorf("query jobs failed: %w", err)
 	}
 
-	items := make([]types.WAFJobItem, 0, len(jobs))
+	items := make([]types.WafJobItem, 0, len(jobs))
 	for _, job := range jobs {
-		items = append(items, types.WAFJobItem{
+		items = append(items, types.WafJobItem{
 			ID:          job.ID,
 			SourceId:    job.SourceID,
 			ReleaseId:   job.ReleaseID,
@@ -74,5 +74,5 @@ func (l *ListWAFJobsLogic) ListWAFJobs(req *types.WAFJobListReq) (resp *types.WA
 		})
 	}
 
-	return &types.WAFJobListResp{List: items, Total: total}, nil
+	return &types.WafJobListResp{List: items, Total: total}, nil
 }

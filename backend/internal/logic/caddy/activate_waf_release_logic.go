@@ -11,24 +11,24 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-type ActivateWAFReleaseLogic struct {
+type ActivateWafReleaseLogic struct {
 	logx.Logger
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
 }
 
-func NewActivateWAFReleaseLogic(ctx context.Context, svcCtx *svc.ServiceContext) *ActivateWAFReleaseLogic {
-	return &ActivateWAFReleaseLogic{
+func NewActivateWafReleaseLogic(ctx context.Context, svcCtx *svc.ServiceContext) *ActivateWafReleaseLogic {
+	return &ActivateWafReleaseLogic{
 		Logger: logx.WithContext(ctx),
 		ctx:    ctx,
 		svcCtx: svcCtx,
 	}
 }
 
-func (l *ActivateWAFReleaseLogic) ActivateWAFRelease(req *types.WAFReleaseActivateReq) (resp *types.BaseResp, err error) {
-	helper := newWAFLogicHelper(l.ctx, l.svcCtx, l.Logger)
+func (l *ActivateWafReleaseLogic) ActivateWafRelease(req *types.WafReleaseActivateReq) (resp *types.BaseResp, err error) {
+	helper := newWafLogicHelper(l.ctx, l.svcCtx, l.Logger)
 
-	var release model.WAFRelease
+	var release model.WafRelease
 	if err := helper.svcCtx.DB.First(&release, req.ID).Error; err != nil {
 		return nil, fmt.Errorf("release not found")
 	}

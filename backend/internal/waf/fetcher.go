@@ -20,6 +20,7 @@ type FetchOptions struct {
 	AllowedDomains []string
 	AuthType       string
 	AuthSecret     string
+	ProxyURL       string
 	TimeoutSec     int
 }
 
@@ -58,6 +59,21 @@ func FetchPackage(downloadURL, targetPath string, options FetchOptions) (*FetchR
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12},
 		},
+	}
+
+	proxyURL := strings.TrimSpace(options.ProxyURL)
+	if proxyURL != "" {
+		parsedProxyURL, proxyErr := url.Parse(proxyURL)
+		if proxyErr != nil {
+			return nil, fmt.Errorf("invalid proxy url: %w", proxyErr)
+		}
+		if parsedProxyURL.Scheme != "http" && parsedProxyURL.Scheme != "https" {
+			return nil, fmt.Errorf("proxy url scheme must be http or https")
+		}
+		httpClient.Transport = &http.Transport{
+			TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12},
+			Proxy:           http.ProxyURL(parsedProxyURL),
+		}
 	}
 
 	request, err := http.NewRequest(http.MethodGet, downloadURL, nil)
@@ -125,6 +141,9 @@ func validateDomainAllowlist(host string, allowlist []string) error {
 			continue
 		}
 		if host == normalizedAllowed {
+			return nil
+		}
+		if strings.HasSuffix(host, "."+normalizedAllowed) {
 			return nil
 		}
 	}

@@ -220,12 +220,13 @@ type (
 	}
 
 	// WAF Update Management
-	WAFSourceReq {
+	WafSourceReq {
 		Name         string `json:"name"`
 		Kind         string `json:"kind,default=crs"`      // crs | coraza_engine
 		Mode         string `json:"mode,default=remote"`   // remote | manual
 		Url          string `json:"url,optional"`
 		ChecksumUrl  string `json:"checksumUrl,optional"`
+		ProxyUrl     string `json:"proxyUrl,optional"`
 		AuthType     string `json:"authType,default=none"` // none | token | basic
 		AuthSecret   string `json:"authSecret,optional"`
 		Schedule     string `json:"schedule,optional"`
@@ -235,13 +236,14 @@ type (
 		AutoActivate bool   `json:"autoActivate,optional"`
 		Meta         string `json:"meta,optional"` // JSON string
 	}
-	WAFSourceUpdateReq {
+	WafSourceUpdateReq {
 		ID           uint   `path:"id"`
 		Name         string `json:"name,optional"`
 		Kind         string `json:"kind,optional"`
 		Mode         string `json:"mode,optional"`
 		Url          string `json:"url,optional"`
 		ChecksumUrl  string `json:"checksumUrl,optional"`
+		ProxyUrl     string `json:"proxyUrl,optional"`
 		AuthType     string `json:"authType,optional"`
 		AuthSecret   string `json:"authSecret,optional"`
 		Schedule     string `json:"schedule,optional"`
@@ -251,19 +253,20 @@ type (
 		AutoActivate bool   `json:"autoActivate,optional"`
 		Meta         string `json:"meta,optional"` // JSON string
 	}
-	WAFSourceListReq {
+	WafSourceListReq {
 		Page     int    `form:"page,default=1"`
 		PageSize int    `form:"pageSize,default=20"`
 		Kind     string `form:"kind,optional"`
 		Name     string `form:"name,optional"`
 	}
-	WAFSourceItem {
+	WafSourceItem {
 		ID           uint   `json:"id"`
 		Name         string `json:"name"`
 		Kind         string `json:"kind"`
 		Mode         string `json:"mode"`
 		Url          string `json:"url"`
 		ChecksumUrl  string `json:"checksumUrl"`
+		ProxyUrl     string `json:"proxyUrl,optional"`
 		AuthType     string `json:"authType"`
 		Schedule     string `json:"schedule"`
 		Enabled      bool   `json:"enabled"`
@@ -275,30 +278,30 @@ type (
 		CreatedAt    string `json:"createdAt"`
 		UpdatedAt    string `json:"updatedAt"`
 	}
-	WAFSourceListResp {
-		List  []WAFSourceItem `json:"list"`
+	WafSourceListResp {
+		List  []WafSourceItem `json:"list"`
 		Total int64           `json:"total"`
 	}
-	WAFSourceActionReq {
+	WafSourceActionReq {
 		ID uint `path:"id"`
 	}
-	WAFSourceSyncReq {
+	WafSourceSyncReq {
 		ID          uint `path:"id"`
 		ActivateNow bool `json:"activateNow,optional"`
 	}
-	WAFUploadReq {
+	WafUploadReq {
 		Kind        string `json:"kind,default=crs"`
 		Version     string `json:"version"`
 		Checksum    string `json:"checksum,optional"`
 		ActivateNow bool   `json:"activateNow,optional"`
 	}
-	WAFReleaseListReq {
+	WafReleaseListReq {
 		Page     int    `form:"page,default=1"`
 		PageSize int    `form:"pageSize,default=20"`
 		Kind     string `form:"kind,optional"`
 		Status   string `form:"status,optional"`
 	}
-	WAFReleaseItem {
+	WafReleaseItem {
 		ID          uint   `json:"id"`
 		SourceId    uint   `json:"sourceId"`
 		Kind        string `json:"kind"`
@@ -311,24 +314,24 @@ type (
 		CreatedAt   string `json:"createdAt"`
 		UpdatedAt   string `json:"updatedAt"`
 	}
-	WAFReleaseListResp {
-		List  []WAFReleaseItem `json:"list"`
+	WafReleaseListResp {
+		List  []WafReleaseItem `json:"list"`
 		Total int64            `json:"total"`
 	}
-	WAFReleaseActivateReq {
+	WafReleaseActivateReq {
 		ID uint `path:"id"`
 	}
-	WAFReleaseRollbackReq {
+	WafReleaseRollbackReq {
 		Target string `json:"target,optional"` // last_good | version
 		Version string `json:"version,optional"`
 	}
-	WAFJobListReq {
+	WafJobListReq {
 		Page     int    `form:"page,default=1"`
 		PageSize int    `form:"pageSize,default=20"`
 		Status   string `form:"status,optional"`
 		Action   string `form:"action,optional"`
 	}
-	WAFJobItem {
+	WafJobItem {
 		ID         uint   `json:"id"`
 		SourceId   uint   `json:"sourceId"`
 		ReleaseId  uint   `json:"releaseId"`
@@ -341,9 +344,17 @@ type (
 		FinishedAt string `json:"finishedAt"`
 		CreatedAt  string `json:"createdAt"`
 	}
-	WAFJobListResp {
-		List  []WAFJobItem `json:"list"`
+	WafJobListResp {
+		List  []WafJobItem `json:"list"`
 		Total int64        `json:"total"`
+	}
+	WafEngineStatusResp {
+		CurrentVersion string `json:"currentVersion,optional"`
+		LatestVersion  string `json:"latestVersion,optional"`
+		CanUpgrade     bool   `json:"canUpgrade"`
+		CheckedAt      string `json:"checkedAt,optional"`
+		Source         string `json:"source,optional"`
+		Message        string `json:"message,optional"`
 	}
 )
 
@@ -453,38 +464,44 @@ service logflux-api {
 	@handler RollbackCaddyConfig
 	post /caddy/server/:serverId/config/rollback (CaddyConfigRollbackReq) returns (BaseResp)
 
-	@handler ListWAFSources
-	get /caddy/waf/source (WAFSourceListReq) returns (WAFSourceListResp)
+	@handler ListWafSources
+	get /caddy/waf/source (WafSourceListReq) returns (WafSourceListResp)
 
-	@handler AddWAFSource
-	post /caddy/waf/source (WAFSourceReq) returns (BaseResp)
+	@handler AddWafSource
+	post /caddy/waf/source (WafSourceReq) returns (BaseResp)
 
-	@handler UpdateWAFSource
-	put /caddy/waf/source/:id (WAFSourceUpdateReq) returns (BaseResp)
+	@handler UpdateWafSource
+	put /caddy/waf/source/:id (WafSourceUpdateReq) returns (BaseResp)
 
-	@handler DeleteWAFSource
+	@handler DeleteWafSource
 	delete /caddy/waf/source/:id (IDReq) returns (BaseResp)
 
-	@handler CheckWAFSource
-	post /caddy/waf/source/:id/check (WAFSourceActionReq) returns (BaseResp)
+	@handler CheckWafSource
+	post /caddy/waf/source/:id/check (WafSourceActionReq) returns (BaseResp)
 
-	@handler SyncWAFSource
-	post /caddy/waf/source/:id/sync (WAFSourceSyncReq) returns (BaseResp)
+	@handler SyncWafSource
+	post /caddy/waf/source/:id/sync (WafSourceSyncReq) returns (BaseResp)
 
-	@handler UploadWAFPackage
-	post /caddy/waf/upload (WAFUploadReq) returns (BaseResp)
+	@handler UploadWafPackage
+	post /caddy/waf/upload (WafUploadReq) returns (BaseResp)
 
-	@handler ListWAFReleases
-	get /caddy/waf/release (WAFReleaseListReq) returns (WAFReleaseListResp)
+	@handler GetWafEngineStatus
+	get /caddy/waf/engine/status returns (WafEngineStatusResp)
 
-	@handler ActivateWAFRelease
-	post /caddy/waf/release/:id/activate (WAFReleaseActivateReq) returns (BaseResp)
+	@handler CheckWafEngine
+	post /caddy/waf/engine/check returns (BaseResp)
 
-	@handler RollbackWAFRelease
-	post /caddy/waf/release/rollback (WAFReleaseRollbackReq) returns (BaseResp)
+	@handler ListWafReleases
+	get /caddy/waf/release (WafReleaseListReq) returns (WafReleaseListResp)
 
-	@handler ListWAFJobs
-	get /caddy/waf/job (WAFJobListReq) returns (WAFJobListResp)
+	@handler ActivateWafRelease
+	post /caddy/waf/release/:id/activate (WafReleaseActivateReq) returns (BaseResp)
+
+	@handler RollbackWafRelease
+	post /caddy/waf/release/rollback (WafReleaseRollbackReq) returns (BaseResp)
+
+	@handler ListWafJobs
+	get /caddy/waf/job (WafJobListReq) returns (WafJobListResp)
 }
 
 @server (

@@ -2,8 +2,8 @@ package model
 
 import "time"
 
-// WAFSource WAF 更新源配置
-type WAFSource struct {
+// WafSource WAF 更新源配置
+type WafSource struct {
 	ID        uint      `gorm:"primarykey" json:"id"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
@@ -13,6 +13,7 @@ type WAFSource struct {
 	Mode        string `gorm:"size:32;index;not null;default:'remote'" json:"mode"` // remote | manual
 	URL         string `gorm:"type:text" json:"url,omitempty"`
 	ChecksumURL string `gorm:"type:text" json:"checksumUrl,omitempty"`
+	ProxyURL    string `gorm:"type:text" json:"proxyUrl,omitempty"`
 
 	AuthType   string `gorm:"size:20;not null;default:'none'" json:"authType"` // none | token | basic
 	AuthSecret string `gorm:"type:text" json:"authSecret,omitempty"`
@@ -30,6 +31,6 @@ type WAFSource struct {
 	Meta          JSONMap    `gorm:"type:jsonb" json:"meta,omitempty"`
 }
 
-func (WAFSource) TableName() string {
+func (WafSource) TableName() string {
 	return "waf_sources"
 }

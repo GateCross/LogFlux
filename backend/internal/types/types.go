@@ -627,7 +627,16 @@ type UserRouteResp struct {
 	Routes []MenuRoute `json:"routes"`
 }
 
-type WAFJobItem struct {
+type WafEngineStatusResp struct {
+	CurrentVersion string `json:"currentVersion,optional"`
+	LatestVersion  string `json:"latestVersion,optional"`
+	CanUpgrade     bool   `json:"canUpgrade"`
+	CheckedAt      string `json:"checkedAt,optional"`
+	Source         string `json:"source,optional"`
+	Message        string `json:"message,optional"`
+}
+
+type WafJobItem struct {
 	ID          uint   `json:"id"`
 	SourceId    uint   `json:"sourceId"`
 	ReleaseId   uint   `json:"releaseId"`
@@ -641,23 +650,23 @@ type WAFJobItem struct {
 	CreatedAt   string `json:"createdAt"`
 }
 
-type WAFJobListReq struct {
+type WafJobListReq struct {
 	Page     int    `form:"page,default=1"`
 	PageSize int    `form:"pageSize,default=20"`
 	Status   string `form:"status,optional"`
 	Action   string `form:"action,optional"`
 }
 
-type WAFJobListResp struct {
-	List  []WAFJobItem `json:"list"`
+type WafJobListResp struct {
+	List  []WafJobItem `json:"list"`
 	Total int64        `json:"total"`
 }
 
-type WAFReleaseActivateReq struct {
+type WafReleaseActivateReq struct {
 	ID uint `path:"id"`
 }
 
-type WAFReleaseItem struct {
+type WafReleaseItem struct {
 	ID           uint   `json:"id"`
 	SourceId     uint   `json:"sourceId"`
 	Kind         string `json:"kind"`
@@ -671,34 +680,35 @@ type WAFReleaseItem struct {
 	UpdatedAt    string `json:"updatedAt"`
 }
 
-type WAFReleaseListReq struct {
+type WafReleaseListReq struct {
 	Page     int    `form:"page,default=1"`
 	PageSize int    `form:"pageSize,default=20"`
 	Kind     string `form:"kind,optional"`
 	Status   string `form:"status,optional"`
 }
 
-type WAFReleaseListResp struct {
-	List  []WAFReleaseItem `json:"list"`
+type WafReleaseListResp struct {
+	List  []WafReleaseItem `json:"list"`
 	Total int64            `json:"total"`
 }
 
-type WAFReleaseRollbackReq struct {
+type WafReleaseRollbackReq struct {
 	Target  string `json:"target,optional"` // last_good | version
 	Version string `json:"version,optional"`
 }
 
-type WAFSourceActionReq struct {
+type WafSourceActionReq struct {
 	ID uint `path:"id"`
 }
 
-type WAFSourceItem struct {
+type WafSourceItem struct {
 	ID           uint   `json:"id"`
 	Name         string `json:"name"`
 	Kind         string `json:"kind"`
 	Mode         string `json:"mode"`
 	Url          string `json:"url"`
 	ChecksumUrl  string `json:"checksumUrl"`
+	ProxyUrl     string `json:"proxyUrl,optional"`
 	AuthType     string `json:"authType"`
 	Schedule     string `json:"schedule"`
 	Enabled      bool   `json:"enabled"`
@@ -711,24 +721,25 @@ type WAFSourceItem struct {
 	UpdatedAt    string `json:"updatedAt"`
 }
 
-type WAFSourceListReq struct {
+type WafSourceListReq struct {
 	Page     int    `form:"page,default=1"`
 	PageSize int    `form:"pageSize,default=20"`
 	Kind     string `form:"kind,optional"`
 	Name     string `form:"name,optional"`
 }
 
-type WAFSourceListResp struct {
-	List  []WAFSourceItem `json:"list"`
+type WafSourceListResp struct {
+	List  []WafSourceItem `json:"list"`
 	Total int64           `json:"total"`
 }
 
-type WAFSourceReq struct {
+type WafSourceReq struct {
 	Name         string `json:"name"`
 	Kind         string `json:"kind,default=crs"`    // crs | coraza_engine
 	Mode         string `json:"mode,default=remote"` // remote | manual
 	Url          string `json:"url,optional"`
 	ChecksumUrl  string `json:"checksumUrl,optional"`
+	ProxyUrl     string `json:"proxyUrl,optional"`
 	AuthType     string `json:"authType,default=none"` // none | token | basic
 	AuthSecret   string `json:"authSecret,optional"`
 	Schedule     string `json:"schedule,optional"`
@@ -739,18 +750,19 @@ type WAFSourceReq struct {
 	Meta         string `json:"meta,optional"` // JSON string
 }
 
-type WAFSourceSyncReq struct {
+type WafSourceSyncReq struct {
 	ID          uint `path:"id"`
 	ActivateNow bool `json:"activateNow,optional"`
 }
 
-type WAFSourceUpdateReq struct {
+type WafSourceUpdateReq struct {
 	ID           uint   `path:"id"`
 	Name         string `json:"name,optional"`
 	Kind         string `json:"kind,optional"`
 	Mode         string `json:"mode,optional"`
 	Url          string `json:"url,optional"`
 	ChecksumUrl  string `json:"checksumUrl,optional"`
+	ProxyUrl     string `json:"proxyUrl,optional"`
 	AuthType     string `json:"authType,optional"`
 	AuthSecret   string `json:"authSecret,optional"`
 	Schedule     string `json:"schedule,optional"`
@@ -761,7 +773,7 @@ type WAFSourceUpdateReq struct {
 	Meta         string `json:"meta,optional"` // JSON string
 }
 
-type WAFUploadReq struct {
+type WafUploadReq struct {
 	Kind        string `json:"kind,default=crs"`
 	Version     string `json:"version"`
 	Checksum    string `json:"checksum,optional"`

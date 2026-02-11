@@ -2,6 +2,7 @@ package caddy
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -10,42 +11,43 @@ import (
 	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
+	"gorm.io/gorm"
 )
 
-type AddWAFSourceLogic struct {
+type AddWafSourceLogic struct {
 	logx.Logger
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
 }
 
-func NewAddWAFSourceLogic(ctx context.Context, svcCtx *svc.ServiceContext) *AddWAFSourceLogic {
-	return &AddWAFSourceLogic{
+func NewAddWafSourceLogic(ctx context.Context, svcCtx *svc.ServiceContext) *AddWafSourceLogic {
+	return &AddWafSourceLogic{
 		Logger: logx.WithContext(ctx),
 		ctx:    ctx,
 		svcCtx: svcCtx,
 	}
 }
 
-func (l *AddWAFSourceLogic) AddWAFSource(req *types.WAFSourceReq) (resp *types.BaseResp, err error) {
-	helper := newWAFLogicHelper(l.ctx, l.svcCtx, l.Logger)
+func (l *AddWafSourceLogic) AddWafSource(req *types.WafSourceReq) (resp *types.BaseResp, err error) {
+	helper := newWafLogicHelper(l.ctx, l.svcCtx, l.Logger)
 
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
 		return nil, fmt.Errorf("source name is required")
 	}
 
-	kind := normalizeWAFKind(req.Kind)
-	if err := validateWAFKind(kind); err != nil {
+	kind := normalizeWafKind(req.Kind)
+	if err := validateWafKind(kind); err != nil {
 		return nil, err
 	}
 
-	mode := normalizeWAFMode(req.Mode)
-	if err := validateWAFMode(mode); err != nil {
+	mode := normalizeWafMode(req.Mode)
+	if err := validateWafMode(mode); err != nil {
 		return nil, err
 	}
 
-	authType := normalizeWAFAuthType(req.AuthType)
-	if err := validateWAFAuthType(authType); err != nil {
+	authType := normalizeWafAuthType(req.AuthType)
+	if err := validateWafAuthType(authType); err != nil {
 		return nil, err
 	}
 
@@ -59,14 +61,22 @@ func (l *AddWAFSourceLogic) AddWAFSource(req *types.WAFSourceReq) (resp *types.B
 		return nil, err
 	}
 
-	source := &model.WAFSource{
-		Name:         name,
-		Kind:         kind,
-		Mode:         mode,
-		URL:          sourceURL,
-		ChecksumURL:  strings.TrimSpace(req.ChecksumUrl),
-		AuthType:     authType,
-		AuthSecret:   strings.TrimSpace(req.AuthSecret),
+	var existing model.WafSource
+	if err := helper.svcCtx.DB.Where("name = ?", name).First(&existing).Error; err == nil {
+		return nil, fmt.Errorf("source name already exists: %s", name)
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, fmt.Errorf("check source name failed: %w", err)
+	}
+
+		source := &model.WafSource{
+			Name:         name,
+			Kind:         kind,
+			Mode:         mode,
+			URL:          sourceURL,
+			ChecksumURL:  strings.TrimSpace(req.ChecksumUrl),
+			ProxyURL:     strings.TrimSpace(req.ProxyUrl),
+			AuthType:     authType,
+			AuthSecret:   strings.TrimSpace(req.AuthSecret),
 		Schedule:     strings.TrimSpace(req.Schedule),
 		Enabled:      true,
 		AutoCheck:    true,
@@ -89,6 +99,9 @@ func (l *AddWAFSourceLogic) AddWAFSource(req *types.WAFSourceReq) (resp *types.B
 	}
 
 	if err := helper.svcCtx.DB.Create(source).Error; err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "duplicate key") {
+			return nil, fmt.Errorf("source name already exists: %s", name)
+		}
 		return nil, fmt.Errorf("create source failed: %w", err)
 	}
 

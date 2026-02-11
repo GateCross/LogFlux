@@ -34,5 +34,6 @@ export const views: Record<LastLevelRouteKey, RouteComponent | (() => Promise<Ro
   notification_log: () => import("@/views/notification/log/index.vue"),
   notification_rule: () => import("@/views/notification/rule/index.vue"),
   notification_template: () => import("@/views/notification/template/index.vue"),
+  security: () => import("@/views/security/index.vue"),
   user_center: () => import("@/views/user/center/index.vue"),
 };

@@ -14,4 +14,7 @@ func TestMenuPermissionKey_LogPages(t *testing.T) {
 	if got := menuPermissionKey("caddy_log"); got != "logs_caddy" {
 		t.Fatalf("expected caddy_log -> logs_caddy, got %q", got)
 	}
+	if got := menuPermissionKey("security"); got != "security" {
+		t.Fatalf("expected security -> security, got %q", got)
+	}
 }

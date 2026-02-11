@@ -2,6 +2,7 @@ package svc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"logflux/common/gorm"
 	"logflux/common/logging"
@@ -57,12 +58,12 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		&model.CronTask{},
 		&model.CronTaskLog{},
 		// WAF 更新管理
-		&model.WAFSource{},
-		&model.WAFRelease{},
-		&model.WAFUpdateJob{},
+		&model.WafSource{},
+		&model.WafRelease{},
+		&model.WafUpdateJob{},
 	)
 
-	initWAFWorkspace(c)
+	initWafWorkspace(&c)
 
 	// 创建归档存储过程（如果不存在）
 	createArchiveFunction(db)
@@ -87,6 +88,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	// 初始化 RBAC 数据
 	initRBACData(db)
+	initWafDefaultSources(db)
 
 	// 初始化默认管理员账号（自动生成随机复杂密码并仅在首次初始化时明文输出）
 	ensureAdminUser(db)
@@ -158,22 +160,220 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	}
 }
 
-func initWAFWorkspace(c config.Config) {
-	baseDir := strings.TrimSpace(c.WAF.WorkDir)
-	if baseDir == "" {
-		baseDir = "/config/caddy/waf"
+func initWafWorkspace(c *config.Config) {
+	if c == nil {
+		return
+	}
+
+	configuredDir := strings.TrimSpace(c.Waf.WorkDir)
+	defaultDir := "/config/caddy/waf"
+	fallbackDir := filepath.Join(os.TempDir(), "logflux", "waf")
+
+	candidates := make([]string, 0, 3)
+	if configuredDir != "" {
+		candidates = append(candidates, configuredDir)
+	}
+	if configuredDir != defaultDir {
+		candidates = append(candidates, defaultDir)
+	}
+	if configuredDir != fallbackDir && defaultDir != fallbackDir {
+		candidates = append(candidates, fallbackDir)
+	}
+
+	for _, baseDir := range candidates {
+		if err := ensureWafWorkspaceDirs(baseDir); err != nil {
+			logx.Errorf("初始化 WAF 工作目录失败: %s, err=%v", baseDir, err)
+			continue
+		}
+
+		if configuredDir != "" && configuredDir != baseDir {
+			logx.Infof("WAF 工作目录回退至可写路径: from=%s to=%s", configuredDir, baseDir)
+		}
+		c.Waf.WorkDir = baseDir
+		logx.Infof("WAF 工作目录已初始化: %s", fmt.Sprintf("%s/{tmp,packages,releases}", baseDir))
+		return
+	}
+
+	if strings.TrimSpace(c.Waf.WorkDir) == "" {
+		c.Waf.WorkDir = fallbackDir
+	}
+	logx.Errorf("WAF 工作目录初始化全部失败，后续涉及文件操作将报错: workDir=%s", c.Waf.WorkDir)
+}
+
+func ensureWafWorkspaceDirs(baseDir string) error {
+	trimmed := strings.TrimSpace(baseDir)
+	if trimmed == "" {
+		return fmt.Errorf("workdir is empty")
 	}
 
 	subDirs := []string{"", "tmp", "packages", "releases"}
 	for _, subDir := range subDirs {
-		target := filepath.Join(baseDir, subDir)
+		target := filepath.Join(trimmed, subDir)
 		if err := os.MkdirAll(target, 0o755); err != nil {
-			logx.Errorf("初始化 WAF 工作目录失败: %s, err=%v", target, err)
-			continue
+			return fmt.Errorf("create dir failed: %s, %w", target, err)
 		}
 	}
 
-	logx.Infof("WAF 工作目录已初始化: %s", fmt.Sprintf("%s/{tmp,packages,releases}", baseDir))
+	return nil
+}
+
+func initWafDefaultSources(db *gorm2.DB) {
+	var total int64
+	if err := db.Model(&model.WafSource{}).Count(&total).Error; err != nil {
+		logx.Errorf("统计 WAF 源数量失败: %v", err)
+		return
+	}
+
+	if total > 0 {
+		return
+	}
+
+	defaultSources := []model.WafSource{
+		{
+			Name:         "default-crs",
+			Kind:         "crs",
+			Mode:         "remote",
+			URL:          "https://codeload.github.com/coreruleset/coreruleset/tar.gz/refs/heads/main",
+			ChecksumURL:  "",
+			ProxyURL:     "",
+			AuthType:     "none",
+			AuthSecret:   "",
+			Schedule:     "0 0 */6 * * *",
+			Enabled:      true,
+			AutoCheck:    true,
+			AutoDownload: true,
+			AutoActivate: false,
+			Meta: model.JSONMap{
+				"default":  true,
+				"official": true,
+				"repo":     "https://github.com/coreruleset/coreruleset",
+			},
+		},
+		{
+			Name:         "official-crs",
+			Kind:         "crs",
+			Mode:         "remote",
+			URL:          "https://github.com/coreruleset/coreruleset/archive/refs/heads/main.tar.gz",
+			ChecksumURL:  "",
+			ProxyURL:     "",
+			AuthType:     "none",
+			AuthSecret:   "",
+			Schedule:     "0 0 */6 * * *",
+			Enabled:      true,
+			AutoCheck:    true,
+			AutoDownload: true,
+			AutoActivate: false,
+			Meta: model.JSONMap{
+				"official": true,
+				"repo":     "https://github.com/coreruleset/coreruleset",
+			},
+		},
+		{
+			Name:         "official-coraza-engine",
+			Kind:         "coraza_engine",
+			Mode:         "remote",
+			URL:          "https://github.com/corazawaf/coraza-caddy/archive/refs/heads/main.tar.gz",
+			ChecksumURL:  "",
+			ProxyURL:     "",
+			AuthType:     "none",
+			AuthSecret:   "",
+			Schedule:     "0 0 0 * * *",
+			Enabled:      true,
+			AutoCheck:    true,
+			AutoDownload: false,
+			AutoActivate: false,
+			Meta: model.JSONMap{
+				"official": true,
+				"repo":     "https://github.com/corazawaf/coraza-caddy",
+			},
+		},
+	}
+
+	for i := range defaultSources {
+		source := defaultSources[i]
+		var existing model.WafSource
+		err := db.Where("name = ?", source.Name).First(&existing).Error
+		if errors.Is(err, gorm2.ErrRecordNotFound) {
+			if createErr := db.Create(&source).Error; createErr != nil {
+				logx.Errorf("初始化默认 WAF 源失败: name=%s err=%v", source.Name, createErr)
+			}
+		} else if err != nil {
+			logx.Errorf("查询默认 WAF 源失败: name=%s err=%v", source.Name, err)
+		}
+	}
+}
+
+func (svc *ServiceContext) EnsureWafDefaultSources() {
+	if svc == nil || svc.DB == nil {
+		return
+	}
+	initWafDefaultSources(svc.DB)
+}
+
+func ensureWafEngineDefaultSource(db *gorm2.DB) {
+	if db == nil {
+		return
+	}
+
+	var count int64
+	if err := db.Model(&model.WafSource{}).Where("kind = ?", "coraza_engine").Count(&count).Error; err != nil {
+		logx.Errorf("统计 Coraza 引擎源失败: %v", err)
+		return
+	}
+	if count > 0 {
+		return
+	}
+
+	baseSource := model.WafSource{
+		Name:         "official-coraza-engine",
+		Kind:         "coraza_engine",
+		Mode:         "remote",
+		URL:          "https://github.com/corazawaf/coraza-caddy/archive/refs/heads/main.tar.gz",
+		ChecksumURL:  "",
+		ProxyURL:     "",
+		AuthType:     "none",
+		AuthSecret:   "",
+		Schedule:     "0 0 0 * * *",
+		Enabled:      true,
+		AutoCheck:    true,
+		AutoDownload: false,
+		AutoActivate: false,
+		Meta: model.JSONMap{
+			"official": true,
+			"repo":     "https://github.com/corazawaf/coraza-caddy",
+		},
+	}
+
+	candidateName := baseSource.Name
+	for suffix := 1; ; suffix++ {
+		var existing model.WafSource
+		err := db.Where("name = ?", candidateName).First(&existing).Error
+		if errors.Is(err, gorm2.ErrRecordNotFound) {
+			baseSource.Name = candidateName
+			break
+		}
+		if err != nil {
+			logx.Errorf("查询 Coraza 引擎默认源名称失败: name=%s err=%v", candidateName, err)
+			return
+		}
+
+		if existing.Kind == "coraza_engine" {
+			return
+		}
+
+		candidateName = fmt.Sprintf("official-coraza-engine-%d", suffix+1)
+	}
+
+	if err := db.Create(&baseSource).Error; err != nil {
+		logx.Errorf("创建 Coraza 引擎默认源失败: name=%s err=%v", baseSource.Name, err)
+	}
+}
+
+func (svc *ServiceContext) EnsureWafEngineDefaultSource() {
+	if svc == nil || svc.DB == nil {
+		return
+	}
+	ensureWafEngineDefaultSource(svc.DB)
 }
 
 // initRBACData 初始化 RBAC 角色和菜单数据
@@ -186,7 +386,7 @@ func initRBACData(db *gorm2.DB) {
 			Description: "系统管理员，拥有所有权限",
 			Permissions: []string{
 				"dashboard", "manage", "manage_user", "manage_role", "manage_menu",
-				"logs", "logs_caddy",
+				"logs", "logs_caddy", "security",
 				"notification", "notification_channel", "notification_rule", "notification_template", "notification_log",
 				"user_center",
 			},
@@ -231,6 +431,14 @@ func initRBACData(db *gorm2.DB) {
 			Order:         2,
 			Meta:          `{"title":"caddy","i18nKey":"route.caddy","icon":"carbon:cloud-monitoring","order":2}`,
 			RequiredRoles: []string{"admin", "analyst"},
+		},
+		{
+			Name:          "security",
+			Path:          "/security",
+			Component:     "layout.base$view.security",
+			Order:         3,
+			Meta:          `{"title":"security","i18nKey":"route.security","icon":"carbon:security","order":3}`,
+			RequiredRoles: []string{"admin"},
 		},
 		{
 			Name:          "manage",
@@ -330,8 +538,8 @@ func initRBACData(db *gorm2.DB) {
 			Name:          "cron",
 			Path:          "/cron",
 			Component:     "layout.base$view.cron",
-			Order:         3,
-			Meta:          `{"title":"cron","i18nKey":"route.cron","icon":"mdi:clock-time-four-outline","order":3,"roles":["admin"]}`,
+			Order:         5,
+			Meta:          `{"title":"cron","i18nKey":"route.cron","icon":"mdi:clock-time-four-outline","order":5,"roles":["admin"]}`,
 			RequiredRoles: []string{"admin"},
 		},
 		// --- 个人中心 ---
@@ -414,6 +622,8 @@ func initRBACData(db *gorm2.DB) {
 	db.Where("name = ?", "home").Delete(&model.Menu{})
 	db.Where("path = ?", "/home").Delete(&model.Menu{})
 	db.Where("component = ?", "home").Delete(&model.Menu{})
+	db.Where("name = ?", "caddy_waf").Delete(&model.Menu{})
+	db.Where("name in ?", []string{"waf", "crs"}).Delete(&model.Menu{})
 }
 
 // createArchiveFunction 创建归档存储过程

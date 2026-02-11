@@ -16,28 +16,28 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-type SyncWAFSourceLogic struct {
+type SyncWafSourceLogic struct {
 	logx.Logger
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
 }
 
-func NewSyncWAFSourceLogic(ctx context.Context, svcCtx *svc.ServiceContext) *SyncWAFSourceLogic {
-	return &SyncWAFSourceLogic{
+func NewSyncWafSourceLogic(ctx context.Context, svcCtx *svc.ServiceContext) *SyncWafSourceLogic {
+	return &SyncWafSourceLogic{
 		Logger: logx.WithContext(ctx),
 		ctx:    ctx,
 		svcCtx: svcCtx,
 	}
 }
 
-func (l *SyncWAFSourceLogic) SyncWAFSource(req *types.WAFSourceSyncReq) (resp *types.BaseResp, err error) {
-	helper := newWAFLogicHelper(l.ctx, l.svcCtx, l.Logger)
+func (l *SyncWafSourceLogic) SyncWafSource(req *types.WafSourceSyncReq) (resp *types.BaseResp, err error) {
+	helper := newWafLogicHelper(l.ctx, l.svcCtx, l.Logger)
 
 	if err := helper.ensureStoreDirs(); err != nil {
 		return nil, err
 	}
 
-	var source model.WAFSource
+	var source model.WafSource
 	if err := helper.svcCtx.DB.First(&source, req.ID).Error; err != nil {
 		return nil, fmt.Errorf("source not found")
 	}
@@ -49,6 +49,11 @@ func (l *SyncWAFSourceLogic) SyncWAFSource(req *types.WAFSourceSyncReq) (resp *t
 	}
 	if strings.TrimSpace(source.URL) == "" {
 		return nil, fmt.Errorf("source url is empty")
+	}
+
+	fetchTimeoutSec := helper.svcCtx.Config.Waf.FetchTimeoutSec
+	if fetchTimeoutSec <= 0 {
+		fetchTimeoutSec = 180
 	}
 
 	job := helper.startJob(source.ID, 0, "download", "manual")
@@ -66,20 +71,33 @@ func (l *SyncWAFSourceLogic) SyncWAFSource(req *types.WAFSourceSyncReq) (resp *t
 	}()
 
 	fetchResult, err := waf.FetchPackage(source.URL, tempPath, waf.FetchOptions{
-		AllowedDomains: helper.svcCtx.Config.WAF.AllowedDomains,
+		AllowedDomains: helper.svcCtx.Config.Waf.AllowedDomains,
 		AuthType:       source.AuthType,
 		AuthSecret:     source.AuthSecret,
-		TimeoutSec:     60,
+		ProxyURL:       source.ProxyURL,
+		TimeoutSec:     fetchTimeoutSec,
 	})
+	if err != nil && strings.TrimSpace(source.ProxyURL) != "" {
+		l.Logger.Errorf("proxy fetch failed, fallback direct connect: source=%s proxy=%s err=%v", source.Name, source.ProxyURL, err)
+		fetchResult, err = waf.FetchPackage(source.URL, tempPath, waf.FetchOptions{
+			AllowedDomains: helper.svcCtx.Config.Waf.AllowedDomains,
+			AuthType:       source.AuthType,
+			AuthSecret:     source.AuthSecret,
+			ProxyURL:       "",
+			TimeoutSec:     fetchTimeoutSec,
+		})
+	}
 	if err != nil {
-		helper.updateSourceLastCheck(source.ID, "", err.Error())
-		helper.finishJob(job, wafJobStatusFailed, err.Error(), 0)
-		return nil, err
+		normalizedErr := normalizeWafSyncFetchError(err, strings.TrimSpace(source.ProxyURL) != "")
+		l.Logger.Errorf("sync source fetch failed: source=%s url=%s timeoutSec=%d err=%v", source.Name, source.URL, fetchTimeoutSec, err)
+		helper.updateSourceLastCheck(source.ID, "", normalizedErr.Error())
+		helper.finishJob(job, wafJobStatusFailed, normalizedErr.Error(), 0)
+		return nil, normalizedErr
 	}
 
 	verifyResult, err := waf.VerifyPackage(fetchResult.SavedPath, waf.VerifyOptions{
 		AllowedExt:      []string{".tar.gz", ".zip"},
-		MaxPackageBytes: helper.svcCtx.Config.WAF.MaxPackageBytes,
+		MaxPackageBytes: helper.svcCtx.Config.Waf.MaxPackageBytes,
 	})
 	if err != nil {
 		helper.updateSourceLastCheck(source.ID, "", err.Error())
@@ -105,8 +123,8 @@ func (l *SyncWAFSourceLogic) SyncWAFSource(req *types.WAFSourceSyncReq) (resp *t
 	}
 
 	if _, err := waf.ExtractPackage(packagePath, releaseDir, waf.ExtractOptions{
-		MaxFiles:      helper.svcCtx.Config.WAF.ExtractMaxFiles,
-		MaxTotalBytes: helper.svcCtx.Config.WAF.ExtractMaxTotalBytes,
+		MaxFiles:      helper.svcCtx.Config.Waf.ExtractMaxFiles,
+		MaxTotalBytes: helper.svcCtx.Config.Waf.ExtractMaxTotalBytes,
 	}); err != nil {
 		_ = os.RemoveAll(releaseDir)
 		helper.updateSourceLastCheck(source.ID, "", err.Error())
@@ -114,7 +132,7 @@ func (l *SyncWAFSourceLogic) SyncWAFSource(req *types.WAFSourceSyncReq) (resp *t
 		return nil, err
 	}
 
-	release := &model.WAFRelease{
+	release := &model.WafRelease{
 		SourceID:     source.ID,
 		Kind:         source.Kind,
 		Version:      version,
@@ -135,11 +153,30 @@ func (l *SyncWAFSourceLogic) SyncWAFSource(req *types.WAFSourceSyncReq) (resp *t
 	helper.finishJob(job, wafJobStatusSuccess, "sync success", release.ID)
 
 	if req.ActivateNow || source.AutoActivate {
-		activateLogic := NewActivateWAFReleaseLogic(l.ctx, l.svcCtx)
-		if _, activateErr := activateLogic.ActivateWAFRelease(&types.WAFReleaseActivateReq{ID: release.ID}); activateErr != nil {
+		activateLogic := NewActivateWafReleaseLogic(l.ctx, l.svcCtx)
+		if _, activateErr := activateLogic.ActivateWafRelease(&types.WafReleaseActivateReq{ID: release.ID}); activateErr != nil {
 			return nil, activateErr
 		}
 	}
 
 	return &types.BaseResp{Code: 200, Msg: "success"}, nil
+}
+
+func normalizeWafSyncFetchError(fetchErr error, hasProxy bool) error {
+	if fetchErr == nil {
+		return nil
+	}
+
+	raw := strings.ToLower(strings.TrimSpace(fetchErr.Error()))
+	switch {
+	case strings.Contains(raw, "context deadline exceeded"), strings.Contains(raw, "client.timeout exceeded"), strings.Contains(raw, "i/o timeout"):
+		if hasProxy {
+			return fmt.Errorf("下载源超时（代理与直连均失败），请检查代理连通性或稍后重试")
+		}
+		return fmt.Errorf("下载源超时，请配置可用代理后重试")
+	case strings.Contains(raw, "host not allowed"):
+		return fmt.Errorf("下载源域名未加入允许列表，请联系管理员在 Waf.AllowedDomains 中添加该域名")
+	default:
+		return fetchErr
+	}
 }

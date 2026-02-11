@@ -116,6 +116,7 @@ export const request = createFlatRequest(
 
       let message = error.message;
       let backendErrorCode = '';
+      const requestUrl = String(error.config?.url || '');
 
       // get backend error message and code
       if (error.code === BACKEND_ERROR_CODE) {
@@ -132,6 +133,16 @@ export const request = createFlatRequest(
 
         const authStore = useAuthStore();
         authStore.resetStore();
+        return;
+      }
+
+      const isWafEngineOptionalApi =
+        requestUrl.includes('/api/caddy/waf/engine/status') ||
+        requestUrl.includes('/api/caddy/waf/engine/check') ||
+        requestUrl.includes('/caddy/waf/engine/status') ||
+        requestUrl.includes('/caddy/waf/engine/check');
+
+      if (isWafEngineOptionalApi && (error.response?.status === 404 || error.response?.status === 405)) {
         return;
       }
 

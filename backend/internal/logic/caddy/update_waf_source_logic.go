@@ -12,24 +12,24 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-type UpdateWAFSourceLogic struct {
+type UpdateWafSourceLogic struct {
 	logx.Logger
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
 }
 
-func NewUpdateWAFSourceLogic(ctx context.Context, svcCtx *svc.ServiceContext) *UpdateWAFSourceLogic {
-	return &UpdateWAFSourceLogic{
+func NewUpdateWafSourceLogic(ctx context.Context, svcCtx *svc.ServiceContext) *UpdateWafSourceLogic {
+	return &UpdateWafSourceLogic{
 		Logger: logx.WithContext(ctx),
 		ctx:    ctx,
 		svcCtx: svcCtx,
 	}
 }
 
-func (l *UpdateWAFSourceLogic) UpdateWAFSource(req *types.WAFSourceUpdateReq) (resp *types.BaseResp, err error) {
-	helper := newWAFLogicHelper(l.ctx, l.svcCtx, l.Logger)
+func (l *UpdateWafSourceLogic) UpdateWafSource(req *types.WafSourceUpdateReq) (resp *types.BaseResp, err error) {
+	helper := newWafLogicHelper(l.ctx, l.svcCtx, l.Logger)
 
-	var source model.WAFSource
+	var source model.WafSource
 	if err := helper.svcCtx.DB.First(&source, req.ID).Error; err != nil {
 		return nil, fmt.Errorf("source not found")
 	}
@@ -39,24 +39,24 @@ func (l *UpdateWAFSourceLogic) UpdateWAFSource(req *types.WAFSourceUpdateReq) (r
 	}
 
 	if strings.TrimSpace(req.Kind) != "" {
-		kind := normalizeWAFKind(req.Kind)
-		if err := validateWAFKind(kind); err != nil {
+		kind := normalizeWafKind(req.Kind)
+		if err := validateWafKind(kind); err != nil {
 			return nil, err
 		}
 		source.Kind = kind
 	}
 
 	if strings.TrimSpace(req.Mode) != "" {
-		mode := normalizeWAFMode(req.Mode)
-		if err := validateWAFMode(mode); err != nil {
+		mode := normalizeWafMode(req.Mode)
+		if err := validateWafMode(mode); err != nil {
 			return nil, err
 		}
 		source.Mode = mode
 	}
 
 	if strings.TrimSpace(req.AuthType) != "" {
-		authType := normalizeWAFAuthType(req.AuthType)
-		if err := validateWAFAuthType(authType); err != nil {
+		authType := normalizeWafAuthType(req.AuthType)
+		if err := validateWafAuthType(authType); err != nil {
 			return nil, err
 		}
 		source.AuthType = authType
@@ -68,6 +68,7 @@ func (l *UpdateWAFSourceLogic) UpdateWAFSource(req *types.WAFSourceUpdateReq) (r
 	if strings.TrimSpace(req.ChecksumUrl) != "" {
 		source.ChecksumURL = strings.TrimSpace(req.ChecksumUrl)
 	}
+	source.ProxyURL = strings.TrimSpace(req.ProxyUrl)
 	if strings.TrimSpace(req.AuthSecret) != "" {
 		source.AuthSecret = strings.TrimSpace(req.AuthSecret)
 	}
@@ -100,6 +101,9 @@ func (l *UpdateWAFSourceLogic) UpdateWAFSource(req *types.WAFSourceUpdateReq) (r
 	}
 
 	if err := helper.svcCtx.DB.Save(&source).Error; err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "duplicate key") {
+			return nil, fmt.Errorf("source name already exists: %s", source.Name)
+		}
 		return nil, fmt.Errorf("update source failed: %w", err)
 	}
 

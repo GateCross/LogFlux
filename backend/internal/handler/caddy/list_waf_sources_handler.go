@@ -10,16 +10,16 @@ import (
 	"logflux/internal/types"
 )
 
-func RollbackWAFReleaseHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
+func ListWafSourcesHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req types.WAFReleaseRollbackReq
+		var req types.WafSourceListReq
 		if err := httpx.Parse(r, &req); err != nil {
 			httpx.ErrorCtx(r.Context(), w, err)
 			return
 		}
 
-		l := caddy.NewRollbackWAFReleaseLogic(r.Context(), svcCtx)
-		resp, err := l.RollbackWAFRelease(&req)
+		l := caddy.NewListWafSourcesLogic(r.Context(), svcCtx)
+		resp, err := l.ListWafSources(&req)
 		result.HttpResult(r, w, resp, err)
 	}
 }
