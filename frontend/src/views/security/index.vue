@@ -738,16 +738,16 @@ const releaseColumns: DataTableColumns<WafReleaseItem> = [
 
 const jobColumns: DataTableColumns<WafJobItem> = [
   { title: 'ID', key: 'id', width: 80 },
-  { title: 'Source ID', key: 'sourceId', width: 90 },
-  { title: 'Release ID', key: 'releaseId', width: 90 },
+  { title: '来源 ID', key: 'sourceId', width: 90 },
+  { title: '版本 ID', key: 'releaseId', width: 90 },
   { title: '动作', key: 'action', width: 120, render: row => mapJobActionLabel(row.action) },
-  { title: '触发方式', key: 'triggerMode', width: 110 },
+  { title: '触发方式', key: 'triggerMode', width: 120, render: row => mapJobTriggerModeLabel(row.triggerMode) },
   {
     title: '状态',
     key: 'status',
     width: 110,
     render(row) {
-      return h(NTag, { type: mapJobStatusType(row.status), bordered: false }, { default: () => row.status });
+      return h(NTag, { type: mapJobStatusType(row.status), bordered: false }, { default: () => mapJobStatusLabel(row.status) });
     }
   },
   { title: '操作人', key: 'operator', width: 120, render: row => row.operator || '-' },
@@ -756,10 +756,10 @@ const jobColumns: DataTableColumns<WafJobItem> = [
   {
     title: '消息',
     key: 'message',
-    minWidth: 280,
+    minWidth: 320,
     ellipsis: { tooltip: true },
     render(row) {
-      return row.message || '-';
+      return mapJobMessage(row.message);
     }
   }
 ];
@@ -790,6 +790,19 @@ function mapJobStatusType(status: WafJobStatus) {
   }
 }
 
+function mapJobStatusLabel(status: string) {
+  switch (status) {
+    case 'running':
+      return '执行中';
+    case 'success':
+      return '成功';
+    case 'failed':
+      return '失败';
+    default:
+      return status || '-';
+  }
+}
+
 function mapJobActionLabel(action: string) {
   switch (action) {
     case 'check':
@@ -807,6 +820,74 @@ function mapJobActionLabel(action: string) {
     default:
       return action || '-';
   }
+}
+
+function mapJobTriggerModeLabel(triggerMode: string) {
+  switch (triggerMode) {
+    case 'manual':
+      return '手动';
+    case 'upload':
+      return '上传';
+    case 'schedule':
+      return '定时';
+    case 'auto':
+      return '自动';
+    case 'system':
+      return '系统';
+    default:
+      return triggerMode || '-';
+  }
+}
+
+function mapJobMessage(rawMessage: string) {
+  const messageText = String(rawMessage || '').trim();
+  if (!messageText) {
+    return '-';
+  }
+
+  const exactMap: Record<string, string> = {
+    'check success': '检查成功',
+    'sync success': '同步成功',
+    'upload success': '上传成功',
+    'activate success': '激活成功',
+    'rollback success': '回滚成功',
+    'engine source check success': '引擎源检查成功'
+  };
+
+  if (exactMap[messageText]) {
+    return exactMap[messageText];
+  }
+
+  const replacementRules: Array<[RegExp, string]> = [
+    [/context deadline exceeded/gi, '请求超时'],
+    [/i\/o timeout/gi, '网络超时'],
+    [/invalid proxy url:/gi, '代理地址不合法：'],
+    [/invalid url:/gi, '无效地址：'],
+    [/only https url is allowed/gi, '仅支持 HTTPS 地址'],
+    [/only https scheme is allowed/gi, '仅允许 HTTPS 协议'],
+    [/proxy url scheme must be http or https/gi, '代理地址协议仅支持 http/https'],
+    [/source not found/gi, '未找到更新源'],
+    [/source is disabled/gi, '更新源已禁用'],
+    [/source mode is not remote/gi, '更新源模式不是 remote'],
+    [/source url is empty/gi, '更新源地址为空'],
+    [/move package failed:/gi, '移动安装包失败：'],
+    [/create release dir failed:/gi, '创建版本目录失败：'],
+    [/create release failed:/gi, '创建版本记录失败：'],
+    [/fetch failed:/gi, '下载失败：'],
+    [/host not allowed:/gi, '源域名不在允许列表：'],
+    [/unexpected status code:/gi, '下载返回异常状态码：'],
+    [/write temp file failed:/gi, '写入临时文件失败：'],
+    [/close temp file failed:/gi, '关闭临时文件失败：'],
+    [/move temp file failed:/gi, '移动临时文件失败：'],
+    [/prepare waf store failed:/gi, '准备 Waf 存储目录失败：']
+  ];
+
+  let localizedMessage = messageText;
+  for (const [pattern, replacement] of replacementRules) {
+    localizedMessage = localizedMessage.replace(pattern, replacement);
+  }
+
+  return localizedMessage;
 }
 
 function formatBytes(size: number) {

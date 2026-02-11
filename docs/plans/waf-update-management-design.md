@@ -30,7 +30,7 @@ Admin UI
        -> Source Fetcher (GitHub/HTTP)
        -> Upload Ingestor (multipart)
        -> Verifier + Extractor
-       -> Release Store (/config/caddy/waf/releases/...)
+       -> Release Store (/config/security/releases/...)
        -> Activator (switch current + /adapt + /load)
        -> Scheduler (periodic check/sync)
        -> Audit & Job History (DB)
@@ -42,7 +42,7 @@ Admin UI
 使用现有持久化路径 `/config/caddy`，新增目录结构：
 
 ```
-/config/caddy/waf/
+/config/security/
   sources/                       # 源配置缓存（可选）
   packages/                      # 原始下载包/上传包
   releases/
@@ -51,13 +51,13 @@ Admin UI
       crs-setup.conf
     crs-v4.23.1/
       ...
-  current -> /config/caddy/waf/releases/crs-v4.23.1   # 软链
-  last_good -> /config/caddy/waf/releases/crs-v4.23.0 # 软链
+  current -> /config/security/releases/crs-v4.23.1   # 软链
+  last_good -> /config/security/releases/crs-v4.23.0 # 软链
   tmp/
 ```
 
 `docker/Caddyfile` 中固定引用：
-- `Include /config/caddy/waf/current/...`
+- `Include /config/security/current/...`
 
 这样无需新增 compose 挂载即可持久化规则与版本切换。
 
@@ -159,7 +159,7 @@ Admin UI
 1. 读取 `waf_sources` 配置。
 2. 拉取远端版本元数据（GitHub Release API 或 URL 模板）。
 3. 比较本地最新版本；无更新则结束。
-4. 下载包到 `/config/caddy/waf/tmp/`。
+4. 下载包到 `/config/security/tmp/`。
 5. 校验大小、SHA256（建议必填）。
 6. 安全解压到新目录 `releases/<version>`：
    - 禁止路径穿越（zip slip）
@@ -242,7 +242,7 @@ Coraza 在线热更新不可行，建议流程：
 7. `backend/internal/waf/`
    - fetcher、verifier、extractor、activator
 8. `docker/Caddyfile`
-   - 固定 include 到 `/config/caddy/waf/current`
+   - 固定 include 到 `/config/security/current`
 
 ## 12. 验收标准（DoD）
 
