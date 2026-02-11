@@ -1,6 +1,7 @@
 package caddy
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -8,6 +9,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 
@@ -15,6 +18,9 @@ import (
 )
 
 const defaultCorazaReleaseAPI = "https://api.github.com/repos/corazawaf/coraza-caddy/releases/latest"
+
+var corazaModuleVersionPattern = regexp.MustCompile(`github\.com/corazawaf/coraza-caddy(?:/v\d+)?@([A-Za-z0-9._+\-~]+)`)
+var semverPattern = regexp.MustCompile(`v\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.\-]+)?`)
 
 type githubLatestReleaseResp struct {
 	TagName string `json:"tag_name"`
@@ -32,7 +38,109 @@ func (helper *wafLogicHelper) corazaCurrentVersion() string {
 	}
 
 	fileVersion, _ := os.ReadFile("/app/etc/coraza-current-version")
-	return strings.TrimSpace(string(fileVersion))
+	trimmedFileVersion := strings.TrimSpace(string(fileVersion))
+	if trimmedFileVersion != "" {
+		return trimmedFileVersion
+	}
+
+	detectedVersion, detectErr := helper.detectCorazaCurrentVersion()
+	if detectErr != nil {
+		helper.logger.Errorf("detect coraza current version failed: %v", detectErr)
+	}
+	return strings.TrimSpace(detectedVersion)
+}
+
+func (helper *wafLogicHelper) detectCorazaCurrentVersion() (string, error) {
+	commandCandidates := [][]string{
+		{"caddy", "list-modules", "--versions"},
+		{"/usr/bin/caddy", "list-modules", "--versions"},
+		{"caddy", "build-info"},
+		{"/usr/bin/caddy", "build-info"},
+	}
+
+	var lastErr error
+	for _, command := range commandCandidates {
+		if len(command) == 0 {
+			continue
+		}
+		version, err := detectCorazaVersionByCommand(helper.ctx, command[0], command[1:]...)
+		if err != nil {
+			if isCommandNotFoundError(err) {
+				continue
+			}
+			lastErr = err
+			continue
+		}
+		if version != "" {
+			return version, nil
+		}
+	}
+
+	if lastErr != nil {
+		return "", lastErr
+	}
+	return "", nil
+}
+
+func detectCorazaVersionByCommand(parentCtx context.Context, name string, args ...string) (string, error) {
+	baseCtx := parentCtx
+	if baseCtx == nil {
+		baseCtx = context.Background()
+	}
+	timeoutCtx, cancel := context.WithTimeout(baseCtx, 3*time.Second)
+	defer cancel()
+
+	command := exec.CommandContext(timeoutCtx, name, args...)
+	outputBytes, err := command.CombinedOutput()
+	outputText := strings.TrimSpace(string(outputBytes))
+	if err != nil {
+		if outputText != "" {
+			return "", fmt.Errorf("exec %s %s failed: %w, output=%s", name, strings.Join(args, " "), err, outputText)
+		}
+		return "", fmt.Errorf("exec %s %s failed: %w", name, strings.Join(args, " "), err)
+	}
+
+	return extractCorazaVersionFromText(outputText), nil
+}
+
+func extractCorazaVersionFromText(rawOutput string) string {
+	output := strings.TrimSpace(rawOutput)
+	if output == "" {
+		return ""
+	}
+
+	if matches := corazaModuleVersionPattern.FindStringSubmatch(output); len(matches) == 2 {
+		return strings.TrimSpace(matches[1])
+	}
+
+	for _, line := range strings.Split(output, "\n") {
+		lineText := strings.TrimSpace(line)
+		if lineText == "" {
+			continue
+		}
+		if !strings.Contains(strings.ToLower(lineText), "coraza") {
+			continue
+		}
+		if matched := semverPattern.FindString(lineText); matched != "" {
+			return strings.TrimSpace(matched)
+		}
+	}
+
+	return ""
+}
+
+func isCommandNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+	messageText := strings.ToLower(err.Error())
+	if strings.Contains(messageText, "executable file not found") {
+		return true
+	}
+	if strings.Contains(messageText, "no such file or directory") {
+		return true
+	}
+	return false
 }
 
 func (helper *wafLogicHelper) corazaReleaseAPI() string {
