@@ -380,6 +380,7 @@ const sourceQuery = reactive({
 
 const sourceLoading = ref(false);
 const sourceTable = ref<WafSourceItem[]>([]);
+const jobSourceNameMap = ref<Record<number, string>>({});
 const sourcePagination = reactive<PaginationProps>({
   page: 1,
   pageSize: 20,
@@ -700,8 +701,7 @@ const releaseColumns: DataTableColumns<WafReleaseItem> = [
 
 const jobColumns: DataTableColumns<WafJobItem> = [
   { title: 'ID', key: 'id', width: 80 },
-  { title: '来源 ID', key: 'sourceId', width: 90 },
-  { title: '版本 ID', key: 'releaseId', width: 90 },
+  { title: '更新源', key: 'sourceName', minWidth: 160, render: row => mapJobSourceName(row) },
   { title: '动作', key: 'action', width: 120, render: row => mapJobActionLabel(row.action) },
   { title: '触发方式', key: 'triggerMode', width: 120, render: row => mapJobTriggerModeLabel(row.triggerMode) },
   {
@@ -798,6 +798,77 @@ function mapJobTriggerModeLabel(triggerMode: string) {
       return '系统';
     default:
       return triggerMode || '-';
+  }
+}
+
+function mapJobSourceName(row: WafJobItem) {
+  if (row.action === 'engine_check') {
+    return 'Coraza 引擎';
+  }
+
+  if (!row.sourceId || row.sourceId <= 0) {
+    return '-';
+  }
+
+  const sourceName = jobSourceNameMap.value[row.sourceId];
+  if (sourceName && sourceName.trim()) {
+    return sourceName.trim();
+  }
+
+  return '未知更新源';
+}
+
+function mergeJobSourceNameMap(sourceList: WafSourceItem[]) {
+  if (!Array.isArray(sourceList) || sourceList.length === 0) {
+    return;
+  }
+
+  const nextMap: Record<number, string> = { ...jobSourceNameMap.value };
+  sourceList.forEach(item => {
+    const sourceId = Number(item?.id || 0);
+    const sourceName = String(item?.name || '').trim();
+    if (sourceId > 0 && sourceName) {
+      nextMap[sourceId] = sourceName;
+    }
+  });
+  jobSourceNameMap.value = nextMap;
+}
+
+async function ensureJobSourceNames(sourceIds: number[]) {
+  const pendingIds = Array.from(new Set(sourceIds.filter(sourceId => sourceId > 0 && !jobSourceNameMap.value[sourceId])));
+  if (pendingIds.length === 0) {
+    return;
+  }
+
+  const pageSize = 200;
+  let page = 1;
+  let total = 0;
+
+  while (page <= 20) {
+    const { data, error } = await fetchWafSourceList({
+      page,
+      pageSize,
+      name: undefined
+    });
+
+    if (error || !data) {
+      break;
+    }
+
+    const sourceList = data.list || [];
+    mergeJobSourceNameMap(sourceList);
+    total = data.total || 0;
+
+    const hasAllPending = pendingIds.every(sourceId => !!jobSourceNameMap.value[sourceId]);
+    if (hasAllPending) {
+      break;
+    }
+
+    if (sourceList.length === 0 || page * pageSize >= total) {
+      break;
+    }
+
+    page += 1;
   }
 }
 
@@ -949,6 +1020,7 @@ async function fetchSources() {
       }
 
       sourceTable.value = list;
+      mergeJobSourceNameMap(list);
       sourcePagination.itemCount = total;
     }
   } finally {
@@ -1303,7 +1375,9 @@ async function fetchJobs() {
       action: jobQuery.action || undefined
     });
     if (!error && data) {
-      jobTable.value = data.list || [];
+      const list = data.list || [];
+      await ensureJobSourceNames(list.map(item => Number(item.sourceId || 0)));
+      jobTable.value = list;
       jobPagination.itemCount = data.total || 0;
     }
   } finally {
