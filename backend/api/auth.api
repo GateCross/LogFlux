@@ -6,6 +6,9 @@ type (
 		Username string `json:"username"`
 		Password string `json:"password"`
 	}
+	RefreshTokenReq {
+		RefreshToken string `json:"refreshToken"`
+	}
 	LoginResp {
 		Token        string `json:"token"`
 		RefreshToken string `json:"refreshToken"`
@@ -19,4 +22,7 @@ type (
 service logflux-api {
 	@handler Login
 	post /login (LoginReq) returns (LoginResp)
+
+	@handler RefreshToken
+	post /refreshToken (RefreshTokenReq) returns (LoginResp)
 }
