@@ -49,13 +49,14 @@ func (l *GetWafEngineStatusLogic) GetWafEngineStatus() (resp *types.WafEngineSta
 	}
 
 	message := strings.TrimSpace(latestCheckJob.Message)
+	if shouldHideEngineStatusMessage(message) {
+		message = ""
+	}
 	if message == "" {
 		if currentVersion == "" && latestVersion == "" {
 			message = "暂未获取到 Coraza 引擎版本，请点击“检查上游版本”"
 		} else if latestVersion == "" {
 			message = "已读取当前版本，请点击“检查上游版本”获取最新 Release"
-		} else {
-			message = "引擎版本状态已读取"
 		}
 	}
 
@@ -73,4 +74,21 @@ func (l *GetWafEngineStatusLogic) GetWafEngineStatus() (resp *types.WafEngineSta
 		Message:        message,
 	}, nil
 
+}
+
+func shouldHideEngineStatusMessage(message string) bool {
+	trimmed := strings.TrimSpace(message)
+	if trimmed == "" {
+		return false
+	}
+
+	lowerText := strings.ToLower(trimmed)
+	if strings.Contains(lowerText, "engine source check success") {
+		return true
+	}
+	if strings.Contains(trimmed, "引擎源检查成功") {
+		return true
+	}
+
+	return false
 }

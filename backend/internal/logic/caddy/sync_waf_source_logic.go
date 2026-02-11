@@ -59,7 +59,18 @@ func (l *SyncWafSourceLogic) SyncWafSource(req *types.WafSourceSyncReq) (resp *t
 		fetchTimeoutSec = 180
 	}
 
-	version := deriveVersionFromURL(source.URL)
+	downloadURL := strings.TrimSpace(source.URL)
+	version := deriveVersionFromURL(downloadURL)
+	if normalizeWafKind(source.Kind) == wafKindCRS {
+		resolvedURL, resolvedVersion := helper.resolveCRSSyncTarget(&source)
+		if strings.TrimSpace(resolvedURL) != "" {
+			downloadURL = strings.TrimSpace(resolvedURL)
+		}
+		if strings.TrimSpace(resolvedVersion) != "" {
+			version = strings.TrimSpace(resolvedVersion)
+		}
+	}
+
 	job := helper.startJob(source.ID, 0, "download", "manual")
 	existingRelease, err := findLatestReleaseByKindAndVersion(helper.svcCtx.DB, source.Kind, version)
 	if err != nil {
@@ -81,7 +92,7 @@ func (l *SyncWafSourceLogic) SyncWafSource(req *types.WafSourceSyncReq) (resp *t
 		return &types.BaseResp{Code: 200, Msg: "success"}, nil
 	}
 
-	ext := detectPackageExt(source.URL)
+	ext := detectPackageExt(downloadURL)
 	if ext == "" {
 		ext = ".tar.gz"
 	}
@@ -93,7 +104,7 @@ func (l *SyncWafSourceLogic) SyncWafSource(req *types.WafSourceSyncReq) (resp *t
 		}
 	}()
 
-	fetchResult, err := waf.FetchPackage(source.URL, tempPath, waf.FetchOptions{
+	fetchResult, err := waf.FetchPackage(downloadURL, tempPath, waf.FetchOptions{
 		AllowedDomains: helper.svcCtx.Config.Waf.AllowedDomains,
 		AuthType:       source.AuthType,
 		AuthSecret:     source.AuthSecret,
@@ -102,7 +113,7 @@ func (l *SyncWafSourceLogic) SyncWafSource(req *types.WafSourceSyncReq) (resp *t
 	})
 	if err != nil && strings.TrimSpace(source.ProxyURL) != "" {
 		l.Logger.Errorf("proxy fetch failed, fallback direct connect: source=%s proxy=%s err=%v", source.Name, source.ProxyURL, err)
-		fetchResult, err = waf.FetchPackage(source.URL, tempPath, waf.FetchOptions{
+		fetchResult, err = waf.FetchPackage(downloadURL, tempPath, waf.FetchOptions{
 			AllowedDomains: helper.svcCtx.Config.Waf.AllowedDomains,
 			AuthType:       source.AuthType,
 			AuthSecret:     source.AuthSecret,
@@ -112,7 +123,7 @@ func (l *SyncWafSourceLogic) SyncWafSource(req *types.WafSourceSyncReq) (resp *t
 	}
 	if err != nil {
 		normalizedErr := normalizeWafSyncFetchError(err, strings.TrimSpace(source.ProxyURL) != "")
-		l.Logger.Errorf("sync source fetch failed: source=%s url=%s timeoutSec=%d err=%v", source.Name, source.URL, fetchTimeoutSec, err)
+		l.Logger.Errorf("sync source fetch failed: source=%s url=%s timeoutSec=%d err=%v", source.Name, downloadURL, fetchTimeoutSec, err)
 		helper.updateSourceLastCheck(source.ID, "", normalizedErr.Error())
 		helper.finishJob(job, wafJobStatusFailed, normalizedErr.Error(), 0)
 		return nil, normalizedErr
