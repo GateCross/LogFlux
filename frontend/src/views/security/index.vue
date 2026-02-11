@@ -91,6 +91,7 @@
             :loading="sourceLoading"
             :pagination="sourcePagination"
             :row-key="row => row.id"
+            :max-height="tableFixedHeight"
             class="min-h-260px"
             @update:page="handleSourcePageChange"
             @update:page-size="handleSourcePageSizeChange"
@@ -125,6 +126,7 @@
             :loading="releaseLoading"
             :pagination="releasePagination"
             :row-key="row => row.id"
+            :max-height="tableFixedHeight"
             class="min-h-260px"
             @update:page="handleReleasePageChange"
             @update:page-size="handleReleasePageSizeChange"
@@ -152,6 +154,7 @@
             :loading="jobLoading"
             :pagination="jobPagination"
             :row-key="row => row.id"
+            :max-height="tableFixedHeight"
             class="min-h-260px"
             :scroll-x="1500"
             :resizable="true"
@@ -346,6 +349,7 @@ const engineUnavailable = ref(false);
 const engineStatus = ref<WafEngineStatusResp | null>(null);
 
 const activeTab = ref<'source' | 'release' | 'job'>('source');
+const tableFixedHeight = 480;
 
 const kindOptions = [
   { label: 'CRS 规则集', value: 'crs' },
