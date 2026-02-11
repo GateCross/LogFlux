@@ -16,29 +16,29 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-type UploadWAFPackageLogic struct {
+type UploadWafPackageLogic struct {
 	logx.Logger
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
 }
 
-func NewUploadWAFPackageLogic(ctx context.Context, svcCtx *svc.ServiceContext) *UploadWAFPackageLogic {
-	return &UploadWAFPackageLogic{
+func NewUploadWafPackageLogic(ctx context.Context, svcCtx *svc.ServiceContext) *UploadWafPackageLogic {
+	return &UploadWafPackageLogic{
 		Logger: logx.WithContext(ctx),
 		ctx:    ctx,
 		svcCtx: svcCtx,
 	}
 }
 
-func (l *UploadWAFPackageLogic) UploadWAFPackage(req *types.WAFUploadReq) (resp *types.BaseResp, err error) {
-	helper := newWAFLogicHelper(l.ctx, l.svcCtx, l.Logger)
+func (l *UploadWafPackageLogic) UploadWafPackage(req *types.WafUploadReq) (resp *types.BaseResp, err error) {
+	helper := newWafLogicHelper(l.ctx, l.svcCtx, l.Logger)
 
 	if err := helper.ensureStoreDirs(); err != nil {
 		return nil, err
 	}
 
-	kind := normalizeWAFKind(req.Kind)
-	if err := validateWAFKind(kind); err != nil {
+	kind := normalizeWafKind(req.Kind)
+	if err := validateWafKind(kind); err != nil {
 		return nil, err
 	}
 
@@ -69,7 +69,7 @@ func (l *UploadWAFPackageLogic) UploadWAFPackage(req *types.WAFUploadReq) (resp 
 
 	verifyResult, err := waf.VerifyPackage(tempPath, waf.VerifyOptions{
 		AllowedExt:      []string{".tar.gz", ".zip"},
-		MaxPackageBytes: helper.svcCtx.Config.WAF.MaxPackageBytes,
+		MaxPackageBytes: helper.svcCtx.Config.Waf.MaxPackageBytes,
 		ExpectedSHA256:  strings.TrimSpace(req.Checksum),
 	})
 	if err != nil {
@@ -92,15 +92,15 @@ func (l *UploadWAFPackageLogic) UploadWAFPackage(req *types.WAFUploadReq) (resp 
 	}
 
 	if _, err := waf.ExtractPackage(packagePath, releaseDir, waf.ExtractOptions{
-		MaxFiles:      helper.svcCtx.Config.WAF.ExtractMaxFiles,
-		MaxTotalBytes: helper.svcCtx.Config.WAF.ExtractMaxTotalBytes,
+		MaxFiles:      helper.svcCtx.Config.Waf.ExtractMaxFiles,
+		MaxTotalBytes: helper.svcCtx.Config.Waf.ExtractMaxTotalBytes,
 	}); err != nil {
 		_ = os.RemoveAll(releaseDir)
 		helper.finishJob(job, wafJobStatusFailed, err.Error(), 0)
 		return nil, err
 	}
 
-	release := &model.WAFRelease{
+	release := &model.WafRelease{
 		SourceID:     0,
 		Kind:         kind,
 		Version:      version,
@@ -120,8 +120,8 @@ func (l *UploadWAFPackageLogic) UploadWAFPackage(req *types.WAFUploadReq) (resp 
 	helper.finishJob(job, wafJobStatusSuccess, "upload success", release.ID)
 
 	if req.ActivateNow {
-		activateLogic := NewActivateWAFReleaseLogic(l.ctx, l.svcCtx)
-		if _, activateErr := activateLogic.ActivateWAFRelease(&types.WAFReleaseActivateReq{ID: release.ID}); activateErr != nil {
+		activateLogic := NewActivateWafReleaseLogic(l.ctx, l.svcCtx)
+		if _, activateErr := activateLogic.ActivateWafRelease(&types.WafReleaseActivateReq{ID: release.ID}); activateErr != nil {
 			return nil, activateErr
 		}
 	}

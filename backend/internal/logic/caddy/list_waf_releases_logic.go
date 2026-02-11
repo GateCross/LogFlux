@@ -12,22 +12,22 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-type ListWAFReleasesLogic struct {
+type ListWafReleasesLogic struct {
 	logx.Logger
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
 }
 
-func NewListWAFReleasesLogic(ctx context.Context, svcCtx *svc.ServiceContext) *ListWAFReleasesLogic {
-	return &ListWAFReleasesLogic{
+func NewListWafReleasesLogic(ctx context.Context, svcCtx *svc.ServiceContext) *ListWafReleasesLogic {
+	return &ListWafReleasesLogic{
 		Logger: logx.WithContext(ctx),
 		ctx:    ctx,
 		svcCtx: svcCtx,
 	}
 }
 
-func (l *ListWAFReleasesLogic) ListWAFReleases(req *types.WAFReleaseListReq) (resp *types.WAFReleaseListResp, err error) {
-	helper := newWAFLogicHelper(l.ctx, l.svcCtx, l.Logger)
+func (l *ListWafReleasesLogic) ListWafReleases(req *types.WafReleaseListReq) (resp *types.WafReleaseListResp, err error) {
+	helper := newWafLogicHelper(l.ctx, l.svcCtx, l.Logger)
 
 	page := req.Page
 	if page <= 0 {
@@ -38,9 +38,9 @@ func (l *ListWAFReleasesLogic) ListWAFReleases(req *types.WAFReleaseListReq) (re
 		pageSize = 20
 	}
 
-	db := helper.svcCtx.DB.Model(&model.WAFRelease{})
+	db := helper.svcCtx.DB.Model(&model.WafRelease{})
 	if strings.TrimSpace(req.Kind) != "" {
-		db = db.Where("kind = ?", normalizeWAFKind(req.Kind))
+		db = db.Where("kind = ?", normalizeWafKind(req.Kind))
 	}
 	if status := strings.TrimSpace(req.Status); status != "" {
 		db = db.Where("status = ?", strings.ToLower(status))
@@ -51,15 +51,15 @@ func (l *ListWAFReleasesLogic) ListWAFReleases(req *types.WAFReleaseListReq) (re
 		return nil, fmt.Errorf("count releases failed: %w", err)
 	}
 
-	var releases []model.WAFRelease
+	var releases []model.WafRelease
 	offset := (page - 1) * pageSize
 	if err := db.Order("created_at desc, id desc").Limit(pageSize).Offset(offset).Find(&releases).Error; err != nil {
 		return nil, fmt.Errorf("query releases failed: %w", err)
 	}
 
-	items := make([]types.WAFReleaseItem, 0, len(releases))
+	items := make([]types.WafReleaseItem, 0, len(releases))
 	for _, release := range releases {
-		items = append(items, types.WAFReleaseItem{
+		items = append(items, types.WafReleaseItem{
 			ID:           release.ID,
 			SourceId:     release.SourceID,
 			Kind:         release.Kind,
@@ -74,5 +74,5 @@ func (l *ListWAFReleasesLogic) ListWAFReleases(req *types.WAFReleaseListReq) (re
 		})
 	}
 
-	return &types.WAFReleaseListResp{List: items, Total: total}, nil
+	return &types.WafReleaseListResp{List: items, Total: total}, nil
 }

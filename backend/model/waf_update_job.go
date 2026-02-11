@@ -2,8 +2,8 @@ package model
 
 import "time"
 
-// WAFUpdateJob WAF 更新任务审计
-type WAFUpdateJob struct {
+// WafUpdateJob WAF 更新任务审计
+type WafUpdateJob struct {
 	ID        uint      `gorm:"primarykey" json:"id"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
@@ -22,6 +22,6 @@ type WAFUpdateJob struct {
 	Meta       JSONMap    `gorm:"type:jsonb" json:"meta,omitempty"`
 }
 
-func (WAFUpdateJob) TableName() string {
+func (WafUpdateJob) TableName() string {
 	return "waf_update_jobs"
 }

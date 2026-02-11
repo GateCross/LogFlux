@@ -10,16 +10,16 @@ import (
 	"logflux/internal/types"
 )
 
-func ListWAFSourcesHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
+func DeleteWafSourceHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req types.WAFSourceListReq
+		var req types.IDReq
 		if err := httpx.Parse(r, &req); err != nil {
 			httpx.ErrorCtx(r.Context(), w, err)
 			return
 		}
 
-		l := caddy.NewListWAFSourcesLogic(r.Context(), svcCtx)
-		resp, err := l.ListWAFSources(&req)
+		l := caddy.NewDeleteWafSourceLogic(r.Context(), svcCtx)
+		resp, err := l.DeleteWafSource(&req)
 		result.HttpResult(r, w, resp, err)
 	}
 }

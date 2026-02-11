@@ -212,6 +212,16 @@ export const generatedRoutes = [
     ]
   },
   {
+    name: 'security',
+    path: '/security',
+    component: 'layout.base$view.security',
+    meta: {
+      title: 'security',
+      i18nKey: 'route.security',
+      icon: 'carbon:security'
+    }
+  },
+  {
     name: 'user',
     path: '/user',
     component: 'layout.base',

@@ -81,59 +81,69 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Handler: caddy.RollbackCaddyConfigHandler(serverCtx),
 			},
 			{
+				Method:  http.MethodPost,
+				Path:    "/caddy/waf/engine/check",
+				Handler: caddy.CheckWafEngineHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/caddy/waf/engine/status",
+				Handler: caddy.GetWafEngineStatusHandler(serverCtx),
+			},
+			{
 				Method:  http.MethodGet,
 				Path:    "/caddy/waf/job",
-				Handler: caddy.ListWAFJobsHandler(serverCtx),
+				Handler: caddy.ListWafJobsHandler(serverCtx),
 			},
 			{
 				Method:  http.MethodGet,
 				Path:    "/caddy/waf/release",
-				Handler: caddy.ListWAFReleasesHandler(serverCtx),
+				Handler: caddy.ListWafReleasesHandler(serverCtx),
 			},
 			{
 				Method:  http.MethodPost,
 				Path:    "/caddy/waf/release/:id/activate",
-				Handler: caddy.ActivateWAFReleaseHandler(serverCtx),
+				Handler: caddy.ActivateWafReleaseHandler(serverCtx),
 			},
 			{
 				Method:  http.MethodPost,
 				Path:    "/caddy/waf/release/rollback",
-				Handler: caddy.RollbackWAFReleaseHandler(serverCtx),
+				Handler: caddy.RollbackWafReleaseHandler(serverCtx),
 			},
 			{
 				Method:  http.MethodGet,
 				Path:    "/caddy/waf/source",
-				Handler: caddy.ListWAFSourcesHandler(serverCtx),
+				Handler: caddy.ListWafSourcesHandler(serverCtx),
 			},
 			{
 				Method:  http.MethodPost,
 				Path:    "/caddy/waf/source",
-				Handler: caddy.AddWAFSourceHandler(serverCtx),
+				Handler: caddy.AddWafSourceHandler(serverCtx),
 			},
 			{
 				Method:  http.MethodPut,
 				Path:    "/caddy/waf/source/:id",
-				Handler: caddy.UpdateWAFSourceHandler(serverCtx),
+				Handler: caddy.UpdateWafSourceHandler(serverCtx),
 			},
 			{
 				Method:  http.MethodDelete,
 				Path:    "/caddy/waf/source/:id",
-				Handler: caddy.DeleteWAFSourceHandler(serverCtx),
+				Handler: caddy.DeleteWafSourceHandler(serverCtx),
 			},
 			{
 				Method:  http.MethodPost,
 				Path:    "/caddy/waf/source/:id/check",
-				Handler: caddy.CheckWAFSourceHandler(serverCtx),
+				Handler: caddy.CheckWafSourceHandler(serverCtx),
 			},
 			{
 				Method:  http.MethodPost,
 				Path:    "/caddy/waf/source/:id/sync",
-				Handler: caddy.SyncWAFSourceHandler(serverCtx),
+				Handler: caddy.SyncWafSourceHandler(serverCtx),
 			},
 			{
 				Method:  http.MethodPost,
 				Path:    "/caddy/waf/upload",
-				Handler: caddy.UploadWAFPackageHandler(serverCtx),
+				Handler: caddy.UploadWafPackageHandler(serverCtx),
 			},
 		},
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
@@ -192,30 +202,6 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 	server.AddRoutes(
 		[]rest.Route{
 			{
-				Method:  http.MethodGet,
-				Path:    "/caddy/logs",
-				Handler: log.GetCaddyLogsHandler(serverCtx),
-			},
-		},
-		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
-		rest.WithPrefix("/api"),
-	)
-
-	server.AddRoutes(
-		[]rest.Route{
-			{
-				Method:  http.MethodGet,
-				Path:    "/system/logs",
-				Handler: log.GetSystemLogsHandler(serverCtx),
-			},
-		},
-		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
-		rest.WithPrefix("/api"),
-	)
-
-	server.AddRoutes(
-		[]rest.Route{
-			{
 				Method:  http.MethodPost,
 				Path:    "/source",
 				Handler: log.AddLogSourceHandler(serverCtx),
@@ -234,6 +220,30 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Method:  http.MethodDelete,
 				Path:    "/source/:id",
 				Handler: log.DeleteLogSourceHandler(serverCtx),
+			},
+		},
+		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
+		rest.WithPrefix("/api"),
+	)
+
+	server.AddRoutes(
+		[]rest.Route{
+			{
+				Method:  http.MethodGet,
+				Path:    "/caddy/logs",
+				Handler: log.GetCaddyLogsHandler(serverCtx),
+			},
+		},
+		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
+		rest.WithPrefix("/api"),
+	)
+
+	server.AddRoutes(
+		[]rest.Route{
+			{
+				Method:  http.MethodGet,
+				Path:    "/system/logs",
+				Handler: log.GetSystemLogsHandler(serverCtx),
 			},
 		},
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),

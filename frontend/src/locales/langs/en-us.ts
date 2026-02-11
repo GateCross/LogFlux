@@ -247,6 +247,7 @@ const local: App.I18n.Schema = {
     caddy_log: 'Caddy Proxy Logs',
     'caddy_system-log': 'System Logs',
     caddy_source: 'Log Sources',
+    security: 'Security Management',
     manage: 'System Manage',
     manage_user: 'User Management',
     manage_role: 'Role Management',

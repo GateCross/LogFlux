@@ -19,7 +19,7 @@ type Config struct {
 	BackendLogPath      string `json:",optional"` // 后端日志文件/目录（用于入库）
 	CaddyRuntimeLogPath string `json:",optional"` // Caddy 后台日志文件/目录（用于入库）
 	Archive             ArchiveConf
-	WAF                 WAFConf
+	Waf                 WafConf
 	Notification        NotificationConf `json:",optional"`
 }
 
@@ -54,8 +54,9 @@ type ArchiveConf struct {
 	ArchiveTable string
 }
 
-type WAFConf struct {
+type WafConf struct {
 	WorkDir              string
+	FetchTimeoutSec      int
 	MaxPackageBytes      int64
 	AllowedDomains       []string
 	ExtractMaxFiles      int

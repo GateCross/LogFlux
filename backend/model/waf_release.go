@@ -2,14 +2,14 @@ package model
 
 import "time"
 
-// WAFRelease WAF 规则发布版本
-type WAFRelease struct {
+// WafRelease WAF 规则发布版本
+type WafRelease struct {
 	ID        uint      `gorm:"primarykey" json:"id"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 
 	SourceID uint `gorm:"index:idx_waf_release_source_version,priority:1;index" json:"sourceId"`
-	Source   WAFSource
+	Source   WafSource
 
 	Kind         string `gorm:"size:32;index;not null;default:'crs'" json:"kind"` // crs | coraza_engine
 	Version      string `gorm:"size:120;not null;index:idx_waf_release_source_version,priority:2" json:"version"`
@@ -23,6 +23,6 @@ type WAFRelease struct {
 	Meta   JSONMap `gorm:"type:jsonb" json:"meta,omitempty"`
 }
 
-func (WAFRelease) TableName() string {
+func (WafRelease) TableName() string {
 	return "waf_releases"
 }

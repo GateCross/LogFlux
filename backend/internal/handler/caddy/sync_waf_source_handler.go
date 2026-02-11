@@ -10,16 +10,16 @@ import (
 	"logflux/internal/types"
 )
 
-func SyncWAFSourceHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
+func SyncWafSourceHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req types.WAFSourceSyncReq
+		var req types.WafSourceSyncReq
 		if err := httpx.Parse(r, &req); err != nil {
 			httpx.ErrorCtx(r.Context(), w, err)
 			return
 		}
 
-		l := caddy.NewSyncWAFSourceLogic(r.Context(), svcCtx)
-		resp, err := l.SyncWAFSource(&req)
+		l := caddy.NewSyncWafSourceLogic(r.Context(), svcCtx)
+		resp, err := l.SyncWafSource(&req)
 		result.HttpResult(r, w, resp, err)
 	}
 }

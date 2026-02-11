@@ -10,16 +10,16 @@ import (
 	"logflux/internal/types"
 )
 
-func ListWAFReleasesHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
+func ActivateWafReleaseHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req types.WAFReleaseListReq
+		var req types.WafReleaseActivateReq
 		if err := httpx.Parse(r, &req); err != nil {
 			httpx.ErrorCtx(r.Context(), w, err)
 			return
 		}
 
-		l := caddy.NewListWAFReleasesLogic(r.Context(), svcCtx)
-		resp, err := l.ListWAFReleases(&req)
+		l := caddy.NewActivateWafReleaseLogic(r.Context(), svcCtx)
+		resp, err := l.ActivateWafRelease(&req)
 		result.HttpResult(r, w, resp, err)
 	}
 }

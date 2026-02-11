@@ -14,22 +14,22 @@ import (
 	"gorm.io/gorm"
 )
 
-type RollbackWAFReleaseLogic struct {
+type RollbackWafReleaseLogic struct {
 	logx.Logger
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
 }
 
-func NewRollbackWAFReleaseLogic(ctx context.Context, svcCtx *svc.ServiceContext) *RollbackWAFReleaseLogic {
-	return &RollbackWAFReleaseLogic{
+func NewRollbackWafReleaseLogic(ctx context.Context, svcCtx *svc.ServiceContext) *RollbackWafReleaseLogic {
+	return &RollbackWafReleaseLogic{
 		Logger: logx.WithContext(ctx),
 		ctx:    ctx,
 		svcCtx: svcCtx,
 	}
 }
 
-func (l *RollbackWAFReleaseLogic) RollbackWAFRelease(req *types.WAFReleaseRollbackReq) (resp *types.BaseResp, err error) {
-	helper := newWAFLogicHelper(l.ctx, l.svcCtx, l.Logger)
+func (l *RollbackWafReleaseLogic) RollbackWafRelease(req *types.WafReleaseRollbackReq) (resp *types.BaseResp, err error) {
+	helper := newWafLogicHelper(l.ctx, l.svcCtx, l.Logger)
 
 	if err := helper.ensureStoreDirs(); err != nil {
 		return nil, err
@@ -57,7 +57,7 @@ func (l *RollbackWAFReleaseLogic) RollbackWAFRelease(req *types.WAFReleaseRollba
 	return &types.BaseResp{Code: 200, Msg: "success"}, nil
 }
 
-func (l *RollbackWAFReleaseLogic) resolveRollbackTarget(helper *wafLogicHelper, req *types.WAFReleaseRollbackReq) (*model.WAFRelease, error) {
+func (l *RollbackWafReleaseLogic) resolveRollbackTarget(helper *wafLogicHelper, req *types.WafReleaseRollbackReq) (*model.WafRelease, error) {
 	if version := strings.TrimSpace(req.Version); version != "" {
 		return l.findReleaseByVersion(helper, version)
 	}
@@ -78,8 +78,8 @@ func (l *RollbackWAFReleaseLogic) resolveRollbackTarget(helper *wafLogicHelper, 
 	return l.findReleaseByVersion(helper, version)
 }
 
-func (l *RollbackWAFReleaseLogic) findReleaseByVersion(helper *wafLogicHelper, version string) (*model.WAFRelease, error) {
-	var release model.WAFRelease
+func (l *RollbackWafReleaseLogic) findReleaseByVersion(helper *wafLogicHelper, version string) (*model.WafRelease, error) {
+	var release model.WafRelease
 	err := helper.svcCtx.DB.Where("version = ?", strings.TrimSpace(version)).Order("id desc").First(&release).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {

@@ -12,15 +12,15 @@ import (
 	"github.com/zeromicro/go-zero/rest/httpx"
 )
 
-func UpdateWAFSourceHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
+func AddWafSourceHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var payload struct {
-			ID           uint   `path:"id"`
-			Name         string `json:"name,optional"`
+			Name         string `json:"name"`
 			Kind         string `json:"kind,optional"`
 			Mode         string `json:"mode,optional"`
 			Url          string `json:"url,optional"`
 			ChecksumUrl  string `json:"checksumUrl,optional"`
+			ProxyUrl     string `json:"proxyUrl,optional"`
 			AuthType     string `json:"authType,optional"`
 			AuthSecret   string `json:"authSecret,optional"`
 			Schedule     string `json:"schedule,optional"`
@@ -35,13 +35,13 @@ func UpdateWAFSourceHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 			return
 		}
 
-		req := types.WAFSourceUpdateReq{
-			ID:          payload.ID,
+			req := types.WafSourceReq{
 			Name:        payload.Name,
 			Kind:        payload.Kind,
 			Mode:        payload.Mode,
 			Url:         payload.Url,
 			ChecksumUrl: payload.ChecksumUrl,
+			ProxyUrl:    payload.ProxyUrl,
 			AuthType:    payload.AuthType,
 			AuthSecret:  payload.AuthSecret,
 			Schedule:    payload.Schedule,
@@ -68,8 +68,8 @@ func UpdateWAFSourceHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 		}
 
 		ctx := context.WithValue(r.Context(), "waf_source_bool_mask", boolMask)
-		l := logiccaddy.NewUpdateWAFSourceLogic(ctx, svcCtx)
-		resp, err := l.UpdateWAFSource(&req)
+		l := logiccaddy.NewAddWafSourceLogic(ctx, svcCtx)
+		resp, err := l.AddWafSource(&req)
 		result.HttpResult(r, w, resp, err)
 	}
 }

@@ -38,6 +38,7 @@ declare module "@elegant-router/types" {
     "notification_log": "/notification/log";
     "notification_rule": "/notification/rule";
     "notification_template": "/notification/template";
+    "security": "/security";
     "user": "/user";
     "user_center": "/user/center";
   };
@@ -81,6 +82,7 @@ declare module "@elegant-router/types" {
     | "login"
     | "manage"
     | "notification"
+    | "security"
     | "user"
   >;
 
@@ -117,6 +119,7 @@ declare module "@elegant-router/types" {
     | "notification_log"
     | "notification_rule"
     | "notification_template"
+    | "security"
     | "user_center"
   >;
 

@@ -58,14 +58,11 @@ function transformElegantRouteToVueRoute(
   function getViewName(component: string) {
     const view = component.replace(VIEW_PREFIX, '');
 
-    const compatibleViews = [view, view.replace(/_/g, '-'), view.replace(/-/g, '_')];
-    const matchedView = compatibleViews.find(item => Boolean(views[item]));
-
-    if(!matchedView) {
+    if(!views[view]) {
       throw new Error(`View component "${view}" not found`);
     }
 
-    return matchedView;
+    return view;
   }
 
   function isFirstLevelRoute(item: ElegantConstRoute) {
@@ -187,6 +184,7 @@ const routeMap: RouteMap = {
   "notification_log": "/notification/log",
   "notification_rule": "/notification/rule",
   "notification_template": "/notification/template",
+  "security": "/security",
   "user": "/user",
   "user_center": "/user/center"
 };
@@ -196,17 +194,7 @@ const routeMap: RouteMap = {
  * @param name route name
  */
 export function getRoutePath<T extends RouteKey>(name: T) {
-  const rawName = String(name);
-  const compatibleNames = [rawName, rawName.replace(/_/g, '-'), rawName.replace(/-/g, '_')];
-
-  for (const key of compatibleNames) {
-    const path = routeMap[key as RouteKey];
-    if (path) {
-      return path;
-    }
-  }
-
-  return undefined;
+  return routeMap[name];
 }
 
 /**

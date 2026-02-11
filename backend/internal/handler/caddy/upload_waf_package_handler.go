@@ -19,14 +19,14 @@ import (
 	"github.com/zeromicro/go-zero/rest/httpx"
 )
 
-func UploadWAFPackageHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
+func UploadWafPackageHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req types.WAFUploadReq
+		var req types.WafUploadReq
 
 		ctx := r.Context()
 		contentType := strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type")))
 		if strings.Contains(contentType, "multipart/form-data") {
-			parsedReq, uploadCtx, err := parseWAFUploadMultipart(ctx, r, svcCtx)
+			parsedReq, uploadCtx, err := parseWafUploadMultipart(ctx, r, svcCtx)
 			if err != nil {
 				httpx.ErrorCtx(ctx, w, err)
 				return
@@ -40,14 +40,14 @@ func UploadWAFPackageHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 			}
 		}
 
-		l := logiccaddy.NewUploadWAFPackageLogic(ctx, svcCtx)
-		resp, err := l.UploadWAFPackage(&req)
+		l := logiccaddy.NewUploadWafPackageLogic(ctx, svcCtx)
+		resp, err := l.UploadWafPackage(&req)
 		result.HttpResult(r, w, resp, err)
 	}
 }
 
-func parseWAFUploadMultipart(ctx context.Context, r *http.Request, svcCtx *svc.ServiceContext) (*types.WAFUploadReq, context.Context, error) {
-	maxBytes := svcCtx.Config.WAF.MaxPackageBytes
+func parseWafUploadMultipart(ctx context.Context, r *http.Request, svcCtx *svc.ServiceContext) (*types.WafUploadReq, context.Context, error) {
+	maxBytes := svcCtx.Config.Waf.MaxPackageBytes
 	if maxBytes <= 0 {
 		maxBytes = waf.DefaultMaxPackageBytes
 	}
@@ -62,7 +62,7 @@ func parseWAFUploadMultipart(ctx context.Context, r *http.Request, svcCtx *svc.S
 	}
 	defer file.Close()
 
-	store := waf.NewStore(svcCtx.Config.WAF.WorkDir)
+	store := waf.NewStore(svcCtx.Config.Waf.WorkDir)
 	if err := store.EnsureDirs(); err != nil {
 		return nil, ctx, fmt.Errorf("prepare upload workspace failed: %w", err)
 	}
@@ -93,7 +93,7 @@ func parseWAFUploadMultipart(ctx context.Context, r *http.Request, svcCtx *svc.S
 		activateNow = parsed
 	}
 
-	req := &types.WAFUploadReq{
+	req := &types.WafUploadReq{
 		Kind:        strings.TrimSpace(r.FormValue("kind")),
 		Version:     strings.TrimSpace(r.FormValue("version")),
 		Checksum:    strings.TrimSpace(r.FormValue("checksum")),

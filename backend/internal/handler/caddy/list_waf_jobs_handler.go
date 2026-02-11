@@ -10,16 +10,16 @@ import (
 	"logflux/internal/types"
 )
 
-func ListWAFJobsHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
+func ListWafJobsHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req types.WAFJobListReq
+		var req types.WafJobListReq
 		if err := httpx.Parse(r, &req); err != nil {
 			httpx.ErrorCtx(r.Context(), w, err)
 			return
 		}
 
-		l := caddy.NewListWAFJobsLogic(r.Context(), svcCtx)
-		resp, err := l.ListWAFJobs(&req)
+		l := caddy.NewListWafJobsLogic(r.Context(), svcCtx)
+		resp, err := l.ListWafJobs(&req)
 		result.HttpResult(r, w, resp, err)
 	}
 }

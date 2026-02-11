@@ -53,8 +53,8 @@ type wafLogicHelper struct {
 	store  *waf.Store
 }
 
-func newWAFLogicHelper(ctx context.Context, svcCtx *svc.ServiceContext, logger logx.Logger) *wafLogicHelper {
-	workDir := strings.TrimSpace(svcCtx.Config.WAF.WorkDir)
+func newWafLogicHelper(ctx context.Context, svcCtx *svc.ServiceContext, logger logx.Logger) *wafLogicHelper {
+	workDir := strings.TrimSpace(svcCtx.Config.Waf.WorkDir)
 	if workDir == "" {
 		workDir = "/config/caddy/waf"
 	}
@@ -73,7 +73,7 @@ func (helper *wafLogicHelper) ensureStoreDirs() error {
 	return nil
 }
 
-func normalizeWAFKind(kind string) string {
+func normalizeWafKind(kind string) string {
 	normalized := strings.ToLower(strings.TrimSpace(kind))
 	if normalized == "" {
 		return wafKindCRS
@@ -81,8 +81,8 @@ func normalizeWAFKind(kind string) string {
 	return normalized
 }
 
-func validateWAFKind(kind string) error {
-	switch normalizeWAFKind(kind) {
+func validateWafKind(kind string) error {
+	switch normalizeWafKind(kind) {
 	case wafKindCRS, wafKindCorazaEngine:
 		return nil
 	default:
@@ -90,7 +90,7 @@ func validateWAFKind(kind string) error {
 	}
 }
 
-func normalizeWAFMode(mode string) string {
+func normalizeWafMode(mode string) string {
 	normalized := strings.ToLower(strings.TrimSpace(mode))
 	if normalized == "" {
 		return wafModeRemote
@@ -98,8 +98,8 @@ func normalizeWAFMode(mode string) string {
 	return normalized
 }
 
-func validateWAFMode(mode string) error {
-	switch normalizeWAFMode(mode) {
+func validateWafMode(mode string) error {
+	switch normalizeWafMode(mode) {
 	case wafModeRemote, wafModeManual:
 		return nil
 	default:
@@ -107,7 +107,7 @@ func validateWAFMode(mode string) error {
 	}
 }
 
-func normalizeWAFAuthType(authType string) string {
+func normalizeWafAuthType(authType string) string {
 	normalized := strings.ToLower(strings.TrimSpace(authType))
 	if normalized == "" {
 		return wafAuthNone
@@ -115,8 +115,8 @@ func normalizeWAFAuthType(authType string) string {
 	return normalized
 }
 
-func validateWAFAuthType(authType string) error {
-	switch normalizeWAFAuthType(authType) {
+func validateWafAuthType(authType string) error {
+	switch normalizeWafAuthType(authType) {
 	case wafAuthNone, wafAuthToken, wafAuthBasic:
 		return nil
 	default:
@@ -151,9 +151,9 @@ func formatNullableTime(value *time.Time) string {
 	return formatTime(*value)
 }
 
-func (helper *wafLogicHelper) startJob(sourceID, releaseID uint, action, triggerMode string) *model.WAFUpdateJob {
+func (helper *wafLogicHelper) startJob(sourceID, releaseID uint, action, triggerMode string) *model.WafUpdateJob {
 	now := time.Now()
-	job := &model.WAFUpdateJob{
+	job := &model.WafUpdateJob{
 		SourceID:    sourceID,
 		ReleaseID:   releaseID,
 		Action:      strings.ToLower(strings.TrimSpace(action)),
@@ -174,7 +174,7 @@ func (helper *wafLogicHelper) startJob(sourceID, releaseID uint, action, trigger
 	return job
 }
 
-func (helper *wafLogicHelper) finishJob(job *model.WAFUpdateJob, status, message string, releaseID uint) {
+func (helper *wafLogicHelper) finishJob(job *model.WafUpdateJob, status, message string, releaseID uint) {
 	if job == nil {
 		return
 	}
@@ -275,7 +275,7 @@ func (loader *wafCaddyLoader) Load(config string) error {
 	return loadCaddyfile(loader.server, config)
 }
 
-func (helper *wafLogicHelper) activateRelease(release *model.WAFRelease) error {
+func (helper *wafLogicHelper) activateRelease(release *model.WafRelease) error {
 	if release == nil {
 		return fmt.Errorf("release is nil")
 	}
@@ -298,19 +298,19 @@ func (helper *wafLogicHelper) activateRelease(release *model.WAFRelease) error {
 	return nil
 }
 
-func (helper *wafLogicHelper) markReleaseActive(release *model.WAFRelease) error {
+func (helper *wafLogicHelper) markReleaseActive(release *model.WafRelease) error {
 	if release == nil {
 		return fmt.Errorf("release is nil")
 	}
 
 	return helper.svcCtx.DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&model.WAFRelease{}).
+		if err := tx.Model(&model.WafRelease{}).
 			Where("kind = ? AND status = ? AND id <> ?", release.Kind, wafReleaseStatusActive, release.ID).
 			Update("status", wafReleaseStatusRolledBack).Error; err != nil {
 			return err
 		}
 
-		if err := tx.Model(&model.WAFRelease{}).
+		if err := tx.Model(&model.WafRelease{}).
 			Where("id = ?", release.ID).
 			Updates(map[string]interface{}{
 				"status": wafReleaseStatusActive,
@@ -319,7 +319,7 @@ func (helper *wafLogicHelper) markReleaseActive(release *model.WAFRelease) error
 		}
 
 		if release.SourceID > 0 {
-			if err := tx.Model(&model.WAFSource{}).
+			if err := tx.Model(&model.WafSource{}).
 				Where("id = ?", release.SourceID).
 				Updates(map[string]interface{}{
 					"last_release": release.Version,
@@ -333,7 +333,7 @@ func (helper *wafLogicHelper) markReleaseActive(release *model.WAFRelease) error
 	})
 }
 
-func (helper *wafLogicHelper) markReleaseFailed(release *model.WAFRelease, message string) {
+func (helper *wafLogicHelper) markReleaseFailed(release *model.WafRelease, message string) {
 	if release == nil {
 		return
 	}
@@ -343,14 +343,14 @@ func (helper *wafLogicHelper) markReleaseFailed(release *model.WAFRelease, messa
 		errorMessage = "activate failed"
 	}
 
-	if err := helper.svcCtx.DB.Model(&model.WAFRelease{}).
+	if err := helper.svcCtx.DB.Model(&model.WafRelease{}).
 		Where("id = ?", release.ID).
 		Updates(map[string]interface{}{"status": wafReleaseStatusFailed}).Error; err != nil {
 		helper.logger.Errorf("mark release failed status error: %v", err)
 	}
 
 	if release.SourceID > 0 {
-		if err := helper.svcCtx.DB.Model(&model.WAFSource{}).
+		if err := helper.svcCtx.DB.Model(&model.WafSource{}).
 			Where("id = ?", release.SourceID).
 			Updates(map[string]interface{}{"last_error": errorMessage}).Error; err != nil {
 			helper.logger.Errorf("update source last_error failed: %v", err)
@@ -362,7 +362,7 @@ func (helper *wafLogicHelper) clearSourceError(sourceID uint) {
 	if sourceID == 0 {
 		return
 	}
-	if err := helper.svcCtx.DB.Model(&model.WAFSource{}).
+	if err := helper.svcCtx.DB.Model(&model.WafSource{}).
 		Where("id = ?", sourceID).
 		Update("last_error", "").Error; err != nil {
 		helper.logger.Errorf("clear source last_error failed: %v", err)
@@ -381,7 +381,7 @@ func (helper *wafLogicHelper) updateSourceLastCheck(sourceID uint, releaseVersio
 	if strings.TrimSpace(releaseVersion) != "" {
 		updates["last_release"] = strings.TrimSpace(releaseVersion)
 	}
-	if err := helper.svcCtx.DB.Model(&model.WAFSource{}).Where("id = ?", sourceID).Updates(updates).Error; err != nil {
+	if err := helper.svcCtx.DB.Model(&model.WafSource{}).Where("id = ?", sourceID).Updates(updates).Error; err != nil {
 		helper.logger.Errorf("update source last check failed: %v", err)
 	}
 }
@@ -446,7 +446,7 @@ func ensureUniqueReleaseVersion(db *gorm.DB, sourceID uint, version string) stri
 	}
 
 	var count int64
-	if err := db.Model(&model.WAFRelease{}).
+	if err := db.Model(&model.WafRelease{}).
 		Where("source_id = ? AND version = ?", sourceID, candidate).
 		Count(&count).Error; err != nil {
 		return candidate
