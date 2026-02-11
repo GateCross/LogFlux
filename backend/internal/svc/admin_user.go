@@ -34,6 +34,17 @@ func ensureAdminUser(db *gorm.DB) {
 		return
 	}
 
+	var adminCount int64
+	if countErr := db.Model(&model.User{}).Where("? = ANY(roles)", "admin").Count(&adminCount).Error; countErr != nil {
+		logx.Errorf("检查管理员账号数量失败: %v", countErr)
+		return
+	}
+
+	if adminCount > 0 {
+		logx.Infof("检测到现有管理员账号，跳过默认管理员初始化")
+		return
+	}
+
 	plainPassword, err := generateComplexPassword(defaultPasswordLen)
 	if err != nil {
 		logx.Errorf("生成管理员随机密码失败: %v", err)
