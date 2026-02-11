@@ -1,77 +1,74 @@
-# LogFlux Docker 部署
+# LogFlux Docker 部署指南
 
-## 目录结构
+本文档以当前仓库实现为准，覆盖：镜像构建、容器部署、WAF/Coraza 版本配置与常见运维操作。
 
-```
+## 1. 目录与职责
+
+```text
 docker/
-  Dockerfile                 # 应用镜像构建（Go + Node + Caddy）
-  runtime.Dockerfile         # 仅运行时镜像（配合产物构建）
-  caddy.Dockerfile           # Caddy 自定义模块构建
-  caddy.modules.txt          # Caddy 模块清单
-  docker-compose.yml         # 应用部署
-  Caddyfile                  # Caddy 反向代理配置
-  supervisord.conf           # 进程管理
-  config.example.yaml        # 后端配置示例
-  .env.example               # 部署环境变量示例
+  Dockerfile                 # 本地一体化构建镜像（前端+后端+Caddy）
+  runtime.Dockerfile         # CI 产物拼装镜像（配合 build-artifacts）
+  caddy.Dockerfile           # 自定义 Caddy（含 Coraza/CRS 模块）
+  docker-compose.yml         # 部署编排（使用预构建 image）
+  Caddyfile                  # Caddy 默认配置
+  config.example.yaml        # 后端配置模板
+  .env.example               # compose 环境变量模板
 ```
 
-## 前置条件
+## 2. 前置条件
 
 - Docker 20.10+
-- Docker Compose 2.0+
-- PostgreSQL / Redis 为外部依赖（按 `backend/etc/config.yaml` 配置）
+- Docker Compose v2+
+- 外部 PostgreSQL（必须）
+- 外部 Redis（可选）
 
-## 构建镜像（GitHub Actions）
+## 3. 快速部署（推荐）
 
-- 主应用镜像：`.github/workflows/build-and-push.yml`
-- Caddy 镜像：`.github/workflows/build-caddy.yml`（仅 Caddy 相关变更触发）
-
-可选变量（GitHub Repo Variables）：
-`REGISTRY`、`IMAGE_NAME`、`PLATFORM`、`CADDY_IMAGE_NAME`
-
-### WAF 模块版本（Coraza + CRS）
-
-`docker/caddy.Dockerfile` 已内置 WAF 模块构建参数：
-
-- `CORAZA_CADDY_VERSION`（默认：`v2.1.0`）
-- `CORAZA_CRS_VERSION`（默认：`v4.23.0`）
-
-如需升级，可在构建时覆盖：
-
-```bash
-docker build -f docker/caddy.Dockerfile \
-  --build-arg CORAZA_CADDY_VERSION=v2.1.0 \
-  --build-arg CORAZA_CRS_VERSION=v4.23.0 \
-  -t logflux-caddy:local .
-```
-
-## 部署应用
-
-### 本地构建
+### 3.1 准备配置
 
 ```bash
 cp docker/.env.example docker/.env
-
-# 可选：本地构建 Caddy 自定义镜像
-docker build -f docker/caddy.Dockerfile -t logflux-caddy:local .
-
-docker compose -f docker/docker-compose.yml build
-docker compose -f docker/docker-compose.yml up -d
+cp docker/config.example.yaml backend/etc/config.yaml
 ```
 
-### 使用 GHCR 镜像
+请至少修改：
 
-在 `docker/.env` 设置：
+- `backend/etc/config.yaml`
+  - `Auth.AccessSecret`
+  - `Database.*`
+  - `Redis.*`（可留空）
 
-```
-LOGFLUX_IMAGE=ghcr.io/<owner>/<repo>:latest
-CADDY_IMAGE=ghcr.io/gatecross/logflux-caddy:latest
-```
-
-私有镜像需先登录：
+### 3.2 启动
 
 ```bash
-docker login ghcr.io
+docker compose -f docker/docker-compose.yml up -d
+# 或 make up
+```
+
+### 3.3 验证
+
+```bash
+docker compose -f docker/docker-compose.yml ps
+curl -f http://localhost/api/health
+```
+
+默认端口：
+
+- `80` -> HTTP
+- `443` -> HTTPS
+
+## 4. 镜像来源与本地构建
+
+`docker-compose.yml` 默认使用：
+
+- `LOGFLUX_IMAGE`（默认 `logflux:local`）
+
+### 4.1 使用远端镜像（GHCR）
+
+`docker/.env` 示例：
+
+```env
+LOGFLUX_IMAGE=ghcr.io/<owner>/<repo>:latest
 ```
 
 然后：
@@ -81,84 +78,142 @@ docker compose -f docker/docker-compose.yml pull
 docker compose -f docker/docker-compose.yml up -d --no-build
 ```
 
-## Caddy 启动与配置生效
+### 4.2 本地构建应用镜像
 
-- 容器启动时，`docker/entrypoint.sh` 会优先尝试 `caddy run --resume`。
-- 若不存在恢复文件（`/config/caddy/autosave.json`），则自动回退到 `/etc/caddy/Caddyfile`。
-
-### 配置页面保存后如何生效
-
-- 前端保存会调用：`POST /api/caddy/server/:serverId/config`。
-- 后端会先调用 Caddy Admin API `/adapt` 校验，再调用 `/load` 下发配置。
-- 这属于 **热重载**（无须手动重启容器），新配置会立即生效。
-
-### 什么时候需要“真正重启”
-
-- 仅在升级 Caddy 二进制、插件变更等场景才建议重启容器。
-- 可执行：`docker compose -f docker/docker-compose.yml restart`（或项目根目录 `make restart`）。
-
-## WAF（Coraza + OWASP CRS）说明
-
-当前 `docker/Caddyfile` 已启用全站 WAF 防护：
-
-- 全局执行顺序：`order coraza_waf first`
-- 防护引擎：`coraza_waf`
-- 规则集：`load_owasp_crs`
-- 运行模式：`SecRuleEngine On`（阻断模式）
-
-Waf/CRS 文件默认目录（后端更新源下载、解压、版本切换）：
-
-- 工作目录：`/config/security`
-- 关键子目录：`/config/security/{tmp,packages,releases}`
-- Docker 持久化：`docker/docker-compose.yml` 已挂载 `security_data:/config/security`
-- 如需映射宿主机目录：可改为 `./data/security:/config/security`
-
-旧版本迁移（历史数据在 `/config/caddy/waf`）：
+可选先构建自定义 Caddy：
 
 ```bash
-docker compose -f docker/docker-compose.yml run --rm logflux \
-  sh -c "mkdir -p /config/security && cp -a /config/caddy/waf/. /config/security/ || true"
+docker build -f docker/caddy.Dockerfile -t logflux-caddy:local .
 ```
 
-审计日志路径：
-
-- `/var/log/caddy/waf_audit.log`
-
-快速验证（容器内）：
+再构建 LogFlux 应用镜像：
 
 ```bash
-caddy list-modules | rg -i "coraza|crs"
-tail -n 100 /var/log/caddy/waf_audit.log
+docker build -f docker/Dockerfile \
+  --build-arg CADDY_IMAGE=logflux-caddy:local \
+  --build-arg CORAZA_CURRENT_VERSION=v2.1.0 \
+  -t logflux:local .
 ```
 
-### 平台说明
+> 若不传 `CADDY_IMAGE`，默认 `ghcr.io/gatecross/logflux-caddy:latest`。
 
-默认 `linux/amd64`。如需 `arm64`，在 `docker/.env` 增加：
+## 5. WAF 与 Coraza（当前行为）
 
+### 5.1 CRS 与 Coraza 的边界
+
+- **CRS**：支持更新源管理、同步、上传、激活、回滚。
+- **Coraza 引擎**：不走“更新源配置”，仅支持版本检查（GitHub Release），不支持在线替换引擎。
+
+### 5.2 WAF 文件目录
+
+工作目录固定：`/config/security`
+
+关键子目录：
+
+- `/config/security/packages`
+- `/config/security/releases`
+
+compose 已默认持久化：
+
+- `security_data:/config/security`
+
+### 5.3 Coraza 版本来源与优先级
+
+后端“当前版本”读取优先级：
+
+1. `Waf.CorazaCurrentVersion`（配置文件）
+2. `CORAZA_CURRENT_VERSION`（运行时环境变量）
+3. `/app/etc/coraza-current-version`（镜像构建写入）
+
+“最新版本”来源：
+
+- `Waf.CorazaReleaseAPI`（默认 `https://api.github.com/repos/corazawaf/coraza-caddy/releases/latest`）
+
+### 5.4 GitHub Release 检查代理
+
+可通过以下方式配置代理：
+
+- `Waf.CorazaCheckProxy`（配置文件）
+- `CORAZA_CHECK_PROXY`（环境变量）
+
+检查逻辑：**优先代理，请求失败自动回退直连**。
+
+## 6. 配置文件示例（WAF 段）
+
+`backend/etc/config.yaml` / `docker/config.example.yaml`：
+
+```yaml
+Waf:
+  WorkDir: "/config/security"
+  FetchTimeoutSec: 180
+  MaxPackageBytes: 104857600
+  AllowedDomains: ["github.com", "api.github.com"]
+  ExtractMaxFiles: 5000
+  ExtractMaxTotalBytes: 536870912
+  ActivateTimeoutSec: 30
+  CorazaReleaseAPI: "https://api.github.com/repos/corazawaf/coraza-caddy/releases/latest"
+  CorazaCurrentVersion: ""
+  CorazaCheckProxy: ""
 ```
-PLATFORM=linux/arm64
-```
 
-## GeoIP2（可选）
+## 7. CI（GitHub Actions）
 
-如需地理位置识别：
+- 主镜像：`.github/workflows/build-and-push.yml`
+- Caddy 镜像：`.github/workflows/build-caddy.yml`
+
+建议设置 Repo Variables：
+
+- `REGISTRY`
+- `IMAGE_NAME`
+- `PLATFORM`
+- `CADDY_IMAGE`
+- `CORAZA_CURRENT_VERSION`（用于构建注入 `/app/etc/coraza-current-version`）
+
+## 8. Caddy 配置生效机制
+
+- 启动优先 `caddy run --resume`（读取 `/config/caddy/autosave.json`）
+- 无 autosave 时回退 `/etc/caddy/Caddyfile`
+- 后台保存配置会调用 Caddy Admin API `/adapt` + `/load`，属于热重载，无需重启容器
+
+## 9. 常用运维命令
 
 ```bash
-cd docker
-wget https://git.io/GeoLite2-City.mmdb
+# 查看状态
+docker compose -f docker/docker-compose.yml ps
+
+# 查看日志
+docker compose -f docker/docker-compose.yml logs -f
+
+# 重启
+docker compose -f docker/docker-compose.yml restart
+
+# 停止并删除容器
+docker compose -f docker/docker-compose.yml down
 ```
 
-不需要 GeoIP2：
-- 注释 `docker/docker-compose.yml` 中的 GeoIP2 volume
-- 注释 `docker/Caddyfile` 中的 `import geoip` 行
+## 10. GeoIP2（可选）
 
-## 常见问题
+如果不使用 GeoIP2：
 
-### Can't drop privilege as nonroot user
+- 注释 `docker/docker-compose.yml` 中 `GeoLite2-City.mmdb` 挂载
+- 注释 `docker/Caddyfile` 中相关 `geoip` 引用
 
-`supervisord` 以非 root 启动时无法切换到 `user=logflux`。
-请确保容器主进程为 root，不要在 `docker-compose.yml` 里设置 `user:` 为非 root。
+## 11. 常见问题
 
-## 端口
+### Q1：容器起来了但 `/api/health` 不通
 
-- 80/443: LogFlux（Caddy）
+优先检查：
+
+- `backend/etc/config.yaml` 的数据库连接是否可达
+- `docker compose logs` 中 `logflux-api` 启动报错
+
+### Q2：Coraza 最新版本检查超时
+
+- 配置 `Waf.CorazaCheckProxy` 或 `CORAZA_CHECK_PROXY`
+- 确认目标域名 `api.github.com` 可访问
+
+### Q3：重启后 CRS 版本切换丢失
+
+确认 `docker-compose.yml` 中已挂载：
+
+- `security_data:/config/security`
