@@ -42,6 +42,11 @@ func (l *CheckWafSourceLogic) CheckWafSource(req *types.WafSourceActionReq) (res
 		helper.finishJob(job, wafJobStatusFailed, err.Error(), 0)
 		return nil, err
 	}
+	if normalizeWafKind(source.Kind) == wafKindCorazaEngine {
+		err = fmt.Errorf("Coraza 引擎更新源无需手工配置，请直接使用引擎版本检查")
+		helper.finishJob(job, wafJobStatusFailed, err.Error(), 0)
+		return nil, err
+	}
 	if err := validateWafMode(source.Mode); err != nil {
 		helper.updateSourceLastCheck(source.ID, "", err.Error())
 		helper.finishJob(job, wafJobStatusFailed, err.Error(), 0)

@@ -40,6 +40,9 @@ func (l *AddWafSourceLogic) AddWafSource(req *types.WafSourceReq) (resp *types.B
 	if err := validateWafKind(kind); err != nil {
 		return nil, err
 	}
+	if kind == wafKindCorazaEngine {
+		return nil, fmt.Errorf("Coraza 引擎更新源无需手工配置，请直接使用引擎版本检查")
+	}
 
 	mode := normalizeWafMode(req.Mode)
 	if err := validateWafMode(mode); err != nil {

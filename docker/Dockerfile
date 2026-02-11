@@ -2,6 +2,7 @@
 # Global build args (must be before first FROM)
 # ==========================================
 ARG CADDY_IMAGE=ghcr.io/gatecross/logflux-caddy:latest
+ARG CORAZA_CURRENT_VERSION=
 
 # ==========================================
 # Stage 1: Build Frontend
@@ -65,6 +66,8 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} \
 # ==========================================
 FROM alpine:3.21
 
+ARG CORAZA_CURRENT_VERSION
+
 # 设置环境变量
 ENV TZ=Asia/Shanghai \
     APP_USER=logflux \
@@ -115,6 +118,9 @@ COPY --chmod=755 docker/entrypoint.sh /app/entrypoint.sh
 # 复制后端配置（构建时，可通过构建参数切换）
 ARG CONFIG_FILE=docker/config.example.yaml
 COPY --chown=${APP_USER}:${APP_GROUP} ${CONFIG_FILE} /app/etc/config.yaml
+
+RUN printf "%s" "${CORAZA_CURRENT_VERSION}" > /app/etc/coraza-current-version && \
+    chown ${APP_USER}:${APP_GROUP} /app/etc/coraza-current-version
 
 # 暴露端口
 # 80 - HTTP

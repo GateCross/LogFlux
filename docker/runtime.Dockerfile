@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1.5
 
 ARG CADDY_IMAGE=ghcr.io/gatecross/logflux-caddy:latest
+ARG CORAZA_CURRENT_VERSION=
 ARG TARGETPLATFORM=linux/amd64
 ARG TARGETARCH=amd64
 
@@ -8,6 +9,7 @@ FROM ${CADDY_IMAGE} AS caddy-binary
 
 FROM --platform=${TARGETPLATFORM} alpine:3.21
 ARG TARGETARCH
+ARG CORAZA_CURRENT_VERSION
 
 ENV TZ=Asia/Shanghai \
     APP_USER=logflux \
@@ -50,6 +52,9 @@ COPY --chmod=755 docker/entrypoint.sh /app/entrypoint.sh
 
 ARG CONFIG_FILE=docker/config.example.yaml
 COPY --chown=${APP_USER}:${APP_GROUP} ${CONFIG_FILE} /app/etc/config.yaml
+
+RUN printf "%s" "${CORAZA_CURRENT_VERSION}" > /app/etc/coraza-current-version && \
+    chown ${APP_USER}:${APP_GROUP} /app/etc/coraza-current-version
 
 EXPOSE 80 443 8888
 

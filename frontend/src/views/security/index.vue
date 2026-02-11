@@ -3,7 +3,7 @@
     <n-alert type="info" :show-icon="true" class="rounded-8px">
       <template #header>{{ pageTitle }}</template>
       <div>
-        CRS 支持在线同步、上传、激活与回滚；Coraza 引擎依赖 Caddy 二进制，当前版本仅提供升级源配置与版本检查，不支持在线替换引擎。
+        CRS 支持在线同步、上传、激活与回滚；Coraza 引擎依赖 Caddy 二进制，仅提供 GitHub Release 版本检查，不支持在线替换引擎。
       </div>
     </n-alert>
 
@@ -55,14 +55,6 @@
         <n-tab-pane name="source" tab="更新源配置">
           <div class="mb-3 flex flex-wrap gap-2 items-center">
             <n-input v-model:value="sourceQuery.name" placeholder="按名称搜索" clearable class="w-220px" @keyup.enter="fetchSources" />
-            <n-select
-              v-model:value="sourceQuery.kind"
-              :options="kindFilterOptions"
-              :disabled="Boolean(routeKind)"
-              clearable
-              placeholder="类型"
-              class="w-160px"
-            />
             <n-button type="primary" @click="fetchSources">
               <template #icon>
                 <icon-carbon-search />
@@ -166,7 +158,7 @@
             <n-input v-model:value="sourceForm.name" placeholder="例如：official-crs" />
           </n-form-item-gi>
           <n-form-item-gi label="类型" path="kind">
-            <n-select v-model:value="sourceForm.kind" :options="kindOptions" :disabled="Boolean(routeKind)" />
+            <n-input value="crs" disabled />
           </n-form-item-gi>
           <n-form-item-gi label="模式" path="mode">
             <n-select v-model:value="sourceForm.mode" :options="modeOptions" />
@@ -178,8 +170,7 @@
 
         <n-form-item label="默认源">
           <div class="flex flex-wrap gap-2">
-            <n-button size="small" secondary @click="applyDefaultSource('crs')">应用 CRS 默认源</n-button>
-            <n-button size="small" secondary @click="applyDefaultSource('coraza_engine')">应用 Coraza 默认源</n-button>
+            <n-button size="small" secondary @click="applyDefaultSource">应用 CRS 默认源</n-button>
           </div>
         </n-form-item>
 
@@ -218,7 +209,7 @@
             <n-switch v-model:value="sourceForm.autoDownload" />
           </n-form-item-gi>
           <n-form-item-gi label="自动激活">
-            <n-switch v-model:value="sourceForm.autoActivate" :disabled="sourceForm.kind === 'coraza_engine'" />
+            <n-switch v-model:value="sourceForm.autoActivate" />
           </n-form-item-gi>
         </n-grid>
       </n-form>
@@ -234,7 +225,7 @@
     <n-modal v-model:show="uploadModalVisible" preset="card" title="上传规则包" class="w-640px">
       <n-form ref="uploadFormRef" :model="uploadForm" :rules="uploadRules" label-placement="left" label-width="110">
         <n-form-item label="类型" path="kind">
-          <n-select v-model:value="uploadForm.kind" :options="kindOptions" :disabled="Boolean(routeKind)" />
+          <n-input value="crs" disabled />
         </n-form-item>
         <n-form-item label="版本号" path="version">
           <n-input v-model:value="uploadForm.version" placeholder="例如：v4.23.0-custom.1" />
@@ -243,7 +234,7 @@
           <n-input v-model:value="uploadForm.checksum" placeholder="可选，建议填写" />
         </n-form-item>
         <n-form-item label="立即激活" path="activateNow">
-          <n-switch v-model:value="uploadForm.activateNow" :disabled="uploadForm.kind === 'coraza_engine'" />
+          <n-switch v-model:value="uploadForm.activateNow" />
         </n-form-item>
         <n-form-item label="规则包" path="file">
           <n-upload
@@ -347,13 +338,6 @@ const engineStatus = ref<WafEngineStatusResp | null>(null);
 const activeTab = ref<'source' | 'release' | 'job'>('source');
 const tableFixedHeight = 480;
 
-const kindOptions = [
-  { label: 'CRS 规则集', value: 'crs' },
-  { label: 'Coraza 引擎', value: 'coraza_engine' }
-];
-
-const kindFilterOptions = [{ label: '全部', value: '' }, ...kindOptions];
-
 const modeOptions = [
   { label: '远程同步 (remote)', value: 'remote' },
   { label: '手动管理 (manual)', value: 'manual' }
@@ -392,11 +376,8 @@ const jobActionOptions = [
 ];
 
 const sourceQuery = reactive({
-  name: '',
-  kind: '' as '' | WafKind
+  name: ''
 });
-
-const routeKind = computed<'' | WafKind>(() => '');
 
 const sourceLoading = ref(false);
 const sourceTable = ref<WafSourceItem[]>([]);
@@ -642,7 +623,6 @@ const sourceColumns: DataTableColumns<WafSourceItem> = [
                 size: 'small',
                 type: 'success',
                 secondary: true,
-                disabled: row.kind === 'coraza_engine',
                 onClick: () => handleSyncSource(row, true)
               },
               { default: () => '同步并激活' }
@@ -962,19 +942,17 @@ async function handleCheckEngine() {
 async function fetchSources() {
   sourceLoading.value = true;
   try {
-    const queryKind = sourceQuery.kind || routeKind.value;
-    const normalizedKind = queryKind === 'crs' || queryKind === 'coraza_engine' ? queryKind : undefined;
     const { data, error } = await fetchWafSourceList({
       page: sourcePagination.page as number,
       pageSize: sourcePagination.pageSize as number,
-      kind: normalizedKind,
+      kind: 'crs',
       name: sourceQuery.name.trim() || undefined
     });
     if (!error && data) {
       const list = data.list || [];
       const total = data.total || 0;
 
-      if (!sourceQuery.name.trim() && !normalizedKind && total > 0 && list.length === 0 && (sourcePagination.page as number) > 1) {
+      if (!sourceQuery.name.trim() && total > 0 && list.length === 0 && (sourcePagination.page as number) > 1) {
         sourcePagination.page = 1;
         await fetchSources();
         return;
@@ -990,7 +968,6 @@ async function fetchSources() {
 
 function resetSourceQuery() {
   sourceQuery.name = '';
-  sourceQuery.kind = '';
   sourcePagination.page = 1;
   fetchSources();
 }
@@ -1009,7 +986,7 @@ function handleSourcePageSizeChange(pageSize: number) {
 function resetSourceForm() {
   sourceForm.id = 0;
   sourceForm.name = '';
-  sourceForm.kind = routeKind.value || 'crs';
+  sourceForm.kind = 'crs';
   sourceForm.mode = 'remote';
   sourceForm.url = '';
   sourceForm.checksumUrl = '';
@@ -1027,7 +1004,7 @@ function resetSourceForm() {
 function handleAddSource() {
   sourceModalMode.value = 'add';
   resetSourceForm();
-  applyDefaultSource('crs');
+  applyDefaultSource();
   sourceModalVisible.value = true;
 }
 
@@ -1049,31 +1026,22 @@ function buildAvailableSourceName(baseName: string) {
   return candidate;
 }
 
-function applyDefaultSource(kind: WafKind) {
-  sourceForm.kind = kind;
+function applyDefaultSource() {
+  sourceForm.kind = 'crs';
   sourceForm.mode = 'remote';
   sourceForm.authType = 'none';
   sourceForm.authSecret = '';
   sourceForm.enabled = true;
   sourceForm.autoCheck = true;
-  sourceForm.autoDownload = kind === 'crs';
+  sourceForm.autoDownload = true;
   sourceForm.autoActivate = false;
 
-  if (kind === 'crs') {
-    sourceForm.name = buildAvailableSourceName('default-crs');
-    sourceForm.url = 'https://codeload.github.com/coreruleset/coreruleset/tar.gz/refs/heads/main';
-    sourceForm.checksumUrl = '';
-    sourceForm.schedule = '0 0 */6 * * *';
-    sourceForm.meta = '{"default":true,"official":true,"repo":"https://github.com/coreruleset/coreruleset"}';
-    return;
-  }
-
-  sourceForm.name = buildAvailableSourceName('official-coraza-engine');
-  sourceForm.url = 'https://codeload.github.com/corazawaf/coraza-caddy/tar.gz/refs/heads/main';
+  sourceForm.name = buildAvailableSourceName('default-crs');
+  sourceForm.url = 'https://codeload.github.com/coreruleset/coreruleset/tar.gz/refs/heads/main';
   sourceForm.checksumUrl = '';
   sourceForm.proxyUrl = '';
-  sourceForm.schedule = '0 0 0 * * *';
-  sourceForm.meta = '{"official":true,"repo":"https://github.com/corazawaf/coraza-caddy"}';
+  sourceForm.schedule = '0 0 */6 * * *';
+  sourceForm.meta = '{"default":true,"official":true,"repo":"https://github.com/coreruleset/coreruleset"}';
 }
 
 function handleEditSource(row: WafSourceItem) {
@@ -1155,7 +1123,7 @@ function handleCheckSource(row: WafSourceItem) {
 }
 
 function handleSyncSource(row: WafSourceItem, activateNow: boolean) {
-  const allowActivate = activateNow && row.kind !== 'coraza_engine';
+  const allowActivate = activateNow;
   const content = allowActivate ? '将下载、校验并立即激活该源对应版本，确认继续？' : '将下载并校验该源对应版本，确认继续？';
 
   dialog.warning({
@@ -1220,11 +1188,6 @@ function handleReleasePageSizeChange(pageSize: number) {
 }
 
 function handleActivateRelease(row: WafReleaseItem) {
-  if (row.kind === 'coraza_engine') {
-    message.warning('Coraza 引擎不支持在线激活，仅支持版本检查');
-    return;
-  }
-
   dialog.warning({
     title: '激活确认',
     content: `确认激活版本 ${row.version} 吗？`,
@@ -1286,7 +1249,7 @@ async function handleSubmitRollback() {
 }
 
 function openUploadModal() {
-  uploadForm.kind = routeKind.value || 'crs';
+  uploadForm.kind = 'crs';
   uploadForm.version = '';
   uploadForm.checksum = '';
   uploadForm.activateNow = false;
@@ -1295,35 +1258,10 @@ function openUploadModal() {
 }
 
 watch(
-  routeKind,
+  () => sourceForm.mode,
   value => {
-    if (value) {
-      sourceForm.kind = value;
-      uploadForm.kind = value;
-
-      if (value === 'coraza_engine') {
-        sourceForm.autoActivate = false;
-        uploadForm.activateNow = false;
-      }
-    }
-  },
-  { immediate: true }
-);
-
-watch(
-  () => sourceForm.kind,
-  value => {
-    if (value === 'coraza_engine') {
-      sourceForm.autoActivate = false;
-    }
-  }
-);
-
-watch(
-  () => uploadForm.kind,
-  value => {
-    if (value === 'coraza_engine') {
-      uploadForm.activateNow = false;
+    if (value !== 'remote') {
+      sourceForm.proxyUrl = '';
     }
   }
 );
@@ -1448,17 +1386,6 @@ watch(activeTab, value => {
     fetchReleases();
   } else {
     fetchJobs();
-  }
-});
-
-watch(routeKind, () => {
-  sourceQuery.kind = '';
-  sourcePagination.page = 1;
-  releasePagination.page = 1;
-  if (activeTab.value === 'source') {
-    fetchSources();
-  } else if (activeTab.value === 'release') {
-    fetchReleases();
   }
 });
 
