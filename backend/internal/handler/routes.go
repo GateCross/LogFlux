@@ -160,6 +160,51 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Path:    "/caddy/waf/upload",
 				Handler: caddy.UploadWafPackageHandler(serverCtx),
 			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/caddy/waf/policy",
+				Handler: caddy.ListWafPoliciesHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/caddy/waf/policy",
+				Handler: caddy.CreateWafPolicyHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPut,
+				Path:    "/caddy/waf/policy/:id",
+				Handler: caddy.UpdateWafPolicyHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodDelete,
+				Path:    "/caddy/waf/policy/:id",
+				Handler: caddy.DeleteWafPolicyHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/caddy/waf/policy/:id/preview",
+				Handler: caddy.PreviewWafPolicyHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/caddy/waf/policy/:id/validate",
+				Handler: caddy.ValidateWafPolicyHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/caddy/waf/policy/:id/publish",
+				Handler: caddy.PublishWafPolicyHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/caddy/waf/policy/rollback",
+				Handler: caddy.RollbackWafPolicyHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/caddy/waf/policy/revision",
+				Handler: caddy.ListWafPolicyRevisionsHandler(serverCtx),
+			},
 		},
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
 		rest.WithPrefix("/api"),
