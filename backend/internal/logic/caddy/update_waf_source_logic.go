@@ -95,6 +95,9 @@ func (l *UpdateWafSourceLogic) UpdateWafSource(req *types.WafSourceUpdateReq) (r
 	if helper.hasSourceBoolField("autoActivate") {
 		source.AutoActivate = req.AutoActivate
 	}
+	if source.Kind == wafKindCorazaEngine {
+		source.AutoActivate = false
+	}
 
 	if source.Mode == wafModeRemote && strings.TrimSpace(source.URL) == "" {
 		return nil, fmt.Errorf("url is required for remote source")

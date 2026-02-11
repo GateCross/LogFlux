@@ -68,7 +68,7 @@ func parseWafUploadMultipart(ctx context.Context, r *http.Request, svcCtx *svc.S
 	}
 
 	tempName := fmt.Sprintf("upload_%d_%s", time.Now().UnixNano(), filepathSafeBase(fileHeader.Filename))
-	tempPath := store.TempPath(tempName)
+	tempPath := store.StagePath(tempName)
 	targetFile, err := os.OpenFile(tempPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
 	if err != nil {
 		return nil, ctx, fmt.Errorf("create temp upload file failed: %w", err)

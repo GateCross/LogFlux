@@ -666,6 +666,10 @@ type WafReleaseActivateReq struct {
 	ID uint `path:"id"`
 }
 
+type WafReleaseClearReq struct {
+	Kind string `json:"kind,optional"` // 仅允许 crs；为空默认 crs
+}
+
 type WafReleaseItem struct {
 	ID           uint   `json:"id"`
 	SourceId     uint   `json:"sourceId"`

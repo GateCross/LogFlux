@@ -64,11 +64,11 @@ func (l *SyncWafSourceLogic) SyncWafSource(req *types.WafSourceSyncReq) (resp *t
 		helper.finishJob(job, wafJobStatusFailed, err.Error(), 0)
 		return nil, err
 	}
-	if existingRelease != nil {
+	if existingRelease != nil && helper.canReuseRelease(existingRelease) {
 		helper.updateSourceLastCheck(source.ID, existingRelease.Version, "")
 		helper.finishJob(job, wafJobStatusSuccess, "版本已存在，复用已有版本", existingRelease.ID)
 
-		if req.ActivateNow || source.AutoActivate {
+		if normalizeWafKind(source.Kind) != wafKindCorazaEngine && (req.ActivateNow || source.AutoActivate) {
 			activateLogic := NewActivateWafReleaseLogic(l.ctx, l.svcCtx)
 			if _, activateErr := activateLogic.ActivateWafRelease(&types.WafReleaseActivateReq{ID: existingRelease.ID}); activateErr != nil {
 				return nil, activateErr
@@ -83,7 +83,7 @@ func (l *SyncWafSourceLogic) SyncWafSource(req *types.WafSourceSyncReq) (resp *t
 		ext = ".tar.gz"
 	}
 	tempName := fmt.Sprintf("%s_%d%s", sanitizeToken(source.Name), time.Now().UnixNano(), ext)
-	tempPath := helper.store.TempPath(tempName)
+	tempPath := helper.store.StagePath(tempName)
 	defer func() {
 		if strings.TrimSpace(tempPath) != "" {
 			_ = os.Remove(tempPath)
@@ -171,7 +171,7 @@ func (l *SyncWafSourceLogic) SyncWafSource(req *types.WafSourceSyncReq) (resp *t
 	helper.updateSourceLastCheck(source.ID, release.Version, "")
 	helper.finishJob(job, wafJobStatusSuccess, "sync success", release.ID)
 
-	if req.ActivateNow || source.AutoActivate {
+	if normalizeWafKind(source.Kind) != wafKindCorazaEngine && (req.ActivateNow || source.AutoActivate) {
 		activateLogic := NewActivateWafReleaseLogic(l.ctx, l.svcCtx)
 		if _, activateErr := activateLogic.ActivateWafRelease(&types.WafReleaseActivateReq{ID: release.ID}); activateErr != nil {
 			return nil, activateErr

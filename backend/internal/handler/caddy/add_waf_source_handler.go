@@ -35,7 +35,7 @@ func AddWafSourceHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 			return
 		}
 
-			req := types.WafSourceReq{
+		req := types.WafSourceReq{
 			Name:        payload.Name,
 			Kind:        payload.Kind,
 			Mode:        payload.Mode,

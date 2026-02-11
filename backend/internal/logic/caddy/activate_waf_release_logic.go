@@ -32,6 +32,9 @@ func (l *ActivateWafReleaseLogic) ActivateWafRelease(req *types.WafReleaseActiva
 	if err := helper.svcCtx.DB.First(&release, req.ID).Error; err != nil {
 		return nil, fmt.Errorf("release not found")
 	}
+	if normalizeWafKind(release.Kind) == wafKindCorazaEngine {
+		return nil, fmt.Errorf("Coraza 引擎不支持在线激活，仅支持版本检查")
+	}
 
 	job := helper.startJob(release.SourceID, release.ID, "activate", "manual")
 

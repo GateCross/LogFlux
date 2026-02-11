@@ -96,6 +96,11 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Handler: caddy.ListWafJobsHandler(serverCtx),
 			},
 			{
+				Method:  http.MethodPost,
+				Path:    "/caddy/waf/job/clear",
+				Handler: caddy.ClearWafJobsHandler(serverCtx),
+			},
+			{
 				Method:  http.MethodGet,
 				Path:    "/caddy/waf/release",
 				Handler: caddy.ListWafReleasesHandler(serverCtx),
@@ -104,6 +109,11 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Method:  http.MethodPost,
 				Path:    "/caddy/waf/release/:id/activate",
 				Handler: caddy.ActivateWafReleaseHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/caddy/waf/release/clear",
+				Handler: caddy.ClearWafReleasesHandler(serverCtx),
 			},
 			{
 				Method:  http.MethodPost,

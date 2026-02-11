@@ -54,6 +54,12 @@ func (l *UploadWafPackageLogic) UploadWafPackage(req *types.WafUploadReq) (resp 
 		return nil, fmt.Errorf("upload file is required")
 	}
 
+	safePath, safeErr := helper.ensurePathInWorkDir(tempPath)
+	if safeErr != nil {
+		return nil, safeErr
+	}
+	tempPath = safePath
+
 	fileName, _ := l.ctx.Value(wafUploadFileNameCtxKey).(string)
 	if strings.TrimSpace(fileName) == "" {
 		fileName = basenameSafe(tempPath)
@@ -71,9 +77,9 @@ func (l *UploadWafPackageLogic) UploadWafPackage(req *types.WafUploadReq) (resp 
 		helper.finishJob(job, wafJobStatusFailed, err.Error(), 0)
 		return nil, err
 	}
-	if existingRelease != nil {
+	if existingRelease != nil && helper.canReuseRelease(existingRelease) {
 		helper.finishJob(job, wafJobStatusSuccess, "版本已存在，复用已有版本", existingRelease.ID)
-		if req.ActivateNow {
+		if kind != wafKindCorazaEngine && req.ActivateNow {
 			activateLogic := NewActivateWafReleaseLogic(l.ctx, l.svcCtx)
 			if _, activateErr := activateLogic.ActivateWafRelease(&types.WafReleaseActivateReq{ID: existingRelease.ID}); activateErr != nil {
 				return nil, activateErr
@@ -134,7 +140,7 @@ func (l *UploadWafPackageLogic) UploadWafPackage(req *types.WafUploadReq) (resp 
 
 	helper.finishJob(job, wafJobStatusSuccess, "upload success", release.ID)
 
-	if req.ActivateNow {
+	if kind != wafKindCorazaEngine && req.ActivateNow {
 		activateLogic := NewActivateWafReleaseLogic(l.ctx, l.svcCtx)
 		if _, activateErr := activateLogic.ActivateWafRelease(&types.WafReleaseActivateReq{ID: release.ID}); activateErr != nil {
 			return nil, activateErr

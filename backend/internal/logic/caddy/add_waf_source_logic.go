@@ -68,21 +68,24 @@ func (l *AddWafSourceLogic) AddWafSource(req *types.WafSourceReq) (resp *types.B
 		return nil, fmt.Errorf("check source name failed: %w", err)
 	}
 
-		source := &model.WafSource{
-			Name:         name,
-			Kind:         kind,
-			Mode:         mode,
-			URL:          sourceURL,
-			ChecksumURL:  strings.TrimSpace(req.ChecksumUrl),
-			ProxyURL:     strings.TrimSpace(req.ProxyUrl),
-			AuthType:     authType,
-			AuthSecret:   strings.TrimSpace(req.AuthSecret),
+	source := &model.WafSource{
+		Name:         name,
+		Kind:         kind,
+		Mode:         mode,
+		URL:          sourceURL,
+		ChecksumURL:  strings.TrimSpace(req.ChecksumUrl),
+		ProxyURL:     strings.TrimSpace(req.ProxyUrl),
+		AuthType:     authType,
+		AuthSecret:   strings.TrimSpace(req.AuthSecret),
 		Schedule:     strings.TrimSpace(req.Schedule),
 		Enabled:      true,
 		AutoCheck:    true,
 		AutoDownload: true,
 		AutoActivate: false,
 		Meta:         meta,
+	}
+	if kind == wafKindCorazaEngine {
+		source.AutoActivate = false
 	}
 
 	if helper.hasSourceBoolField("enabled") {
@@ -96,6 +99,9 @@ func (l *AddWafSourceLogic) AddWafSource(req *types.WafSourceReq) (resp *types.B
 	}
 	if helper.hasSourceBoolField("autoActivate") {
 		source.AutoActivate = req.AutoActivate
+	}
+	if kind == wafKindCorazaEngine {
+		source.AutoActivate = false
 	}
 
 	if err := helper.svcCtx.DB.Create(source).Error; err != nil {

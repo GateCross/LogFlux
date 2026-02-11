@@ -3,7 +3,7 @@
     <n-alert type="info" :show-icon="true" class="rounded-8px">
       <template #header>{{ pageTitle }}</template>
       <div>
-        CRS 支持在线同步、上传、激活与回滚；Coraza 引擎依赖 Caddy 二进制，当前版本仅提供升级源配置与版本记录，不支持在线替换引擎。
+        CRS 支持在线同步、上传、激活与回滚；Coraza 引擎依赖 Caddy 二进制，当前版本仅提供升级源配置与版本检查，不支持在线替换引擎。
       </div>
     </n-alert>
 
@@ -100,14 +100,6 @@
 
         <n-tab-pane name="release" tab="版本发布管理">
           <div class="mb-3 flex flex-wrap gap-2 items-center">
-            <n-select
-              v-model:value="releaseQuery.kind"
-              :options="kindFilterOptions"
-              :disabled="Boolean(routeKind)"
-              clearable
-              placeholder="类型"
-              class="w-160px"
-            />
             <n-select v-model:value="releaseQuery.status" :options="releaseStatusOptions" clearable placeholder="状态" class="w-160px" />
             <n-button type="primary" @click="fetchReleases">
               <template #icon>
@@ -117,6 +109,7 @@
             </n-button>
             <n-button @click="resetReleaseQuery">重置</n-button>
             <n-button type="warning" @click="openRollbackModal">回滚到历史版本</n-button>
+            <n-button type="error" @click="handleClearReleases">清空非激活版本</n-button>
           </div>
 
           <n-data-table
@@ -145,6 +138,7 @@
             </n-button>
             <n-button @click="resetJobQuery">重置</n-button>
             <n-button type="success" @click="refreshCurrentTab">刷新</n-button>
+            <n-button type="error" @click="handleClearJobs">清空任务日志</n-button>
           </div>
 
           <n-data-table
@@ -224,7 +218,7 @@
             <n-switch v-model:value="sourceForm.autoDownload" />
           </n-form-item-gi>
           <n-form-item-gi label="自动激活">
-            <n-switch v-model:value="sourceForm.autoActivate" />
+            <n-switch v-model:value="sourceForm.autoActivate" :disabled="sourceForm.kind === 'coraza_engine'" />
           </n-form-item-gi>
         </n-grid>
       </n-form>
@@ -249,7 +243,7 @@
           <n-input v-model:value="uploadForm.checksum" placeholder="可选，建议填写" />
         </n-form-item>
         <n-form-item label="立即激活" path="activateNow">
-          <n-switch v-model:value="uploadForm.activateNow" />
+          <n-switch v-model:value="uploadForm.activateNow" :disabled="uploadForm.kind === 'coraza_engine'" />
         </n-form-item>
         <n-form-item label="规则包" path="file">
           <n-upload
@@ -319,6 +313,8 @@ import {
   activateWafRelease,
   checkWafSource,
   checkWafEngine,
+  clearWafJobs,
+  clearWafReleases,
   createWafSource,
   deleteWafSource,
   fetchWafEngineStatus,
@@ -466,7 +462,6 @@ const sourceRules: FormRules = {
 };
 
 const releaseQuery = reactive({
-  kind: '' as '' | WafKind,
   status: '' as '' | WafReleaseStatus
 });
 
@@ -647,6 +642,7 @@ const sourceColumns: DataTableColumns<WafSourceItem> = [
                 size: 'small',
                 type: 'success',
                 secondary: true,
+                disabled: row.kind === 'coraza_engine',
                 onClick: () => handleSyncSource(row, true)
               },
               { default: () => '同步并激活' }
@@ -677,14 +673,6 @@ const sourceColumns: DataTableColumns<WafSourceItem> = [
 const releaseColumns: DataTableColumns<WafReleaseItem> = [
   { title: 'ID', key: 'id', width: 80 },
   { title: '来源ID', key: 'sourceId', width: 90 },
-  {
-    title: '类型',
-    key: 'kind',
-    width: 120,
-    render(row) {
-      return h(NTag, { type: row.kind === 'crs' ? 'success' : 'warning', bordered: false }, { default: () => row.kind });
-    }
-  },
   { title: '版本', key: 'version', minWidth: 180, ellipsis: { tooltip: true } },
   { title: '包类型', key: 'artifactType', width: 110 },
   {
@@ -714,7 +702,7 @@ const releaseColumns: DataTableColumns<WafReleaseItem> = [
   {
     title: '操作',
     key: 'action',
-    width: 180,
+    width: 120,
     fixed: 'right',
     render(row) {
       return h(
@@ -1083,6 +1071,7 @@ function applyDefaultSource(kind: WafKind) {
   sourceForm.name = buildAvailableSourceName('official-coraza-engine');
   sourceForm.url = 'https://codeload.github.com/corazawaf/coraza-caddy/tar.gz/refs/heads/main';
   sourceForm.checksumUrl = '';
+  sourceForm.proxyUrl = '';
   sourceForm.schedule = '0 0 0 * * *';
   sourceForm.meta = '{"official":true,"repo":"https://github.com/corazawaf/coraza-caddy"}';
 }
@@ -1166,17 +1155,18 @@ function handleCheckSource(row: WafSourceItem) {
 }
 
 function handleSyncSource(row: WafSourceItem, activateNow: boolean) {
-  const content = activateNow ? '将下载、校验并立即激活该源对应版本，确认继续？' : '将下载并校验该源对应版本，确认继续？';
+  const allowActivate = activateNow && row.kind !== 'coraza_engine';
+  const content = allowActivate ? '将下载、校验并立即激活该源对应版本，确认继续？' : '将下载并校验该源对应版本，确认继续？';
 
   dialog.warning({
-    title: activateNow ? '同步并激活确认' : '同步确认',
+    title: allowActivate ? '同步并激活确认' : '同步确认',
     content,
     positiveText: '确认',
     negativeText: '取消',
     async onPositiveClick() {
-      const { error } = await syncWafSource(row.id, activateNow);
+      const { error } = await syncWafSource(row.id, allowActivate);
       if (!error) {
-        message.success(activateNow ? '同步并激活成功' : '同步成功');
+        message.success(allowActivate ? '同步并激活成功' : '同步成功');
         fetchSources();
         fetchReleases();
         if (activeTab.value === 'job') {
@@ -1196,7 +1186,7 @@ function handleSyncSource(row: WafSourceItem, activateNow: boolean) {
 async function fetchReleases() {
   releaseLoading.value = true;
   try {
-    const queryKind = releaseQuery.kind || routeKind.value;
+    const queryKind: WafKind = 'crs';
     const { data, error } = await fetchWafReleaseList({
       page: releasePagination.page as number,
       pageSize: releasePagination.pageSize as number,
@@ -1213,7 +1203,6 @@ async function fetchReleases() {
 }
 
 function resetReleaseQuery() {
-  releaseQuery.kind = '';
   releaseQuery.status = '';
   releasePagination.page = 1;
   fetchReleases();
@@ -1231,6 +1220,11 @@ function handleReleasePageSizeChange(pageSize: number) {
 }
 
 function handleActivateRelease(row: WafReleaseItem) {
+  if (row.kind === 'coraza_engine') {
+    message.warning('Coraza 引擎不支持在线激活，仅支持版本检查');
+    return;
+  }
+
   dialog.warning({
     title: '激活确认',
     content: `确认激活版本 ${row.version} 吗？`,
@@ -1240,6 +1234,23 @@ function handleActivateRelease(row: WafReleaseItem) {
       const { error } = await activateWafRelease(row.id);
       if (!error) {
         message.success('激活已提交');
+        fetchReleases();
+        fetchJobs();
+      }
+    }
+  });
+}
+
+function handleClearReleases() {
+  dialog.warning({
+    title: '清空确认',
+    content: '将清空版本发布管理中所有非激活的 CRS 版本（含文件目录），确认继续？',
+    positiveText: '确认清空',
+    negativeText: '取消',
+    async onPositiveClick() {
+      const { error } = await clearWafReleases({ kind: 'crs' });
+      if (!error) {
+        message.success('已清空非激活版本');
         fetchReleases();
         fetchJobs();
       }
@@ -1289,9 +1300,32 @@ watch(
     if (value) {
       sourceForm.kind = value;
       uploadForm.kind = value;
+
+      if (value === 'coraza_engine') {
+        sourceForm.autoActivate = false;
+        uploadForm.activateNow = false;
+      }
     }
   },
   { immediate: true }
+);
+
+watch(
+  () => sourceForm.kind,
+  value => {
+    if (value === 'coraza_engine') {
+      sourceForm.autoActivate = false;
+    }
+  }
+);
+
+watch(
+  () => uploadForm.kind,
+  value => {
+    if (value === 'coraza_engine') {
+      uploadForm.activateNow = false;
+    }
+  }
 );
 
 function handleBeforeUpload(data: { file: UploadFileInfo }) {
@@ -1379,6 +1413,22 @@ function handleJobPageSizeChange(pageSize: number) {
   fetchJobs();
 }
 
+function handleClearJobs() {
+  dialog.warning({
+    title: '清空确认',
+    content: '将清空全部任务日志记录，确认继续？',
+    positiveText: '确认清空',
+    negativeText: '取消',
+    async onPositiveClick() {
+      const { error } = await clearWafJobs();
+      if (!error) {
+        message.success('任务日志已清空');
+        fetchJobs();
+      }
+    }
+  });
+}
+
 function refreshCurrentTab() {
   if (activeTab.value === 'source') {
     fetchSources();
@@ -1403,7 +1453,6 @@ watch(activeTab, value => {
 
 watch(routeKind, () => {
   sourceQuery.kind = '';
-  releaseQuery.kind = '';
   sourcePagination.page = 1;
   releasePagination.page = 1;
   if (activeTab.value === 'source') {
