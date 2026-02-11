@@ -39,6 +39,9 @@ func (l *RollbackWafReleaseLogic) RollbackWafRelease(req *types.WafReleaseRollba
 	if err != nil {
 		return nil, err
 	}
+	if normalizeWafKind(targetRelease.Kind) == wafKindCorazaEngine {
+		return nil, fmt.Errorf("Coraza 引擎不支持在线激活，仅支持版本检查")
+	}
 
 	job := helper.startJob(targetRelease.SourceID, targetRelease.ID, "rollback", "manual")
 

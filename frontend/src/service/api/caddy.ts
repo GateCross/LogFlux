@@ -210,8 +210,23 @@ export function rollbackWafRelease(data: { target?: 'last_good' | 'version'; ver
     });
 }
 
+export function clearWafReleases(data?: { kind?: WafKind | '' }) {
+    return request<any>({
+        url: '/api/caddy/waf/release/clear',
+        method: 'post',
+        data
+    });
+}
+
 export function fetchWafJobList(params: { page: number; pageSize: number; status?: WafJobStatus | ''; action?: string }) {
     return request<WafJobListResp>({ url: '/api/caddy/waf/job', params });
+}
+
+export function clearWafJobs() {
+    return request<any>({
+        url: '/api/caddy/waf/job/clear',
+        method: 'post'
+    });
 }
 
 export function fetchWafEngineStatus() {

@@ -39,8 +39,16 @@ func (l *ListWafReleasesLogic) ListWafReleases(req *types.WafReleaseListReq) (re
 	}
 
 	db := helper.svcCtx.DB.Model(&model.WafRelease{})
-	if strings.TrimSpace(req.Kind) != "" {
-		db = db.Where("kind = ?", normalizeWafKind(req.Kind))
+	kind := strings.TrimSpace(req.Kind)
+	if kind == "" {
+		kind = wafKindCRS
+	}
+	if kind != "" {
+		normalizedKind := normalizeWafKind(kind)
+		if normalizedKind != wafKindCRS {
+			return &types.WafReleaseListResp{List: []types.WafReleaseItem{}, Total: 0}, nil
+		}
+		db = db.Where("kind = ?", normalizedKind)
 	}
 	if status := strings.TrimSpace(req.Status); status != "" {
 		db = db.Where("status = ?", strings.ToLower(status))

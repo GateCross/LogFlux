@@ -15,7 +15,7 @@ func TestStoreEnsureDirs(t *testing.T) {
 		t.Fatalf("EnsureDirs returned error: %v", err)
 	}
 
-	directories := []string{store.BaseDir, store.PackagesDir, store.ReleasesDir, store.TmpDir}
+	directories := []string{store.BaseDir, store.PackagesDir, store.ReleasesDir}
 	for _, directory := range directories {
 		info, err := os.Stat(directory)
 		if err != nil {

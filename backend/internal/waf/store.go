@@ -16,7 +16,6 @@ type Store struct {
 	BaseDir     string
 	PackagesDir string
 	ReleasesDir string
-	TmpDir      string
 }
 
 func NewStore(baseDir string) *Store {
@@ -29,12 +28,11 @@ func NewStore(baseDir string) *Store {
 		BaseDir:     baseDir,
 		PackagesDir: filepath.Join(baseDir, "packages"),
 		ReleasesDir: filepath.Join(baseDir, "releases"),
-		TmpDir:      filepath.Join(baseDir, "tmp"),
 	}
 }
 
 func (store *Store) EnsureDirs() error {
-	directories := []string{store.BaseDir, store.PackagesDir, store.ReleasesDir, store.TmpDir}
+	directories := []string{store.BaseDir, store.PackagesDir, store.ReleasesDir}
 	for _, directory := range directories {
 		if err := os.MkdirAll(directory, 0o755); err != nil {
 			return fmt.Errorf("create dir failed: %s, %w", directory, err)
@@ -52,8 +50,12 @@ func (store *Store) PackagePath(filename string) string {
 	return filepath.Join(store.PackagesDir, filepath.Base(filename))
 }
 
-func (store *Store) TempPath(filename string) string {
-	return filepath.Join(store.TmpDir, filepath.Base(filename))
+func (store *Store) StagePath(filename string) string {
+	baseName := filepath.Base(filename)
+	if baseName == "." || baseName == "/" || strings.TrimSpace(baseName) == "" {
+		baseName = "package"
+	}
+	return filepath.Join(store.PackagesDir, fmt.Sprintf(".stage_%s", baseName))
 }
 
 func (store *Store) CurrentLinkPath() string {

@@ -325,6 +325,9 @@ type (
 		Target string `json:"target,optional"` // last_good | version
 		Version string `json:"version,optional"`
 	}
+	WafReleaseClearReq {
+		Kind string `json:"kind,optional"` // 仅允许 crs；为空默认 crs
+	}
 	WafJobListReq {
 		Page     int    `form:"page,default=1"`
 		PageSize int    `form:"pageSize,default=20"`
@@ -500,8 +503,14 @@ service logflux-api {
 	@handler RollbackWafRelease
 	post /caddy/waf/release/rollback (WafReleaseRollbackReq) returns (BaseResp)
 
+	@handler ClearWafReleases
+	post /caddy/waf/release/clear (WafReleaseClearReq) returns (BaseResp)
+
 	@handler ListWafJobs
 	get /caddy/waf/job (WafJobListReq) returns (WafJobListResp)
+
+	@handler ClearWafJobs
+	post /caddy/waf/job/clear returns (BaseResp)
 }
 
 @server (

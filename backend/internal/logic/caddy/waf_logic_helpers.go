@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -512,6 +513,42 @@ func findLatestReleaseByKindAndVersion(db *gorm.DB, kind, version string) (*mode
 		return nil, nil
 	}
 	return nil, fmt.Errorf("query release version failed: %w", err)
+}
+
+func (helper *wafLogicHelper) ensurePathInWorkDir(pathValue string) (string, error) {
+	baseDir := filepath.Clean(strings.TrimSpace(helper.store.BaseDir))
+	cleanPath := filepath.Clean(strings.TrimSpace(pathValue))
+	if cleanPath == "" {
+		return "", fmt.Errorf("path is empty")
+	}
+
+	if cleanPath == baseDir {
+		return cleanPath, nil
+	}
+
+	prefix := baseDir + string(os.PathSeparator)
+	if !strings.HasPrefix(cleanPath, prefix) {
+		return "", fmt.Errorf("仅允许读取 %s 目录内的文件", baseDir)
+	}
+
+	return cleanPath, nil
+}
+
+func (helper *wafLogicHelper) canReuseRelease(release *model.WafRelease) bool {
+	if release == nil {
+		return false
+	}
+
+	releaseDir := helper.store.ReleaseDir(release.Version)
+	if _, err := helper.ensurePathInWorkDir(releaseDir); err != nil {
+		return false
+	}
+
+	stat, err := os.Stat(releaseDir)
+	if err != nil {
+		return false
+	}
+	return stat.IsDir()
 }
 
 func basenameSafe(pathValue string) string {

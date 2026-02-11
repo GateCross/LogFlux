@@ -166,38 +166,19 @@ func initWafWorkspace(c *config.Config) {
 	}
 
 	configuredDir := strings.TrimSpace(c.Waf.WorkDir)
-	defaultDir := "/config/security"
-	fallbackDir := filepath.Join(os.TempDir(), "logflux", "security")
-
-	candidates := make([]string, 0, 3)
-	if configuredDir != "" {
-		candidates = append(candidates, configuredDir)
-	}
-	if configuredDir != defaultDir {
-		candidates = append(candidates, defaultDir)
-	}
-	if configuredDir != fallbackDir && defaultDir != fallbackDir {
-		candidates = append(candidates, fallbackDir)
+	securityDir := "/config/security"
+	if configuredDir != "" && filepath.Clean(configuredDir) != securityDir {
+		logx.Infof("WAF 工作目录仅允许使用安全目录: from=%s to=%s", configuredDir, securityDir)
 	}
 
-	for _, baseDir := range candidates {
-		if err := ensureWafWorkspaceDirs(baseDir); err != nil {
-			logx.Errorf("初始化 WAF 工作目录失败: %s, err=%v", baseDir, err)
-			continue
-		}
-
-		if configuredDir != "" && configuredDir != baseDir {
-			logx.Infof("WAF 工作目录回退至可写路径: from=%s to=%s", configuredDir, baseDir)
-		}
-		c.Waf.WorkDir = baseDir
-		logx.Infof("WAF 工作目录已初始化: %s", fmt.Sprintf("%s/{tmp,packages,releases}", baseDir))
+	c.Waf.WorkDir = securityDir
+	if err := ensureWafWorkspaceDirs(securityDir); err != nil {
+		logx.Errorf("初始化 WAF 工作目录失败: %s, err=%v", securityDir, err)
+		logx.Errorf("WAF 工作目录初始化失败，后续涉及文件操作将报错: workDir=%s", c.Waf.WorkDir)
 		return
 	}
 
-	if strings.TrimSpace(c.Waf.WorkDir) == "" {
-		c.Waf.WorkDir = fallbackDir
-	}
-	logx.Errorf("WAF 工作目录初始化全部失败，后续涉及文件操作将报错: workDir=%s", c.Waf.WorkDir)
+	logx.Infof("WAF 工作目录已初始化: %s", fmt.Sprintf("%s/{packages,releases}", securityDir))
 }
 
 func ensureWafWorkspaceDirs(baseDir string) error {
@@ -206,7 +187,7 @@ func ensureWafWorkspaceDirs(baseDir string) error {
 		return fmt.Errorf("workdir is empty")
 	}
 
-	subDirs := []string{"", "tmp", "packages", "releases"}
+	subDirs := []string{"", "packages", "releases"}
 	for _, subDir := range subDirs {
 		target := filepath.Join(trimmed, subDir)
 		if err := os.MkdirAll(target, 0o755); err != nil {
