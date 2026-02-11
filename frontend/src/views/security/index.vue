@@ -3,7 +3,7 @@
     <n-alert type="info" :show-icon="true" class="rounded-8px">
       <template #header>{{ pageTitle }}</template>
       <div>
-        CRS 支持在线同步、上传、激活与回滚；Coraza 引擎依赖 Caddy 二进制，仅提供 GitHub Release 版本检查，不支持在线替换引擎。
+        CRS 支持在线同步（含检查）、上传、激活与回滚；Coraza 引擎依赖 Caddy 二进制，仅提供 GitHub Release 版本检查，不支持在线替换引擎。
       </div>
     </n-alert>
 
@@ -302,7 +302,6 @@ import {
 } from 'naive-ui';
 import {
   activateWafRelease,
-  checkWafSource,
   checkWafEngine,
   clearWafJobs,
   clearWafReleases,
@@ -590,7 +589,7 @@ const sourceColumns: DataTableColumns<WafSourceItem> = [
   {
     title: '操作',
     key: 'action',
-    width: 320,
+    width: 280,
     fixed: 'right',
     render(row) {
       return h(
@@ -598,15 +597,6 @@ const sourceColumns: DataTableColumns<WafSourceItem> = [
         { size: 4 },
         {
           default: () => [
-            h(
-              NButton,
-              {
-                size: 'small',
-                secondary: true,
-                onClick: () => handleCheckSource(row)
-              },
-              { default: () => '检查' }
-            ),
             h(
               NButton,
               {
@@ -1106,18 +1096,6 @@ function handleDeleteSource(row: WafSourceItem) {
     if (!error) {
       message.success('删除成功');
       fetchSources();
-    }
-  });
-}
-
-function handleCheckSource(row: WafSourceItem) {
-  checkWafSource(row.id).then(({ error }) => {
-    if (!error) {
-      message.success('检查任务已提交');
-      fetchSources();
-      if (activeTab.value === 'job') {
-        fetchJobs();
-      }
     }
   });
 }
