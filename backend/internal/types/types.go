@@ -423,6 +423,10 @@ type PreviewTemplateResp struct {
 	Content string `json:"content"`
 }
 
+type RefreshTokenReq struct {
+	RefreshToken string `json:"refreshToken"`
+}
+
 type RoleItem struct {
 	ID          uint     `json:"id"`
 	Name        string   `json:"name"`

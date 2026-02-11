@@ -43,7 +43,7 @@ export function fetchUpdateUserPreferences(preferences: string) {
  */
 export function fetchRefreshToken(refreshToken: string) {
   return request<Api.Auth.LoginToken>({
-    url: '/auth/refreshToken',
+    url: '/api/refreshToken',
     method: 'post',
     data: {
       refreshToken

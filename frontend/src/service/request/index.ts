@@ -52,6 +52,7 @@ export const request = createFlatRequest(
     async onBackendFail(response, instance) {
       const authStore = useAuthStore();
       const responseCode = String(response.data.code);
+      const unauthorizedCode = '401';
 
       function handleLogout() {
         authStore.resetStore();
@@ -67,6 +68,19 @@ export const request = createFlatRequest(
       // when the backend response code is in `logoutCodes`, it means the user will be logged out and redirected to login page
       const logoutCodes = import.meta.env.VITE_SERVICE_LOGOUT_CODES?.split(',') || [];
       if (logoutCodes.includes(responseCode)) {
+        handleLogout();
+        return null;
+      }
+
+      if (responseCode === unauthorizedCode) {
+        const success = await handleExpiredRequest(request.state);
+        if (success) {
+          const Authorization = getAuthorization();
+          Object.assign(response.config.headers, { Authorization });
+
+          return instance.request(response.config) as Promise<AxiosResponse>;
+        }
+
         handleLogout();
         return null;
       }
@@ -122,6 +136,10 @@ export const request = createFlatRequest(
       if (error.code === BACKEND_ERROR_CODE) {
         message = error.response?.data?.msg || (error.response?.data as any)?.error || message;
         backendErrorCode = String(error.response?.data?.code || '');
+
+        if (backendErrorCode === '401') {
+          return;
+        }
       }
 
       // Handle HTTP error codes directly
