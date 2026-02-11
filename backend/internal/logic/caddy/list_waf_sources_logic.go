@@ -44,6 +44,9 @@ func (l *ListWafSourcesLogic) ListWafSources(req *types.WafSourceListReq) (resp 
 	hasKindFilter := false
 	if rawKind != "" {
 		kind := normalizeWafKind(rawKind)
+		if kind == wafKindCorazaEngine {
+			return &types.WafSourceListResp{List: []types.WafSourceItem{}, Total: 0}, nil
+		}
 		if validateWafKind(kind) == nil {
 			db = db.Where("kind = ?", kind)
 			hasKindFilter = true
@@ -56,6 +59,7 @@ func (l *ListWafSourcesLogic) ListWafSources(req *types.WafSourceListReq) (resp 
 		hasNameFilter = true
 		db = db.Where("name ILIKE ?", "%"+keyword+"%")
 	}
+	db = db.Where("kind <> ?", wafKindCorazaEngine)
 
 	var total int64
 	if err := db.Count(&total).Error; err != nil {

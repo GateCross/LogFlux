@@ -19,6 +19,7 @@ env:
   IMAGE_NAME: ${{ vars.IMAGE_NAME || github.repository }}
   PLATFORM: ${{ vars.PLATFORM || 'linux/amd64,linux/arm64' }}
   CADDY_IMAGE: ${{ vars.CADDY_IMAGE || 'ghcr.io/gatecross/logflux-caddy:latest' }}
+  CORAZA_CURRENT_VERSION: ${{ vars.CORAZA_CURRENT_VERSION || '' }}
 
 jobs:
   frontend:
@@ -153,6 +154,7 @@ jobs:
           push: true
           build-args: |
             CADDY_IMAGE=${{ env.CADDY_IMAGE }}
+            CORAZA_CURRENT_VERSION=${{ env.CORAZA_CURRENT_VERSION }}
           provenance: false
           sbom: false
           tags: ${{ steps.meta.outputs.tags }}

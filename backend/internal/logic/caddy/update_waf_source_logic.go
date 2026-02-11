@@ -43,7 +43,14 @@ func (l *UpdateWafSourceLogic) UpdateWafSource(req *types.WafSourceUpdateReq) (r
 		if err := validateWafKind(kind); err != nil {
 			return nil, err
 		}
+		if kind == wafKindCorazaEngine {
+			return nil, fmt.Errorf("Coraza 引擎更新源无需手工配置，请直接使用引擎版本检查")
+		}
 		source.Kind = kind
+	}
+
+	if source.Kind == wafKindCorazaEngine {
+		return nil, fmt.Errorf("Coraza 引擎更新源无需手工配置，请直接使用引擎版本检查")
 	}
 
 	if strings.TrimSpace(req.Mode) != "" {

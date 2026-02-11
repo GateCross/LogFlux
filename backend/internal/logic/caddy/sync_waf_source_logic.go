@@ -44,6 +44,9 @@ func (l *SyncWafSourceLogic) SyncWafSource(req *types.WafSourceSyncReq) (resp *t
 	if !source.Enabled {
 		return nil, fmt.Errorf("source is disabled")
 	}
+	if normalizeWafKind(source.Kind) == wafKindCorazaEngine {
+		return nil, fmt.Errorf("Coraza 引擎更新源无需手工同步，请直接使用引擎版本检查")
+	}
 	if source.Mode != wafModeRemote {
 		return nil, fmt.Errorf("source mode is not remote")
 	}

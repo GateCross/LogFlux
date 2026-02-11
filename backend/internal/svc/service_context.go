@@ -249,25 +249,6 @@ func initWafDefaultSources(db *gorm2.DB) {
 				"repo":     "https://github.com/coreruleset/coreruleset",
 			},
 		},
-		{
-			Name:         "official-coraza-engine",
-			Kind:         "coraza_engine",
-			Mode:         "remote",
-			URL:          "https://github.com/corazawaf/coraza-caddy/archive/refs/heads/main.tar.gz",
-			ChecksumURL:  "",
-			ProxyURL:     "",
-			AuthType:     "none",
-			AuthSecret:   "",
-			Schedule:     "0 0 0 * * *",
-			Enabled:      true,
-			AutoCheck:    true,
-			AutoDownload: false,
-			AutoActivate: false,
-			Meta: model.JSONMap{
-				"official": true,
-				"repo":     "https://github.com/corazawaf/coraza-caddy",
-			},
-		},
 	}
 
 	for i := range defaultSources {
@@ -291,70 +272,8 @@ func (svc *ServiceContext) EnsureWafDefaultSources() {
 	initWafDefaultSources(svc.DB)
 }
 
-func ensureWafEngineDefaultSource(db *gorm2.DB) {
-	if db == nil {
-		return
-	}
-
-	var count int64
-	if err := db.Model(&model.WafSource{}).Where("kind = ?", "coraza_engine").Count(&count).Error; err != nil {
-		logx.Errorf("统计 Coraza 引擎源失败: %v", err)
-		return
-	}
-	if count > 0 {
-		return
-	}
-
-	baseSource := model.WafSource{
-		Name:         "official-coraza-engine",
-		Kind:         "coraza_engine",
-		Mode:         "remote",
-		URL:          "https://github.com/corazawaf/coraza-caddy/archive/refs/heads/main.tar.gz",
-		ChecksumURL:  "",
-		ProxyURL:     "",
-		AuthType:     "none",
-		AuthSecret:   "",
-		Schedule:     "0 0 0 * * *",
-		Enabled:      true,
-		AutoCheck:    true,
-		AutoDownload: false,
-		AutoActivate: false,
-		Meta: model.JSONMap{
-			"official": true,
-			"repo":     "https://github.com/corazawaf/coraza-caddy",
-		},
-	}
-
-	candidateName := baseSource.Name
-	for suffix := 1; ; suffix++ {
-		var existing model.WafSource
-		err := db.Where("name = ?", candidateName).First(&existing).Error
-		if errors.Is(err, gorm2.ErrRecordNotFound) {
-			baseSource.Name = candidateName
-			break
-		}
-		if err != nil {
-			logx.Errorf("查询 Coraza 引擎默认源名称失败: name=%s err=%v", candidateName, err)
-			return
-		}
-
-		if existing.Kind == "coraza_engine" {
-			return
-		}
-
-		candidateName = fmt.Sprintf("official-coraza-engine-%d", suffix+1)
-	}
-
-	if err := db.Create(&baseSource).Error; err != nil {
-		logx.Errorf("创建 Coraza 引擎默认源失败: name=%s err=%v", baseSource.Name, err)
-	}
-}
-
 func (svc *ServiceContext) EnsureWafEngineDefaultSource() {
-	if svc == nil || svc.DB == nil {
-		return
-	}
-	ensureWafEngineDefaultSource(svc.DB)
+	return
 }
 
 // initRBACData 初始化 RBAC 角色和菜单数据

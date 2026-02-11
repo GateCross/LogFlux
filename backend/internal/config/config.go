@@ -62,6 +62,9 @@ type WafConf struct {
 	ExtractMaxFiles      int
 	ExtractMaxTotalBytes int64
 	ActivateTimeoutSec   int
+	CorazaReleaseAPI     string `json:",optional"`
+	CorazaCurrentVersion string `json:",optional"`
+	CorazaCheckProxy     string `json:",optional"`
 }
 
 // NotificationConf 通知配置

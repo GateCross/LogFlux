@@ -30,3 +30,6 @@ Waf:
   ExtractMaxFiles: 5000
   ExtractMaxTotalBytes: 536870912
   ActivateTimeoutSec: 30
+  CorazaReleaseAPI: "https://api.github.com/repos/corazawaf/coraza-caddy/releases/latest"
+  CorazaCurrentVersion: ""
+  CorazaCheckProxy: ""
