@@ -63,6 +63,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		&model.WafUpdateJob{},
 		&model.WafPolicy{},
 		&model.WafPolicyRevision{},
+		&model.WafRuleExclusion{},
+		&model.WafPolicyBinding{},
+		&model.WafPolicyFalsePositiveFeedback{},
 	)
 
 	initWafWorkspace(&c)
@@ -283,17 +286,21 @@ func initWafDefaultPolicies(db *gorm2.DB) {
 	}
 
 	defaultPolicy := model.WafPolicy{
-		Name:                    "default-global-policy",
-		Description:             "默认全局策略",
-		Enabled:                 true,
-		IsDefault:               true,
-		EngineMode:              "on",
-		AuditEngine:             "relevantonly",
-		AuditLogFormat:          "json",
-		AuditRelevantStatus:     "^(?:5|4(?!04))",
-		RequestBodyAccess:       true,
-		RequestBodyLimit:        10 * 1024 * 1024,
-		RequestBodyNoFilesLimit: 1024 * 1024,
+		Name:                        "default-global-policy",
+		Description:                 "默认全局策略",
+		Enabled:                     true,
+		IsDefault:                   true,
+		EngineMode:                  "on",
+		AuditEngine:                 "relevantonly",
+		AuditLogFormat:              "json",
+		AuditRelevantStatus:         "^(?:5|4(?!04))",
+		RequestBodyAccess:           true,
+		RequestBodyLimit:            10 * 1024 * 1024,
+		RequestBodyNoFilesLimit:     1024 * 1024,
+		CrsTemplate:                 "low_fp",
+		CrsParanoiaLevel:            1,
+		CrsInboundAnomalyThreshold:  10,
+		CrsOutboundAnomalyThreshold: 8,
 		Config: model.JSONMap{
 			"scope": "global",
 		},
@@ -304,7 +311,7 @@ func initWafDefaultPolicies(db *gorm2.DB) {
 		return
 	}
 
-	directives := "SecRuleEngine On\nSecAuditEngine RelevantOnly\nSecAuditLogFormat JSON\nSecAuditLogRelevantStatus ^(?:5|4(?!04))\nSecRequestBodyAccess On\nSecRequestBodyLimit 10485760\nSecRequestBodyNoFilesLimit 1048576"
+	directives := "SecRuleEngine On\nSecAuditEngine RelevantOnly\nSecAuditLogFormat JSON\nSecAuditLogRelevantStatus ^(?:5|4(?!04))\nSecRequestBodyAccess On\nSecRequestBodyLimit 10485760\nSecRequestBodyNoFilesLimit 1048576\nSecAction \"id:900000,phase:1,pass,nolog,t:none,setvar:tx.paranoia_level=1\"\nSecAction \"id:900110,phase:1,pass,nolog,t:none,setvar:tx.inbound_anomaly_score_threshold=10\"\nSecAction \"id:900100,phase:1,pass,nolog,t:none,setvar:tx.outbound_anomaly_score_threshold=8\""
 	revision := model.WafPolicyRevision{
 		PolicyID:           defaultPolicy.ID,
 		Version:            1,
@@ -316,6 +323,18 @@ func initWafDefaultPolicies(db *gorm2.DB) {
 	}
 	if err := db.Create(&revision).Error; err != nil {
 		logx.Errorf("初始化默认 WAF 策略版本失败: %v", err)
+	}
+
+	defaultBinding := model.WafPolicyBinding{
+		PolicyID:  defaultPolicy.ID,
+		Name:      "default-global-binding",
+		Enabled:   true,
+		ScopeType: "global",
+		Priority:  100,
+	}
+	if err := db.Where("policy_id = ? AND scope_type = ? AND priority = ?", defaultPolicy.ID, "global", 100).
+		FirstOrCreate(&defaultBinding).Error; err != nil {
+		logx.Errorf("初始化默认 WAF 策略绑定失败: %v", err)
 	}
 }
 

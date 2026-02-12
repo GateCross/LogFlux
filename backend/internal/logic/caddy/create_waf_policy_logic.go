@@ -29,6 +29,10 @@ func NewCreateWafPolicyLogic(ctx context.Context, svcCtx *svc.ServiceContext) *C
 }
 
 func (l *CreateWafPolicyLogic) CreateWafPolicy(req *types.WafPolicyReq) (resp *types.BaseResp, err error) {
+	defer func() {
+		err = localizeWafPolicyError(err)
+	}()
+
 	helper := newWafLogicHelper(l.ctx, l.svcCtx, l.Logger)
 	if req == nil {
 		return nil, fmt.Errorf("invalid policy payload")

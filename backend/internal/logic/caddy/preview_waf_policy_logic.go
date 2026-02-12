@@ -26,6 +26,10 @@ func NewPreviewWafPolicyLogic(ctx context.Context, svcCtx *svc.ServiceContext) *
 }
 
 func (l *PreviewWafPolicyLogic) PreviewWafPolicy(req *types.WafPolicyActionReq) (resp *types.WafPolicyPreviewResp, err error) {
+	defer func() {
+		err = localizeWafPolicyError(err)
+	}()
+
 	if req == nil || req.ID == 0 {
 		return nil, fmt.Errorf("policy id is required")
 	}
@@ -35,7 +39,7 @@ func (l *PreviewWafPolicyLogic) PreviewWafPolicy(req *types.WafPolicyActionReq) 
 		return nil, fmt.Errorf("policy not found")
 	}
 
-	directives, err := buildWafPolicyDirectives(&policy)
+	directives, err := buildPolicyDirectivesWithExclusions(l.svcCtx.DB, &policy)
 	if err != nil {
 		return nil, err
 	}

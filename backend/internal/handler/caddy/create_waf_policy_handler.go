@@ -15,18 +15,22 @@ import (
 func CreateWafPolicyHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var payload struct {
-			Name                    string `json:"name"`
-			Description             string `json:"description,optional"`
-			Enabled                 *bool  `json:"enabled,optional"`
-			IsDefault               *bool  `json:"isDefault,optional"`
-			EngineMode              string `json:"engineMode,optional"`
-			AuditEngine             string `json:"auditEngine,optional"`
-			AuditLogFormat          string `json:"auditLogFormat,optional"`
-			AuditRelevantStatus     string `json:"auditRelevantStatus,optional"`
-			RequestBodyAccess       *bool  `json:"requestBodyAccess,optional"`
-			RequestBodyLimit        int64  `json:"requestBodyLimit,optional"`
-			RequestBodyNoFilesLimit int64  `json:"requestBodyNoFilesLimit,optional"`
-			Config                  string `json:"config,optional"`
+			Name                        string `json:"name"`
+			Description                 string `json:"description,optional"`
+			Enabled                     *bool  `json:"enabled,optional"`
+			IsDefault                   *bool  `json:"isDefault,optional"`
+			EngineMode                  string `json:"engineMode,optional"`
+			AuditEngine                 string `json:"auditEngine,optional"`
+			AuditLogFormat              string `json:"auditLogFormat,optional"`
+			AuditRelevantStatus         string `json:"auditRelevantStatus,optional"`
+			RequestBodyAccess           *bool  `json:"requestBodyAccess,optional"`
+			RequestBodyLimit            int64  `json:"requestBodyLimit,optional"`
+			RequestBodyNoFilesLimit     int64  `json:"requestBodyNoFilesLimit,optional"`
+			CrsTemplate                 string `json:"crsTemplate,optional"`
+			CrsParanoiaLevel            int64  `json:"crsParanoiaLevel,optional"`
+			CrsInboundAnomalyThreshold  int64  `json:"crsInboundAnomalyThreshold,optional"`
+			CrsOutboundAnomalyThreshold int64  `json:"crsOutboundAnomalyThreshold,optional"`
+			Config                      string `json:"config,optional"`
 		}
 		if err := httpx.Parse(r, &payload); err != nil {
 			httpx.ErrorCtx(r.Context(), w, err)
@@ -34,15 +38,19 @@ func CreateWafPolicyHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 		}
 
 		req := types.WafPolicyReq{
-			Name:                    payload.Name,
-			Description:             payload.Description,
-			EngineMode:              payload.EngineMode,
-			AuditEngine:             payload.AuditEngine,
-			AuditLogFormat:          payload.AuditLogFormat,
-			AuditRelevantStatus:     payload.AuditRelevantStatus,
-			RequestBodyLimit:        payload.RequestBodyLimit,
-			RequestBodyNoFilesLimit: payload.RequestBodyNoFilesLimit,
-			Config:                  payload.Config,
+			Name:                        payload.Name,
+			Description:                 payload.Description,
+			EngineMode:                  payload.EngineMode,
+			AuditEngine:                 payload.AuditEngine,
+			AuditLogFormat:              payload.AuditLogFormat,
+			AuditRelevantStatus:         payload.AuditRelevantStatus,
+			RequestBodyLimit:            payload.RequestBodyLimit,
+			RequestBodyNoFilesLimit:     payload.RequestBodyNoFilesLimit,
+			CrsTemplate:                 payload.CrsTemplate,
+			CrsParanoiaLevel:            payload.CrsParanoiaLevel,
+			CrsInboundAnomalyThreshold:  payload.CrsInboundAnomalyThreshold,
+			CrsOutboundAnomalyThreshold: payload.CrsOutboundAnomalyThreshold,
+			Config:                      payload.Config,
 		}
 
 		boolMask := map[string]bool{

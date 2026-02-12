@@ -10,7 +10,42 @@ import (
 
 const (
 	wafPolicyDefaultAuditRelevantStatus = "^(?:5|4(?!04))"
+
+	wafPolicyCRSTemplateLowFP        = "low_fp"
+	wafPolicyCRSTemplateBalanced     = "balanced"
+	wafPolicyCRSTemplateHighBlocking = "high_blocking"
+	wafPolicyCRSTemplateCustom       = "custom"
+	wafPolicyDefaultCRSTemplate      = wafPolicyCRSTemplateLowFP
+
+	wafPolicyMinCRSParanoiaLevel    int64 = 1
+	wafPolicyMaxCRSParanoiaLevel    int64 = 4
+	wafPolicyMinCRSAnomalyThreshold int64 = 1
+	wafPolicyMaxCRSAnomalyThreshold int64 = 20
 )
+
+type policyCRSTuningPreset struct {
+	ParanoiaLevel            int64
+	InboundAnomalyThreshold  int64
+	OutboundAnomalyThreshold int64
+}
+
+var wafPolicyCRSTuningPresets = map[string]policyCRSTuningPreset{
+	wafPolicyCRSTemplateLowFP: {
+		ParanoiaLevel:            1,
+		InboundAnomalyThreshold:  10,
+		OutboundAnomalyThreshold: 8,
+	},
+	wafPolicyCRSTemplateBalanced: {
+		ParanoiaLevel:            2,
+		InboundAnomalyThreshold:  5,
+		OutboundAnomalyThreshold: 4,
+	},
+	wafPolicyCRSTemplateHighBlocking: {
+		ParanoiaLevel:            3,
+		InboundAnomalyThreshold:  3,
+		OutboundAnomalyThreshold: 2,
+	},
+}
 
 func normalizePolicyEngineMode(mode string) string {
 	normalized := strings.ToLower(strings.TrimSpace(mode))
@@ -88,6 +123,105 @@ func validatePolicyRequestBodyLimit(value int64, field string) error {
 	return nil
 }
 
+func normalizePolicyCRSTemplate(template string) string {
+	normalized := strings.ToLower(strings.TrimSpace(template))
+	if normalized == "" {
+		return wafPolicyDefaultCRSTemplate
+	}
+	return normalized
+}
+
+func validatePolicyCRSTemplate(template string) error {
+	switch normalizePolicyCRSTemplate(template) {
+	case wafPolicyCRSTemplateLowFP, wafPolicyCRSTemplateBalanced, wafPolicyCRSTemplateHighBlocking, wafPolicyCRSTemplateCustom:
+		return nil
+	default:
+		return fmt.Errorf("invalid crs template: %s", template)
+	}
+}
+
+func validatePolicyCRSParanoiaLevel(value int64) error {
+	if value < wafPolicyMinCRSParanoiaLevel || value > wafPolicyMaxCRSParanoiaLevel {
+		return fmt.Errorf("crsParanoiaLevel must be between %d and %d", wafPolicyMinCRSParanoiaLevel, wafPolicyMaxCRSParanoiaLevel)
+	}
+	return nil
+}
+
+func validatePolicyCRSAnomalyThreshold(value int64, field string) error {
+	if value < wafPolicyMinCRSAnomalyThreshold || value > wafPolicyMaxCRSAnomalyThreshold {
+		return fmt.Errorf("%s must be between %d and %d", field, wafPolicyMinCRSAnomalyThreshold, wafPolicyMaxCRSAnomalyThreshold)
+	}
+	return nil
+}
+
+func defaultPolicyCRSTuningByTemplate(template string) policyCRSTuningPreset {
+	normalized := normalizePolicyCRSTemplate(template)
+	if preset, ok := wafPolicyCRSTuningPresets[normalized]; ok {
+		return preset
+	}
+	return wafPolicyCRSTuningPresets[wafPolicyDefaultCRSTemplate]
+}
+
+func derivePolicyCRSTemplateFromValues(paranoiaLevel, inboundThreshold, outboundThreshold int64) string {
+	for _, template := range []string{
+		wafPolicyCRSTemplateLowFP,
+		wafPolicyCRSTemplateBalanced,
+		wafPolicyCRSTemplateHighBlocking,
+	} {
+		preset := wafPolicyCRSTuningPresets[template]
+		if preset.ParanoiaLevel == paranoiaLevel &&
+			preset.InboundAnomalyThreshold == inboundThreshold &&
+			preset.OutboundAnomalyThreshold == outboundThreshold {
+			return template
+		}
+	}
+	return wafPolicyCRSTemplateCustom
+}
+
+func ensurePolicyCRSTuning(policy *model.WafPolicy) error {
+	if policy == nil {
+		return fmt.Errorf("policy is nil")
+	}
+
+	template := normalizePolicyCRSTemplate(policy.CrsTemplate)
+	if err := validatePolicyCRSTemplate(template); err != nil {
+		return err
+	}
+
+	preset := defaultPolicyCRSTuningByTemplate(template)
+	if policy.CrsParanoiaLevel <= 0 {
+		policy.CrsParanoiaLevel = preset.ParanoiaLevel
+	}
+	if policy.CrsInboundAnomalyThreshold <= 0 {
+		policy.CrsInboundAnomalyThreshold = preset.InboundAnomalyThreshold
+	}
+	if policy.CrsOutboundAnomalyThreshold <= 0 {
+		policy.CrsOutboundAnomalyThreshold = preset.OutboundAnomalyThreshold
+	}
+
+	if err := validatePolicyCRSParanoiaLevel(policy.CrsParanoiaLevel); err != nil {
+		return err
+	}
+	if err := validatePolicyCRSAnomalyThreshold(policy.CrsInboundAnomalyThreshold, "crsInboundAnomalyThreshold"); err != nil {
+		return err
+	}
+	if err := validatePolicyCRSAnomalyThreshold(policy.CrsOutboundAnomalyThreshold, "crsOutboundAnomalyThreshold"); err != nil {
+		return err
+	}
+
+	derivedTemplate := derivePolicyCRSTemplateFromValues(
+		policy.CrsParanoiaLevel,
+		policy.CrsInboundAnomalyThreshold,
+		policy.CrsOutboundAnomalyThreshold,
+	)
+
+	if template != wafPolicyCRSTemplateCustom && template != derivedTemplate {
+		template = wafPolicyCRSTemplateCustom
+	}
+	policy.CrsTemplate = template
+	return nil
+}
+
 func buildWafPolicyDirectives(policy *model.WafPolicy) (string, error) {
 	if policy == nil {
 		return "", fmt.Errorf("policy is nil")
@@ -106,6 +240,9 @@ func buildWafPolicyDirectives(policy *model.WafPolicy) (string, error) {
 		return "", err
 	}
 	if err := validatePolicyRequestBodyLimit(policy.RequestBodyNoFilesLimit, "requestBodyNoFilesLimit"); err != nil {
+		return "", err
+	}
+	if err := ensurePolicyCRSTuning(policy); err != nil {
 		return "", err
 	}
 
@@ -140,6 +277,9 @@ func buildWafPolicyDirectives(policy *model.WafPolicy) (string, error) {
 	lines = append(lines,
 		fmt.Sprintf("SecRequestBodyLimit %d", policy.RequestBodyLimit),
 		fmt.Sprintf("SecRequestBodyNoFilesLimit %d", policy.RequestBodyNoFilesLimit),
+		fmt.Sprintf(`SecAction "id:900000,phase:1,pass,nolog,t:none,setvar:tx.paranoia_level=%d"`, policy.CrsParanoiaLevel),
+		fmt.Sprintf(`SecAction "id:900110,phase:1,pass,nolog,t:none,setvar:tx.inbound_anomaly_score_threshold=%d"`, policy.CrsInboundAnomalyThreshold),
+		fmt.Sprintf(`SecAction "id:900100,phase:1,pass,nolog,t:none,setvar:tx.outbound_anomaly_score_threshold=%d"`, policy.CrsOutboundAnomalyThreshold),
 	)
 
 	return strings.Join(lines, "\n"), nil

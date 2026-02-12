@@ -27,6 +27,10 @@ func NewDeleteWafPolicyLogic(ctx context.Context, svcCtx *svc.ServiceContext) *D
 }
 
 func (l *DeleteWafPolicyLogic) DeleteWafPolicy(req *types.IDReq) (resp *types.BaseResp, err error) {
+	defer func() {
+		err = localizeWafPolicyError(err)
+	}()
+
 	helper := newWafLogicHelper(l.ctx, l.svcCtx, l.Logger)
 	if req == nil || req.ID == 0 {
 		return nil, fmt.Errorf("policy id is required")

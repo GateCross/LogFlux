@@ -666,6 +666,273 @@ type WafJobListResp struct {
 	Total int64        `json:"total"`
 }
 
+type WafPolicyActionReq struct {
+	ID uint `path:"id"`
+}
+
+type WafPolicyBindingItem struct {
+	ID          uint   `json:"id"`
+	PolicyId    uint   `json:"policyId"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Enabled     bool   `json:"enabled"`
+	ScopeType   string `json:"scopeType"`
+	Host        string `json:"host"`
+	Path        string `json:"path"`
+	Method      string `json:"method"`
+	Priority    int64  `json:"priority"`
+	CreatedAt   string `json:"createdAt"`
+	UpdatedAt   string `json:"updatedAt"`
+}
+
+type WafPolicyBindingListReq struct {
+	Page      int    `form:"page,default=1"`
+	PageSize  int    `form:"pageSize,default=20"`
+	PolicyId  uint   `form:"policyId,optional"`
+	ScopeType string `form:"scopeType,optional"`
+	Name      string `form:"name,optional"`
+}
+
+type WafPolicyBindingListResp struct {
+	List  []WafPolicyBindingItem `json:"list"`
+	Total int64                  `json:"total"`
+}
+
+type WafPolicyBindingReq struct {
+	PolicyId    uint   `json:"policyId"`
+	Name        string `json:"name,optional"`
+	Description string `json:"description,optional"`
+	Enabled     bool   `json:"enabled,optional"`
+	ScopeType   string `json:"scopeType,default=global"` // global | site | route
+	Host        string `json:"host,optional"`
+	Path        string `json:"path,optional"`
+	Method      string `json:"method,optional"`
+	Priority    int64  `json:"priority,optional"`
+}
+
+type WafPolicyBindingUpdateReq struct {
+	ID          uint   `path:"id"`
+	PolicyId    uint   `json:"policyId"`
+	Name        string `json:"name,optional"`
+	Description string `json:"description,optional"`
+	Enabled     bool   `json:"enabled"`
+	ScopeType   string `json:"scopeType"` // global | site | route
+	Host        string `json:"host,optional"`
+	Path        string `json:"path,optional"`
+	Method      string `json:"method,optional"`
+	Priority    int64  `json:"priority"`
+}
+
+type WafPolicyFalsePositiveFeedbackItem struct {
+	ID             uint   `json:"id"`
+	PolicyId       uint   `json:"policyId"`
+	PolicyName     string `json:"policyName"`
+	Host           string `json:"host"`
+	Path           string `json:"path"`
+	Method         string `json:"method"`
+	Status         int    `json:"status"`
+	FeedbackStatus string `json:"feedbackStatus"` // pending | confirmed | resolved
+	Assignee       string `json:"assignee"`
+	DueAt          string `json:"dueAt"`
+	IsOverdue      bool   `json:"isOverdue"`
+	SampleURI      string `json:"sampleUri"`
+	Reason         string `json:"reason"`
+	Suggestion     string `json:"suggestion"`
+	Operator       string `json:"operator"`
+	ProcessNote    string `json:"processNote"`
+	ProcessedBy    string `json:"processedBy"`
+	ProcessedAt    string `json:"processedAt"`
+	CreatedAt      string `json:"createdAt"`
+}
+
+type WafPolicyFalsePositiveFeedbackListReq struct {
+	Page           int    `form:"page,default=1"`
+	PageSize       int    `form:"pageSize,default=10"`
+	PolicyId       uint   `form:"policyId,optional"`
+	Host           string `form:"host,optional"`
+	Path           string `form:"path,optional"`
+	Method         string `form:"method,optional"`
+	FeedbackStatus string `form:"feedbackStatus,optional"`
+	Assignee       string `form:"assignee,optional"`
+	SLAStatus      string `form:"slaStatus,optional"` // all | normal | overdue | resolved
+}
+
+type WafPolicyFalsePositiveFeedbackListResp struct {
+	List  []WafPolicyFalsePositiveFeedbackItem `json:"list"`
+	Total int64                                `json:"total"`
+}
+
+type WafPolicyFalsePositiveFeedbackReq struct {
+	PolicyId   uint   `json:"policyId,optional"`
+	Host       string `json:"host,optional"`
+	Path       string `json:"path,optional"`
+	Method     string `json:"method,optional"`
+	Status     int    `json:"status,optional"`
+	Assignee   string `json:"assignee,optional"`
+	DueAt      string `json:"dueAt,optional"` // YYYY-MM-DD HH:mm:ss
+	SampleURI  string `json:"sampleUri,optional"`
+	Reason     string `json:"reason"`
+	Suggestion string `json:"suggestion,optional"`
+}
+
+type WafPolicyFalsePositiveFeedbackStatusUpdateReq struct {
+	ID             uint   `path:"id"`
+	FeedbackStatus string `json:"feedbackStatus"` // pending | confirmed | resolved
+	ProcessNote    string `json:"processNote,optional"`
+	Assignee       string `json:"assignee,optional"`
+	DueAt          string `json:"dueAt,optional"` // YYYY-MM-DD HH:mm:ss
+}
+
+type WafPolicyItem struct {
+	ID                          uint   `json:"id"`
+	Name                        string `json:"name"`
+	Description                 string `json:"description"`
+	Enabled                     bool   `json:"enabled"`
+	IsDefault                   bool   `json:"isDefault"`
+	EngineMode                  string `json:"engineMode"`
+	AuditEngine                 string `json:"auditEngine"`
+	AuditLogFormat              string `json:"auditLogFormat"`
+	AuditRelevantStatus         string `json:"auditRelevantStatus"`
+	RequestBodyAccess           bool   `json:"requestBodyAccess"`
+	RequestBodyLimit            int64  `json:"requestBodyLimit"`
+	RequestBodyNoFilesLimit     int64  `json:"requestBodyNoFilesLimit"`
+	CrsTemplate                 string `json:"crsTemplate"`
+	CrsParanoiaLevel            int64  `json:"crsParanoiaLevel"`
+	CrsInboundAnomalyThreshold  int64  `json:"crsInboundAnomalyThreshold"`
+	CrsOutboundAnomalyThreshold int64  `json:"crsOutboundAnomalyThreshold"`
+	Config                      string `json:"config"`
+	CreatedAt                   string `json:"createdAt"`
+	UpdatedAt                   string `json:"updatedAt"`
+}
+
+type WafPolicyListReq struct {
+	Page     int    `form:"page,default=1"`
+	PageSize int    `form:"pageSize,default=20"`
+	Name     string `form:"name,optional"`
+}
+
+type WafPolicyListResp struct {
+	List  []WafPolicyItem `json:"list"`
+	Total int64           `json:"total"`
+}
+
+type WafPolicyPreviewResp struct {
+	Directives string `json:"directives"`
+}
+
+type WafPolicyReq struct {
+	Name                        string `json:"name"`
+	Description                 string `json:"description,optional"`
+	Enabled                     bool   `json:"enabled,optional"`
+	IsDefault                   bool   `json:"isDefault,optional"`
+	EngineMode                  string `json:"engineMode,default=on"`            // on | off | detectiononly
+	AuditEngine                 string `json:"auditEngine,default=relevantonly"` // off | on | relevantonly
+	AuditLogFormat              string `json:"auditLogFormat,default=json"`      // json | native
+	AuditRelevantStatus         string `json:"auditRelevantStatus,optional"`
+	RequestBodyAccess           bool   `json:"requestBodyAccess,optional"`
+	RequestBodyLimit            int64  `json:"requestBodyLimit,optional"`
+	RequestBodyNoFilesLimit     int64  `json:"requestBodyNoFilesLimit,optional"`
+	CrsTemplate                 string `json:"crsTemplate,optional"` // low_fp | balanced | high_blocking | custom
+	CrsParanoiaLevel            int64  `json:"crsParanoiaLevel,optional"`
+	CrsInboundAnomalyThreshold  int64  `json:"crsInboundAnomalyThreshold,optional"`
+	CrsOutboundAnomalyThreshold int64  `json:"crsOutboundAnomalyThreshold,optional"`
+	Config                      string `json:"config,optional"` // JSON string
+}
+
+type WafPolicyRevisionItem struct {
+	ID            uint   `json:"id"`
+	PolicyId      uint   `json:"policyId"`
+	PolicyName    string `json:"policyName"`
+	Version       uint   `json:"version"`
+	Status        string `json:"status"`
+	Operator      string `json:"operator"`
+	Message       string `json:"message"`
+	ChangeSummary string `json:"changeSummary"`
+	CreatedAt     string `json:"createdAt"`
+	UpdatedAt     string `json:"updatedAt"`
+}
+
+type WafPolicyRevisionListReq struct {
+	Page     int  `form:"page,default=1"`
+	PageSize int  `form:"pageSize,default=20"`
+	PolicyId uint `form:"policyId,optional"`
+}
+
+type WafPolicyRevisionListResp struct {
+	List  []WafPolicyRevisionItem `json:"list"`
+	Total int64                   `json:"total"`
+}
+
+type WafPolicyRollbackReq struct {
+	RevisionId uint `json:"revisionId"`
+}
+
+type WafPolicyStatsDimensionItem struct {
+	Key          string  `json:"key"`
+	HitCount     int64   `json:"hitCount"`
+	BlockedCount int64   `json:"blockedCount"`
+	AllowedCount int64   `json:"allowedCount"`
+	BlockRate    float64 `json:"blockRate"`
+}
+
+type WafPolicyStatsItem struct {
+	PolicyId                    uint    `json:"policyId"`
+	PolicyName                  string  `json:"policyName"`
+	HitCount                    int64   `json:"hitCount"`
+	BlockedCount                int64   `json:"blockedCount"`
+	AllowedCount                int64   `json:"allowedCount"`
+	SuspectedFalsePositiveCount int64   `json:"suspectedFalsePositiveCount"`
+	BlockRate                   float64 `json:"blockRate"`
+}
+
+type WafPolicyStatsReq struct {
+	PolicyId    uint   `form:"policyId,optional"`
+	StartTime   string `form:"startTime,optional"`
+	EndTime     string `form:"endTime,optional"`
+	IntervalSec int    `form:"intervalSec,optional"`
+	TopN        int    `form:"topN,optional"`
+	Host        string `form:"host,optional"`
+	Path        string `form:"path,optional"`
+	Method      string `form:"method,optional"`
+}
+
+type WafPolicyStatsResp struct {
+	Range      DashboardRange                `json:"range"`
+	Summary    WafPolicyStatsItem            `json:"summary"`
+	List       []WafPolicyStatsItem          `json:"list"`
+	Trend      []WafPolicyStatsTrendItem     `json:"trend"`
+	TopHosts   []WafPolicyStatsDimensionItem `json:"topHosts"`
+	TopPaths   []WafPolicyStatsDimensionItem `json:"topPaths"`
+	TopMethods []WafPolicyStatsDimensionItem `json:"topMethods"`
+}
+
+type WafPolicyStatsTrendItem struct {
+	Time         string `json:"time"`
+	HitCount     int64  `json:"hitCount"`
+	BlockedCount int64  `json:"blockedCount"`
+	AllowedCount int64  `json:"allowedCount"`
+}
+
+type WafPolicyUpdateReq struct {
+	ID                          uint   `path:"id"`
+	Name                        string `json:"name,optional"`
+	Description                 string `json:"description,optional"`
+	Enabled                     bool   `json:"enabled,optional"`
+	IsDefault                   bool   `json:"isDefault,optional"`
+	EngineMode                  string `json:"engineMode,optional"`
+	AuditEngine                 string `json:"auditEngine,optional"`
+	AuditLogFormat              string `json:"auditLogFormat,optional"`
+	AuditRelevantStatus         string `json:"auditRelevantStatus,optional"`
+	RequestBodyAccess           bool   `json:"requestBodyAccess,optional"`
+	RequestBodyLimit            int64  `json:"requestBodyLimit,optional"`
+	RequestBodyNoFilesLimit     int64  `json:"requestBodyNoFilesLimit,optional"`
+	CrsTemplate                 string `json:"crsTemplate,optional"` // low_fp | balanced | high_blocking | custom
+	CrsParanoiaLevel            int64  `json:"crsParanoiaLevel,optional"`
+	CrsInboundAnomalyThreshold  int64  `json:"crsInboundAnomalyThreshold,optional"`
+	CrsOutboundAnomalyThreshold int64  `json:"crsOutboundAnomalyThreshold,optional"`
+	Config                      string `json:"config,optional"` // JSON string
+}
+
 type WafReleaseActivateReq struct {
 	ID uint `path:"id"`
 }
@@ -703,6 +970,62 @@ type WafReleaseListResp struct {
 type WafReleaseRollbackReq struct {
 	Target  string `json:"target,optional"` // last_good | version
 	Version string `json:"version,optional"`
+}
+
+type WafRuleExclusionItem struct {
+	ID          uint   `json:"id"`
+	PolicyId    uint   `json:"policyId"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Enabled     bool   `json:"enabled"`
+	ScopeType   string `json:"scopeType"`
+	Host        string `json:"host"`
+	Path        string `json:"path"`
+	Method      string `json:"method"`
+	RemoveType  string `json:"removeType"`
+	RemoveValue string `json:"removeValue"`
+	CreatedAt   string `json:"createdAt"`
+	UpdatedAt   string `json:"updatedAt"`
+}
+
+type WafRuleExclusionListReq struct {
+	Page      int    `form:"page,default=1"`
+	PageSize  int    `form:"pageSize,default=20"`
+	PolicyId  uint   `form:"policyId,optional"`
+	ScopeType string `form:"scopeType,optional"`
+	Name      string `form:"name,optional"`
+}
+
+type WafRuleExclusionListResp struct {
+	List  []WafRuleExclusionItem `json:"list"`
+	Total int64                  `json:"total"`
+}
+
+type WafRuleExclusionReq struct {
+	PolicyId    uint   `json:"policyId"`
+	Name        string `json:"name,optional"`
+	Description string `json:"description,optional"`
+	Enabled     bool   `json:"enabled,optional"`
+	ScopeType   string `json:"scopeType,default=global"` // global | site | route
+	Host        string `json:"host,optional"`
+	Path        string `json:"path,optional"`
+	Method      string `json:"method,optional"`
+	RemoveType  string `json:"removeType,default=id"` // id | tag
+	RemoveValue string `json:"removeValue"`
+}
+
+type WafRuleExclusionUpdateReq struct {
+	ID          uint   `path:"id"`
+	PolicyId    uint   `json:"policyId"`
+	Name        string `json:"name,optional"`
+	Description string `json:"description,optional"`
+	Enabled     bool   `json:"enabled"`
+	ScopeType   string `json:"scopeType"` // global | site | route
+	Host        string `json:"host,optional"`
+	Path        string `json:"path,optional"`
+	Method      string `json:"method,optional"`
+	RemoveType  string `json:"removeType"` // id | tag
+	RemoveValue string `json:"removeValue"`
 }
 
 type WafSourceActionReq struct {
@@ -786,98 +1109,4 @@ type WafUploadReq struct {
 	Version     string `json:"version"`
 	Checksum    string `json:"checksum,optional"`
 	ActivateNow bool   `json:"activateNow,optional"`
-}
-
-type WafPolicyActionReq struct {
-	ID uint `path:"id"`
-}
-
-type WafPolicyItem struct {
-	ID                      uint   `json:"id"`
-	Name                    string `json:"name"`
-	Description             string `json:"description"`
-	Enabled                 bool   `json:"enabled"`
-	IsDefault               bool   `json:"isDefault"`
-	EngineMode              string `json:"engineMode"`
-	AuditEngine             string `json:"auditEngine"`
-	AuditLogFormat          string `json:"auditLogFormat"`
-	AuditRelevantStatus     string `json:"auditRelevantStatus"`
-	RequestBodyAccess       bool   `json:"requestBodyAccess"`
-	RequestBodyLimit        int64  `json:"requestBodyLimit"`
-	RequestBodyNoFilesLimit int64  `json:"requestBodyNoFilesLimit"`
-	Config                  string `json:"config"`
-	CreatedAt               string `json:"createdAt"`
-	UpdatedAt               string `json:"updatedAt"`
-}
-
-type WafPolicyListReq struct {
-	Page     int    `form:"page,default=1"`
-	PageSize int    `form:"pageSize,default=20"`
-	Name     string `form:"name,optional"`
-}
-
-type WafPolicyListResp struct {
-	List  []WafPolicyItem `json:"list"`
-	Total int64           `json:"total"`
-}
-
-type WafPolicyPreviewResp struct {
-	Directives string `json:"directives"`
-}
-
-type WafPolicyReq struct {
-	Name                    string `json:"name"`
-	Description             string `json:"description,optional"`
-	Enabled                 bool   `json:"enabled,optional"`
-	IsDefault               bool   `json:"isDefault,optional"`
-	EngineMode              string `json:"engineMode,default=on"`           // on | off | detectiononly
-	AuditEngine             string `json:"auditEngine,default=relevantonly"` // off | on | relevantonly
-	AuditLogFormat          string `json:"auditLogFormat,default=json"`      // json | native
-	AuditRelevantStatus     string `json:"auditRelevantStatus,optional"`
-	RequestBodyAccess       bool   `json:"requestBodyAccess,optional"`
-	RequestBodyLimit        int64  `json:"requestBodyLimit,optional"`
-	RequestBodyNoFilesLimit int64  `json:"requestBodyNoFilesLimit,optional"`
-	Config                  string `json:"config,optional"` // JSON string
-}
-
-type WafPolicyRevisionItem struct {
-	ID        uint   `json:"id"`
-	PolicyId  uint   `json:"policyId"`
-	Version   uint   `json:"version"`
-	Status    string `json:"status"`
-	Operator  string `json:"operator"`
-	Message   string `json:"message"`
-	CreatedAt string `json:"createdAt"`
-	UpdatedAt string `json:"updatedAt"`
-}
-
-type WafPolicyRevisionListReq struct {
-	Page     int  `form:"page,default=1"`
-	PageSize int  `form:"pageSize,default=20"`
-	PolicyId uint `form:"policyId,optional"`
-}
-
-type WafPolicyRevisionListResp struct {
-	List  []WafPolicyRevisionItem `json:"list"`
-	Total int64                   `json:"total"`
-}
-
-type WafPolicyRollbackReq struct {
-	RevisionId uint `json:"revisionId"`
-}
-
-type WafPolicyUpdateReq struct {
-	ID                      uint   `path:"id"`
-	Name                    string `json:"name,optional"`
-	Description             string `json:"description,optional"`
-	Enabled                 bool   `json:"enabled,optional"`
-	IsDefault               bool   `json:"isDefault,optional"`
-	EngineMode              string `json:"engineMode,optional"`
-	AuditEngine             string `json:"auditEngine,optional"`
-	AuditLogFormat          string `json:"auditLogFormat,optional"`
-	AuditRelevantStatus     string `json:"auditRelevantStatus,optional"`
-	RequestBodyAccess       bool   `json:"requestBodyAccess,optional"`
-	RequestBodyLimit        int64  `json:"requestBodyLimit,optional"`
-	RequestBodyNoFilesLimit int64  `json:"requestBodyNoFilesLimit,optional"`
-	Config                  string `json:"config,optional"` // JSON string
 }

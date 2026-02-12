@@ -80,6 +80,33 @@ func applyPolicyReqToModel(helper *wafLogicHelper, req *types.WafPolicyReq, poli
 		return err
 	}
 
+	crsTemplate := normalizePolicyCRSTemplate(req.CrsTemplate)
+	if err := validatePolicyCRSTemplate(crsTemplate); err != nil {
+		return err
+	}
+	preset := defaultPolicyCRSTuningByTemplate(crsTemplate)
+	crsParanoiaLevel := req.CrsParanoiaLevel
+	if crsParanoiaLevel <= 0 {
+		crsParanoiaLevel = preset.ParanoiaLevel
+	}
+	if err := validatePolicyCRSParanoiaLevel(crsParanoiaLevel); err != nil {
+		return err
+	}
+	crsInboundAnomalyThreshold := req.CrsInboundAnomalyThreshold
+	if crsInboundAnomalyThreshold <= 0 {
+		crsInboundAnomalyThreshold = preset.InboundAnomalyThreshold
+	}
+	if err := validatePolicyCRSAnomalyThreshold(crsInboundAnomalyThreshold, "crsInboundAnomalyThreshold"); err != nil {
+		return err
+	}
+	crsOutboundAnomalyThreshold := req.CrsOutboundAnomalyThreshold
+	if crsOutboundAnomalyThreshold <= 0 {
+		crsOutboundAnomalyThreshold = preset.OutboundAnomalyThreshold
+	}
+	if err := validatePolicyCRSAnomalyThreshold(crsOutboundAnomalyThreshold, "crsOutboundAnomalyThreshold"); err != nil {
+		return err
+	}
+
 	policy.Name = name
 	policy.Description = strings.TrimSpace(req.Description)
 	policy.EngineMode = normalizePolicyEngineMode(req.EngineMode)
@@ -88,6 +115,10 @@ func applyPolicyReqToModel(helper *wafLogicHelper, req *types.WafPolicyReq, poli
 	policy.AuditRelevantStatus = normalizePolicyAuditRelevantStatus(req.AuditRelevantStatus)
 	policy.RequestBodyLimit = requestBodyLimit
 	policy.RequestBodyNoFilesLimit = requestBodyNoFilesLimit
+	policy.CrsTemplate = crsTemplate
+	policy.CrsParanoiaLevel = crsParanoiaLevel
+	policy.CrsInboundAnomalyThreshold = crsInboundAnomalyThreshold
+	policy.CrsOutboundAnomalyThreshold = crsOutboundAnomalyThreshold
 	policy.Config = config
 
 	if policy.ID == 0 {
@@ -104,6 +135,10 @@ func applyPolicyReqToModel(helper *wafLogicHelper, req *types.WafPolicyReq, poli
 	}
 	if helper.hasPolicyBoolField("requestBodyAccess") {
 		policy.RequestBodyAccess = req.RequestBodyAccess
+	}
+
+	if err := ensurePolicyCRSTuning(policy); err != nil {
+		return err
 	}
 
 	return nil
@@ -155,6 +190,30 @@ func applyPolicyUpdateReqToModel(helper *wafLogicHelper, req *types.WafPolicyUpd
 		}
 		policy.RequestBodyNoFilesLimit = req.RequestBodyNoFilesLimit
 	}
+	if strings.TrimSpace(req.CrsTemplate) != "" {
+		if err := validatePolicyCRSTemplate(req.CrsTemplate); err != nil {
+			return err
+		}
+		policy.CrsTemplate = normalizePolicyCRSTemplate(req.CrsTemplate)
+	}
+	if req.CrsParanoiaLevel > 0 {
+		if err := validatePolicyCRSParanoiaLevel(req.CrsParanoiaLevel); err != nil {
+			return err
+		}
+		policy.CrsParanoiaLevel = req.CrsParanoiaLevel
+	}
+	if req.CrsInboundAnomalyThreshold > 0 {
+		if err := validatePolicyCRSAnomalyThreshold(req.CrsInboundAnomalyThreshold, "crsInboundAnomalyThreshold"); err != nil {
+			return err
+		}
+		policy.CrsInboundAnomalyThreshold = req.CrsInboundAnomalyThreshold
+	}
+	if req.CrsOutboundAnomalyThreshold > 0 {
+		if err := validatePolicyCRSAnomalyThreshold(req.CrsOutboundAnomalyThreshold, "crsOutboundAnomalyThreshold"); err != nil {
+			return err
+		}
+		policy.CrsOutboundAnomalyThreshold = req.CrsOutboundAnomalyThreshold
+	}
 
 	if strings.TrimSpace(req.Config) != "" {
 		config, err := parsePolicyConfigJSON(req.Config)
@@ -201,6 +260,9 @@ func applyPolicyUpdateReqToModel(helper *wafLogicHelper, req *types.WafPolicyUpd
 		return err
 	}
 	if err := validatePolicyRequestBodyLimit(policy.RequestBodyNoFilesLimit, "requestBodyNoFilesLimit"); err != nil {
+		return err
+	}
+	if err := ensurePolicyCRSTuning(policy); err != nil {
 		return err
 	}
 
@@ -308,4 +370,48 @@ func currentOperatorFromContext(ctx context.Context) string {
 		return "system"
 	}
 	return value
+}
+
+func normalizeCaddyModulesJSON(modules string) string {
+	trimmed := strings.TrimSpace(modules)
+	if trimmed == "" {
+		return emptyModulesJSON
+	}
+	return trimmed
+}
+
+func createCaddyPolicyHistory(tx *gorm.DB, serverID uint, action, config, modules string) error {
+	if tx == nil {
+		return fmt.Errorf("db is nil")
+	}
+
+	history := &model.CaddyConfigHistory{
+		ServerID: serverID,
+		Action:   strings.TrimSpace(action),
+		Hash:     hashConfig(config),
+		Config:   config,
+		Modules:  normalizeCaddyModulesJSON(modules),
+	}
+	if err := tx.Create(history).Error; err != nil {
+		return fmt.Errorf("create caddy config history failed: %w", err)
+	}
+	return nil
+}
+
+func rollbackPolicyConfigToLastGood(server *model.CaddyServer, lastGoodConfig string) error {
+	if server == nil {
+		return fmt.Errorf("caddy server not found")
+	}
+	rollbackConfig := strings.TrimSpace(lastGoodConfig)
+	if rollbackConfig == "" {
+		return fmt.Errorf("last good caddy config is empty")
+	}
+
+	if err := adaptCaddyfile(server, rollbackConfig); err != nil {
+		return fmt.Errorf("rollback last_good adapt failed: %w", err)
+	}
+	if err := loadCaddyfile(server, rollbackConfig); err != nil {
+		return fmt.Errorf("rollback last_good load failed: %w", err)
+	}
+	return nil
 }

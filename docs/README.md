@@ -8,6 +8,9 @@
 - Docker 部署主文档：[`docker/README.md`](../docker/README.md)
 - Docker 配置模板：[`docker/config.example.yaml`](../docker/config.example.yaml)
 - Compose 编排文件：[`docker/docker-compose.yml`](../docker/docker-compose.yml)
+- WAF/CRS 运行策略计划与进度：
+  - [`plans/waf-crs-frontend-security-config-overall-plan.md`](./plans/waf-crs-frontend-security-config-overall-plan.md)
+  - [`plans/waf-crs-frontend-security-config-progress.md`](./plans/waf-crs-frontend-security-config-progress.md)
 
 ## 部署文档（当前有效）
 
@@ -20,6 +23,9 @@
 - 环境准备与配置项说明
 - 镜像使用与本地构建
 - Coraza 版本检查机制（GitHub Release）
+- 运行策略（SecRuleEngine / 审计 / 请求体限制）发布与回滚
+- CRS 调优（低误报/平衡/高拦截模板、PL 与 anomaly 阈值）独立发布
+- 规则例外与策略绑定（global/site/route）配置
 - 代理配置与失败回退策略
 - 常见故障排查与运维命令
 
@@ -33,9 +39,9 @@
 
 以下文档主要用于设计背景、实施计划和运维规范，部分内容可能早于当前实现，请以代码与 `docker/README.md` 的“当前行为”章节为准：
 
-- [`plans/caddy-coraza-crs-full-cutover-plan.md`](./plans/caddy-coraza-crs-full-cutover-plan.md)
+- [`plans/waf-crs-frontend-security-config-overall-plan.md`](./plans/waf-crs-frontend-security-config-overall-plan.md)
+- [`plans/waf-crs-frontend-security-config-progress.md`](./plans/waf-crs-frontend-security-config-progress.md)
 - [`plans/waf-update-management-design.md`](./plans/waf-update-management-design.md)
-- [`plans/waf-update-p0-implementation-plan.md`](./plans/waf-update-p0-implementation-plan.md)
 - [`plans/waf-update-task-checklist.md`](./plans/waf-update-task-checklist.md)
 - [`plans/waf-update-operations-guide.md`](./plans/waf-update-operations-guide.md)
 
@@ -54,4 +60,4 @@
 
 ---
 
-最后更新：2026-02-11
+最后更新：2026-02-12

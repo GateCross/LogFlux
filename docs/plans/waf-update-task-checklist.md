@@ -145,4 +145,4 @@
 - [x] `DOC-01` 总体设计文档：`waf-update-management-design.md`
 - [x] `DOC-02` 执行任务清单：`waf-update-task-checklist.md`
 - [x] `DOC-03` 运维操作指南：`waf-update-operations-guide.md`
-- [x] `DOC-04` P0 实施细化：`waf-update-p0-implementation-plan.md`
+- [x] `DOC-04` P0 实施细化：已并入本清单与 `waf-crs-frontend-security-config-progress.md`，独立文档已归档删除。

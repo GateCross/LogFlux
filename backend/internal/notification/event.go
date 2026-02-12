@@ -88,13 +88,18 @@ const (
 	EventArchiveAnomaly   = "archive.anomaly"
 
 	// Caddy 配置事件
-	EventCaddyConfigUpdateFailed   = "caddy.config_update_failed"
-	EventCaddyConfigUpdateSuccess  = "caddy.config_update_success"
-	EventCaddyLogSourceDiscovered  = "caddy.log_source_discovered"
+	EventCaddyConfigUpdateFailed  = "caddy.config_update_failed"
+	EventCaddyConfigUpdateSuccess = "caddy.config_update_success"
+	EventCaddyLogSourceDiscovered = "caddy.log_source_discovered"
 
 	// 安全事件
-	EventSecurityLoginFailed      = "security.login_failed"
-	EventSecurityBruteForce       = "security.brute_force"
-	EventSecurityAdminLogin       = "security.admin_login"
-	EventSecurityPermissionDenied = "security.permission_denied"
+	EventSecurityLoginFailed             = "security.login_failed"
+	EventSecurityBruteForce              = "security.brute_force"
+	EventSecurityAdminLogin              = "security.admin_login"
+	EventSecurityPermissionDenied        = "security.permission_denied"
+	EventSecurityWafPolicyPublishFailed  = "security.waf_policy_publish_failed"
+	EventSecurityWafPolicyPublished      = "security.waf_policy_published"
+	EventSecurityWafPolicyRollback       = "security.waf_policy_rollback"
+	EventSecurityWafPolicyRollbackFailed = "security.waf_policy_rollback_failed"
+	EventSecurityWafPolicyAutoRollback   = "security.waf_policy_auto_rollback"
 )

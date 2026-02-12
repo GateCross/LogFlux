@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"logflux/internal/notification"
 	"logflux/internal/svc"
 	"logflux/internal/types"
 	"logflux/model"
@@ -27,16 +28,43 @@ func NewPublishWafPolicyLogic(ctx context.Context, svcCtx *svc.ServiceContext) *
 }
 
 func (l *PublishWafPolicyLogic) PublishWafPolicy(req *types.WafPolicyActionReq) (resp *types.BaseResp, err error) {
+	policyID := uint(0)
+	policyName := ""
+	operator := currentOperatorFromContext(l.ctx)
+
+	defer func() {
+		if err != nil {
+			notifyData := buildWafPolicyNotifyData(policyID, policyName, operator)
+			notifyData["error"] = localizeWafPolicyMessage(err.Error())
+			notifyWafPolicyEventAsync(
+				l.svcCtx,
+				l.Logger,
+				notification.EventSecurityWafPolicyPublishFailed,
+				notification.LevelError,
+				"WAF 策略发布失败",
+				fmt.Sprintf("WAF 策略发布失败：%s", localizeWafPolicyMessage(err.Error())),
+				notifyData,
+			)
+		}
+		err = localizeWafPolicyError(err)
+	}()
+
 	if req == nil || req.ID == 0 {
 		return nil, fmt.Errorf("policy id is required")
 	}
+	policyID = req.ID
 
 	var policy model.WafPolicy
 	if err := l.svcCtx.DB.First(&policy, req.ID).Error; err != nil {
 		return nil, fmt.Errorf("policy not found")
 	}
+	policyName = policy.Name
 
-	directives, err := buildWafPolicyDirectives(&policy)
+	if err := ensureNoPolicyBindingConflicts(l.svcCtx.DB); err != nil {
+		return nil, err
+	}
+
+	directives, err := buildPolicyDirectivesWithExclusions(l.svcCtx.DB, &policy)
 	if err != nil {
 		return nil, err
 	}
@@ -45,6 +73,9 @@ func (l *PublishWafPolicyLogic) PublishWafPolicy(req *types.WafPolicyActionReq) 
 	if err != nil {
 		return nil, err
 	}
+
+	lastGoodConfig := server.Config
+	lastGoodModules := normalizeCaddyModulesJSON(server.Modules)
 
 	candidateConfig, err := applyWafPolicyToCaddyConfig(server.Config, directives)
 	if err != nil {
@@ -55,16 +86,28 @@ func (l *PublishWafPolicyLogic) PublishWafPolicy(req *types.WafPolicyActionReq) 
 		return nil, fmt.Errorf("policy publish validate failed: %w", err)
 	}
 	if err := loadCaddyfile(server, candidateConfig); err != nil {
+		if rollbackErr := rollbackPolicyConfigToLastGood(server, lastGoodConfig); rollbackErr != nil {
+			return nil, fmt.Errorf("policy publish load failed: %v, rollback to last_good failed: %v", err, rollbackErr)
+		}
+		notifyWafPolicyEventAsync(
+			l.svcCtx,
+			l.Logger,
+			notification.EventSecurityWafPolicyAutoRollback,
+			notification.LevelWarning,
+			"WAF 策略自动回滚",
+			fmt.Sprintf("WAF 策略发布失败，已自动回滚到 last_good：policy=%s", policyName),
+			buildWafPolicyNotifyData(policyID, policyName, operator),
+		)
 		return nil, fmt.Errorf("policy publish load failed: %w", err)
 	}
 
-	modules := server.Modules
-	if modules == "" {
-		modules = emptyModulesJSON
-	}
+	modules := normalizeCaddyModulesJSON(server.Modules)
 
-	operator := currentOperatorFromContext(l.ctx)
 	if err := l.svcCtx.DB.Transaction(func(tx *gorm.DB) error {
+		if err := createCaddyPolicyHistory(tx, server.ID, "policy_last_good", lastGoodConfig, lastGoodModules); err != nil {
+			return err
+		}
+
 		if err := tx.Model(&model.CaddyServer{}).
 			Where("id = ?", server.ID).
 			Updates(map[string]interface{}{
@@ -74,15 +117,8 @@ func (l *PublishWafPolicyLogic) PublishWafPolicy(req *types.WafPolicyActionReq) 
 			return fmt.Errorf("save caddy server config failed: %w", err)
 		}
 
-		history := &model.CaddyConfigHistory{
-			ServerID: server.ID,
-			Action:   "policy_publish",
-			Hash:     hashConfig(candidateConfig),
-			Config:   candidateConfig,
-			Modules:  modules,
-		}
-		if err := tx.Create(history).Error; err != nil {
-			return fmt.Errorf("create caddy config history failed: %w", err)
+		if err := createCaddyPolicyHistory(tx, server.ID, "policy_publish", candidateConfig, modules); err != nil {
+			return err
 		}
 
 		revision, err := createPolicyRevision(tx, &policy, wafPolicyStatusPublished, directives, "publish policy", operator)
@@ -96,8 +132,30 @@ func (l *PublishWafPolicyLogic) PublishWafPolicy(req *types.WafPolicyActionReq) 
 
 		return nil
 	}); err != nil {
-		return nil, err
+		if rollbackErr := rollbackPolicyConfigToLastGood(server, lastGoodConfig); rollbackErr != nil {
+			return nil, fmt.Errorf("policy publish persist failed: %v, rollback to last_good failed: %v", err, rollbackErr)
+		}
+		notifyWafPolicyEventAsync(
+			l.svcCtx,
+			l.Logger,
+			notification.EventSecurityWafPolicyAutoRollback,
+			notification.LevelWarning,
+			"WAF 策略自动回滚",
+			fmt.Sprintf("WAF 策略发布落库失败，已自动回滚到 last_good：policy=%s", policyName),
+			buildWafPolicyNotifyData(policyID, policyName, operator),
+		)
+		return nil, fmt.Errorf("policy publish persist failed: %w", err)
 	}
+
+	notifyWafPolicyEventAsync(
+		l.svcCtx,
+		l.Logger,
+		notification.EventSecurityWafPolicyPublished,
+		notification.LevelInfo,
+		"WAF 策略已发布",
+		fmt.Sprintf("WAF 策略发布成功：policy=%s", policyName),
+		buildWafPolicyNotifyData(policyID, policyName, operator),
+	)
 
 	go syncCaddyLogSources(l.svcCtx, server, l.Logger)
 
