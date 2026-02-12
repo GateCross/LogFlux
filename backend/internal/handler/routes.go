@@ -107,6 +107,111 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 			},
 			{
 				Method:  http.MethodGet,
+				Path:    "/caddy/waf/policy",
+				Handler: caddy.ListWafPoliciesHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/caddy/waf/policy",
+				Handler: caddy.CreateWafPolicyHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPut,
+				Path:    "/caddy/waf/policy/:id",
+				Handler: caddy.UpdateWafPolicyHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodDelete,
+				Path:    "/caddy/waf/policy/:id",
+				Handler: caddy.DeleteWafPolicyHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/caddy/waf/policy/:id/preview",
+				Handler: caddy.PreviewWafPolicyHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/caddy/waf/policy/:id/publish",
+				Handler: caddy.PublishWafPolicyHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/caddy/waf/policy/:id/validate",
+				Handler: caddy.ValidateWafPolicyHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/caddy/waf/policy/binding",
+				Handler: caddy.ListWafPolicyBindingsHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/caddy/waf/policy/binding",
+				Handler: caddy.CreateWafPolicyBindingHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPut,
+				Path:    "/caddy/waf/policy/binding/:id",
+				Handler: caddy.UpdateWafPolicyBindingHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodDelete,
+				Path:    "/caddy/waf/policy/binding/:id",
+				Handler: caddy.DeleteWafPolicyBindingHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/caddy/waf/policy/exclusion",
+				Handler: caddy.ListWafRuleExclusionsHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/caddy/waf/policy/exclusion",
+				Handler: caddy.CreateWafRuleExclusionHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPut,
+				Path:    "/caddy/waf/policy/exclusion/:id",
+				Handler: caddy.UpdateWafRuleExclusionHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodDelete,
+				Path:    "/caddy/waf/policy/exclusion/:id",
+				Handler: caddy.DeleteWafRuleExclusionHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/caddy/waf/policy/false-positive-feedback",
+				Handler: caddy.ListWafPolicyFalsePositiveFeedbacksHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/caddy/waf/policy/false-positive-feedback",
+				Handler: caddy.CreateWafPolicyFalsePositiveFeedbackHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPut,
+				Path:    "/caddy/waf/policy/false-positive-feedback/:id/status",
+				Handler: caddy.UpdateWafPolicyFalsePositiveFeedbackStatusHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/caddy/waf/policy/revision",
+				Handler: caddy.ListWafPolicyRevisionsHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/caddy/waf/policy/rollback",
+				Handler: caddy.RollbackWafPolicyHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/caddy/waf/policy/stats",
+				Handler: caddy.GetWafPolicyStatsHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
 				Path:    "/caddy/waf/release",
 				Handler: caddy.ListWafReleasesHandler(serverCtx),
 			},
@@ -159,51 +264,6 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Method:  http.MethodPost,
 				Path:    "/caddy/waf/upload",
 				Handler: caddy.UploadWafPackageHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodGet,
-				Path:    "/caddy/waf/policy",
-				Handler: caddy.ListWafPoliciesHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/caddy/waf/policy",
-				Handler: caddy.CreateWafPolicyHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPut,
-				Path:    "/caddy/waf/policy/:id",
-				Handler: caddy.UpdateWafPolicyHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodDelete,
-				Path:    "/caddy/waf/policy/:id",
-				Handler: caddy.DeleteWafPolicyHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/caddy/waf/policy/:id/preview",
-				Handler: caddy.PreviewWafPolicyHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/caddy/waf/policy/:id/validate",
-				Handler: caddy.ValidateWafPolicyHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/caddy/waf/policy/:id/publish",
-				Handler: caddy.PublishWafPolicyHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/caddy/waf/policy/rollback",
-				Handler: caddy.RollbackWafPolicyHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodGet,
-				Path:    "/caddy/waf/policy/revision",
-				Handler: caddy.ListWafPolicyRevisionsHandler(serverCtx),
 			},
 		},
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
@@ -263,18 +323,6 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 		[]rest.Route{
 			{
 				Method:  http.MethodGet,
-				Path:    "/caddy/logs",
-				Handler: log.GetCaddyLogsHandler(serverCtx),
-			},
-		},
-		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
-		rest.WithPrefix("/api"),
-	)
-
-	server.AddRoutes(
-		[]rest.Route{
-			{
-				Method:  http.MethodGet,
 				Path:    "/system/logs",
 				Handler: log.GetSystemLogsHandler(serverCtx),
 			},
@@ -304,6 +352,18 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Method:  http.MethodDelete,
 				Path:    "/source/:id",
 				Handler: log.DeleteLogSourceHandler(serverCtx),
+			},
+		},
+		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
+		rest.WithPrefix("/api"),
+	)
+
+	server.AddRoutes(
+		[]rest.Route{
+			{
+				Method:  http.MethodGet,
+				Path:    "/caddy/logs",
+				Handler: log.GetCaddyLogsHandler(serverCtx),
 			},
 		},
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),

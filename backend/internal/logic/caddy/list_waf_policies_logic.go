@@ -28,6 +28,10 @@ func NewListWafPoliciesLogic(ctx context.Context, svcCtx *svc.ServiceContext) *L
 }
 
 func (l *ListWafPoliciesLogic) ListWafPolicies(req *types.WafPolicyListReq) (resp *types.WafPolicyListResp, err error) {
+	defer func() {
+		err = localizeWafPolicyError(err)
+	}()
+
 	page := req.Page
 	if page <= 0 {
 		page = 1
@@ -63,24 +67,27 @@ func (l *ListWafPoliciesLogic) ListWafPolicies(req *types.WafPolicyListReq) (res
 		}
 
 		items = append(items, types.WafPolicyItem{
-			ID:                      policy.ID,
-			Name:                    policy.Name,
-			Description:             policy.Description,
-			Enabled:                 policy.Enabled,
-			IsDefault:               policy.IsDefault,
-			EngineMode:              policy.EngineMode,
-			AuditEngine:             policy.AuditEngine,
-			AuditLogFormat:          policy.AuditLogFormat,
-			AuditRelevantStatus:     policy.AuditRelevantStatus,
-			RequestBodyAccess:       policy.RequestBodyAccess,
-			RequestBodyLimit:        policy.RequestBodyLimit,
-			RequestBodyNoFilesLimit: policy.RequestBodyNoFilesLimit,
-			Config:                  configText,
-			CreatedAt:               formatTime(policy.CreatedAt),
-			UpdatedAt:               formatTime(policy.UpdatedAt),
+			ID:                          policy.ID,
+			Name:                        policy.Name,
+			Description:                 policy.Description,
+			Enabled:                     policy.Enabled,
+			IsDefault:                   policy.IsDefault,
+			EngineMode:                  policy.EngineMode,
+			AuditEngine:                 policy.AuditEngine,
+			AuditLogFormat:              policy.AuditLogFormat,
+			AuditRelevantStatus:         policy.AuditRelevantStatus,
+			RequestBodyAccess:           policy.RequestBodyAccess,
+			RequestBodyLimit:            policy.RequestBodyLimit,
+			RequestBodyNoFilesLimit:     policy.RequestBodyNoFilesLimit,
+			CrsTemplate:                 policy.CrsTemplate,
+			CrsParanoiaLevel:            policy.CrsParanoiaLevel,
+			CrsInboundAnomalyThreshold:  policy.CrsInboundAnomalyThreshold,
+			CrsOutboundAnomalyThreshold: policy.CrsOutboundAnomalyThreshold,
+			Config:                      configText,
+			CreatedAt:                   formatTime(policy.CreatedAt),
+			UpdatedAt:                   formatTime(policy.UpdatedAt),
 		})
 	}
 
 	return &types.WafPolicyListResp{List: items, Total: total}, nil
 }
-

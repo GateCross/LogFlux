@@ -371,6 +371,10 @@ type (
 		RequestBodyAccess        bool   `json:"requestBodyAccess,optional"`
 		RequestBodyLimit         int64  `json:"requestBodyLimit,optional"`
 		RequestBodyNoFilesLimit  int64  `json:"requestBodyNoFilesLimit,optional"`
+		CrsTemplate              string `json:"crsTemplate,optional"` // low_fp | balanced | high_blocking | custom
+		CrsParanoiaLevel         int64  `json:"crsParanoiaLevel,optional"`
+		CrsInboundAnomalyThreshold  int64  `json:"crsInboundAnomalyThreshold,optional"`
+		CrsOutboundAnomalyThreshold int64  `json:"crsOutboundAnomalyThreshold,optional"`
 		Config                   string `json:"config,optional"` // JSON string
 	}
 	WafPolicyUpdateReq {
@@ -386,6 +390,10 @@ type (
 		RequestBodyAccess        bool   `json:"requestBodyAccess,optional"`
 		RequestBodyLimit         int64  `json:"requestBodyLimit,optional"`
 		RequestBodyNoFilesLimit  int64  `json:"requestBodyNoFilesLimit,optional"`
+		CrsTemplate              string `json:"crsTemplate,optional"` // low_fp | balanced | high_blocking | custom
+		CrsParanoiaLevel         int64  `json:"crsParanoiaLevel,optional"`
+		CrsInboundAnomalyThreshold  int64  `json:"crsInboundAnomalyThreshold,optional"`
+		CrsOutboundAnomalyThreshold int64  `json:"crsOutboundAnomalyThreshold,optional"`
 		Config                   string `json:"config,optional"` // JSON string
 	}
 	WafPolicyActionReq {
@@ -407,6 +415,10 @@ type (
 		RequestBodyAccess        bool   `json:"requestBodyAccess"`
 		RequestBodyLimit         int64  `json:"requestBodyLimit"`
 		RequestBodyNoFilesLimit  int64  `json:"requestBodyNoFilesLimit"`
+		CrsTemplate              string `json:"crsTemplate"`
+		CrsParanoiaLevel         int64  `json:"crsParanoiaLevel"`
+		CrsInboundAnomalyThreshold  int64  `json:"crsInboundAnomalyThreshold"`
+		CrsOutboundAnomalyThreshold int64  `json:"crsOutboundAnomalyThreshold"`
 		Config                   string `json:"config"`
 		CreatedAt                string `json:"createdAt"`
 		UpdatedAt                string `json:"updatedAt"`
@@ -426,10 +438,12 @@ type (
 	WafPolicyRevisionItem {
 		ID         uint   `json:"id"`
 		PolicyId   uint   `json:"policyId"`
+		PolicyName string `json:"policyName"`
 		Version    uint   `json:"version"`
 		Status     string `json:"status"`
 		Operator   string `json:"operator"`
 		Message    string `json:"message"`
+		ChangeSummary string `json:"changeSummary"`
 		CreatedAt  string `json:"createdAt"`
 		UpdatedAt  string `json:"updatedAt"`
 	}
@@ -441,6 +455,201 @@ type (
 	WafPolicyRevisionListResp {
 		List  []WafPolicyRevisionItem `json:"list"`
 		Total int64                   `json:"total"`
+	}
+	WafPolicyStatsReq {
+		PolicyId     uint   `form:"policyId,optional"`
+		StartTime    string `form:"startTime,optional"`
+		EndTime      string `form:"endTime,optional"`
+		IntervalSec  int    `form:"intervalSec,optional"`
+		TopN         int    `form:"topN,optional"`
+		Host         string `form:"host,optional"`
+		Path         string `form:"path,optional"`
+		Method       string `form:"method,optional"`
+	}
+	WafPolicyStatsItem {
+		PolicyId                     uint    `json:"policyId"`
+		PolicyName                   string  `json:"policyName"`
+		HitCount                     int64   `json:"hitCount"`
+		BlockedCount                 int64   `json:"blockedCount"`
+		AllowedCount                 int64   `json:"allowedCount"`
+		SuspectedFalsePositiveCount  int64   `json:"suspectedFalsePositiveCount"`
+		BlockRate                    float64 `json:"blockRate"`
+	}
+	WafPolicyStatsTrendItem {
+		Time         string `json:"time"`
+		HitCount     int64  `json:"hitCount"`
+		BlockedCount int64  `json:"blockedCount"`
+		AllowedCount int64  `json:"allowedCount"`
+	}
+	WafPolicyStatsDimensionItem {
+		Key          string  `json:"key"`
+		HitCount     int64   `json:"hitCount"`
+		BlockedCount int64   `json:"blockedCount"`
+		AllowedCount int64   `json:"allowedCount"`
+		BlockRate    float64 `json:"blockRate"`
+	}
+	WafPolicyStatsResp {
+		Range   DashboardRange          `json:"range"`
+		Summary WafPolicyStatsItem      `json:"summary"`
+		List    []WafPolicyStatsItem    `json:"list"`
+		Trend   []WafPolicyStatsTrendItem `json:"trend"`
+		TopHosts   []WafPolicyStatsDimensionItem `json:"topHosts"`
+		TopPaths   []WafPolicyStatsDimensionItem `json:"topPaths"`
+		TopMethods []WafPolicyStatsDimensionItem `json:"topMethods"`
+	}
+	WafPolicyFalsePositiveFeedbackReq {
+		PolicyId   uint   `json:"policyId,optional"`
+		Host       string `json:"host,optional"`
+		Path       string `json:"path,optional"`
+		Method     string `json:"method,optional"`
+		Status     int    `json:"status,optional"`
+		Assignee   string `json:"assignee,optional"`
+		DueAt      string `json:"dueAt,optional"` // YYYY-MM-DD HH:mm:ss
+		SampleURI  string `json:"sampleUri,optional"`
+		Reason     string `json:"reason"`
+		Suggestion string `json:"suggestion,optional"`
+	}
+	WafPolicyFalsePositiveFeedbackItem {
+		ID         uint   `json:"id"`
+		PolicyId   uint   `json:"policyId"`
+		PolicyName string `json:"policyName"`
+		Host       string `json:"host"`
+		Path       string `json:"path"`
+		Method     string `json:"method"`
+		Status     int    `json:"status"`
+		FeedbackStatus string `json:"feedbackStatus"` // pending | confirmed | resolved
+		Assignee   string `json:"assignee"`
+		DueAt      string `json:"dueAt"`
+		IsOverdue  bool   `json:"isOverdue"`
+		SampleURI  string `json:"sampleUri"`
+		Reason     string `json:"reason"`
+		Suggestion string `json:"suggestion"`
+		Operator   string `json:"operator"`
+		ProcessNote string `json:"processNote"`
+		ProcessedBy string `json:"processedBy"`
+		ProcessedAt string `json:"processedAt"`
+		CreatedAt  string `json:"createdAt"`
+	}
+	WafPolicyFalsePositiveFeedbackStatusUpdateReq {
+		ID            uint   `path:"id"`
+		FeedbackStatus string `json:"feedbackStatus"` // pending | confirmed | resolved
+		ProcessNote   string `json:"processNote,optional"`
+		Assignee      string `json:"assignee,optional"`
+		DueAt         string `json:"dueAt,optional"` // YYYY-MM-DD HH:mm:ss
+	}
+	WafPolicyFalsePositiveFeedbackListReq {
+		Page     int    `form:"page,default=1"`
+		PageSize int    `form:"pageSize,default=10"`
+		PolicyId uint   `form:"policyId,optional"`
+		Host     string `form:"host,optional"`
+		Path     string `form:"path,optional"`
+		Method   string `form:"method,optional"`
+		FeedbackStatus string `form:"feedbackStatus,optional"`
+		Assignee string `form:"assignee,optional"`
+		SLAStatus string `form:"slaStatus,optional"` // all | normal | overdue | resolved
+	}
+	WafPolicyFalsePositiveFeedbackListResp {
+		List  []WafPolicyFalsePositiveFeedbackItem `json:"list"`
+		Total int64                                `json:"total"`
+	}
+	WafRuleExclusionReq {
+		PolicyId    uint   `json:"policyId"`
+		Name        string `json:"name,optional"`
+		Description string `json:"description,optional"`
+		Enabled     bool   `json:"enabled,optional"`
+		ScopeType   string `json:"scopeType,default=global"` // global | site | route
+		Host        string `json:"host,optional"`
+		Path        string `json:"path,optional"`
+		Method      string `json:"method,optional"`
+		RemoveType  string `json:"removeType,default=id"` // id | tag
+		RemoveValue string `json:"removeValue"`
+	}
+	WafRuleExclusionUpdateReq {
+		ID          uint   `path:"id"`
+		PolicyId    uint   `json:"policyId"`
+		Name        string `json:"name,optional"`
+		Description string `json:"description,optional"`
+		Enabled     bool   `json:"enabled"`
+		ScopeType   string `json:"scopeType"` // global | site | route
+		Host        string `json:"host,optional"`
+		Path        string `json:"path,optional"`
+		Method      string `json:"method,optional"`
+		RemoveType  string `json:"removeType"` // id | tag
+		RemoveValue string `json:"removeValue"`
+	}
+	WafRuleExclusionItem {
+		ID          uint   `json:"id"`
+		PolicyId    uint   `json:"policyId"`
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		Enabled     bool   `json:"enabled"`
+		ScopeType   string `json:"scopeType"`
+		Host        string `json:"host"`
+		Path        string `json:"path"`
+		Method      string `json:"method"`
+		RemoveType  string `json:"removeType"`
+		RemoveValue string `json:"removeValue"`
+		CreatedAt   string `json:"createdAt"`
+		UpdatedAt   string `json:"updatedAt"`
+	}
+	WafRuleExclusionListReq {
+		Page      int    `form:"page,default=1"`
+		PageSize  int    `form:"pageSize,default=20"`
+		PolicyId  uint   `form:"policyId,optional"`
+		ScopeType string `form:"scopeType,optional"`
+		Name      string `form:"name,optional"`
+	}
+	WafRuleExclusionListResp {
+		List  []WafRuleExclusionItem `json:"list"`
+		Total int64                  `json:"total"`
+	}
+	WafPolicyBindingReq {
+		PolicyId    uint   `json:"policyId"`
+		Name        string `json:"name,optional"`
+		Description string `json:"description,optional"`
+		Enabled     bool   `json:"enabled,optional"`
+		ScopeType   string `json:"scopeType,default=global"` // global | site | route
+		Host        string `json:"host,optional"`
+		Path        string `json:"path,optional"`
+		Method      string `json:"method,optional"`
+		Priority    int64  `json:"priority,optional"`
+	}
+	WafPolicyBindingUpdateReq {
+		ID          uint   `path:"id"`
+		PolicyId    uint   `json:"policyId"`
+		Name        string `json:"name,optional"`
+		Description string `json:"description,optional"`
+		Enabled     bool   `json:"enabled"`
+		ScopeType   string `json:"scopeType"` // global | site | route
+		Host        string `json:"host,optional"`
+		Path        string `json:"path,optional"`
+		Method      string `json:"method,optional"`
+		Priority    int64  `json:"priority"`
+	}
+	WafPolicyBindingItem {
+		ID          uint   `json:"id"`
+		PolicyId    uint   `json:"policyId"`
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		Enabled     bool   `json:"enabled"`
+		ScopeType   string `json:"scopeType"`
+		Host        string `json:"host"`
+		Path        string `json:"path"`
+		Method      string `json:"method"`
+		Priority    int64  `json:"priority"`
+		CreatedAt   string `json:"createdAt"`
+		UpdatedAt   string `json:"updatedAt"`
+	}
+	WafPolicyBindingListReq {
+		Page      int    `form:"page,default=1"`
+		PageSize  int    `form:"pageSize,default=20"`
+		PolicyId  uint   `form:"policyId,optional"`
+		ScopeType string `form:"scopeType,optional"`
+		Name      string `form:"name,optional"`
+	}
+	WafPolicyBindingListResp {
+		List  []WafPolicyBindingItem `json:"list"`
+		Total int64                  `json:"total"`
 	}
 )
 
@@ -621,6 +830,42 @@ service logflux-api {
 
 	@handler ListWafPolicyRevisions
 	get /caddy/waf/policy/revision (WafPolicyRevisionListReq) returns (WafPolicyRevisionListResp)
+
+	@handler GetWafPolicyStats
+	get /caddy/waf/policy/stats (WafPolicyStatsReq) returns (WafPolicyStatsResp)
+
+	@handler ListWafPolicyFalsePositiveFeedbacks
+	get /caddy/waf/policy/false-positive-feedback (WafPolicyFalsePositiveFeedbackListReq) returns (WafPolicyFalsePositiveFeedbackListResp)
+
+	@handler CreateWafPolicyFalsePositiveFeedback
+	post /caddy/waf/policy/false-positive-feedback (WafPolicyFalsePositiveFeedbackReq) returns (BaseResp)
+
+	@handler UpdateWafPolicyFalsePositiveFeedbackStatus
+	put /caddy/waf/policy/false-positive-feedback/:id/status (WafPolicyFalsePositiveFeedbackStatusUpdateReq) returns (BaseResp)
+
+	@handler ListWafRuleExclusions
+	get /caddy/waf/policy/exclusion (WafRuleExclusionListReq) returns (WafRuleExclusionListResp)
+
+	@handler CreateWafRuleExclusion
+	post /caddy/waf/policy/exclusion (WafRuleExclusionReq) returns (BaseResp)
+
+	@handler UpdateWafRuleExclusion
+	put /caddy/waf/policy/exclusion/:id (WafRuleExclusionUpdateReq) returns (BaseResp)
+
+	@handler DeleteWafRuleExclusion
+	delete /caddy/waf/policy/exclusion/:id (IDReq) returns (BaseResp)
+
+	@handler ListWafPolicyBindings
+	get /caddy/waf/policy/binding (WafPolicyBindingListReq) returns (WafPolicyBindingListResp)
+
+	@handler CreateWafPolicyBinding
+	post /caddy/waf/policy/binding (WafPolicyBindingReq) returns (BaseResp)
+
+	@handler UpdateWafPolicyBinding
+	put /caddy/waf/policy/binding/:id (WafPolicyBindingUpdateReq) returns (BaseResp)
+
+	@handler DeleteWafPolicyBinding
+	delete /caddy/waf/policy/binding/:id (IDReq) returns (BaseResp)
 }
 
 @server (

@@ -28,6 +28,10 @@ func NewUpdateWafPolicyLogic(ctx context.Context, svcCtx *svc.ServiceContext) *U
 }
 
 func (l *UpdateWafPolicyLogic) UpdateWafPolicy(req *types.WafPolicyUpdateReq) (resp *types.BaseResp, err error) {
+	defer func() {
+		err = localizeWafPolicyError(err)
+	}()
+
 	helper := newWafLogicHelper(l.ctx, l.svcCtx, l.Logger)
 	if req == nil || req.ID == 0 {
 		return nil, fmt.Errorf("policy id is required")
@@ -57,7 +61,7 @@ func (l *UpdateWafPolicyLogic) UpdateWafPolicy(req *types.WafPolicyUpdateReq) (r
 		}
 	}
 
-	directives, err := buildWafPolicyDirectives(&policy)
+	directives, err := buildPolicyDirectivesWithExclusions(helper.svcCtx.DB, &policy)
 	if err != nil {
 		return nil, err
 	}
