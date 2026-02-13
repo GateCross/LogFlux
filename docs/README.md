@@ -12,6 +12,11 @@
   - [`plans/waf-crs-frontend-security-config-overall-plan.md`](./plans/waf-crs-frontend-security-config-overall-plan.md)
   - [`plans/waf-crs-frontend-security-config-progress.md`](./plans/waf-crs-frontend-security-config-progress.md)
 
+## 计划文档目录说明
+
+- 当前统一目录为：`docs/plans/`
+- 历史 `docs/plan/` 已合并完成，不再维护；如提到“plan”，请直接在 `docs/plans/` 查阅对应文档。
+
 ## 部署文档（当前有效）
 
 ### 1) Docker 一体化部署（推荐）
@@ -60,4 +65,4 @@
 
 ---
 
-最后更新：2026-02-12
+最后更新：2026-02-13
