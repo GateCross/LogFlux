@@ -196,6 +196,11 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Handler: caddy.UpdateWafPolicyFalsePositiveFeedbackStatusHandler(serverCtx),
 			},
 			{
+				Method:  http.MethodPut,
+				Path:    "/caddy/waf/policy/false-positive-feedback/batch-status",
+				Handler: caddy.BatchUpdateWafPolicyFalsePositiveFeedbackStatusHandler(serverCtx),
+			},
+			{
 				Method:  http.MethodGet,
 				Path:    "/caddy/waf/policy/revision",
 				Handler: caddy.ListWafPolicyRevisionsHandler(serverCtx),
@@ -322,18 +327,6 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 	server.AddRoutes(
 		[]rest.Route{
 			{
-				Method:  http.MethodGet,
-				Path:    "/system/logs",
-				Handler: log.GetSystemLogsHandler(serverCtx),
-			},
-		},
-		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
-		rest.WithPrefix("/api"),
-	)
-
-	server.AddRoutes(
-		[]rest.Route{
-			{
 				Method:  http.MethodPost,
 				Path:    "/source",
 				Handler: log.AddLogSourceHandler(serverCtx),
@@ -364,6 +357,18 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Method:  http.MethodGet,
 				Path:    "/caddy/logs",
 				Handler: log.GetCaddyLogsHandler(serverCtx),
+			},
+		},
+		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
+		rest.WithPrefix("/api"),
+	)
+
+	server.AddRoutes(
+		[]rest.Route{
+			{
+				Method:  http.MethodGet,
+				Path:    "/system/logs",
+				Handler: log.GetSystemLogsHandler(serverCtx),
 			},
 		},
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),

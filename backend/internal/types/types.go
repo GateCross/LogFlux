@@ -723,6 +723,20 @@ type WafPolicyBindingUpdateReq struct {
 	Priority    int64  `json:"priority"`
 }
 
+type WafPolicyFalsePositiveFeedbackBatchStatusUpdateReq struct {
+	IDs            []uint `json:"ids"`
+	FeedbackStatus string `json:"feedbackStatus"` // pending | confirmed | resolved
+	ProcessNote    string `json:"processNote,optional"`
+	Assignee       string `json:"assignee,optional"`
+	DueAt          string `json:"dueAt,optional"` // YYYY-MM-DD HH:mm:ss
+}
+
+type WafPolicyFalsePositiveFeedbackBatchStatusUpdateResp struct {
+	AffectedCount int64  `json:"affectedCount"`
+	ProcessedBy   string `json:"processedBy"`
+	ProcessedAt   string `json:"processedAt"`
+}
+
 type WafPolicyFalsePositiveFeedbackItem struct {
 	ID             uint   `json:"id"`
 	PolicyId       uint   `json:"policyId"`

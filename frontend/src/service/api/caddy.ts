@@ -257,6 +257,20 @@ export interface WafPolicyFalsePositiveFeedbackStatusUpdatePayload {
     dueAt?: string;
 }
 
+export interface WafPolicyFalsePositiveFeedbackBatchStatusUpdatePayload {
+    ids: number[];
+    feedbackStatus: 'pending' | 'confirmed' | 'resolved';
+    processNote?: string;
+    assignee?: string;
+    dueAt?: string;
+}
+
+export interface WafPolicyFalsePositiveFeedbackBatchStatusUpdateResp {
+    affectedCount: number;
+    processedBy: string;
+    processedAt: string;
+}
+
 export interface WafRuleExclusionItem {
     id: number;
     policyId: number;
@@ -537,6 +551,14 @@ export function createWafPolicyFalsePositiveFeedback(data: WafPolicyFalsePositiv
 
 export function updateWafPolicyFalsePositiveFeedbackStatus(id: number, data: WafPolicyFalsePositiveFeedbackStatusUpdatePayload) {
     return request<any>({ url: `/api/caddy/waf/policy/false-positive-feedback/${id}/status`, method: 'put', data });
+}
+
+export function batchUpdateWafPolicyFalsePositiveFeedbackStatus(data: WafPolicyFalsePositiveFeedbackBatchStatusUpdatePayload) {
+    return request<WafPolicyFalsePositiveFeedbackBatchStatusUpdateResp>({
+        url: '/api/caddy/waf/policy/false-positive-feedback/batch-status',
+        method: 'put',
+        data
+    });
 }
 
 export function fetchWafRuleExclusionList(params: {
