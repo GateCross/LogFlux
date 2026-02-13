@@ -44,8 +44,16 @@
 - P4-B03：新增后端批量处理接口 `PUT /api/caddy/waf/policy/false-positive-feedback/batch-status`，返回 `affectedCount/processedBy/processedAt` 审计信息并支持前端展示处理结果。
 - P4-C01：误报反馈与规则例外联动已落地：反馈列表支持“生成例外草稿”，可自动带入策略/Host/Path/Method/建议内容并一键跳转到例外表单。
 - P4-C02：策略观测对比导出已扩展 Top Host/Path/Method 差异块，支持维度级当前值/基线值/变化量离线复盘。
+- P5-A01：补齐批量处理与例外草稿链路回归能力：新增批量处理后端单测（ID 去重/越界、无记录、非法截止时间、pending/confirmed 审计分支），并在前端支持跨页保留多选，观测口径变化时自动清空选择，降低误批量风险。
+- P5-A02：增强“建议动作 -> 例外草稿”解析策略，支持 `removeById/removeByTag`、`ruleRemoveById/ruleRemoveByTag`、中文“移除规则/移除标签”等自然语言模板识别。
+- P5-B01：新增“生成例外草稿”确认向导，先展示策略/作用域/移除类型与移除值草稿，再确认落入例外表单，降低误操作风险。
+- P5-B02：确认向导支持“多候选 remove 值”选择（当建议文本匹配多个 ID/Tag 时可手工择一），减少解析歧义导致的二次编辑。
+- P5-C01：确认向导升级为“可编辑确认”：支持在弹窗中直接修改策略/作用域/Host/Path/Method/规则名称/removeType/removeValue/描述后再生成草稿，降低二次返工。
+- P5-C02：补充前端自动化回归用例：新增 `policy-feedback-draft.ts` 纯函数模块与 `policy-feedback-draft.test.ts`，覆盖向导候选值解析/选择、可编辑确认默认解析、跨页多选合并，以及引号/中文标点/异常 key 等边界样例，并提供 `pnpm --dir frontend test:regression` 脚本。
+- P5-C03：当草稿缺少 `removeValue` 时，确认生成后自动聚焦例外表单“移除值”输入框，减少人工定位成本。
 - 文档更新：补充 `docs/README.md` 与 `docker/README.md` 的 CRS 调优入口与操作说明。
-- 工程验证：通过 `backend` 目录 `go test ./...`，通过 `frontend` 目录 `pnpm --dir frontend typecheck` 与 `pnpm --dir frontend build:test`。
+- 工程验证：通过 `backend` 目录 `go test ./...`，通过 `frontend` 目录 `pnpm --dir frontend typecheck`、`pnpm --dir frontend build:test` 与 `pnpm --dir frontend test:regression`。
+- P0-H02（补充）：新增 `check_waf_source_logic_test.go` 与 `sync_waf_source_logic_test.go`，覆盖 source check/sync 关键失败分支及作业审计写入路径回归。
 
 ## 未完成任务（重点）
 
@@ -53,10 +61,10 @@
 
 ## 未完成任务（后续阶段）
 
-- P5-A01：为批量处理与“生成例外草稿”补齐联调与回归用例（覆盖多选边界、空建议、跨页筛选）。
-- P5-A02：增强“建议动作 -> 例外草稿”解析策略（支持更多自然语言模板与规则 ID/Tag 自动识别）。
+- 草稿向导可选增强：补充“草稿差异对比”提示（展示与原反馈的关键字段变更点），用于人工复核场景。
+- 回归用例可选增强：继续补充异常建议文本边界样例（混合标点、缺损片段、脏数据）以提高解析稳健性。
 
 ## 下一步建议
 
-1. 先做 P5-A01：补齐回归用例，保证批量处理与例外草稿链路稳定。
-2. 再做 P5-A02：增强建议解析命中率，减少手工补录 `removeValue` 的频次。
+1. 先保持当前 P5 主线功能冻结，继续以回归测试兜底稳定性。
+2. 下一阶段若继续迭代，优先做“草稿差异对比”提示，再补充解析边界回归样例。
