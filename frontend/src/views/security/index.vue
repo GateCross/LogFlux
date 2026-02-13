@@ -515,7 +515,7 @@
               :data="policyFeedbackTable"
               :loading="policyFeedbackLoading"
               :pagination="policyFeedbackPagination"
-              :checked-row-keys="policyFeedbackCheckedRowKeys"
+              :checked-row-keys="policyFeedbackCheckedRowKeysInPage"
               :row-key="row => row.id"
               :max-height="300"
               class="min-h-140px"
@@ -879,7 +879,11 @@
         </n-grid>
 
         <n-form-item label="移除值" path="removeValue">
-          <n-input v-model:value="exclusionForm.removeValue" :placeholder="exclusionForm.removeType === 'id' ? '例如：920350' : '例如：attack-sqli'" />
+          <n-input
+            ref="exclusionRemoveValueInputRef"
+            v-model:value="exclusionForm.removeValue"
+            :placeholder="exclusionForm.removeType === 'id' ? '例如：920350' : '例如：attack-sqli'"
+          />
         </n-form-item>
         <n-form-item label="描述" path="description">
           <n-input v-model:value="exclusionForm.description" placeholder="可选，记录误报场景与原因" />
@@ -1039,6 +1043,67 @@
       </template>
     </n-modal>
 
+    <n-modal v-model:show="policyFeedbackExclusionDraftModalVisible" preset="card" title="确认生成例外草稿" class="w-760px">
+      <div v-if="policyFeedbackExclusionDraft" class="space-y-3">
+        <div class="text-sm text-gray-600">来源反馈 #{{ policyFeedbackExclusionDraft.feedbackId }}</div>
+        <n-form :model="policyFeedbackExclusionDraft" label-placement="left" label-width="120">
+          <n-grid cols="2" x-gap="12">
+            <n-form-item-gi label="关联策略">
+              <n-select v-model:value="policyFeedbackExclusionDraft.policyId" :options="crsPolicyOptions" />
+            </n-form-item-gi>
+            <n-form-item-gi label="作用域">
+              <n-select
+                v-model:value="policyFeedbackExclusionDraft.scopeType"
+                :options="scopeTypeOptions"
+                @update:value="handlePolicyFeedbackExclusionDraftScopeChange"
+              />
+            </n-form-item-gi>
+            <n-form-item-gi label="Host" v-if="policyFeedbackExclusionDraft.scopeType !== 'global'">
+              <n-input v-model:value="policyFeedbackExclusionDraft.host" placeholder="例如：app.example.com" />
+            </n-form-item-gi>
+            <n-form-item-gi label="Path" v-if="policyFeedbackExclusionDraft.scopeType === 'route'">
+              <n-input v-model:value="policyFeedbackExclusionDraft.path" placeholder="例如：/api/login" />
+            </n-form-item-gi>
+            <n-form-item-gi label="Method" v-if="policyFeedbackExclusionDraft.scopeType === 'route'">
+              <n-select v-model:value="policyFeedbackExclusionDraft.method" :options="methodOptions" clearable placeholder="可选" />
+            </n-form-item-gi>
+            <n-form-item-gi label="移除类型">
+              <n-select v-model:value="policyFeedbackExclusionDraft.removeType" :options="removeTypeOptions" />
+            </n-form-item-gi>
+          </n-grid>
+          <n-form-item label="规则名称">
+            <n-input v-model:value="policyFeedbackExclusionDraft.name" />
+          </n-form-item>
+        </n-form>
+        <div v-if="policyFeedbackExclusionCandidateOptions.length > 1">
+          <div class="text-xs text-gray-500 mb-1">候选移除值（建议文本匹配到多个候选）</div>
+          <n-select
+            v-model:value="policyFeedbackExclusionDraftCandidateKey"
+            :options="policyFeedbackExclusionCandidateOptions"
+            placeholder="请选择 remove 值候选"
+            @update:value="handlePolicyFeedbackExclusionCandidateChange"
+          />
+        </div>
+        <div>
+          <div class="text-xs text-gray-500">移除值</div>
+          <n-input v-model:value="policyFeedbackExclusionDraft.removeValue" :placeholder="policyFeedbackExclusionDraft.removeType === 'id' ? '例如：920350' : '例如：attack-sqli'" />
+        </div>
+        <div>
+          <div class="text-xs text-gray-500">描述草稿</div>
+          <n-input v-model:value="policyFeedbackExclusionDraft.description" type="textarea" :autosize="{ minRows: 2, maxRows: 4 }" />
+        </div>
+        <n-alert v-if="!policyFeedbackExclusionDraft.removeValue" type="warning" :show-icon="true">
+          建议文本未解析到可用的 remove 值，请在下一步表单中补充后再保存。
+        </n-alert>
+      </div>
+      <template #footer>
+        <div class="flex justify-end gap-2">
+          <n-button @click="policyFeedbackExclusionDraftModalVisible = false">取消</n-button>
+          <n-button type="primary" @click="handleConfirmPolicyFeedbackExclusionDraft">确认生成</n-button>
+        </div>
+      </template>
+    </n-modal>
+
     <n-modal v-model:show="rollbackModalVisible" preset="card" title="回滚版本" class="w-520px">
       <n-form ref="rollbackFormRef" :model="rollbackForm" :rules="rollbackRules" label-placement="left" label-width="110">
         <n-form-item label="回滚目标" path="target">
@@ -1065,7 +1130,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, h, onMounted, reactive, ref, watch } from 'vue';
+import { computed, h, nextTick, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
   NButton,
@@ -1079,6 +1144,7 @@ import {
   type DataTableColumns,
   type FormInst,
   type FormRules,
+  type InputInst,
   type PaginationProps,
   type UploadFileInfo
 } from 'naive-ui';
@@ -1149,6 +1215,13 @@ import {
   type WafReleaseStatus,
   type WafSourceItem
 } from '@/service/api/caddy';
+import {
+  buildExclusionCandidateKey,
+  collectExclusionCandidatesFromFeedbackSuggestion,
+  mergePolicyFeedbackCheckedRowKeys,
+  parseExclusionCandidateKey,
+  parseExclusionFromFeedbackSuggestion
+} from './policy-feedback-draft';
 
 const message = useMessage();
 const dialog = useDialog();
@@ -1508,6 +1581,26 @@ const policyFeedbackBatchProcessForm = reactive({
   assignee: '',
   dueAt: ''
 });
+type PolicyFeedbackExclusionDraft = {
+  feedbackId: number;
+  policyId: number;
+  policyName: string;
+  name: string;
+  description: string;
+  scopeType: WafPolicyScopeType;
+  host: string;
+  path: string;
+  method: string;
+  removeType: WafPolicyRemoveType;
+  removeValue: string;
+  candidates: Array<{
+    removeType: WafPolicyRemoveType;
+    removeValue: string;
+  }>;
+};
+const policyFeedbackExclusionDraftModalVisible = ref(false);
+const policyFeedbackExclusionDraft = ref<PolicyFeedbackExclusionDraft | null>(null);
+const policyFeedbackExclusionDraftCandidateKey = ref('');
 const observeWindowValueSet = new Set(observeWindowOptions.map(item => item.value));
 const observeRouteSyncing = ref(false);
 
@@ -1520,6 +1613,17 @@ const hasPolicyStatsDrillFilters = computed(
   () => !!(policyStatsQuery.host.trim() || policyStatsQuery.path.trim() || policyStatsQuery.method.trim())
 );
 const hasPolicyFeedbackSelection = computed(() => policyFeedbackCheckedRowKeys.value.length > 0);
+const policyFeedbackCheckedRowKeysInPage = computed(() => {
+  const selectedKeySet = new Set(policyFeedbackCheckedRowKeys.value);
+  return policyFeedbackTable.value.map(item => Number(item.id || 0)).filter(id => id > 0 && selectedKeySet.has(id));
+});
+const policyFeedbackExclusionCandidateOptions = computed(() => {
+  const candidates = policyFeedbackExclusionDraft.value?.candidates || [];
+  return candidates.map(item => ({
+    label: `${item.removeType === 'id' ? 'removeById' : 'removeByTag'}: ${item.removeValue}`,
+    value: buildExclusionCandidateKey(item.removeType, item.removeValue)
+  }));
+});
 
 const policyFeedbackRules: FormRules = {
   method: {
@@ -1710,6 +1814,8 @@ const exclusionModalVisible = ref(false);
 const exclusionModalMode = ref<'add' | 'edit'>('add');
 const exclusionSubmitting = ref(false);
 const exclusionFormRef = ref<FormInst | null>(null);
+const exclusionRemoveValueInputRef = ref<InputInst | null>(null);
+const shouldFocusExclusionRemoveValue = ref(false);
 const exclusionForm = reactive({
   id: 0,
   policyId: 0,
@@ -3291,15 +3397,16 @@ async function fetchPolicyFalsePositiveFeedbacks() {
   try {
     const { data, error } = await fetchWafPolicyFalsePositiveFeedbackList(buildPolicyFeedbackListParams());
     if (!error && data) {
-      const list = data.list || [];
-      policyFeedbackTable.value = list;
+      policyFeedbackTable.value = data.list || [];
       policyFeedbackPagination.itemCount = data.total || 0;
-      const visibleKeySet = new Set(list.map(item => Number(item.id || 0)).filter(id => id > 0));
-      policyFeedbackCheckedRowKeys.value = policyFeedbackCheckedRowKeys.value.filter(id => visibleKeySet.has(id));
     }
   } finally {
     policyFeedbackLoading.value = false;
   }
+}
+
+function resetPolicyFeedbackSelection() {
+  policyFeedbackCheckedRowKeys.value = [];
 }
 
 function resetPolicyFeedbackForm() {
@@ -3322,28 +3429,24 @@ function openPolicyFeedbackModal() {
 
 function handlePolicyFeedbackPageChange(page: number) {
   policyFeedbackPagination.page = page;
-  policyFeedbackCheckedRowKeys.value = [];
   fetchPolicyFalsePositiveFeedbacks();
 }
 
 function handlePolicyFeedbackPageSizeChange(pageSize: number) {
   policyFeedbackPagination.pageSize = pageSize;
   policyFeedbackPagination.page = 1;
-  policyFeedbackCheckedRowKeys.value = [];
   fetchPolicyFalsePositiveFeedbacks();
 }
 
 function handlePolicyFeedbackStatusFilterChange() {
   policyFeedbackPagination.page = 1;
-  policyFeedbackCheckedRowKeys.value = [];
+  resetPolicyFeedbackSelection();
   fetchPolicyFalsePositiveFeedbacks();
 }
 
 function handlePolicyFeedbackCheckedRowKeysChange(keys: Array<string | number>) {
-  const normalized = keys
-    .map(item => Number(item))
-    .filter(item => Number.isInteger(item) && item > 0);
-  policyFeedbackCheckedRowKeys.value = Array.from(new Set(normalized));
+  const currentPageIDs = policyFeedbackTable.value.map(item => Number(item.id || 0)).filter(id => id > 0);
+  policyFeedbackCheckedRowKeys.value = mergePolicyFeedbackCheckedRowKeys(policyFeedbackCheckedRowKeys.value, currentPageIDs, keys);
 }
 
 function openPolicyFeedbackProcessModal(row: WafPolicyFalsePositiveFeedbackItem) {
@@ -3418,7 +3521,7 @@ async function handleSubmitPolicyFeedbackBatchProcess() {
       const affectedCount = Number(data?.affectedCount || 0);
       message.success(affectedCount > 0 ? `批量处理完成，已更新 ${affectedCount} 条反馈` : '批量处理完成');
       policyFeedbackBatchProcessModalVisible.value = false;
-      policyFeedbackCheckedRowKeys.value = [];
+      resetPolicyFeedbackSelection();
       fetchPolicyFalsePositiveFeedbacks();
     }
   } finally {
@@ -3447,7 +3550,7 @@ async function handleSubmitPolicyFeedback() {
       message.success('误报反馈已提交');
       policyFeedbackModalVisible.value = false;
       policyFeedbackPagination.page = 1;
-      policyFeedbackCheckedRowKeys.value = [];
+      resetPolicyFeedbackSelection();
       fetchPolicyFalsePositiveFeedbacks();
     }
   } finally {
@@ -3491,6 +3594,7 @@ async function fetchPolicyStats() {
   } finally {
     policyStatsLoading.value = false;
   }
+  resetPolicyFeedbackSelection();
   fetchPolicyFalsePositiveFeedbacks();
 }
 
@@ -4495,53 +4599,112 @@ function handleAddExclusion() {
   exclusionModalVisible.value = true;
 }
 
-function parseExclusionFromFeedbackSuggestion(suggestion: string) {
-  const raw = String(suggestion || '').trim();
-  if (!raw) {
-    return { removeType: 'id' as WafPolicyRemoveType, removeValue: '' };
-  }
+function buildExclusionDraftFromFeedback(row: WafPolicyFalsePositiveFeedbackItem): PolicyFeedbackExclusionDraft {
+  const policyId = Number(row.policyId || 0) > 0 ? Number(row.policyId) : getDefaultPolicyId();
+  const host = String(row.host || '').trim();
+  const path = String(row.path || '').trim();
+  const method = String(row.method || '').trim().toUpperCase() || '';
+  const scopeType: WafPolicyScopeType = path ? 'route' : host ? 'site' : 'global';
+  const candidates = collectExclusionCandidatesFromFeedbackSuggestion(row.suggestion || '');
+  const parsed = parseExclusionFromFeedbackSuggestion(row.suggestion || '');
+  const reason = String(row.reason || '').trim();
+  const suggestion = String(row.suggestion || '').trim();
 
-  const tagMatch = raw.match(/(?:removebytag|tag)\s*[#:：=]?\s*([a-zA-Z0-9_./:-]+)/i);
-  if (tagMatch?.[1]) {
-    return { removeType: 'tag' as WafPolicyRemoveType, removeValue: tagMatch[1].trim() };
-  }
-
-  const idMatch = raw.match(/(?:removebyid|rule\s*id|ruleid|id)\s*[#:：=]?\s*(\d{5,7})/i);
-  if (idMatch?.[1]) {
-    return { removeType: 'id' as WafPolicyRemoveType, removeValue: idMatch[1].trim() };
-  }
-
-  return { removeType: 'id' as WafPolicyRemoveType, removeValue: '' };
+  return {
+    feedbackId: Number(row.id || 0),
+    policyId,
+    policyName: mapPolicyNameById(policyId),
+    name: `fp-${Number(row.id || 0) || Date.now()}`,
+    description: suggestion ? `来源反馈#${row.id}：${reason}；建议：${suggestion}` : `来源反馈#${row.id}：${reason}`,
+    scopeType,
+    host,
+    path,
+    method,
+    removeType: parsed.removeType,
+    removeValue: parsed.removeValue,
+    candidates
+  };
 }
 
 function handleCreateExclusionDraftFromFeedback(row: WafPolicyFalsePositiveFeedbackItem) {
-  exclusionModalMode.value = 'add';
-  resetExclusionForm();
+  const draft = buildExclusionDraftFromFeedback(row);
+  policyFeedbackExclusionDraft.value = draft;
+  policyFeedbackExclusionDraftCandidateKey.value =
+    draft.removeValue ? buildExclusionCandidateKey(draft.removeType, draft.removeValue) : '';
+  policyFeedbackExclusionDraftModalVisible.value = true;
+}
 
-  exclusionForm.policyId = Number(row.policyId || 0) > 0 ? Number(row.policyId) : getDefaultPolicyId();
-  exclusionForm.host = String(row.host || '').trim();
-  exclusionForm.path = String(row.path || '').trim();
-  exclusionForm.method = String(row.method || '').trim().toUpperCase() || '';
-  if (exclusionForm.path) {
-    exclusionForm.scopeType = 'route';
-  } else if (exclusionForm.host) {
-    exclusionForm.scopeType = 'site';
-  } else {
-    exclusionForm.scopeType = 'global';
+function handlePolicyFeedbackExclusionCandidateChange(value: string) {
+  const draft = policyFeedbackExclusionDraft.value;
+  if (!draft) {
+    return;
+  }
+  const selected = parseExclusionCandidateKey(value);
+  if (!selected) {
+    return;
+  }
+  draft.removeType = selected.removeType;
+  draft.removeValue = selected.removeValue;
+}
+
+function handlePolicyFeedbackExclusionDraftScopeChange(scopeType: WafPolicyScopeType) {
+  const draft = policyFeedbackExclusionDraft.value;
+  if (!draft) {
+    return;
+  }
+  draft.scopeType = scopeType;
+  if (scopeType === 'global') {
+    draft.host = '';
+    draft.path = '';
+    draft.method = '';
+  } else if (scopeType === 'site') {
+    draft.path = '';
+    draft.method = '';
+  }
+}
+
+function handleConfirmPolicyFeedbackExclusionDraft() {
+  const draft = policyFeedbackExclusionDraft.value;
+  if (!draft) {
+    message.warning('例外草稿为空');
+    return;
+  }
+  if (!Number(draft.policyId || 0)) {
+    message.warning('请选择关联策略');
+    return;
+  }
+  if (draft.scopeType === 'site' && !String(draft.host || '').trim()) {
+    message.warning('站点作用域必须填写 Host');
+    return;
+  }
+  if (draft.scopeType === 'route' && !String(draft.path || '').trim()) {
+    message.warning('路由作用域必须填写 Path');
+    return;
+  }
+  if (!String(draft.name || '').trim()) {
+    message.warning('请填写规则名称');
+    return;
   }
 
-  const parsed = parseExclusionFromFeedbackSuggestion(row.suggestion || '');
-  exclusionForm.removeType = parsed.removeType;
-  exclusionForm.removeValue = parsed.removeValue;
-  exclusionForm.name = `fp-${Number(row.id || 0) || Date.now()}`;
+  exclusionModalMode.value = 'add';
+  resetExclusionForm();
+  exclusionForm.policyId = Number(draft.policyId);
+  exclusionForm.name = String(draft.name || '').trim();
+  exclusionForm.description = draft.description;
+  exclusionForm.scopeType = draft.scopeType;
+  exclusionForm.host = String(draft.host || '').trim();
+  exclusionForm.path = String(draft.path || '').trim();
+  exclusionForm.method = String(draft.method || '').trim().toUpperCase();
+  exclusionForm.removeType = draft.removeType;
+  exclusionForm.removeValue = String(draft.removeValue || '').trim();
 
-  const reason = String(row.reason || '').trim();
-  const suggestion = String(row.suggestion || '').trim();
-  exclusionForm.description = suggestion ? `来源反馈#${row.id}：${reason}；建议：${suggestion}` : `来源反馈#${row.id}：${reason}`;
-
+  policyFeedbackExclusionDraftModalVisible.value = false;
+  policyFeedbackExclusionDraft.value = null;
+  policyFeedbackExclusionDraftCandidateKey.value = '';
   activeTab.value = 'exclusion';
+  shouldFocusExclusionRemoveValue.value = !exclusionForm.removeValue;
   exclusionModalVisible.value = true;
-  if (!parsed.removeValue) {
+  if (!exclusionForm.removeValue) {
     message.warning('已生成例外草稿，请补充移除值（removeById / removeByTag）后保存');
   } else {
     message.success('已根据误报反馈生成例外草稿');
@@ -4927,6 +5090,16 @@ watch(
     }
   }
 );
+
+watch(exclusionModalVisible, value => {
+  if (!value || !shouldFocusExclusionRemoveValue.value) {
+    return;
+  }
+  nextTick(() => {
+    exclusionRemoveValueInputRef.value?.focus();
+    shouldFocusExclusionRemoveValue.value = false;
+  });
+});
 
 watch(
   () => bindingForm.scopeType,
