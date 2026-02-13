@@ -412,6 +412,9 @@
               @update:value="handlePolicyFeedbackStatusFilterChange"
             />
             <n-button type="warning" secondary @click="openPolicyFeedbackModal">标记误报</n-button>
+            <n-button type="warning" secondary :disabled="!hasPolicyFeedbackSelection" @click="openPolicyFeedbackBatchProcessModal">
+              批量处理（{{ policyFeedbackCheckedRowKeys.length }}）
+            </n-button>
             <n-button secondary :loading="policyFeedbackLoading" @click="fetchPolicyFalsePositiveFeedbacks">刷新反馈</n-button>
             <n-button secondary @click="handleCopyPolicyStatsLink">
               <template #icon>
@@ -512,10 +515,12 @@
               :data="policyFeedbackTable"
               :loading="policyFeedbackLoading"
               :pagination="policyFeedbackPagination"
+              :checked-row-keys="policyFeedbackCheckedRowKeys"
               :row-key="row => row.id"
               :max-height="300"
               class="min-h-140px"
               :scroll-x="1800"
+              @update:checked-row-keys="handlePolicyFeedbackCheckedRowKeysChange"
               @update:page="handlePolicyFeedbackPageChange"
               @update:page-size="handlePolicyFeedbackPageSizeChange"
             />
@@ -1005,6 +1010,35 @@
       </template>
     </n-modal>
 
+    <n-modal v-model:show="policyFeedbackBatchProcessModalVisible" preset="card" title="批量处理误报反馈" class="w-640px">
+      <div class="mb-3 text-sm text-gray-600">已选择 {{ policyFeedbackCheckedRowKeys.length }} 条反馈记录</div>
+      <n-form ref="policyFeedbackBatchProcessFormRef" :model="policyFeedbackBatchProcessForm" :rules="policyFeedbackProcessRules" label-placement="left" label-width="120">
+        <n-form-item label="处理状态" path="feedbackStatus">
+          <n-select v-model:value="policyFeedbackBatchProcessForm.feedbackStatus" :options="policyFeedbackStatusOptions" />
+        </n-form-item>
+        <n-form-item label="责任人" path="assignee">
+          <n-input v-model:value="policyFeedbackBatchProcessForm.assignee" placeholder="可选，例如 alice" />
+        </n-form-item>
+        <n-form-item label="截止时间" path="dueAt">
+          <n-input v-model:value="policyFeedbackBatchProcessForm.dueAt" placeholder="可选，YYYY-MM-DD HH:mm:ss" />
+        </n-form-item>
+        <n-form-item label="处理备注" path="processNote">
+          <n-input
+            v-model:value="policyFeedbackBatchProcessForm.processNote"
+            type="textarea"
+            :autosize="{ minRows: 2, maxRows: 4 }"
+            placeholder="可选，批量处理说明"
+          />
+        </n-form-item>
+      </n-form>
+      <template #footer>
+        <div class="flex justify-end gap-2">
+          <n-button @click="policyFeedbackBatchProcessModalVisible = false">取消</n-button>
+          <n-button type="warning" :loading="policyFeedbackBatchProcessSubmitting" @click="handleSubmitPolicyFeedbackBatchProcess">批量保存</n-button>
+        </div>
+      </template>
+    </n-modal>
+
     <n-modal v-model:show="rollbackModalVisible" preset="card" title="回滚版本" class="w-520px">
       <n-form ref="rollbackFormRef" :model="rollbackForm" :rules="rollbackRules" label-placement="left" label-width="110">
         <n-form-item label="回滚目标" path="target">
@@ -1053,6 +1087,7 @@ import {
   checkWafEngine,
   clearWafJobs,
   clearWafReleases,
+  batchUpdateWafPolicyFalsePositiveFeedbackStatus,
   createWafPolicyFalsePositiveFeedback,
   createWafPolicyBinding,
   createWafPolicy,
@@ -1093,6 +1128,7 @@ import {
   type WafPolicyBindingItem,
   type WafPolicyBindingPayload,
   type WafPolicyFalsePositiveFeedbackItem,
+  type WafPolicyFalsePositiveFeedbackBatchStatusUpdatePayload,
   type WafPolicyFalsePositiveFeedbackPayload,
   type WafPolicyFalsePositiveFeedbackStatusUpdatePayload,
   type WafPolicyRemoveType,
@@ -1427,6 +1463,7 @@ type PolicyStatsSnapshot = {
 const policyStatsPreviousSnapshot = ref<PolicyStatsSnapshot | null>(null);
 const policyFeedbackLoading = ref(false);
 const policyFeedbackTable = ref<WafPolicyFalsePositiveFeedbackItem[]>([]);
+const policyFeedbackCheckedRowKeys = ref<number[]>([]);
 const policyFeedbackPagination = reactive<PaginationProps>({
   page: 1,
   pageSize: 10,
@@ -1462,6 +1499,15 @@ const policyFeedbackProcessForm = reactive({
   assignee: '',
   dueAt: ''
 });
+const policyFeedbackBatchProcessModalVisible = ref(false);
+const policyFeedbackBatchProcessSubmitting = ref(false);
+const policyFeedbackBatchProcessFormRef = ref<FormInst | null>(null);
+const policyFeedbackBatchProcessForm = reactive({
+  feedbackStatus: 'confirmed' as 'pending' | 'confirmed' | 'resolved',
+  processNote: '',
+  assignee: '',
+  dueAt: ''
+});
 const observeWindowValueSet = new Set(observeWindowOptions.map(item => item.value));
 const observeRouteSyncing = ref(false);
 
@@ -1473,6 +1519,7 @@ const policyStatsPolicyOptions = computed(() => [
 const hasPolicyStatsDrillFilters = computed(
   () => !!(policyStatsQuery.host.trim() || policyStatsQuery.path.trim() || policyStatsQuery.method.trim())
 );
+const hasPolicyFeedbackSelection = computed(() => policyFeedbackCheckedRowKeys.value.length > 0);
 
 const policyFeedbackRules: FormRules = {
   method: {
@@ -2398,6 +2445,10 @@ function mapPolicyFeedbackSLAStatusTagType(row: WafPolicyFalsePositiveFeedbackIt
 }
 
 const policyFeedbackColumns: DataTableColumns<WafPolicyFalsePositiveFeedbackItem> = [
+  {
+    type: 'selection',
+    width: 48
+  },
   { title: '策略', key: 'policyName', minWidth: 160, render: row => row.policyName || `#${row.policyId}` },
   { title: 'Host', key: 'host', minWidth: 160, ellipsis: { tooltip: true }, render: row => row.host || '-' },
   { title: 'Path', key: 'path', minWidth: 180, ellipsis: { tooltip: true }, render: row => row.path || '-' },
@@ -2432,18 +2483,36 @@ const policyFeedbackColumns: DataTableColumns<WafPolicyFalsePositiveFeedbackItem
   {
     title: '操作',
     key: 'actions',
-    width: 110,
+    width: 230,
     fixed: 'right',
     render: row =>
       h(
-        NButton,
+        NSpace,
+        { size: 6 },
         {
-          size: 'small',
-          tertiary: true,
-          type: 'warning',
-          onClick: () => openPolicyFeedbackProcessModal(row)
-        },
-        { default: () => '处理' }
+          default: () => [
+            h(
+              NButton,
+              {
+                size: 'small',
+                tertiary: true,
+                type: 'info',
+                onClick: () => handleCreateExclusionDraftFromFeedback(row)
+              },
+              { default: () => '生成例外草稿' }
+            ),
+            h(
+              NButton,
+              {
+                size: 'small',
+                tertiary: true,
+                type: 'warning',
+                onClick: () => openPolicyFeedbackProcessModal(row)
+              },
+              { default: () => '处理' }
+            )
+          ]
+        }
       )
   }
 ];
@@ -3222,8 +3291,11 @@ async function fetchPolicyFalsePositiveFeedbacks() {
   try {
     const { data, error } = await fetchWafPolicyFalsePositiveFeedbackList(buildPolicyFeedbackListParams());
     if (!error && data) {
-      policyFeedbackTable.value = data.list || [];
+      const list = data.list || [];
+      policyFeedbackTable.value = list;
       policyFeedbackPagination.itemCount = data.total || 0;
+      const visibleKeySet = new Set(list.map(item => Number(item.id || 0)).filter(id => id > 0));
+      policyFeedbackCheckedRowKeys.value = policyFeedbackCheckedRowKeys.value.filter(id => visibleKeySet.has(id));
     }
   } finally {
     policyFeedbackLoading.value = false;
@@ -3250,18 +3322,28 @@ function openPolicyFeedbackModal() {
 
 function handlePolicyFeedbackPageChange(page: number) {
   policyFeedbackPagination.page = page;
+  policyFeedbackCheckedRowKeys.value = [];
   fetchPolicyFalsePositiveFeedbacks();
 }
 
 function handlePolicyFeedbackPageSizeChange(pageSize: number) {
   policyFeedbackPagination.pageSize = pageSize;
   policyFeedbackPagination.page = 1;
+  policyFeedbackCheckedRowKeys.value = [];
   fetchPolicyFalsePositiveFeedbacks();
 }
 
 function handlePolicyFeedbackStatusFilterChange() {
   policyFeedbackPagination.page = 1;
+  policyFeedbackCheckedRowKeys.value = [];
   fetchPolicyFalsePositiveFeedbacks();
+}
+
+function handlePolicyFeedbackCheckedRowKeysChange(keys: Array<string | number>) {
+  const normalized = keys
+    .map(item => Number(item))
+    .filter(item => Number.isInteger(item) && item > 0);
+  policyFeedbackCheckedRowKeys.value = Array.from(new Set(normalized));
 }
 
 function openPolicyFeedbackProcessModal(row: WafPolicyFalsePositiveFeedbackItem) {
@@ -3298,6 +3380,52 @@ async function handleSubmitPolicyFeedbackProcess() {
   }
 }
 
+function resetPolicyFeedbackBatchProcessForm() {
+  policyFeedbackBatchProcessForm.feedbackStatus = 'confirmed';
+  policyFeedbackBatchProcessForm.processNote = '';
+  policyFeedbackBatchProcessForm.assignee = policyFeedbackAssigneeFilter.value.trim();
+  policyFeedbackBatchProcessForm.dueAt = '';
+}
+
+function openPolicyFeedbackBatchProcessModal() {
+  if (!policyFeedbackCheckedRowKeys.value.length) {
+    message.warning('请先选择要处理的反馈记录');
+    return;
+  }
+  resetPolicyFeedbackBatchProcessForm();
+  policyFeedbackBatchProcessModalVisible.value = true;
+}
+
+async function handleSubmitPolicyFeedbackBatchProcess() {
+  await policyFeedbackBatchProcessFormRef.value?.validate();
+  const selectedIDs = Array.from(new Set(policyFeedbackCheckedRowKeys.value.map(id => Number(id)).filter(id => Number.isInteger(id) && id > 0)));
+  if (!selectedIDs.length) {
+    message.warning('未选择可处理的反馈记录');
+    return;
+  }
+
+  policyFeedbackBatchProcessSubmitting.value = true;
+  try {
+    const payload: WafPolicyFalsePositiveFeedbackBatchStatusUpdatePayload = {
+      ids: selectedIDs,
+      feedbackStatus: policyFeedbackBatchProcessForm.feedbackStatus,
+      processNote: policyFeedbackBatchProcessForm.processNote.trim() || undefined,
+      assignee: policyFeedbackBatchProcessForm.assignee.trim() || undefined,
+      dueAt: policyFeedbackBatchProcessForm.dueAt.trim() || undefined
+    };
+    const { data, error } = await batchUpdateWafPolicyFalsePositiveFeedbackStatus(payload);
+    if (!error) {
+      const affectedCount = Number(data?.affectedCount || 0);
+      message.success(affectedCount > 0 ? `批量处理完成，已更新 ${affectedCount} 条反馈` : '批量处理完成');
+      policyFeedbackBatchProcessModalVisible.value = false;
+      policyFeedbackCheckedRowKeys.value = [];
+      fetchPolicyFalsePositiveFeedbacks();
+    }
+  } finally {
+    policyFeedbackBatchProcessSubmitting.value = false;
+  }
+}
+
 async function handleSubmitPolicyFeedback() {
   await policyFeedbackFormRef.value?.validate();
   policyFeedbackSubmitting.value = true;
@@ -3319,6 +3447,7 @@ async function handleSubmitPolicyFeedback() {
       message.success('误报反馈已提交');
       policyFeedbackModalVisible.value = false;
       policyFeedbackPagination.page = 1;
+      policyFeedbackCheckedRowKeys.value = [];
       fetchPolicyFalsePositiveFeedbacks();
     }
   } finally {
@@ -3418,6 +3547,50 @@ function buildDimensionCsvRows(
         row.blockedCount,
         row.allowedCount,
         escapeCsvCell(formatRatePercent(row.blockRate))
+      ].join(',')
+    );
+  });
+  lines.push('');
+  return lines;
+}
+
+function buildDimensionCompareCsvRows(
+  section: string,
+  currentRows: WafPolicyStatsDimensionItem[],
+  previousRows: WafPolicyStatsDimensionItem[]
+) {
+  const lines: string[] = [escapeCsvCell(section), '维度值,当前命中,基线命中,命中变化,当前拦截,基线拦截,拦截变化,当前放行,基线放行,放行变化,当前拦截率,基线拦截率,拦截率变化(pp)'];
+  const currentMap = new Map<string, WafPolicyStatsDimensionItem>();
+  const previousMap = new Map<string, WafPolicyStatsDimensionItem>();
+  currentRows.forEach(item => currentMap.set(String(item.key || '-'), item));
+  previousRows.forEach(item => previousMap.set(String(item.key || '-'), item));
+  const allKeys = Array.from(new Set([...currentMap.keys(), ...previousMap.keys()])).sort((a, b) => a.localeCompare(b));
+  allKeys.forEach(key => {
+    const current = currentMap.get(key);
+    const previous = previousMap.get(key);
+    const currentHit = Number(current?.hitCount || 0);
+    const previousHit = Number(previous?.hitCount || 0);
+    const currentBlocked = Number(current?.blockedCount || 0);
+    const previousBlocked = Number(previous?.blockedCount || 0);
+    const currentAllowed = Number(current?.allowedCount || 0);
+    const previousAllowed = Number(previous?.allowedCount || 0);
+    const currentRate = Number(current?.blockRate || 0);
+    const previousRate = Number(previous?.blockRate || 0);
+    lines.push(
+      [
+        escapeCsvCell(key || '-'),
+        currentHit,
+        previousHit,
+        currentHit - previousHit,
+        currentBlocked,
+        previousBlocked,
+        currentBlocked - previousBlocked,
+        currentAllowed,
+        previousAllowed,
+        currentAllowed - previousAllowed,
+        escapeCsvCell(formatRatePercent(currentRate)),
+        escapeCsvCell(formatRatePercent(previousRate)),
+        `${((currentRate - previousRate) * 100).toFixed(2)}pp`
       ].join(',')
     );
   });
@@ -3562,6 +3735,10 @@ function handleExportPolicyStatsCompareCsv() {
     );
   });
   lines.push('');
+
+  lines.push(...buildDimensionCompareCsvRows('Top Host 对比', current.topHosts, previous.topHosts));
+  lines.push(...buildDimensionCompareCsvRows('Top Path 对比', current.topPaths, previous.topPaths));
+  lines.push(...buildDimensionCompareCsvRows('Top Method 对比', current.topMethods, previous.topMethods));
 
   const content = `\ufeff${lines.join('\n')}`;
   const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
@@ -4316,6 +4493,59 @@ function handleAddExclusion() {
   exclusionModalMode.value = 'add';
   resetExclusionForm();
   exclusionModalVisible.value = true;
+}
+
+function parseExclusionFromFeedbackSuggestion(suggestion: string) {
+  const raw = String(suggestion || '').trim();
+  if (!raw) {
+    return { removeType: 'id' as WafPolicyRemoveType, removeValue: '' };
+  }
+
+  const tagMatch = raw.match(/(?:removebytag|tag)\s*[#:：=]?\s*([a-zA-Z0-9_./:-]+)/i);
+  if (tagMatch?.[1]) {
+    return { removeType: 'tag' as WafPolicyRemoveType, removeValue: tagMatch[1].trim() };
+  }
+
+  const idMatch = raw.match(/(?:removebyid|rule\s*id|ruleid|id)\s*[#:：=]?\s*(\d{5,7})/i);
+  if (idMatch?.[1]) {
+    return { removeType: 'id' as WafPolicyRemoveType, removeValue: idMatch[1].trim() };
+  }
+
+  return { removeType: 'id' as WafPolicyRemoveType, removeValue: '' };
+}
+
+function handleCreateExclusionDraftFromFeedback(row: WafPolicyFalsePositiveFeedbackItem) {
+  exclusionModalMode.value = 'add';
+  resetExclusionForm();
+
+  exclusionForm.policyId = Number(row.policyId || 0) > 0 ? Number(row.policyId) : getDefaultPolicyId();
+  exclusionForm.host = String(row.host || '').trim();
+  exclusionForm.path = String(row.path || '').trim();
+  exclusionForm.method = String(row.method || '').trim().toUpperCase() || '';
+  if (exclusionForm.path) {
+    exclusionForm.scopeType = 'route';
+  } else if (exclusionForm.host) {
+    exclusionForm.scopeType = 'site';
+  } else {
+    exclusionForm.scopeType = 'global';
+  }
+
+  const parsed = parseExclusionFromFeedbackSuggestion(row.suggestion || '');
+  exclusionForm.removeType = parsed.removeType;
+  exclusionForm.removeValue = parsed.removeValue;
+  exclusionForm.name = `fp-${Number(row.id || 0) || Date.now()}`;
+
+  const reason = String(row.reason || '').trim();
+  const suggestion = String(row.suggestion || '').trim();
+  exclusionForm.description = suggestion ? `来源反馈#${row.id}：${reason}；建议：${suggestion}` : `来源反馈#${row.id}：${reason}`;
+
+  activeTab.value = 'exclusion';
+  exclusionModalVisible.value = true;
+  if (!parsed.removeValue) {
+    message.warning('已生成例外草稿，请补充移除值（removeById / removeByTag）后保存');
+  } else {
+    message.success('已根据误报反馈生成例外草稿');
+  }
 }
 
 function handleEditExclusion(row: WafRuleExclusionItem) {

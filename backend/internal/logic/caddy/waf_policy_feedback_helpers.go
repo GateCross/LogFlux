@@ -75,3 +75,22 @@ func isPolicyFeedbackOverdue(feedbackStatus string, dueAt *time.Time, now time.T
 	}
 	return dueAt.Before(now)
 }
+
+func normalizePolicyFeedbackIDs(ids []uint) []uint {
+	if len(ids) == 0 {
+		return nil
+	}
+	seen := make(map[uint]struct{}, len(ids))
+	result := make([]uint, 0, len(ids))
+	for _, id := range ids {
+		if id == 0 {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		result = append(result, id)
+	}
+	return result
+}

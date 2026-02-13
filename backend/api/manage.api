@@ -537,6 +537,18 @@ type (
 		Assignee      string `json:"assignee,optional"`
 		DueAt         string `json:"dueAt,optional"` // YYYY-MM-DD HH:mm:ss
 	}
+	WafPolicyFalsePositiveFeedbackBatchStatusUpdateReq {
+		IDs           []uint `json:"ids"`
+		FeedbackStatus string `json:"feedbackStatus"` // pending | confirmed | resolved
+		ProcessNote   string `json:"processNote,optional"`
+		Assignee      string `json:"assignee,optional"`
+		DueAt         string `json:"dueAt,optional"` // YYYY-MM-DD HH:mm:ss
+	}
+	WafPolicyFalsePositiveFeedbackBatchStatusUpdateResp {
+		AffectedCount int64  `json:"affectedCount"`
+		ProcessedBy   string `json:"processedBy"`
+		ProcessedAt   string `json:"processedAt"`
+	}
 	WafPolicyFalsePositiveFeedbackListReq {
 		Page     int    `form:"page,default=1"`
 		PageSize int    `form:"pageSize,default=10"`
@@ -842,6 +854,9 @@ service logflux-api {
 
 	@handler UpdateWafPolicyFalsePositiveFeedbackStatus
 	put /caddy/waf/policy/false-positive-feedback/:id/status (WafPolicyFalsePositiveFeedbackStatusUpdateReq) returns (BaseResp)
+
+	@handler BatchUpdateWafPolicyFalsePositiveFeedbackStatus
+	put /caddy/waf/policy/false-positive-feedback/batch-status (WafPolicyFalsePositiveFeedbackBatchStatusUpdateReq) returns (WafPolicyFalsePositiveFeedbackBatchStatusUpdateResp)
 
 	@handler ListWafRuleExclusions
 	get /caddy/waf/policy/exclusion (WafRuleExclusionListReq) returns (WafRuleExclusionListResp)
