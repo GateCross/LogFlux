@@ -23,6 +23,148 @@ import {
   updateLocaleOfGlobalMenus
 } from './shared';
 
+const securityMenuRouteIconMap: Record<string, string> = {
+  security_source: 'carbon:catalog',
+  security_policy: 'carbon:settings',
+  security_observe: 'carbon:view',
+  security_ops: 'carbon:time'
+};
+
+const securityChildRouteTemplates: ElegantConstRoute[] = [
+  {
+    name: 'security_source',
+    path: '/security/source',
+    component: 'view.security',
+    meta: {
+      title: 'security_source',
+      i18nKey: 'route.security_source',
+      icon: securityMenuRouteIconMap.security_source
+    }
+  },
+  {
+    name: 'security_policy',
+    path: '/security/policy',
+    component: 'view.security',
+    meta: {
+      title: 'security_policy',
+      i18nKey: 'route.security_policy',
+      icon: securityMenuRouteIconMap.security_policy
+    }
+  },
+  {
+    name: 'security_observe',
+    path: '/security/observe',
+    component: 'view.security',
+    meta: {
+      title: 'security_observe',
+      i18nKey: 'route.security_observe',
+      icon: securityMenuRouteIconMap.security_observe
+    }
+  },
+  {
+    name: 'security_ops',
+    path: '/security/ops',
+    component: 'view.security',
+    meta: {
+      title: 'security_ops',
+      i18nKey: 'route.security_ops',
+      icon: securityMenuRouteIconMap.security_ops
+    }
+  },
+  {
+    name: 'security_runtime',
+    path: '/security/runtime',
+    component: 'view.security',
+    meta: {
+      title: 'security_runtime',
+      i18nKey: 'route.security_runtime',
+      hideInMenu: true
+    }
+  },
+  {
+    name: 'security_crs',
+    path: '/security/crs',
+    component: 'view.security',
+    meta: {
+      title: 'security_crs',
+      i18nKey: 'route.security_crs',
+      hideInMenu: true
+    }
+  },
+  {
+    name: 'security_exclusion',
+    path: '/security/exclusion',
+    component: 'view.security',
+    meta: {
+      title: 'security_exclusion',
+      i18nKey: 'route.security_exclusion',
+      hideInMenu: true
+    }
+  },
+  {
+    name: 'security_binding',
+    path: '/security/binding',
+    component: 'view.security',
+    meta: {
+      title: 'security_binding',
+      i18nKey: 'route.security_binding',
+      hideInMenu: true
+    }
+  },
+  {
+    name: 'security_release',
+    path: '/security/release',
+    component: 'view.security',
+    meta: {
+      title: 'security_release',
+      i18nKey: 'route.security_release',
+      hideInMenu: true
+    }
+  },
+  {
+    name: 'security_job',
+    path: '/security/job',
+    component: 'view.security',
+    meta: {
+      title: 'security_job',
+      i18nKey: 'route.security_job',
+      hideInMenu: true
+    }
+  }
+];
+
+function normalizeSecurityRoutes(routes: ElegantConstRoute[]): ElegantConstRoute[] {
+  return routes.map(route => {
+    const normalized: ElegantConstRoute = {
+      ...route
+    };
+
+    if (normalized.children?.length) {
+      normalized.children = normalizeSecurityRoutes(normalized.children);
+    }
+
+    if (normalized.name !== 'security') {
+      return normalized;
+    }
+
+    const inheritedRoles = (normalized.meta?.roles || []) as string[];
+    const children = securityChildRouteTemplates.map(template => ({
+      ...template,
+      meta: {
+        ...template.meta,
+        roles: inheritedRoles
+      }
+    })) as ElegantConstRoute[];
+
+    return {
+      ...normalized,
+      component: 'layout.base',
+      redirect: '/security/source',
+      children
+    } as ElegantConstRoute;
+  });
+}
+
 export const useRouteStore = defineStore(SetupStoreId.Route, () => {
   const { bool: isInitConstantRoute, setBool: setIsInitConstantRoute } = useBoolean();
   const { bool: isInitAuthRoute, setBool: setIsInitAuthRoute } = useBoolean();
@@ -177,7 +319,7 @@ export const useRouteStore = defineStore(SetupStoreId.Route, () => {
               return route;
             });
 
-          addConstantRoutes(processedRoutes);
+          addConstantRoutes(normalizeSecurityRoutes(processedRoutes));
         } else {
           // if fetch constant routes failed, use static constant routes
           addConstantRoutes(staticRoute.constantRoutes);
@@ -251,7 +393,7 @@ export const useRouteStore = defineStore(SetupStoreId.Route, () => {
       console.log('initDynamicAuthRoute data:', data);
       const { routes, home } = data;
 
-      addAuthRoutes(routes);
+      addAuthRoutes(normalizeSecurityRoutes(routes));
 
       handleConstantAndAuthRoutes();
 
