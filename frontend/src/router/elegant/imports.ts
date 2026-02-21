@@ -4,7 +4,7 @@
 // Read more: https://github.com/soybeanjs/elegant-router
 
 import type { RouteComponent } from "vue-router";
-import type { LastLevelRouteKey, RouteLayout } from "@elegant-router/types";
+import type { RouteLayout } from "@elegant-router/types";
 
 import BaseLayout from "@/layouts/base-layout/index.vue";
 import BlankLayout from "@/layouts/blank-layout/index.vue";
@@ -14,7 +14,7 @@ export const layouts: Record<RouteLayout, RouteComponent | (() => Promise<RouteC
   blank: BlankLayout,
 };
 
-export const views: Record<LastLevelRouteKey, RouteComponent | (() => Promise<RouteComponent>)> = {
+export const views: Record<string, RouteComponent | (() => Promise<RouteComponent>)> = {
   403: () => import("@/views/_builtin/403/index.vue"),
   404: () => import("@/views/_builtin/404/index.vue"),
   500: () => import("@/views/_builtin/500/index.vue"),
@@ -35,5 +35,15 @@ export const views: Record<LastLevelRouteKey, RouteComponent | (() => Promise<Ro
   notification_rule: () => import("@/views/notification/rule/index.vue"),
   notification_template: () => import("@/views/notification/template/index.vue"),
   security: () => import("@/views/security/index.vue"),
+  security_source: () => import("@/views/security/index.vue"),
+  security_policy: () => import("@/views/security/index.vue"),
+  security_runtime: () => import("@/views/security/index.vue"),
+  security_crs: () => import("@/views/security/index.vue"),
+  security_exclusion: () => import("@/views/security/index.vue"),
+  security_binding: () => import("@/views/security/index.vue"),
+  security_observe: () => import("@/views/security/index.vue"),
+  security_ops: () => import("@/views/security/index.vue"),
+  security_release: () => import("@/views/security/index.vue"),
+  security_job: () => import("@/views/security/index.vue"),
   user_center: () => import("@/views/user/center/index.vue"),
 };

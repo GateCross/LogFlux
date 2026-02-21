@@ -1,13 +1,13 @@
 <template>
   <div class="h-full flex flex-col gap-3">
-    <n-alert type="info" :show-icon="true" class="rounded-8px">
+    <n-alert v-if="activeTab === 'source'" type="info" :show-icon="true" class="rounded-8px">
       <template #header>{{ pageTitle }}</template>
       <div>
         CRS 支持在线同步（含检查）、上传、激活与回滚；Coraza 引擎依赖 Caddy 二进制，仅提供 GitHub Release 版本检查，不支持在线替换引擎。
       </div>
     </n-alert>
 
-    <n-card :bordered="false" class="rounded-8px shadow-sm">
+    <n-card v-if="activeTab === 'source'" :bordered="false" class="rounded-8px shadow-sm">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div class="text-base font-semibold">Coraza 引擎版本检查</div>
@@ -51,8 +51,13 @@
     </n-card>
 
     <n-card :bordered="false" class="rounded-8px shadow-sm">
-      <n-tabs v-model:value="activeTab" type="line" animated>
-        <n-tab-pane name="source" tab="更新源配置">
+      <n-tabs
+        v-model:value="activeTab"
+        type="line"
+        animated
+        :class="['security-tabs-by-route', { 'security-tabs-hide-nav': !isMenuTabNavVisible }]"
+      >
+        <n-tab-pane v-if="isTabVisible('source')" name="source" tab="更新源配置">
           <div class="mb-3 flex flex-wrap gap-2 items-center">
             <n-input v-model:value="sourceQuery.name" placeholder="按名称搜索" clearable class="w-220px" @keyup.enter="fetchSources" />
             <n-button type="primary" @click="fetchSources">
@@ -90,7 +95,7 @@
           />
         </n-tab-pane>
 
-        <n-tab-pane name="runtime" tab="运行模式">
+        <n-tab-pane v-if="isTabVisible('runtime')" name="runtime" tab="运行模式">
           <n-alert type="warning" :show-icon="true" class="mb-3">
             建议先使用 DetectionOnly（仅检测）观察，再切换到 On（阻断）。On 模式发布会触发二次确认。
           </n-alert>
@@ -156,7 +161,7 @@
           />
         </n-tab-pane>
 
-        <n-tab-pane name="crs" tab="CRS 调优">
+        <n-tab-pane v-if="isTabVisible('crs')" name="crs" tab="CRS 调优">
           <n-alert type="info" :show-icon="true" class="mb-3">
             可按模板快速设置 `tx.paranoia_level` 与 anomaly 阈值，并独立发布 CRS 调优参数。
           </n-alert>
@@ -251,7 +256,7 @@
           />
         </n-tab-pane>
 
-        <n-tab-pane name="exclusion" tab="规则例外">
+        <n-tab-pane v-if="isTabVisible('exclusion')" name="exclusion" tab="规则例外">
           <n-alert type="info" :show-icon="true" class="mb-3">
             用于处理误报，支持按全局/站点/路由维度配置 `removeById/removeByTag`。
           </n-alert>
@@ -291,7 +296,7 @@
           />
         </n-tab-pane>
 
-        <n-tab-pane name="binding" tab="策略绑定">
+        <n-tab-pane v-if="isTabVisible('binding')" name="binding" tab="策略绑定">
           <n-alert type="warning" :show-icon="true" class="mb-3">
             同一作用域 + 同一优先级仅允许一个生效绑定，冲突会阻止策略发布。
           </n-alert>
@@ -353,7 +358,7 @@
           </n-card>
         </n-tab-pane>
 
-        <n-tab-pane name="observe" tab="策略观测">
+        <n-tab-pane v-if="isTabVisible('observe')" name="observe" tab="策略观测">
           <n-alert type="info" :show-icon="true" class="mb-3">
             统计口径基于策略绑定作用域与请求日志；“疑似误报”当前为启发式指标（安全端点被拦截），用于辅助调优参考。
           </n-alert>
@@ -614,7 +619,7 @@
           </n-grid>
         </n-tab-pane>
 
-        <n-tab-pane name="release" tab="版本发布管理">
+        <n-tab-pane v-if="isTabVisible('release')" name="release" tab="版本发布管理">
           <div class="mb-3 flex flex-wrap gap-2 items-center">
             <n-select v-model:value="releaseQuery.status" :options="releaseStatusOptions" clearable placeholder="状态" class="w-160px" />
             <n-button type="primary" @click="fetchReleases">
@@ -642,7 +647,7 @@
           />
         </n-tab-pane>
 
-        <n-tab-pane name="job" tab="任务日志">
+        <n-tab-pane v-if="isTabVisible('job')" name="job" tab="任务日志">
           <div class="mb-3 flex flex-wrap gap-2 items-center">
             <n-select v-model:value="jobQuery.status" :options="jobStatusOptions" clearable placeholder="状态" class="w-160px" />
             <n-select v-model:value="jobQuery.action" :options="jobActionOptions" clearable placeholder="动作" class="w-160px" />
@@ -1075,6 +1080,17 @@
             <n-input v-model:value="policyFeedbackExclusionDraft.name" />
           </n-form-item>
         </n-form>
+        <n-alert type="info" :show-icon="false">
+          <template #header>草稿差异对比</template>
+          <div v-if="policyFeedbackExclusionDraftDiffItems.length === 0" class="text-xs text-gray-500">
+            当前草稿与原反馈关键字段一致
+          </div>
+          <ul v-else class="text-xs text-gray-600 leading-6">
+            <li v-for="item in policyFeedbackExclusionDraftDiffItems" :key="item.field">
+              {{ item.field }}：{{ item.before || '空' }} -> {{ item.after || '空' }}
+            </li>
+          </ul>
+        </n-alert>
         <div v-if="policyFeedbackExclusionCandidateOptions.length > 1">
           <div class="text-xs text-gray-500 mb-1">候选移除值（建议文本匹配到多个候选）</div>
           <n-select
@@ -1222,18 +1238,75 @@ import {
   parseExclusionCandidateKey,
   parseExclusionFromFeedbackSuggestion
 } from './policy-feedback-draft';
+import { request } from '@/service/request';
 
 const message = useMessage();
 const dialog = useDialog();
 const route = useRoute();
 const router = useRouter();
 
+type SecurityTabKey = 'source' | 'runtime' | 'crs' | 'exclusion' | 'binding' | 'observe' | 'release' | 'job';
+type SecurityMenuKey = 'source' | 'policy' | 'observe' | 'ops';
+
+const securityMenuRouteNameMap: Record<SecurityMenuKey, string> = {
+  source: 'security_source',
+  policy: 'security_policy',
+  observe: 'security_observe',
+  ops: 'security_ops'
+};
+
+const securityMenuTabGroupMap: Record<SecurityMenuKey, SecurityTabKey[]> = {
+  source: ['source'],
+  policy: ['runtime', 'crs', 'exclusion', 'binding'],
+  observe: ['observe'],
+  ops: ['release', 'job']
+};
+
+const securityTabMenuMap: Record<SecurityTabKey, SecurityMenuKey> = {
+  source: 'source',
+  runtime: 'policy',
+  crs: 'policy',
+  exclusion: 'policy',
+  binding: 'policy',
+  observe: 'observe',
+  release: 'ops',
+  job: 'ops'
+};
+
+const securityRouteNameMenuMap: Record<string, SecurityMenuKey> = {
+  security_source: 'source',
+  security_policy: 'policy',
+  security_observe: 'observe',
+  security_ops: 'ops',
+  security_runtime: 'policy',
+  security_crs: 'policy',
+  security_exclusion: 'policy',
+  security_binding: 'policy',
+  security_release: 'ops',
+  security_job: 'ops'
+};
+
+const securityTabTitleMap: Record<SecurityTabKey, string> = {
+  source: '更新源配置',
+  runtime: '运行模式',
+  crs: 'CRS 调优',
+  exclusion: '规则例外',
+  binding: '策略绑定',
+  observe: '策略观测',
+  release: '版本发布管理',
+  job: '任务日志'
+};
+
+const observeQueryKeys = ['policyId', 'window', 'intervalSec', 'topN', 'host', 'path', 'method'];
+
 const engineLoading = ref(false);
 const engineChecking = ref(false);
 const engineUnavailable = ref(false);
 const engineStatus = ref<WafEngineStatusResp | null>(null);
 
-const activeTab = ref<'source' | 'runtime' | 'crs' | 'exclusion' | 'binding' | 'observe' | 'release' | 'job'>('source');
+const activeMenu = ref<SecurityMenuKey>('source');
+const activeTab = ref<SecurityTabKey>('source');
+const isMenuTabNavVisible = computed(() => securityMenuTabGroupMap[activeMenu.value].length > 1);
 const tableFixedHeight = 480;
 
 const modeOptions = [
@@ -1352,6 +1425,8 @@ const sourceQuery = reactive({
 const sourceLoading = ref(false);
 const sourceTable = ref<WafSourceItem[]>([]);
 const jobSourceNameMap = ref<Record<number, string>>({});
+const userNameMap = ref<Record<string, string>>({});
+const userNameLoading = ref(false);
 const sourcePagination = reactive<PaginationProps>({
   page: 1,
   pageSize: 20,
@@ -1383,7 +1458,11 @@ const sourceForm = reactive({
 });
 
 const sourceModalTitle = computed(() => (sourceModalMode.value === 'add' ? '新增更新源' : '编辑更新源'));
-const pageTitle = computed(() => '安全升级管理');
+const pageTitle = computed(() => `安全管理 · ${securityTabTitleMap[activeTab.value]}`);
+
+function isTabVisible(tab: SecurityTabKey) {
+  return securityMenuTabGroupMap[activeMenu.value].includes(tab);
+}
 
 const sourceRules: FormRules = {
   name: { required: true, message: '请输入源名称', trigger: 'blur' },
@@ -1597,6 +1676,20 @@ type PolicyFeedbackExclusionDraft = {
     removeType: WafPolicyRemoveType;
     removeValue: string;
   }>;
+  baseline: {
+    policyId: number;
+    scopeType: WafPolicyScopeType;
+    host: string;
+    path: string;
+    method: string;
+    removeType: WafPolicyRemoveType;
+    removeValue: string;
+  };
+};
+type PolicyFeedbackExclusionDraftDiffItem = {
+  field: string;
+  before: string;
+  after: string;
 };
 const policyFeedbackExclusionDraftModalVisible = ref(false);
 const policyFeedbackExclusionDraft = ref<PolicyFeedbackExclusionDraft | null>(null);
@@ -1623,6 +1716,38 @@ const policyFeedbackExclusionCandidateOptions = computed(() => {
     label: `${item.removeType === 'id' ? 'removeById' : 'removeByTag'}: ${item.removeValue}`,
     value: buildExclusionCandidateKey(item.removeType, item.removeValue)
   }));
+});
+const policyFeedbackExclusionDraftDiffItems = computed<PolicyFeedbackExclusionDraftDiffItem[]>(() => {
+  const draft = policyFeedbackExclusionDraft.value;
+  if (!draft) {
+    return [];
+  }
+
+  const baseline = draft.baseline;
+  const diffItems: PolicyFeedbackExclusionDraftDiffItem[] = [];
+  const appendDiff = (field: string, beforeValue: string, afterValue: string) => {
+    const beforeText = String(beforeValue || '').trim();
+    const afterText = String(afterValue || '').trim();
+    if (beforeText === afterText) {
+      return;
+    }
+    diffItems.push({
+      field,
+      before: beforeText,
+      after: afterText
+    });
+  };
+
+  const baselinePolicyName = mapPolicyNameById(Number(baseline.policyId || 0)) || String(baseline.policyId || '');
+  const currentPolicyName = mapPolicyNameById(Number(draft.policyId || 0)) || String(draft.policyId || '');
+  appendDiff('关联策略', baselinePolicyName, currentPolicyName);
+  appendDiff('作用域', mapScopeTypeLabel(baseline.scopeType), mapScopeTypeLabel(draft.scopeType));
+  appendDiff('Host', baseline.host, draft.host);
+  appendDiff('Path', baseline.path, draft.path);
+  appendDiff('Method', baseline.method, String(draft.method || '').trim().toUpperCase());
+  appendDiff('移除类型', baseline.removeType === 'id' ? 'removeById' : 'removeByTag', draft.removeType === 'id' ? 'removeById' : 'removeByTag');
+  appendDiff('移除值', baseline.removeValue, draft.removeValue);
+  return diffItems;
 });
 
 const policyFeedbackRules: FormRules = {
@@ -2258,7 +2383,7 @@ const policyRevisionColumns: DataTableColumns<WafPolicyRevisionItem> = [
       );
     }
   },
-  { title: '操作人', key: 'operator', width: 120, render: row => row.operator || '-' },
+  { title: '操作人', key: 'operator', width: 120, render: row => displayOperatorName(row.operator) },
   { title: '变更摘要', key: 'changeSummary', minWidth: 220, ellipsis: { tooltip: true }, render: row => row.changeSummary || row.message || '-' },
   { title: '描述', key: 'message', minWidth: 160, ellipsis: { tooltip: true }, render: row => row.message || '-' },
   { title: '创建时间', key: 'createdAt', width: 180 },
@@ -2571,7 +2696,7 @@ const policyFeedbackColumns: DataTableColumns<WafPolicyFalsePositiveFeedbackItem
     width: 110,
     render: row => h(NTag, { bordered: false, type: mapPolicyFeedbackStatusTagType(row.feedbackStatus) }, { default: () => mapPolicyFeedbackStatusLabel(row.feedbackStatus) })
   },
-  { title: '责任人', key: 'assignee', width: 120, render: row => row.assignee || '-' },
+  { title: '责任人', key: 'assignee', width: 120, render: row => displayOperatorName(row.assignee) },
   { title: '截止时间', key: 'dueAt', width: 180, render: row => row.dueAt || '-' },
   {
     title: 'SLA',
@@ -2582,9 +2707,9 @@ const policyFeedbackColumns: DataTableColumns<WafPolicyFalsePositiveFeedbackItem
   { title: '误报原因', key: 'reason', minWidth: 220, ellipsis: { tooltip: true }, render: row => row.reason || '-' },
   { title: '建议动作', key: 'suggestion', minWidth: 180, ellipsis: { tooltip: true }, render: row => row.suggestion || '-' },
   { title: '处理备注', key: 'processNote', minWidth: 180, ellipsis: { tooltip: true }, render: row => row.processNote || '-' },
-  { title: '处理人', key: 'processedBy', width: 120, render: row => row.processedBy || '-' },
+  { title: '处理人', key: 'processedBy', width: 120, render: row => displayOperatorName(row.processedBy) },
   { title: '处理时间', key: 'processedAt', width: 180, render: row => row.processedAt || '-' },
-  { title: '提交人', key: 'operator', width: 120, render: row => row.operator || '-' },
+  { title: '提交人', key: 'operator', width: 120, render: row => displayOperatorName(row.operator) },
   { title: '提交时间', key: 'createdAt', width: 180 },
   {
     title: '操作',
@@ -2810,7 +2935,7 @@ const jobColumns: DataTableColumns<WafJobItem> = [
       return h(NTag, { type: mapJobStatusType(row.status), bordered: false }, { default: () => mapJobStatusLabel(row.status) });
     }
   },
-  { title: '操作人', key: 'operator', width: 120, render: row => row.operator || '-' },
+  { title: '操作人', key: 'operator', width: 120, render: row => displayOperatorName(row.operator) },
   { title: '开始时间', key: 'startedAt', width: 180, render: row => row.startedAt || '-' },
   { title: '结束时间', key: 'finishedAt', width: 180, render: row => row.finishedAt || '-' },
   {
@@ -3190,12 +3315,131 @@ function buildQuerySignature(query: Record<string, unknown>) {
   );
 }
 
-function applyObserveQueryFromRoute(query: Record<string, unknown>) {
-  const routeTab = pickRouteQueryValue(query.activeTab);
-  const shouldEnterObserve = routeTab === 'observe';
-  if (shouldEnterObserve && activeTab.value !== 'observe') {
-    activeTab.value = 'observe';
+function isSecurityTabKey(value: string): value is SecurityTabKey {
+  return value in securityTabMenuMap;
+}
+
+function resolveSecurityMenuFromRoute() {
+  const routeName = String(route.name || '');
+  const matched = securityRouteNameMenuMap[routeName];
+  if (matched) {
+    return matched;
   }
+
+  const legacyTab = pickRouteQueryValue(route.query.activeTab);
+  if (isSecurityTabKey(legacyTab)) {
+    return securityTabMenuMap[legacyTab];
+  }
+
+  return 'source';
+}
+
+function resolveSecurityTabFromRoute(menu: SecurityMenuKey) {
+  const groupTabs = securityMenuTabGroupMap[menu] || ['source'];
+  const routeTab = pickRouteQueryValue(route.query.activeTab);
+  if (isSecurityTabKey(routeTab) && groupTabs.includes(routeTab)) {
+    return routeTab;
+  }
+
+  return groupTabs[0];
+}
+
+function isNumericUserId(value: unknown) {
+  return /^\d+$/.test(String(value ?? '').trim());
+}
+
+function displayOperatorName(value: unknown) {
+  const raw = String(value ?? '').trim();
+  if (!raw) {
+    return '-';
+  }
+  if (!isNumericUserId(raw)) {
+    return raw;
+  }
+  return userNameMap.value[raw] || '-';
+}
+
+async function ensureUserNamesByIds(values: unknown[]) {
+  const pendingIds = Array.from(
+    new Set(
+      values
+        .map(value => String(value ?? '').trim())
+        .filter(value => value && isNumericUserId(value) && !userNameMap.value[value])
+    )
+  );
+
+  if (!pendingIds.length || userNameLoading.value) {
+    return;
+  }
+
+  userNameLoading.value = true;
+  try {
+    const unresolved = new Set(pendingIds);
+    let page = 1;
+    const pageSize = 100;
+
+    while (unresolved.size > 0) {
+      const { data, error } = await request<any>({
+        url: '/api/user/list',
+        params: { page, pageSize }
+      });
+
+      if (error || !data) {
+        break;
+      }
+
+      const list = Array.isArray(data.list) ? data.list : [];
+      list.forEach((item: any) => {
+        const id = String(item?.id ?? '').trim();
+        const username = String(item?.username ?? '').trim();
+        if (!id || !username) {
+          return;
+        }
+        userNameMap.value[id] = username;
+        unresolved.delete(id);
+      });
+
+      const total = Number(data.total || 0);
+      if (list.length === 0 || page * pageSize >= total) {
+        break;
+      }
+      page += 1;
+    }
+  } finally {
+    userNameLoading.value = false;
+  }
+}
+
+async function navigateToSecurityTab(tab: SecurityTabKey, replace = false) {
+  const menu = securityTabMenuMap[tab];
+  const targetRouteName = securityMenuRouteNameMap[menu];
+  if (!targetRouteName) {
+    return;
+  }
+
+  const query: Record<string, string> = {};
+  if (tab === 'observe') {
+    observeQueryKeys.forEach(key => {
+      const value = pickRouteQueryValue(route.query[key]);
+      if (value) {
+        query[key] = value;
+      }
+    });
+  } else {
+    const defaultTab = securityMenuTabGroupMap[menu][0];
+    if (tab !== defaultTab) {
+      query.activeTab = tab;
+    }
+  }
+
+  const navigationMethod = replace ? router.replace : router.push;
+  await navigationMethod({
+    name: targetRouteName as any,
+    query
+  });
+}
+
+function applyObserveQueryFromRoute(query: Record<string, unknown>) {
   if (activeTab.value !== 'observe') {
     return false;
   }
@@ -3241,14 +3485,14 @@ async function syncObserveStateToRouteQuery() {
   }
 
   const nextQuery: Record<string, string> = {};
-  Object.entries(route.query).forEach(([key, value]) => {
+  observeQueryKeys.forEach(key => {
+    const value = route.query[key];
     const resolved = pickRouteQueryValue(value);
     if (resolved) {
       nextQuery[key] = resolved;
     }
   });
 
-  nextQuery.activeTab = 'observe';
   if (policyStatsQuery.policyId) {
     nextQuery.policyId = String(policyStatsQuery.policyId);
   } else {
@@ -3397,7 +3641,9 @@ async function fetchPolicyFalsePositiveFeedbacks() {
   try {
     const { data, error } = await fetchWafPolicyFalsePositiveFeedbackList(buildPolicyFeedbackListParams());
     if (!error && data) {
-      policyFeedbackTable.value = data.list || [];
+      const list = data.list || [];
+      await ensureUserNamesByIds(list.flatMap(item => [item.operator, item.processedBy, item.assignee]));
+      policyFeedbackTable.value = list;
       policyFeedbackPagination.itemCount = data.total || 0;
     }
   } finally {
@@ -4500,7 +4746,9 @@ async function fetchPolicyRevisions(policyId?: number) {
       policyId
     });
     if (!error && data) {
-      policyRevisionTable.value = data.list || [];
+      const list = data.list || [];
+      await ensureUserNamesByIds(list.map(item => item.operator));
+      policyRevisionTable.value = list;
       policyRevisionPagination.itemCount = data.total || 0;
     }
   } finally {
@@ -4622,7 +4870,16 @@ function buildExclusionDraftFromFeedback(row: WafPolicyFalsePositiveFeedbackItem
     method,
     removeType: parsed.removeType,
     removeValue: parsed.removeValue,
-    candidates
+    candidates,
+    baseline: {
+      policyId,
+      scopeType,
+      host,
+      path,
+      method,
+      removeType: parsed.removeType,
+      removeValue: parsed.removeValue
+    }
   };
 }
 
@@ -4701,7 +4958,7 @@ function handleConfirmPolicyFeedbackExclusionDraft() {
   policyFeedbackExclusionDraftModalVisible.value = false;
   policyFeedbackExclusionDraft.value = null;
   policyFeedbackExclusionDraftCandidateKey.value = '';
-  activeTab.value = 'exclusion';
+  void navigateToSecurityTab('exclusion');
   shouldFocusExclusionRemoveValue.value = !exclusionForm.removeValue;
   exclusionModalVisible.value = true;
   if (!exclusionForm.removeValue) {
@@ -5024,6 +5281,21 @@ function openUploadModal() {
 }
 
 watch(
+  () => [route.name, route.query.activeTab],
+  () => {
+    const nextMenu = resolveSecurityMenuFromRoute();
+    const nextTab = resolveSecurityTabFromRoute(nextMenu);
+    if (activeMenu.value !== nextMenu) {
+      activeMenu.value = nextMenu;
+    }
+    if (activeTab.value !== nextTab) {
+      activeTab.value = nextTab;
+    }
+  },
+  { immediate: true }
+);
+
+watch(
   () => route.query,
   query => {
     if (observeRouteSyncing.value) {
@@ -5176,6 +5448,7 @@ async function fetchJobs() {
     if (!error && data) {
       const list = data.list || [];
       await ensureSourceNamesByIds(list.map(item => Number(item.sourceId || 0)));
+      await ensureUserNamesByIds(list.map(item => item.operator));
       jobTable.value = list;
       jobPagination.itemCount = data.total || 0;
     }
@@ -5257,6 +5530,7 @@ function refreshCurrentTab() {
 
 watch(activeTab, value => {
   if (value === 'source') {
+    fetchEngineStatus();
     fetchSources();
   } else if (value === 'runtime') {
     fetchPolicies();
@@ -5281,12 +5555,18 @@ watch(activeTab, value => {
 });
 
 onMounted(() => {
-  fetchEngineStatus();
+  if (activeTab.value === 'source') {
+    fetchEngineStatus();
+  }
   refreshCurrentTab();
 });
 </script>
 
 <style scoped>
+:deep(.security-tabs-hide-nav > .n-tabs-nav) {
+  display: none;
+}
+
 :deep(.n-data-table .n-data-table-th__title) {
   white-space: nowrap;
 }

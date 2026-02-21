@@ -39,6 +39,16 @@ declare module "@elegant-router/types" {
     "notification_rule": "/notification/rule";
     "notification_template": "/notification/template";
     "security": "/security";
+    "security_source": "/security/source";
+    "security_policy": "/security/policy";
+    "security_runtime": "/security/runtime";
+    "security_crs": "/security/crs";
+    "security_exclusion": "/security/exclusion";
+    "security_binding": "/security/binding";
+    "security_observe": "/security/observe";
+    "security_ops": "/security/ops";
+    "security_release": "/security/release";
+    "security_job": "/security/job";
     "user": "/user";
     "user_center": "/user/center";
   };
@@ -119,7 +129,16 @@ declare module "@elegant-router/types" {
     | "notification_log"
     | "notification_rule"
     | "notification_template"
-    | "security"
+    | "security_source"
+    | "security_policy"
+    | "security_runtime"
+    | "security_crs"
+    | "security_exclusion"
+    | "security_binding"
+    | "security_observe"
+    | "security_ops"
+    | "security_release"
+    | "security_job"
     | "user_center"
   >;
 
