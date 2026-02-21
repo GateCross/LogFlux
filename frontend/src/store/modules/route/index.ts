@@ -297,7 +297,7 @@ export const useRouteStore = defineStore(SetupStoreId.Route, () => {
       const staticRoute = createStaticRoutes();
 
       if (authRouteMode.value === 'static') {
-        addConstantRoutes(staticRoute.constantRoutes);
+        addConstantRoutes(normalizeSecurityRoutes(staticRoute.constantRoutes));
       } else {
         const { data, error } = await fetchGetConstantRoutes();
 
@@ -322,7 +322,7 @@ export const useRouteStore = defineStore(SetupStoreId.Route, () => {
           addConstantRoutes(normalizeSecurityRoutes(processedRoutes));
         } else {
           // if fetch constant routes failed, use static constant routes
-          addConstantRoutes(staticRoute.constantRoutes);
+          addConstantRoutes(normalizeSecurityRoutes(staticRoute.constantRoutes));
         }
       }
 
@@ -331,7 +331,7 @@ export const useRouteStore = defineStore(SetupStoreId.Route, () => {
       console.error('initConstantRoute error:', error);
       // Fallback to static routes on generic error to avoid blocking app
       const staticRoute = createStaticRoutes();
-      addConstantRoutes(staticRoute.constantRoutes);
+      addConstantRoutes(normalizeSecurityRoutes(staticRoute.constantRoutes));
     } finally {
       setIsInitConstantRoute(true);
     }
@@ -371,11 +371,11 @@ export const useRouteStore = defineStore(SetupStoreId.Route, () => {
     const { authRoutes: staticAuthRoutes } = createStaticRoutes();
 
     if (authStore.isStaticSuper) {
-      addAuthRoutes(staticAuthRoutes);
+      addAuthRoutes(normalizeSecurityRoutes(staticAuthRoutes));
     } else {
       const filteredAuthRoutes = filterAuthRoutesByRoles(staticAuthRoutes, authStore.userInfo.roles);
 
-      addAuthRoutes(filteredAuthRoutes);
+      addAuthRoutes(normalizeSecurityRoutes(filteredAuthRoutes));
     }
 
     handleConstantAndAuthRoutes();
