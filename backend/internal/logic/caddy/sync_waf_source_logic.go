@@ -181,6 +181,7 @@ func (l *SyncWafSourceLogic) SyncWafSource(req *types.WafSourceSyncReq) (resp *t
 		helper.finishJob(job, wafJobStatusFailed, fmt.Sprintf("create release failed: %v", err), 0)
 		return nil, fmt.Errorf("create release failed: %w", err)
 	}
+	helper.applyReleaseRetention(release.Kind)
 
 	helper.updateSourceLastCheck(source.ID, release.Version, "")
 	helper.finishJob(job, wafJobStatusSuccess, "sync success", release.ID)

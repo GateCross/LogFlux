@@ -29,7 +29,9 @@ Waf:
   AllowedDomains: ["github.com", "api.github.com"]
   ExtractMaxFiles: 5000
   ExtractMaxTotalBytes: 536870912
+  ReleaseRetentionCount: 20
   ActivateTimeoutSec: 30
+  ActivateRetryCount: 1
   CorazaReleaseAPI: "https://api.github.com/repos/corazawaf/coraza-caddy/releases/latest"
   CorazaCurrentVersion: ""
   CorazaCheckProxy: ""

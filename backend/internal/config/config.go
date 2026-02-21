@@ -55,16 +55,18 @@ type ArchiveConf struct {
 }
 
 type WafConf struct {
-	WorkDir              string
-	FetchTimeoutSec      int
-	MaxPackageBytes      int64
-	AllowedDomains       []string
-	ExtractMaxFiles      int
-	ExtractMaxTotalBytes int64
-	ActivateTimeoutSec   int
-	CorazaReleaseAPI     string `json:",optional"`
-	CorazaCurrentVersion string `json:",optional"`
-	CorazaCheckProxy     string `json:",optional"`
+	WorkDir               string
+	FetchTimeoutSec       int
+	MaxPackageBytes       int64
+	AllowedDomains        []string
+	ExtractMaxFiles       int
+	ExtractMaxTotalBytes  int64
+	ReleaseRetentionCount int
+	ActivateTimeoutSec    int
+	ActivateRetryCount    int
+	CorazaReleaseAPI      string `json:",optional"`
+	CorazaCurrentVersion  string `json:",optional"`
+	CorazaCheckProxy      string `json:",optional"`
 }
 
 // NotificationConf 通知配置

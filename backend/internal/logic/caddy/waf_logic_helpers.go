@@ -47,6 +47,7 @@ const (
 	wafUploadFileNameCtxKey = "waf_upload_file_name"
 	wafSourceBoolMaskCtxKey = "waf_source_bool_mask"
 	wafPolicyBoolMaskCtxKey = "waf_policy_bool_mask"
+	wafJobTriggerModeCtxKey = "waf_job_trigger_mode"
 )
 
 type wafLogicHelper struct {
@@ -54,6 +55,18 @@ type wafLogicHelper struct {
 	svcCtx *svc.ServiceContext
 	logger logx.Logger
 	store  *waf.Store
+}
+
+func WithWafJobTriggerMode(ctx context.Context, triggerMode string) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	normalizedMode := strings.ToLower(strings.TrimSpace(triggerMode))
+	if normalizedMode == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, wafJobTriggerModeCtxKey, normalizedMode)
 }
 
 func newWafLogicHelper(ctx context.Context, svcCtx *svc.ServiceContext, logger logx.Logger) *wafLogicHelper {
@@ -160,15 +173,12 @@ func (helper *wafLogicHelper) startJob(sourceID, releaseID uint, action, trigger
 		SourceID:    sourceID,
 		ReleaseID:   releaseID,
 		Action:      strings.ToLower(strings.TrimSpace(action)),
-		TriggerMode: strings.ToLower(strings.TrimSpace(triggerMode)),
+		TriggerMode: helper.resolveJobTriggerMode(triggerMode),
 		Operator:    helper.currentOperator(),
 		Status:      wafJobStatusRunning,
 		StartedAt:   &now,
 		FinishedAt:  nil,
 		Message:     "",
-	}
-	if job.TriggerMode == "" {
-		job.TriggerMode = "manual"
 	}
 	if err := helper.svcCtx.DB.Create(job).Error; err != nil {
 		helper.logger.Errorf("create waf job failed: %v", err)
@@ -195,6 +205,8 @@ func (helper *wafLogicHelper) finishJob(job *model.WafUpdateJob, status, message
 	if err := helper.svcCtx.DB.Model(job).Updates(updates).Error; err != nil {
 		helper.logger.Errorf("finish waf job failed: %v", err)
 	}
+
+	helper.notifyWafUpdateJobEvent(job, updates["status"].(string), localizedMessage, releaseID)
 }
 
 func localizeWafJobMessage(rawMessage string) string {
@@ -322,6 +334,26 @@ func (helper *wafLogicHelper) currentOperator() string {
 	}
 }
 
+func (helper *wafLogicHelper) resolveJobTriggerMode(defaultMode string) string {
+	mode := strings.ToLower(strings.TrimSpace(defaultMode))
+	if helper != nil && helper.ctx != nil {
+		rawMode := helper.ctx.Value(wafJobTriggerModeCtxKey)
+		if modeText, ok := rawMode.(string); ok {
+			candidate := strings.ToLower(strings.TrimSpace(modeText))
+			if candidate != "" {
+				mode = candidate
+			}
+		}
+	}
+
+	switch mode {
+	case "manual", "schedule", "upload":
+		return mode
+	default:
+		return "manual"
+	}
+}
+
 func (helper *wafLogicHelper) primaryCaddyServer() (*model.CaddyServer, error) {
 	var server model.CaddyServer
 	err := helper.svcCtx.DB.Where("type = ?", "local").Order("id asc").First(&server).Error
@@ -369,10 +401,74 @@ func (helper *wafLogicHelper) activateRelease(release *model.WafRelease) error {
 		Store:       helper.store,
 		CaddyLoader: &wafCaddyLoader{server: server},
 	}
-	if err := activator.ActivateVersion(release.Version, server.Config); err != nil {
-		return fmt.Errorf("activate version failed: %w", err)
+
+	timeoutSec := helper.activateTimeoutSeconds()
+	retryCount := helper.activateRetryCount()
+	maxAttempts := retryCount + 1
+	if maxAttempts <= 0 {
+		maxAttempts = 1
 	}
-	return nil
+
+	var lastErr error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		if err := helper.activateReleaseOnce(activator, release.Version, server.Config, timeoutSec); err != nil {
+			lastErr = err
+			if attempt < maxAttempts {
+				helper.logger.Errorf("activate release retrying: version=%s attempt=%d/%d err=%v", release.Version, attempt, maxAttempts, err)
+				time.Sleep(time.Duration(attempt) * time.Second)
+				continue
+			}
+			break
+		}
+		return nil
+	}
+
+	return fmt.Errorf("activate failed after %d attempts: %w", maxAttempts, lastErr)
+}
+
+func (helper *wafLogicHelper) activateReleaseOnce(activator *waf.Activator, releaseVersion, caddyConfig string, timeoutSec int) error {
+	if activator == nil {
+		return fmt.Errorf("activator is nil")
+	}
+
+	timeout := time.Duration(timeoutSec) * time.Second
+	if timeout <= 0 {
+		timeout = 30 * time.Second
+	}
+
+	resultCh := make(chan error, 1)
+	go func() {
+		resultCh <- activator.ActivateVersion(releaseVersion, caddyConfig)
+	}()
+
+	select {
+	case activateErr := <-resultCh:
+		if activateErr != nil {
+			return fmt.Errorf("activate version failed: %w", activateErr)
+		}
+		return nil
+	case <-time.After(timeout):
+		return fmt.Errorf("activate timeout after %d seconds", int(timeout.Seconds()))
+	}
+}
+
+func (helper *wafLogicHelper) activateTimeoutSeconds() int {
+	timeoutSec := helper.svcCtx.Config.Waf.ActivateTimeoutSec
+	if timeoutSec <= 0 {
+		timeoutSec = 30
+	}
+	return timeoutSec
+}
+
+func (helper *wafLogicHelper) activateRetryCount() int {
+	retryCount := helper.svcCtx.Config.Waf.ActivateRetryCount
+	if retryCount < 0 {
+		retryCount = 0
+	}
+	if retryCount == 0 {
+		return 1
+	}
+	return retryCount
 }
 
 func (helper *wafLogicHelper) markReleaseActive(release *model.WafRelease) error {

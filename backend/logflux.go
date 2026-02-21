@@ -1,15 +1,19 @@
 package main
 
 import (
+	"context"
 	"flag"
+	"fmt"
 	"net/http"
 
 	"logflux/common/logging"
 	"logflux/common/result"
 	"logflux/internal/config"
 	"logflux/internal/handler"
+	caddylogic "logflux/internal/logic/caddy"
 	"logflux/internal/middleware"
 	"logflux/internal/svc"
+	"logflux/internal/types"
 	"strings"
 
 	"github.com/zeromicro/go-zero/core/conf"
@@ -44,6 +48,11 @@ func main() {
 	}
 
 	ctx := svc.NewServiceContext(c)
+	if ctx.WafScheduler != nil {
+		ctx.WafScheduler.SetExecutor(&wafScheduleExecutor{svcCtx: ctx})
+		ctx.WafScheduler.Start()
+		defer ctx.WafScheduler.Stop()
+	}
 	handler.RegisterHandlers(server, ctx)
 
 	// Global Response Middleware
@@ -69,4 +78,31 @@ func main() {
 
 	logx.Infof("Starting server at %s:%d...", c.Host, c.Port)
 	server.Start()
+}
+
+type wafScheduleExecutor struct {
+	svcCtx *svc.ServiceContext
+}
+
+func (executor *wafScheduleExecutor) CheckSource(ctx context.Context, sourceID uint) error {
+	if executor == nil || executor.svcCtx == nil {
+		return fmt.Errorf("waf scheduler svc context is nil")
+	}
+	ctx = caddylogic.WithWafJobTriggerMode(ctx, "schedule")
+	logic := caddylogic.NewCheckWafSourceLogic(ctx, executor.svcCtx)
+	_, err := logic.CheckWafSource(&types.WafSourceActionReq{ID: sourceID})
+	return err
+}
+
+func (executor *wafScheduleExecutor) SyncSource(ctx context.Context, sourceID uint, activateNow bool) error {
+	if executor == nil || executor.svcCtx == nil {
+		return fmt.Errorf("waf scheduler svc context is nil")
+	}
+	ctx = caddylogic.WithWafJobTriggerMode(ctx, "schedule")
+	logic := caddylogic.NewSyncWafSourceLogic(ctx, executor.svcCtx)
+	_, err := logic.SyncWafSource(&types.WafSourceSyncReq{
+		ID:          sourceID,
+		ActivateNow: activateNow,
+	})
+	return err
 }

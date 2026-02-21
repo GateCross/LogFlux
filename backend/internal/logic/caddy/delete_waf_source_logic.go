@@ -54,6 +54,9 @@ func (l *DeleteWafSourceLogic) DeleteWafSource(req *types.IDReq) (resp *types.Ba
 	if err != nil {
 		return nil, err
 	}
+	if l.svcCtx.WafScheduler != nil {
+		l.svcCtx.WafScheduler.RemoveSource(req.ID)
+	}
 
 	return &types.BaseResp{Code: 200, Msg: "success"}, nil
 }
