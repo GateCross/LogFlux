@@ -62,8 +62,8 @@ jobs:
           sbom: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=logflux-caddy
+          cache-to: type=gha,mode=min,scope=logflux-caddy
 
   cleanup:
     needs: build

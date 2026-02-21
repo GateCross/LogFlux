@@ -40,9 +40,6 @@ WORKDIR /app
 
 # 使用 --chown 直接设置权限，避免额外的层
 COPY --from=caddy-binary --chown=${APP_USER}:${APP_GROUP} /usr/bin/caddy /usr/bin/caddy
-COPY --chown=${APP_USER}:${APP_GROUP} build-artifacts/frontend/dist /app/frontend
-COPY --chown=${APP_USER}:${APP_GROUP} build-artifacts/backend/${TARGETARCH}/logflux-api /app/logflux-api
-RUN chmod +x /app/logflux-api
 
 ARG CADDYFILE=docker/Caddyfile
 COPY --chown=${APP_USER}:${APP_GROUP} ${CADDYFILE} /etc/caddy/Caddyfile
@@ -52,6 +49,10 @@ COPY --chmod=755 docker/entrypoint.sh /app/entrypoint.sh
 
 ARG CONFIG_FILE=docker/config.example.yaml
 COPY --chown=${APP_USER}:${APP_GROUP} ${CONFIG_FILE} /app/etc/config.yaml
+
+# 将高频变更产物放在后面，降低前置层失效概率
+COPY --chown=${APP_USER}:${APP_GROUP} --chmod=755 build-artifacts/backend/${TARGETARCH}/logflux-api /app/logflux-api
+COPY --chown=${APP_USER}:${APP_GROUP} build-artifacts/frontend/dist /app/frontend
 
 RUN printf "%s" "${CORAZA_CURRENT_VERSION}" > /app/etc/coraza-current-version && \
     chown ${APP_USER}:${APP_GROUP} /app/etc/coraza-current-version
