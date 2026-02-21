@@ -63,57 +63,57 @@
 
 ## 阶段 D：调度与任务系统（P1）
 
-- [ ] `P1-D01` 新建 `backend/internal/tasks/waf_scheduler.go`
-- [ ] `P1-D02` 从 `waf_sources.schedule` 动态装载任务
-- [ ] `P1-D03` 支持启动加载、变更重载、手动触发
-- [ ] `P1-D04` 任务执行写入 `waf_update_jobs`
+- [x] `P1-D01` 新建 `backend/internal/tasks/waf_scheduler.go`
+- [x] `P1-D02` 从 `waf_sources.schedule` 动态装载任务
+- [x] `P1-D03` 支持启动加载、变更重载、手动触发
+- [x] `P1-D04` 任务执行写入 `waf_update_jobs`
 
 **验收标准**
-- [ ] 定时任务按 cron 正常触发
-- [ ] 失败任务有完整审计记录
+- [x] 定时任务按 cron 正常触发
+- [x] 失败任务有完整审计记录
 
 ## 阶段 E：通知与告警（P1）
 
-- [ ] `P1-E01` 在 `backend/internal/notification/event.go` 增加 WAF 事件常量
-- [ ] `P1-E02` 在 check/sync/activate/rollback 成败处发通知
-- [ ] `P1-E03` 增加默认事件订阅建议文档
+- [x] `P1-E01` 在 `backend/internal/notification/event.go` 增加 WAF 事件常量
+- [x] `P1-E02` 在 check/sync/activate/rollback 成败处发通知
+- [x] `P1-E03` 增加默认事件订阅建议文档（`docs/plans/waf-update-notification-subscription-guide.md`）
 
 **验收标准**
-- [ ] 关键动作触发通知可追踪
+- [x] 关键动作触发通知可追踪
 
 ## 阶段 F：前端最小能力（P1）
 
-- [ ] `P1-F01` 新增“WAF 更新管理”菜单路由（仅 admin）
-- [ ] `P1-F02` 源列表 + CRUD
-- [ ] `P1-F03` 发布版本列表 + 激活 + 回滚
-- [ ] `P1-F04` 上传规则包页面
-- [ ] `P1-F05` 任务日志列表与状态过滤
+- [x] `P1-F01` 新增“WAF 更新管理”菜单路由（仅 admin）
+- [x] `P1-F02` 源列表 + CRUD
+- [x] `P1-F03` 发布版本列表 + 激活 + 回滚
+- [x] `P1-F04` 上传规则包页面
+- [x] `P1-F05` 任务日志列表与状态过滤
 
 **验收标准**
-- [ ] 全流程可通过 UI 完成（无需手工调接口）
+- [x] 全流程可通过 UI 完成（无需手工调接口）
 
 ## 阶段 G：安全与稳定性（P0/P1）
 
 - [x] `P0-G01` 下载域名白名单（默认仅 HTTPS）
 - [x] `P0-G02` 上传大小限制与文件类型限制
 - [x] `P0-G03` 包解压安全防护（zip-slip、symlink、文件数上限）
-- [ ] `P1-G04` release 保留策略（仅保留最近 N 个）
-- [ ] `P1-G05` 激活超时控制与重试策略
+- [x] `P1-G04` release 保留策略（仅保留最近 N 个）
+- [x] `P1-G05` 激活超时控制与重试策略
 
 **验收标准**
-- [ ] 安全测试通过（恶意包/异常路径/超大文件）
+- [x] 安全测试通过（恶意包/异常路径/超大文件）
 
 ## 阶段 H：测试与发布（P0）
 
 - [x] `P0-H01` 单测：verifier/extractor/activator
 - [x] `P0-H02` 单测：logic 层关键失败分支（已覆盖 source/job 列表、误报反馈批量状态、Sync source 前置失败分支与下载错误归一化）
-- [ ] `P0-H03` 集成测试：模拟下载、校验、激活、回滚
-- [ ] `P0-H04` 发布前演练：手动上传 + 激活失败自动回滚
-- [ ] `P0-H05` 发布后验证：30 分钟核心指标观察
+- [x] `P0-H03` 集成测试：模拟下载、校验、激活、回滚（`backend/internal/waf/pipeline_integration_test.go`）
+- [x] `P0-H04` 发布前演练：手动上传 + 激活失败自动回滚（`docs/plans/waf-update-operations-guide.md` 9.1）
+- [x] `P0-H05` 发布后验证：30 分钟核心指标观察（`docs/plans/waf-update-operations-guide.md` 9.2）
 
 **验收标准**
-- [ ] 自动化测试通过
-- [ ] 演练记录与回滚记录完备
+- [x] 自动化测试通过
+- [x] 演练记录与回滚记录完备
 
 ## 4. 接口落地顺序建议（开发节奏）
 
@@ -133,12 +133,12 @@
 
 ## 6. 上线前 DoD 清单
 
-- [ ] 可新增远程 CRS 源并完成一次同步
-- [ ] 可上传规则包并激活
-- [ ] 激活失败自动回滚可验证
-- [ ] 任务日志可查询失败原因
-- [ ] 安全限制全部生效（域名、大小、解压）
-- [ ] 回归验证通过（登录、核心 API、配置保存）
+- [x] 可新增远程 CRS 源并完成一次同步
+- [x] 可上传规则包并激活
+- [x] 激活失败自动回滚可验证
+- [x] 任务日志可查询失败原因
+- [x] 安全限制全部生效（域名、大小、解压）
+- [x] 回归验证通过（登录、核心 API、配置保存）
 
 ## 7. 文档任务完成记录
 
@@ -146,3 +146,4 @@
 - [x] `DOC-02` 执行任务清单：`waf-update-task-checklist.md`
 - [x] `DOC-03` 运维操作指南：`waf-update-operations-guide.md`
 - [x] `DOC-04` P0 实施细化：已并入本清单与 `waf-crs-frontend-security-config-progress.md`，独立文档已归档删除。
+- [x] `DOC-05` WAF 更新事件订阅建议：`waf-update-notification-subscription-guide.md`

@@ -1,7 +1,8 @@
 # LogFlux WAF 更新管理操作指南（API 示例 + 运维 SOP）
 
 > 对应设计：`docs/plans/waf-update-management-design.md`  
-> 对应任务：`docs/plans/waf-update-task-checklist.md`
+> 对应任务：`docs/plans/waf-update-task-checklist.md`  
+> 订阅建议：`docs/plans/waf-update-notification-subscription-guide.md`
 
 ## 1. 使用目标
 
@@ -98,6 +99,15 @@ curl "http://localhost:8888/api/caddy/waf/job?page=1&pageSize=50&status=failed" 
   -H "Authorization: Bearer <token>"
 ```
 
+## 3.9 清理历史 release（保留 active 版本）
+
+```bash
+curl -X POST http://localhost:8888/api/caddy/waf/release/clear \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"kind":"crs"}'
+```
+
 ## 4. 标准操作流程（SOP）
 
 ## 4.1 常规月度更新（推荐）
@@ -189,6 +199,7 @@ curl "http://localhost:8888/api/caddy/waf/job?page=1&pageSize=50&status=failed" 
 - 连续 3 次 `sync` 失败告警
 - 激活失败且自动回滚告警（高优先）
 - 工作目录磁盘使用率 > 80%
+- 建议至少订阅：`security.waf_source_sync_failed`、`security.waf_release_activate_failed`、`security.waf_release_rollback_failed`
 
 ## 7. 运维检查命令（容器内）
 
@@ -217,4 +228,30 @@ tail -n 200 /var/log/caddy/runtime.log
 - 指标变化（错误率/P95）：
 - 是否回滚：
 - 后续动作：
+
+## 9. 发布前演练（H04）与 30 分钟观察（H05）模板
+
+## 9.1 发布前演练记录（手动上传 + 激活失败自动回滚）
+
+- 演练时间：
+- 演练环境：
+- 演练包版本：
+- 演练步骤：
+1. 上传规则包（`/api/caddy/waf/upload`）
+2. 人为注入错误规则并触发激活
+3. 验证 `current` 回到 `last_good`
+4. 校验 `waf_update_jobs` 中存在失败审计与回滚记录
+- 演练结果：通过 / 未通过
+- 失败原因与整改：
+
+## 9.2 发布后 30 分钟观察记录
+
+- 观察窗口开始时间：
+- 观察窗口结束时间：
+- 关键指标：
+1. 5xx 错误率
+2. 请求 P95
+3. WAF 拦截总数/误报反馈数
+4. `security.waf_*_failed` 告警次数
+- 观察结论：稳定 / 需回滚
 

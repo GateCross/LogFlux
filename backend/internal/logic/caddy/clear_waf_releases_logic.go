@@ -101,32 +101,11 @@ func (l *ClearWafReleasesLogic) ClearWafReleases(req *types.WafReleaseClearReq) 
 		return nil, err
 	}
 
-	for _, pathValue := range dedupeStringSlice(pathsToRemove) {
+	for _, pathValue := range dedupeNonEmptyStrings(pathsToRemove) {
 		if removeErr := os.RemoveAll(pathValue); removeErr != nil {
 			l.Logger.Errorf("remove release storage path failed: path=%s err=%v", pathValue, removeErr)
 		}
 	}
 
 	return &types.BaseResp{Code: 200, Msg: "success"}, nil
-}
-
-func dedupeStringSlice(items []string) []string {
-	if len(items) == 0 {
-		return nil
-	}
-
-	set := make(map[string]struct{}, len(items))
-	results := make([]string, 0, len(items))
-	for _, item := range items {
-		trimmed := strings.TrimSpace(item)
-		if trimmed == "" {
-			continue
-		}
-		if _, ok := set[trimmed]; ok {
-			continue
-		}
-		set[trimmed] = struct{}{}
-		results = append(results, trimmed)
-	}
-	return results
 }

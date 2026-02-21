@@ -1,15 +1,18 @@
 package waf
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
 const (
 	CurrentLinkName  = "current"
 	LastGoodLinkName = "last_good"
+	linkTargetSuffix = ".linktarget"
 )
 
 type Store struct {
@@ -69,7 +72,19 @@ func (store *Store) LastGoodLinkPath() string {
 func (store *Store) LinkTarget(linkPath string) (string, error) {
 	targetPath, err := os.Readlink(linkPath)
 	if err != nil {
-		return "", err
+		metaPath := filepath.Clean(linkPath) + linkTargetSuffix
+		metaBytes, metaErr := os.ReadFile(metaPath)
+		if metaErr != nil {
+			return "", err
+		}
+		targetPath = strings.TrimSpace(string(metaBytes))
+		if targetPath == "" {
+			return "", err
+		}
+		if filepath.IsAbs(targetPath) {
+			return filepath.Clean(targetPath), nil
+		}
+		return filepath.Clean(filepath.Join(filepath.Dir(linkPath), targetPath)), nil
 	}
 	if filepath.IsAbs(targetPath) {
 		return filepath.Clean(targetPath), nil
@@ -80,6 +95,7 @@ func (store *Store) LinkTarget(linkPath string) (string, error) {
 func (store *Store) SetLink(linkPath, targetPath string) error {
 	cleanLinkPath := filepath.Clean(linkPath)
 	cleanTargetPath := filepath.Clean(targetPath)
+	metaPath := cleanLinkPath + linkTargetSuffix
 
 	if err := os.MkdirAll(filepath.Dir(cleanLinkPath), 0o755); err != nil {
 		return fmt.Errorf("prepare link dir failed: %w", err)
@@ -88,12 +104,17 @@ func (store *Store) SetLink(linkPath, targetPath string) error {
 	tempLink := cleanLinkPath + ".tmp"
 	_ = os.Remove(tempLink)
 	if err := os.Symlink(cleanTargetPath, tempLink); err != nil {
+		if shouldUseLinkMetadataFallback(err) {
+			return writeLinkMetadata(cleanLinkPath, cleanTargetPath)
+		}
 		return fmt.Errorf("create temp symlink failed: %w", err)
 	}
+	_ = os.Remove(cleanLinkPath)
 	if err := os.Rename(tempLink, cleanLinkPath); err != nil {
 		_ = os.Remove(tempLink)
 		return fmt.Errorf("replace symlink failed: %w", err)
 	}
+	_ = os.Remove(metaPath)
 	return nil
 }
 
@@ -105,4 +126,33 @@ func sanitizeVersion(version string) string {
 
 	replacer := strings.NewReplacer("/", "_", "\\", "_", "..", "_", " ", "_")
 	return replacer.Replace(version)
+}
+
+func shouldUseLinkMetadataFallback(err error) bool {
+	if runtime.GOOS != "windows" || err == nil {
+		return false
+	}
+	if errors.Is(err, os.ErrPermission) {
+		return true
+	}
+	lowerErr := strings.ToLower(strings.TrimSpace(err.Error()))
+	return strings.Contains(lowerErr, "privilege") || strings.Contains(lowerErr, "operation not permitted")
+}
+
+func writeLinkMetadata(linkPath, targetPath string) error {
+	cleanLinkPath := filepath.Clean(linkPath)
+	cleanTargetPath := filepath.Clean(targetPath)
+	metaPath := cleanLinkPath + linkTargetSuffix
+	tempPath := metaPath + ".tmp"
+
+	_ = os.Remove(cleanLinkPath)
+	_ = os.Remove(tempPath)
+	if err := os.WriteFile(tempPath, []byte(cleanTargetPath), 0o644); err != nil {
+		return fmt.Errorf("write link metadata failed: %w", err)
+	}
+	if err := os.Rename(tempPath, metaPath); err != nil {
+		_ = os.Remove(tempPath)
+		return fmt.Errorf("replace link metadata failed: %w", err)
+	}
+	return nil
 }

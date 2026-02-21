@@ -116,6 +116,11 @@ func (l *UpdateWafSourceLogic) UpdateWafSource(req *types.WafSourceUpdateReq) (r
 		}
 		return nil, fmt.Errorf("update source failed: %w", err)
 	}
+	if helper.svcCtx.WafScheduler != nil {
+		if reloadErr := helper.svcCtx.WafScheduler.ReloadSource(source.ID); reloadErr != nil {
+			l.Logger.Errorf("reload waf scheduler source failed: sourceID=%d err=%v", source.ID, reloadErr)
+		}
+	}
 
 	return &types.BaseResp{Code: 200, Msg: "success"}, nil
 }

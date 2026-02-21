@@ -30,6 +30,7 @@ type ServiceContext struct {
 	Ingestor        *ingest.IngestManager
 	ArchiveTask     *tasks.ArchiveTask
 	CronScheduler   *tasks.CronScheduler
+	WafScheduler    *tasks.WafScheduler
 	NotificationMgr notification.NotificationManager
 }
 
@@ -155,6 +156,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	cronScheduler := tasks.NewCronScheduler(db)
 	cronScheduler.Start()
 
+	// 初始化 WAF 更新调度器（执行器在 main 中注入）
+	wafScheduler := tasks.NewWafScheduler(db)
+
 	return &ServiceContext{
 		Config:          c,
 		DB:              db,
@@ -162,6 +166,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		Ingestor:        ingestor,
 		ArchiveTask:     archiveTask,
 		CronScheduler:   cronScheduler,
+		WafScheduler:    wafScheduler,
 		NotificationMgr: notificationMgr,
 	}
 }

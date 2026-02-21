@@ -137,6 +137,7 @@ func (l *UploadWafPackageLogic) UploadWafPackage(req *types.WafUploadReq) (resp 
 		helper.finishJob(job, wafJobStatusFailed, fmt.Sprintf("create release failed: %v", err), 0)
 		return nil, fmt.Errorf("create release failed: %w", err)
 	}
+	helper.applyReleaseRetention(release.Kind)
 
 	helper.finishJob(job, wafJobStatusSuccess, "upload success", release.ID)
 

@@ -61,6 +61,28 @@ test('collectExclusionCandidatesFromFeedbackSuggestion supports quoted values an
   );
 });
 
+test('collectExclusionCandidatesFromFeedbackSuggestion tolerates dirty fragments and broken tokens', () => {
+  const suggestion = [
+    '建议 removeByTag：attack-rce；',
+    'rule id=9x2134（坏样本）',
+    'removeById: 949110###',
+    '标签=attack-sqli,,',
+    '脏数据<script>alert(1)</script>',
+    'fallback id: 950001'
+  ].join(' ');
+
+  const candidates = collectExclusionCandidatesFromFeedbackSuggestion(suggestion);
+  assert.deepEqual(
+    [...candidates].sort((a, b) => a.removeType.localeCompare(b.removeType) || a.removeValue.localeCompare(b.removeValue)),
+    [
+      { removeType: 'id', removeValue: '949110' },
+      { removeType: 'id', removeValue: '950001' },
+      { removeType: 'tag', removeValue: 'attack-rce' },
+      { removeType: 'tag', removeValue: 'attack-sqli' }
+    ]
+  );
+});
+
 test('parseExclusionCandidateKey rejects malformed values', () => {
   assert.equal(parseExclusionCandidateKey('tag'), null);
   assert.equal(parseExclusionCandidateKey('\u0000attack-sqli'), null);
