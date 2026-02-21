@@ -214,115 +214,12 @@ export const generatedRoutes = [
   {
     name: 'security',
     path: '/security',
-    component: 'layout.base',
-    redirect: '/security/source',
+    component: 'layout.base$view.security',
     meta: {
       title: 'security',
       i18nKey: 'route.security',
       icon: 'carbon:security'
-    },
-    children: [
-      {
-        name: 'security_source',
-        path: '/security/source',
-        component: 'view.security',
-        meta: {
-          title: 'security_source',
-          i18nKey: 'route.security_source',
-          icon: 'carbon:catalog'
-        }
-      },
-      {
-        name: 'security_policy',
-        path: '/security/policy',
-        component: 'view.security',
-        meta: {
-          title: 'security_policy',
-          i18nKey: 'route.security_policy',
-          icon: 'carbon:settings'
-        }
-      },
-      {
-        name: 'security_observe',
-        path: '/security/observe',
-        component: 'view.security',
-        meta: {
-          title: 'security_observe',
-          i18nKey: 'route.security_observe',
-          icon: 'carbon:view'
-        }
-      },
-      {
-        name: 'security_ops',
-        path: '/security/ops',
-        component: 'view.security',
-        meta: {
-          title: 'security_ops',
-          i18nKey: 'route.security_ops',
-          icon: 'carbon:time'
-        }
-      },
-      {
-        name: 'security_runtime',
-        path: '/security/runtime',
-        component: 'view.security',
-        meta: {
-          title: 'security_runtime',
-          i18nKey: 'route.security_runtime',
-          hideInMenu: true
-        }
-      },
-      {
-        name: 'security_crs',
-        path: '/security/crs',
-        component: 'view.security',
-        meta: {
-          title: 'security_crs',
-          i18nKey: 'route.security_crs',
-          hideInMenu: true
-        }
-      },
-      {
-        name: 'security_exclusion',
-        path: '/security/exclusion',
-        component: 'view.security',
-        meta: {
-          title: 'security_exclusion',
-          i18nKey: 'route.security_exclusion',
-          hideInMenu: true
-        }
-      },
-      {
-        name: 'security_binding',
-        path: '/security/binding',
-        component: 'view.security',
-        meta: {
-          title: 'security_binding',
-          i18nKey: 'route.security_binding',
-          hideInMenu: true
-        }
-      },
-      {
-        name: 'security_release',
-        path: '/security/release',
-        component: 'view.security',
-        meta: {
-          title: 'security_release',
-          i18nKey: 'route.security_release',
-          hideInMenu: true
-        }
-      },
-      {
-        name: 'security_job',
-        path: '/security/job',
-        component: 'view.security',
-        meta: {
-          title: 'security_job',
-          i18nKey: 'route.security_job',
-          hideInMenu: true
-        }
-      }
-    ]
+    }
   },
   {
     name: 'user',
