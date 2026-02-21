@@ -4,6 +4,11 @@ on:
   push:
     branches:
       - main
+    paths:
+      - frontend/**
+      - backend/**
+      - docker/**
+      - .github/workflows/build-and-push.yml
   workflow_dispatch:
 
 permissions:
@@ -159,8 +164,6 @@ jobs:
           sbom: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
   cleanup:
     needs: build
