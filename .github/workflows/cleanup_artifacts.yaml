@@ -1,0 +1,32 @@
+name: Cleanup Old Artifacts
+
+on:
+  schedule:
+    # 设定为每周日凌晨 2 点自动执行 (UTC 时间)
+    - cron: '0 2 * * 0'
+  workflow_dispatch: # 保留手动触发按钮，方便随时清理
+
+jobs:
+  delete-artifacts:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write # 必须赋予 write 权限才能执行删除操作
+    steps:
+      - name: Delete Artifacts older than 7 days
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          # 计算 7 天前的日期时间戳
+          EXPIRY_DATE=$(date -d "7 days ago" +%Y-%m-%dT%H:%M:%SZ)
+          
+          # 调用 GitHub API 获取所有早于该日期的 Artifact ID
+          gh api repos/$REPO/actions/artifacts --paginate -q ".artifacts[] | select(.created_at < \"$EXPIRY_DATE\") | .id" > artifacts_to_delete.txt
+          
+          # 遍历并逐一删除
+          while read artifact_id; do
+            if [ -n "$artifact_id" ]; then
+              echo "Deleting artifact ID: $artifact_id"
+              gh api -X DELETE repos/$REPO/actions/artifacts/$artifact_id
+            fi
+          done < artifacts_to_delete.txt
