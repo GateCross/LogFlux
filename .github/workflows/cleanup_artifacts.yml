@@ -2,8 +2,8 @@ name: Cleanup Old Artifacts
 
 on:
   schedule:
-    # 设定为每周日凌晨 2 点自动执行 (UTC 时间)
-    - cron: '0 2 * * 0'
+    # 设定为每天北京时间 (CST) 凌晨 0 点自动执行 (对应 UTC 时间为 16 点)
+    - cron: '0 16 * * *'
   workflow_dispatch: # 保留手动触发按钮，方便随时清理
 
 jobs:
