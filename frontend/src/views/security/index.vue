@@ -359,322 +359,94 @@
         </n-tab-pane>
 
         <n-tab-pane v-if="isTabVisible('observe')" name="observe" tab="策略观测">
-          <n-alert type="info" :show-icon="true" class="mb-3">
-            统计口径基于策略绑定作用域与请求日志；“疑似误报”当前为启发式指标（安全端点被拦截），用于辅助调优参考。
-          </n-alert>
-
-          <div class="mb-3 flex flex-wrap gap-2 items-center">
-            <n-select
-              v-model:value="policyStatsQuery.policyId"
-              :options="policyStatsPolicyOptions"
-              clearable
-              placeholder="策略范围"
-              class="w-240px"
-            />
-            <n-select v-model:value="policyStatsQuery.window" :options="observeWindowOptions" class="w-180px" />
-            <n-input-number
-              v-model:value="policyStatsQuery.intervalSec"
-              :show-button="false"
-              :min="60"
-              :max="86400"
-              placeholder="趋势粒度（秒）"
-              class="w-180px"
-            />
-            <n-input-number
-              v-model:value="policyStatsQuery.topN"
-              :show-button="false"
-              :min="1"
-              :max="50"
-              placeholder="TopN"
-              class="w-120px"
-            />
-            <n-button type="primary" :loading="policyStatsLoading" @click="fetchPolicyStats">
-              <template #icon>
-                <icon-carbon-search />
-              </template>
-              查询
-            </n-button>
-            <n-button @click="resetPolicyStatsQuery">重置</n-button>
-            <n-button :disabled="!hasPolicyStatsDrillFilters" @click="clearPolicyStatsDrillFilters">清空下钻</n-button>
-            <n-select
-              v-model:value="policyFeedbackStatusFilter"
-              :options="policyFeedbackStatusFilterOptions"
-              placeholder="反馈状态"
-              class="w-160px"
-              @update:value="handlePolicyFeedbackStatusFilterChange"
-            />
-            <n-input
-              v-model:value="policyFeedbackAssigneeFilter"
-              clearable
-              placeholder="责任人"
-              class="w-160px"
-              @keyup.enter="handlePolicyFeedbackStatusFilterChange"
-            />
-            <n-select
-              v-model:value="policyFeedbackSLAStatusFilter"
-              :options="policyFeedbackSLAStatusOptions"
-              class="w-160px"
-              @update:value="handlePolicyFeedbackStatusFilterChange"
-            />
-            <n-button type="warning" secondary @click="openPolicyFeedbackModal">标记误报</n-button>
-            <n-button type="warning" secondary :disabled="!hasPolicyFeedbackSelection" @click="openPolicyFeedbackBatchProcessModal">
-              批量处理（{{ policyFeedbackCheckedRowKeys.length }}）
-            </n-button>
-            <n-button secondary :loading="policyFeedbackLoading" @click="fetchPolicyFalsePositiveFeedbacks">刷新反馈</n-button>
-            <n-button secondary @click="handleCopyPolicyStatsLink">
-              <template #icon>
-                <icon-carbon-link />
-              </template>
-              复制筛选链接
-            </n-button>
-            <n-button secondary :disabled="!policyStatsPreviousSnapshot" @click="handleExportPolicyStatsCompareCsv">导出对比 CSV</n-button>
-            <n-button secondary @click="handleExportPolicyStatsCsv">导出 CSV</n-button>
-          </div>
-
-          <n-grid cols="5" x-gap="12" y-gap="10">
-            <n-gi>
-              <n-card size="small" :bordered="false">
-                <div class="text-xs text-gray-500">命中</div>
-                <div class="text-lg font-semibold">{{ policyStatsSummary.hitCount || 0 }}</div>
-              </n-card>
-            </n-gi>
-            <n-gi>
-              <n-card size="small" :bordered="false">
-                <div class="text-xs text-gray-500">拦截</div>
-                <div class="text-lg font-semibold">{{ policyStatsSummary.blockedCount || 0 }}</div>
-              </n-card>
-            </n-gi>
-            <n-gi>
-              <n-card size="small" :bordered="false">
-                <div class="text-xs text-gray-500">放行</div>
-                <div class="text-lg font-semibold">{{ policyStatsSummary.allowedCount || 0 }}</div>
-              </n-card>
-            </n-gi>
-            <n-gi>
-              <n-card size="small" :bordered="false">
-                <div class="text-xs text-gray-500">疑似误报</div>
-                <div class="text-lg font-semibold">{{ policyStatsSummary.suspectedFalsePositiveCount || 0 }}</div>
-              </n-card>
-            </n-gi>
-            <n-gi>
-              <n-card size="small" :bordered="false">
-                <div class="text-xs text-gray-500">拦截率</div>
-                <div class="text-lg font-semibold">{{ formatRatePercent(policyStatsSummary.blockRate) }}</div>
-              </n-card>
-            </n-gi>
-          </n-grid>
-
-          <div class="mt-3 text-xs text-gray-500">
-            统计区间：{{ policyStatsRange.startTime || '-' }} ~ {{ policyStatsRange.endTime || '-' }}，粒度 {{ policyStatsRange.intervalSec || 0 }} 秒
-          </div>
-          <div v-if="policyStatsPreviousSnapshot" class="mt-1 text-xs text-gray-500">对比基线：{{ policyStatsPreviousSnapshot.capturedAt }}</div>
-          <div class="mt-1 text-xs text-gray-500">
-            下钻过滤：Host={{ policyStatsQuery.host || '-' }} / Path={{ policyStatsQuery.path || '-' }} / Method={{ policyStatsQuery.method || '-' }}
-          </div>
-          <div class="mt-1 text-xs text-gray-500">下钻顺序：先点 Top Host，再点 Top Path，最后点 Top Method。</div>
-          <div class="mt-2 flex flex-wrap gap-2 items-center">
-            <span class="text-xs text-gray-500">当前下钻标签：</span>
-            <n-tag v-if="policyStatsQuery.host" closable size="small" @close="() => clearPolicyStatsDrillLevel('host')">
-              Host: {{ policyStatsQuery.host }}
-            </n-tag>
-            <n-tag v-if="policyStatsQuery.path" closable size="small" type="info" @close="() => clearPolicyStatsDrillLevel('path')">
-              Path: {{ policyStatsQuery.path }}
-            </n-tag>
-            <n-tag v-if="policyStatsQuery.method" closable size="small" type="warning" @close="() => clearPolicyStatsDrillLevel('method')">
-              Method: {{ policyStatsQuery.method }}
-            </n-tag>
-            <span v-if="!hasPolicyStatsDrillFilters" class="text-xs text-gray-400">-</span>
-          </div>
-
-          <n-card :bordered="false" size="small" class="mt-3">
-            <div class="text-sm font-semibold mb-2">命中趋势</div>
-            <n-data-table
-              :columns="policyStatsTrendColumns"
-              :data="policyStatsTrend"
-              :loading="policyStatsLoading"
-              :pagination="false"
-              :row-key="row => row.time"
-              :max-height="260"
-              class="min-h-120px"
-            />
-          </n-card>
-
-          <n-card :bordered="false" size="small" class="mt-3">
-            <div class="text-sm font-semibold mb-2">策略命中统计</div>
-            <n-data-table
-              :columns="policyStatsColumns"
-              :data="policyStatsTable"
-              :loading="policyStatsLoading"
-              :pagination="false"
-              :row-key="row => row.policyId"
-              :max-height="320"
-              class="min-h-160px"
-            />
-          </n-card>
-
-          <n-card :bordered="false" size="small" class="mt-3">
-            <div class="text-sm font-semibold mb-2">人工误报反馈（当前筛选口径）</div>
-            <n-data-table
-              remote
-              :columns="policyFeedbackColumns"
-              :data="policyFeedbackTable"
-              :loading="policyFeedbackLoading"
-              :pagination="policyFeedbackPagination"
-              :checked-row-keys="policyFeedbackCheckedRowKeysInPage"
-              :row-key="row => row.id"
-              :max-height="300"
-              class="min-h-140px"
-              :scroll-x="1800"
-              @update:checked-row-keys="handlePolicyFeedbackCheckedRowKeysChange"
-              @update:page="handlePolicyFeedbackPageChange"
-              @update:page-size="handlePolicyFeedbackPageSizeChange"
-            />
-          </n-card>
-
-          <n-grid cols="3" x-gap="12" y-gap="12" class="mt-3">
-            <n-gi>
-              <n-card :bordered="false" size="small">
-                <div class="text-sm font-semibold mb-2 flex items-center gap-2">
-                  <span>Top Host</span>
-                  <n-tooltip trigger="hover">
-                    <template #trigger>
-                      <span class="inline-flex items-center text-green-600">
-                        <icon-carbon-unlocked />
-                      </span>
-                    </template>
-                    {{ policyStatsDrillHint('host') }}
-                  </n-tooltip>
-                  <n-tag size="small" type="success" :bordered="false">{{ policyStatsDrillStatusLabel('host') }}</n-tag>
-                </div>
-                <n-data-table
-                  :columns="policyStatsDimensionColumns"
-                  :data="policyStatsTopHosts"
-                  :loading="policyStatsLoading"
-                  :pagination="false"
-                  :row-props="buildPolicyStatsDimensionRowProps('host')"
-                  :row-key="row => `host-${row.key}`"
-                  :max-height="260"
-                  class="min-h-120px"
-                />
-              </n-card>
-            </n-gi>
-            <n-gi>
-              <n-card :bordered="false" size="small">
-                <div class="text-sm font-semibold mb-2 flex items-center gap-2">
-                  <span>Top Path</span>
-                  <n-tooltip trigger="hover">
-                    <template #trigger>
-                      <span class="inline-flex items-center" :class="isPolicyStatsDrillUnlocked('path') ? 'text-green-600' : 'text-gray-400'">
-                        <icon-carbon-unlocked v-if="isPolicyStatsDrillUnlocked('path')" />
-                        <icon-carbon-locked v-else />
-                      </span>
-                    </template>
-                    {{ policyStatsDrillHint('path') }}
-                  </n-tooltip>
-                  <n-tag size="small" :type="isPolicyStatsDrillUnlocked('path') ? 'success' : 'default'" :bordered="false">
-                    {{ policyStatsDrillStatusLabel('path') }}
-                  </n-tag>
-                </div>
-                <n-data-table
-                  :columns="policyStatsDimensionColumns"
-                  :data="policyStatsTopPaths"
-                  :loading="policyStatsLoading"
-                  :pagination="false"
-                  :row-props="buildPolicyStatsDimensionRowProps('path')"
-                  :row-key="row => `path-${row.key}`"
-                  :max-height="260"
-                  class="min-h-120px"
-                />
-              </n-card>
-            </n-gi>
-            <n-gi>
-              <n-card :bordered="false" size="small">
-                <div class="text-sm font-semibold mb-2 flex items-center gap-2">
-                  <span>Top Method</span>
-                  <n-tooltip trigger="hover">
-                    <template #trigger>
-                      <span class="inline-flex items-center" :class="isPolicyStatsDrillUnlocked('method') ? 'text-green-600' : 'text-gray-400'">
-                        <icon-carbon-unlocked v-if="isPolicyStatsDrillUnlocked('method')" />
-                        <icon-carbon-locked v-else />
-                      </span>
-                    </template>
-                    {{ policyStatsDrillHint('method') }}
-                  </n-tooltip>
-                  <n-tag size="small" :type="isPolicyStatsDrillUnlocked('method') ? 'success' : 'default'" :bordered="false">
-                    {{ policyStatsDrillStatusLabel('method') }}
-                  </n-tag>
-                </div>
-                <n-data-table
-                  :columns="policyStatsDimensionColumns"
-                  :data="policyStatsTopMethods"
-                  :loading="policyStatsLoading"
-                  :pagination="false"
-                  :row-props="buildPolicyStatsDimensionRowProps('method')"
-                  :row-key="row => `method-${row.key}`"
-                  :max-height="260"
-                  class="min-h-120px"
-                />
-              </n-card>
-            </n-gi>
-          </n-grid>
+          <ObserveTabContent
+            :policy-stats-query="policyStatsQuery"
+            :policy-stats-policy-options="policyStatsPolicyOptions"
+            :observe-window-options="observeWindowOptions"
+            :policy-stats-loading="policyStatsLoading"
+            :fetch-policy-stats="fetchPolicyStats"
+            :reset-policy-stats-query="resetPolicyStatsQuery"
+            :has-policy-stats-drill-filters="hasPolicyStatsDrillFilters"
+            :clear-policy-stats-drill-filters="clearPolicyStatsDrillFilters"
+            :policy-feedback-status-filter="policyFeedbackStatusFilter"
+            :policy-feedback-status-filter-options="policyFeedbackStatusFilterOptions"
+            :set-policy-feedback-status-filter="(value: '' | 'pending' | 'confirmed' | 'resolved') => { policyFeedbackStatusFilter = value; }"
+            :policy-feedback-assignee-filter="policyFeedbackAssigneeFilter"
+            :set-policy-feedback-assignee-filter="(value: string) => { policyFeedbackAssigneeFilter = value; }"
+            :policy-feedback-sla-status-filter="policyFeedbackSLAStatusFilter"
+            :policy-feedback-sla-status-options="policyFeedbackSLAStatusOptions"
+            :set-policy-feedback-sla-status-filter="(value: 'all' | 'normal' | 'overdue' | 'resolved') => { policyFeedbackSLAStatusFilter = value; }"
+            :handle-policy-feedback-status-filter-change="handlePolicyFeedbackStatusFilterChange"
+            :open-policy-feedback-modal="openPolicyFeedbackModal"
+            :open-policy-feedback-batch-process-modal="openPolicyFeedbackBatchProcessModal"
+            :has-policy-feedback-selection="hasPolicyFeedbackSelection"
+            :policy-feedback-checked-row-keys="policyFeedbackCheckedRowKeys"
+            :policy-feedback-loading="policyFeedbackLoading"
+            :fetch-policy-false-positive-feedbacks="fetchPolicyFalsePositiveFeedbacks"
+            :handle-copy-policy-stats-link="handleCopyPolicyStatsLink"
+            :handle-export-policy-stats-compare-csv="handleExportPolicyStatsCompareCsv"
+            :handle-export-policy-stats-csv="handleExportPolicyStatsCsv"
+            :policy-stats-summary="policyStatsSummary"
+            :policy-stats-range="policyStatsRange"
+            :policy-stats-previous-snapshot="policyStatsPreviousSnapshot"
+            :format-rate-percent="formatRatePercent"
+            :clear-policy-stats-drill-level="clearPolicyStatsDrillLevel"
+            :policy-stats-trend-columns="policyStatsTrendColumns"
+            :policy-stats-trend="policyStatsTrend"
+            :policy-stats-columns="policyStatsColumns"
+            :policy-stats-table="policyStatsTable"
+            :policy-feedback-columns="policyFeedbackColumns"
+            :policy-feedback-table="policyFeedbackTable"
+            :policy-feedback-pagination="policyFeedbackPagination"
+            :policy-feedback-checked-row-keys-in-page="policyFeedbackCheckedRowKeysInPage"
+            :handle-policy-feedback-checked-row-keys-change="handlePolicyFeedbackCheckedRowKeysChange"
+            :handle-policy-feedback-page-change="handlePolicyFeedbackPageChange"
+            :handle-policy-feedback-page-size-change="handlePolicyFeedbackPageSizeChange"
+            :policy-stats-drill-hint="policyStatsDrillHint"
+            :policy-stats-drill-status-label="policyStatsDrillStatusLabel"
+            :is-policy-stats-drill-unlocked="isPolicyStatsDrillUnlocked"
+            :policy-stats-dimension-columns="policyStatsDimensionColumns"
+            :policy-stats-top-hosts="policyStatsTopHosts"
+            :policy-stats-top-paths="policyStatsTopPaths"
+            :policy-stats-top-methods="policyStatsTopMethods"
+            :build-policy-stats-dimension-row-props="buildPolicyStatsDimensionRowProps"
+          />
         </n-tab-pane>
 
         <n-tab-pane v-if="isTabVisible('release')" name="release" tab="版本发布管理">
-          <div class="mb-3 flex flex-wrap gap-2 items-center">
-            <n-select v-model:value="releaseQuery.status" :options="releaseStatusOptions" clearable placeholder="状态" class="w-160px" />
-            <n-button type="primary" @click="fetchReleases">
-              <template #icon>
-                <icon-carbon-search />
-              </template>
-              查询
-            </n-button>
-            <n-button @click="resetReleaseQuery">重置</n-button>
-            <n-button type="warning" @click="openRollbackModal">回滚到历史版本</n-button>
-            <n-button type="error" @click="handleClearReleases">清空非激活版本</n-button>
-          </div>
-
-          <n-data-table
-            remote
-            :columns="releaseColumns"
-            :data="releaseTable"
-            :loading="releaseLoading"
-            :pagination="releasePagination"
-            :row-key="row => row.id"
-            :max-height="tableFixedHeight"
-            class="min-h-260px"
-            @update:page="handleReleasePageChange"
-            @update:page-size="handleReleasePageSizeChange"
+          <ReleaseTabContent
+            :release-query="releaseQuery"
+            :release-status-options="releaseStatusOptions"
+            :fetch-releases="fetchReleases"
+            :reset-release-query="resetReleaseQuery"
+            :open-rollback-modal="openRollbackModal"
+            :handle-clear-releases="handleClearReleases"
+            :release-columns="releaseColumns"
+            :release-table="releaseTable"
+            :release-loading="releaseLoading"
+            :release-pagination="releasePagination"
+            :table-fixed-height="tableFixedHeight"
+            :handle-release-page-change="handleReleasePageChange"
+            :handle-release-page-size-change="handleReleasePageSizeChange"
           />
         </n-tab-pane>
 
         <n-tab-pane v-if="isTabVisible('job')" name="job" tab="任务日志">
-          <div class="mb-3 flex flex-wrap gap-2 items-center">
-            <n-select v-model:value="jobQuery.status" :options="jobStatusOptions" clearable placeholder="状态" class="w-160px" />
-            <n-select v-model:value="jobQuery.action" :options="jobActionOptions" clearable placeholder="动作" class="w-160px" />
-            <n-button type="primary" @click="fetchJobs">
-              <template #icon>
-                <icon-carbon-search />
-              </template>
-              查询
-            </n-button>
-            <n-button @click="resetJobQuery">重置</n-button>
-            <n-button type="success" @click="refreshCurrentTab">刷新</n-button>
-            <n-button type="error" @click="handleClearJobs">清空任务日志</n-button>
-          </div>
-
-          <n-data-table
-            remote
-            :columns="jobColumns"
-            :data="jobTable"
-            :loading="jobLoading"
-            :pagination="jobPagination"
-            :row-key="row => row.id"
-            :max-height="tableFixedHeight"
-            class="min-h-260px"
-            :scroll-x="1500"
-            :resizable="true"
-            @update:page="handleJobPageChange"
-            @update:page-size="handleJobPageSizeChange"
+          <JobTabContent
+            :job-query="jobQuery"
+            :job-status-options="jobStatusOptions"
+            :job-action-options="jobActionOptions"
+            :fetch-jobs="fetchJobs"
+            :reset-job-query="resetJobQuery"
+            :refresh-current-tab="refreshCurrentTab"
+            :handle-clear-jobs="handleClearJobs"
+            :job-columns="jobColumns"
+            :job-table="jobTable"
+            :job-loading="jobLoading"
+            :job-pagination="jobPagination"
+            :table-fixed-height="tableFixedHeight"
+            :handle-job-page-change="handleJobPageChange"
+            :handle-job-page-size-change="handleJobPageSizeChange"
           />
         </n-tab-pane>
       </n-tabs>
@@ -1238,6 +1010,10 @@ import {
   parseExclusionCandidateKey,
   parseExclusionFromFeedbackSuggestion
 } from './policy-feedback-draft';
+import ObserveTabContent from './tabs/ObserveTabContent.vue';
+import ReleaseTabContent from './tabs/ReleaseTabContent.vue';
+import JobTabContent from './tabs/JobTabContent.vue';
+import { useWafPolicy } from './composables/useWafPolicy';
 import { request } from '@/service/request';
 
 const message = useMessage();
@@ -1492,44 +1268,6 @@ const sourceRules: FormRules = {
   }
 };
 
-const policyQuery = reactive({
-  name: ''
-});
-
-const policyLoading = ref(false);
-const policyTable = ref<WafPolicyItem[]>([]);
-const policyPagination = reactive<PaginationProps>({
-  page: 1,
-  pageSize: 20,
-  itemCount: 0,
-  showSizePicker: true,
-  pageSizes: [10, 20, 50, 100]
-});
-
-const policyModalVisible = ref(false);
-const policyModalMode = ref<'add' | 'edit'>('add');
-const policySubmitting = ref(false);
-const policyFormRef = ref<FormInst | null>(null);
-const policyForm = reactive({
-  id: 0,
-  name: '',
-  description: '',
-  enabled: true,
-  isDefault: false,
-  engineMode: 'detectiononly' as WafPolicyEngineMode,
-  auditEngine: 'relevantonly' as WafPolicyAuditEngine,
-  auditLogFormat: 'json' as WafPolicyAuditLogFormat,
-  auditRelevantStatus: '^(?:5|4(?!04))',
-  requestBodyAccess: true,
-  requestBodyLimit: 10 * 1024 * 1024,
-  requestBodyNoFilesLimit: 1024 * 1024,
-  config: ''
-});
-
-const policyModalTitle = computed(() => (policyModalMode.value === 'add' ? '新增运行策略' : '编辑运行策略'));
-const policyPreviewLoading = ref(false);
-const policyPreviewPolicyName = ref('');
-const policyPreviewDirectives = ref('');
 const crsTuningSubmitting = ref(false);
 const crsTuningFormRef = ref<FormInst | null>(null);
 const crsTuningForm = reactive({
@@ -1539,21 +1277,47 @@ const crsTuningForm = reactive({
   crsInboundAnomalyThreshold: 10,
   crsOutboundAnomalyThreshold: 8
 });
-const crsPolicyOptions = computed(() =>
-  policyTable.value.map(item => ({
-    label: `${item.name}${item.isDefault ? '（默认）' : ''}`,
-    value: item.id
-  }))
-);
 
-const policyRevisionLoading = ref(false);
-const policyRevisionTable = ref<WafPolicyRevisionItem[]>([]);
-const policyRevisionPagination = reactive<PaginationProps>({
-  page: 1,
-  pageSize: 10,
-  itemCount: 0,
-  showSizePicker: true,
-  pageSizes: [10, 20, 50]
+const {
+  policyQuery,
+  policyLoading,
+  policyTable,
+  policyPagination,
+  policyModalVisible,
+  policyModalMode,
+  policySubmitting,
+  policyFormRef,
+  policyForm,
+  policyModalTitle,
+  policyPreviewLoading,
+  policyPreviewPolicyName,
+  policyPreviewDirectives,
+  policyRevisionLoading,
+  policyRevisionTable,
+  policyRevisionPagination,
+  crsPolicyOptions,
+  fetchPolicies,
+  resetPolicyQuery,
+  handlePolicyPageChange,
+  handlePolicyPageSizeChange,
+  handleAddPolicy,
+  handleEditPolicy,
+  handleSubmitPolicy,
+  handleDeletePolicy,
+  handlePreviewPolicy,
+  handleValidatePolicy,
+  handlePublishPolicy,
+  fetchPolicyRevisions,
+  handlePolicyRevisionPageChange,
+  handlePolicyRevisionPageSizeChange,
+  handleRollbackPolicyRevision,
+  getDefaultPolicyId
+} = useWafPolicy({
+  message,
+  dialog,
+  ensureUserNamesByIds,
+  onPolicyListSynced: syncCrsTuningFromPolicyTable,
+  getCurrentRevisionPolicyId
 });
 
 const observeWindowOptions = [
@@ -1697,7 +1461,7 @@ const policyFeedbackExclusionDraftCandidateKey = ref('');
 const observeWindowValueSet = new Set(observeWindowOptions.map(item => item.value));
 const observeRouteSyncing = ref(false);
 
-const policyStatsPolicyOptions = computed(() => [
+const policyStatsPolicyOptions = computed<Array<{ label: string; value: number | '' }>>(() => [
   { label: '全部策略', value: '' },
   ...crsPolicyOptions.value
 ]);
@@ -4340,32 +4104,6 @@ function handleDeleteSource(row: WafSourceItem) {
   });
 }
 
-async function fetchPolicies() {
-  policyLoading.value = true;
-  try {
-    const { data, error } = await fetchWafPolicyList({
-      page: policyPagination.page as number,
-      pageSize: policyPagination.pageSize as number,
-      name: policyQuery.name.trim() || undefined
-    });
-    if (!error && data) {
-      const list = data.list || [];
-      const total = data.total || 0;
-
-      if (!policyQuery.name.trim() && total > 0 && list.length === 0 && (policyPagination.page as number) > 1) {
-        policyPagination.page = 1;
-        await fetchPolicies();
-        return;
-      }
-
-      policyTable.value = list;
-      policyPagination.itemCount = total;
-      syncCrsTuningFromPolicyTable();
-    }
-  } finally {
-    policyLoading.value = false;
-  }
-}
 
 function syncCrsTuningFromPolicy(policy: WafPolicyItem | null | undefined) {
   if (!policy) {
@@ -4403,6 +4141,10 @@ function syncCrsTuningFromPolicyTable() {
 
   const preferred = policyTable.value.find(item => item.isDefault) || policyTable.value[0];
   syncCrsTuningFromPolicy(preferred);
+}
+
+function getCurrentRevisionPolicyId() {
+  return activeTab.value === 'crs' ? crsTuningForm.policyId || undefined : undefined;
 }
 
 function handleCrsPolicyChange(policyId: number | null) {
@@ -4572,221 +4314,6 @@ function handlePublishCrsTuning() {
       }
     }
   });
-}
-
-function resetPolicyQuery() {
-  policyQuery.name = '';
-  policyPagination.page = 1;
-  fetchPolicies();
-}
-
-function handlePolicyPageChange(page: number) {
-  policyPagination.page = page;
-  fetchPolicies();
-}
-
-function handlePolicyPageSizeChange(pageSize: number) {
-  policyPagination.pageSize = pageSize;
-  policyPagination.page = 1;
-  fetchPolicies();
-}
-
-function resetPolicyForm() {
-  policyForm.id = 0;
-  policyForm.name = '';
-  policyForm.description = '';
-  policyForm.enabled = true;
-  policyForm.isDefault = false;
-  policyForm.engineMode = 'detectiononly';
-  policyForm.auditEngine = 'relevantonly';
-  policyForm.auditLogFormat = 'json';
-  policyForm.auditRelevantStatus = '^(?:5|4(?!04))';
-  policyForm.requestBodyAccess = true;
-  policyForm.requestBodyLimit = 10 * 1024 * 1024;
-  policyForm.requestBodyNoFilesLimit = 1024 * 1024;
-  policyForm.config = '';
-}
-
-function handleAddPolicy() {
-  policyModalMode.value = 'add';
-  resetPolicyForm();
-  policyModalVisible.value = true;
-}
-
-function handleEditPolicy(row: WafPolicyItem) {
-  policyModalMode.value = 'edit';
-  policyForm.id = row.id;
-  policyForm.name = row.name;
-  policyForm.description = row.description || '';
-  policyForm.enabled = row.enabled;
-  policyForm.isDefault = row.isDefault;
-  policyForm.engineMode = row.engineMode;
-  policyForm.auditEngine = row.auditEngine;
-  policyForm.auditLogFormat = row.auditLogFormat;
-  policyForm.auditRelevantStatus = row.auditRelevantStatus || '^(?:5|4(?!04))';
-  policyForm.requestBodyAccess = row.requestBodyAccess;
-  policyForm.requestBodyLimit = row.requestBodyLimit;
-  policyForm.requestBodyNoFilesLimit = row.requestBodyNoFilesLimit;
-  policyForm.config = row.config || '';
-  policyModalVisible.value = true;
-}
-
-function buildPolicyPayload() {
-  return {
-    name: policyForm.name.trim(),
-    description: policyForm.description.trim(),
-    enabled: policyForm.enabled,
-    isDefault: policyForm.isDefault,
-    engineMode: policyForm.engineMode,
-    auditEngine: policyForm.auditEngine,
-    auditLogFormat: policyForm.auditLogFormat,
-    auditRelevantStatus: policyForm.auditRelevantStatus.trim(),
-    requestBodyAccess: policyForm.requestBodyAccess,
-    requestBodyLimit: Number(policyForm.requestBodyLimit),
-    requestBodyNoFilesLimit: Number(policyForm.requestBodyNoFilesLimit),
-    config: policyForm.config.trim()
-  };
-}
-
-async function handleSubmitPolicy() {
-  await policyFormRef.value?.validate();
-  policySubmitting.value = true;
-  try {
-    const payload = buildPolicyPayload();
-    const request =
-      policyModalMode.value === 'add' ? createWafPolicy(payload) : updateWafPolicy(policyForm.id, payload);
-
-    const { error } = await request;
-    if (!error) {
-      message.success(policyModalMode.value === 'add' ? '策略创建成功' : '策略更新成功');
-      policyModalVisible.value = false;
-      await fetchPolicies();
-      await fetchPolicyRevisions(getCurrentRevisionPolicyId());
-    }
-  } finally {
-    policySubmitting.value = false;
-  }
-}
-
-function handleDeletePolicy(row: WafPolicyItem) {
-  deleteWafPolicy(row.id).then(async ({ error }) => {
-    if (!error) {
-      message.success('策略删除成功');
-      if (policyPreviewPolicyName.value === row.name) {
-        policyPreviewPolicyName.value = '';
-        policyPreviewDirectives.value = '';
-      }
-      await fetchPolicies();
-      await fetchPolicyRevisions(getCurrentRevisionPolicyId());
-    }
-  });
-}
-
-async function handlePreviewPolicy(row: WafPolicyItem) {
-  policyPreviewLoading.value = true;
-  try {
-    const { data, error } = await previewWafPolicy(row.id);
-    if (!error && data) {
-      policyPreviewPolicyName.value = row.name;
-      policyPreviewDirectives.value = data.directives || '';
-      message.success('已生成策略预览');
-    }
-  } finally {
-    policyPreviewLoading.value = false;
-  }
-}
-
-async function handleValidatePolicy(row: WafPolicyItem) {
-  const { error } = await validateWafPolicy(row.id);
-  if (!error) {
-    message.success(`策略 ${row.name} 校验通过`);
-  }
-}
-
-function handlePublishPolicy(row: WafPolicyItem) {
-  const isBlockingMode = row.engineMode === 'on';
-  const highRiskParanoia = Number(row.crsParanoiaLevel || 0) >= 3;
-  const warningParts: string[] = [];
-
-  if (isBlockingMode) {
-    warningParts.push('当前为 On（阻断）模式');
-  }
-  if (highRiskParanoia) {
-    warningParts.push(`CRS PL=${row.crsParanoiaLevel}`);
-  }
-
-  dialog.warning({
-    title: warningParts.length ? '高风险发布确认' : '发布确认',
-    content: warningParts.length
-      ? `策略 ${row.name} ${warningParts.join('，')}，发布后可能引发误拦截，确认继续发布吗？`
-      : `确认发布策略 ${row.name} 吗？`,
-    positiveText: '确认发布',
-    negativeText: '取消',
-    async onPositiveClick() {
-      const { error } = await publishWafPolicy(row.id);
-      if (!error) {
-        message.success('策略发布成功');
-        await fetchPolicies();
-        await fetchPolicyRevisions(getCurrentRevisionPolicyId());
-      }
-    }
-  });
-}
-
-function getCurrentRevisionPolicyId() {
-  return activeTab.value === 'crs' ? crsTuningForm.policyId || undefined : undefined;
-}
-
-async function fetchPolicyRevisions(policyId?: number) {
-  policyRevisionLoading.value = true;
-  try {
-    const { data, error } = await fetchWafPolicyRevisionList({
-      page: policyRevisionPagination.page as number,
-      pageSize: policyRevisionPagination.pageSize as number,
-      policyId
-    });
-    if (!error && data) {
-      const list = data.list || [];
-      await ensureUserNamesByIds(list.map(item => item.operator));
-      policyRevisionTable.value = list;
-      policyRevisionPagination.itemCount = data.total || 0;
-    }
-  } finally {
-    policyRevisionLoading.value = false;
-  }
-}
-
-function handlePolicyRevisionPageChange(page: number) {
-  policyRevisionPagination.page = page;
-  fetchPolicyRevisions(getCurrentRevisionPolicyId());
-}
-
-function handlePolicyRevisionPageSizeChange(pageSize: number) {
-  policyRevisionPagination.pageSize = pageSize;
-  policyRevisionPagination.page = 1;
-  fetchPolicyRevisions(getCurrentRevisionPolicyId());
-}
-
-function handleRollbackPolicyRevision(row: WafPolicyRevisionItem) {
-  dialog.warning({
-    title: '策略回滚确认',
-    content: `确认回滚到策略 ${row.policyId} 的版本 v${row.version} 吗？`,
-    positiveText: '确认回滚',
-    negativeText: '取消',
-    async onPositiveClick() {
-      const { error } = await rollbackWafPolicy({ revisionId: row.id });
-      if (!error) {
-        message.success('策略回滚成功');
-        await fetchPolicies();
-        await fetchPolicyRevisions(getCurrentRevisionPolicyId());
-      }
-    }
-  });
-}
-
-function getDefaultPolicyId() {
-  const preferred = policyTable.value.find(item => item.isDefault) || policyTable.value[0];
-  return Number(preferred?.id || 0);
 }
 
 async function fetchExclusions() {
