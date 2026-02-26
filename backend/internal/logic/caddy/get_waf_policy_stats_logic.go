@@ -279,7 +279,7 @@ func applyWafPolicyStatsDrillFilter(db *gorm.DB, filter wafPolicyStatsDrillFilte
 	}
 
 	if filter.Path != "" {
-		db = db.Where("COALESCE(NULLIF(split_part(uri, '?', 1), ''), ?) = ?", wafPolicyStatsDimensionPathRoot, filter.Path)
+		db = db.Where("COALESCE(NULLIF(split_part(uri, chr(63), 1), ''), ?) = ?", wafPolicyStatsDimensionPathRoot, filter.Path)
 	}
 
 	if filter.Method != "" {
@@ -453,7 +453,7 @@ func (l *GetWafPolicyStatsLogic) queryWafPolicyDimensions(
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	topPaths, err := queryWafPolicyStatsDimension(base, "COALESCE(NULLIF(split_part(uri, '?', 1), ''), '/')", topN, func(raw string) string {
+	topPaths, err := queryWafPolicyStatsDimension(base, "COALESCE(NULLIF(split_part(uri, chr(63), 1), ''), '/')", topN, func(raw string) string {
 		return normalizeWafPolicyDimensionKey(raw, wafPolicyStatsDimensionPathRoot)
 	})
 	if err != nil {
