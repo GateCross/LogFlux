@@ -536,15 +536,20 @@ func applyWafPolicyBindingScopeQuery(db *gorm.DB, bindings []model.WafPolicyBind
 		}
 	}
 
-	query := db.Where("1 = 0")
+	clauses := make([]string, 0, len(bindings))
+	queryArgs := make([]interface{}, 0, len(bindings)*4)
 	for _, binding := range bindings {
-		condition, args := buildWafPolicyBindingCondition(&binding)
+		condition, conditionArgs := buildWafPolicyBindingCondition(&binding)
 		if condition == "" {
 			continue
 		}
-		query = query.Or(condition, args...)
+		clauses = append(clauses, condition)
+		queryArgs = append(queryArgs, conditionArgs...)
 	}
-	return query
+	if len(clauses) == 0 {
+		return db.Where("1 = 0")
+	}
+	return db.Where("("+strings.Join(clauses, " OR ")+")", queryArgs...)
 }
 
 func buildWafPolicyBindingCondition(binding *model.WafPolicyBinding) (string, []interface{}) {
