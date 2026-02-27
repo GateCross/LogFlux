@@ -946,7 +946,7 @@ import ObserveTabContent from './tabs/ObserveTabContent.vue';
 import ReleaseTabContent from './tabs/ReleaseTabContent.vue';
 import JobTabContent from './tabs/JobTabContent.vue';
 import { useWafPolicy } from './composables/useWafPolicy';
-import { useWafObserve, type PolicyStatsSnapshot } from './composables/useWafObserve';
+import { useWafObserve } from './composables/useWafObserve';
 import { useWafObserveFeedback } from './composables/useWafObserveFeedback';
 import { useWafObserveExport } from './composables/useWafObserveExport';
 import { request } from '@/service/request';
@@ -2967,28 +2967,6 @@ function pickRouteQueryValue(value: unknown) {
     return '';
   }
   return String(value).trim();
-}
-
-function parseRangedInteger(rawValue: string, defaultValue: number, min: number, max: number) {
-  const parsed = Number.parseInt(rawValue, 10);
-  if (!Number.isFinite(parsed)) {
-    return defaultValue;
-  }
-  return Math.min(max, Math.max(min, parsed));
-}
-
-function buildQuerySignature(query: Record<string, unknown>) {
-  const normalized: Record<string, string> = {};
-  Object.entries(query).forEach(([key, value]) => {
-    const resolved = pickRouteQueryValue(value);
-    if (resolved) {
-      normalized[key] = resolved;
-    }
-  });
-  const orderedKeys = Object.keys(normalized).sort();
-  return JSON.stringify(
-    orderedKeys.map(key => [key, normalized[key]])
-  );
 }
 
 function isSecurityTabKey(value: string): value is SecurityTabKey {
