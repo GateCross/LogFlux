@@ -8,7 +8,7 @@ import {
   type WafPolicyFalsePositiveFeedbackItem,
   type WafPolicyFalsePositiveFeedbackPayload,
   type WafPolicyFalsePositiveFeedbackStatusUpdatePayload
-} from '@/service/api/caddy';
+} from '@/service/api/caddy-observe';
 
 type MessageApi = {
   success: (content: string) => void;

@@ -10,7 +10,7 @@ import {
   type WafKind,
   type WafMode,
   type WafSourceItem
-} from '@/service/api/caddy';
+} from '@/service/api/caddy-source';
 
 type MessageApi = {
   success: (content: string) => void;
