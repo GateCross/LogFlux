@@ -42,7 +42,7 @@ FROM ${CADDY_IMAGE} AS caddy-binary
 # ==========================================
 # Stage 3: Build Backend
 # ==========================================
-FROM golang:1.25.3-alpine AS backend-builder
+FROM golang:1.26.0-alpine AS backend-builder
 ARG TARGETARCH
 
 ARG GOPROXY=https://proxy.golang.org,direct
