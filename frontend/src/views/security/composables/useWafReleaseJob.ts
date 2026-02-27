@@ -11,7 +11,7 @@ import {
   type WafJobStatus,
   type WafReleaseItem,
   type WafReleaseStatus
-} from '@/service/api/caddy';
+} from '@/service/api/caddy-release-job';
 
 type MessageApi = {
   success: (content: string) => void;

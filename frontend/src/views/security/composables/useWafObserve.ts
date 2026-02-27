@@ -7,7 +7,7 @@ import {
   type WafPolicyStatsDimensionItem,
   type WafPolicyStatsItem,
   type WafPolicyStatsTrendItem
-} from '@/service/api/caddy';
+} from '@/service/api/caddy-observe';
 import { mergePolicyFeedbackCheckedRowKeys } from '../policy-feedback-draft';
 
 export type PolicyStatsDimensionType = 'host' | 'path' | 'method';

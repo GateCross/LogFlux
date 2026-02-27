@@ -15,7 +15,7 @@ import {
   type WafPolicyEngineMode,
   type WafPolicyItem,
   type WafPolicyRevisionItem
-} from '@/service/api/caddy';
+} from '@/service/api/caddy-policy';
 
 type MessageApi = {
   success: (content: string) => void;
