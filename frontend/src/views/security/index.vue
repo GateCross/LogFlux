@@ -944,6 +944,7 @@ import { useWafObserve } from './composables/useWafObserve';
 import { useWafObserveFeedback } from './composables/useWafObserveFeedback';
 import { useWafObserveExport } from './composables/useWafObserveExport';
 import { useWafReleaseJob } from './composables/useWafReleaseJob';
+import { useWafSource } from './composables/useWafSource';
 import { request } from '@/service/request';
 
 const message = useMessage();
@@ -1125,79 +1126,49 @@ const jobActionOptions = [
   { label: '引擎检查', value: 'engine_check' }
 ];
 
-const sourceQuery = reactive({
-  name: ''
-});
-
-const sourceLoading = ref(false);
-const sourceTable = ref<WafSourceItem[]>([]);
 const jobSourceNameMap = ref<Record<number, string>>({});
 const userNameMap = ref<Record<string, string>>({});
 const userNameLoading = ref(false);
-const sourcePagination = reactive<PaginationProps>({
-  page: 1,
-  pageSize: 20,
-  itemCount: 0,
-  showSizePicker: true,
-  pageSizes: [10, 20, 50, 100]
+
+const {
+  sourceQuery,
+  sourceLoading,
+  sourceTable,
+  sourcePagination,
+  sourceModalVisible,
+  sourceModalMode,
+  sourceSubmitting,
+  sourceFormRef,
+  sourceForm,
+  sourceModalTitle,
+  sourceRules,
+  fetchSources,
+  resetSourceQuery,
+  handleSourcePageChange,
+  handleSourcePageSizeChange,
+  handleAddSource,
+  handleEditSource,
+  handleSubmitSource,
+  handleDeleteSource,
+  handleSyncSource,
+  applyDefaultSource
+} = useWafSource({
+  message,
+  dialog,
+  mergeJobSourceNameMap,
+  onSyncSuccess: () => {
+    fetchReleases();
+    if (activeTab.value === 'job') {
+      fetchJobs();
+    }
+  }
 });
 
-const sourceModalVisible = ref(false);
-const sourceModalMode = ref<'add' | 'edit'>('add');
-const sourceSubmitting = ref(false);
-const sourceFormRef = ref<FormInst | null>(null);
-const sourceForm = reactive({
-  id: 0,
-  name: '',
-  kind: 'crs' as WafKind,
-  mode: 'remote' as WafMode,
-  url: '',
-  checksumUrl: '',
-  proxyUrl: '',
-  authType: 'none' as WafAuthType,
-  authSecret: '',
-  schedule: '',
-  enabled: true,
-  autoCheck: true,
-  autoDownload: true,
-  autoActivate: false,
-  meta: ''
-});
-
-const sourceModalTitle = computed(() => (sourceModalMode.value === 'add' ? '新增更新源' : '编辑更新源'));
 const pageTitle = computed(() => `安全管理 · ${securityTabTitleMap[activeTab.value]}`);
 
 function isTabVisible(tab: SecurityTabKey) {
   return securityMenuTabGroupMap[activeMenu.value].includes(tab);
 }
-
-const sourceRules: FormRules = {
-  name: { required: true, message: '请输入源名称', trigger: 'blur' },
-  kind: { required: true, message: '请选择类型', trigger: 'change' },
-  mode: { required: true, message: '请选择模式', trigger: 'change' },
-  authType: { required: true, message: '请选择鉴权类型', trigger: 'change' },
-  url: {
-    validator(_rule, value: string) {
-      if (sourceForm.mode !== 'remote') return true;
-      if (!value?.trim()) return new Error('remote 模式必须填写源地址');
-      return true;
-    },
-    trigger: ['blur', 'input']
-  },
-  meta: {
-    validator(_rule, value: string) {
-      const raw = value?.trim();
-      if (!raw) return true;
-      try {
-        JSON.parse(raw);
-        return true;
-      } catch {
-        return new Error('meta 必须是合法 JSON');
-      }
-    },
-    trigger: 'blur'
-  }
-};
 
 const crsTuningSubmitting = ref(false);
 const crsTuningFormRef = ref<FormInst | null>(null);
@@ -3150,179 +3121,6 @@ async function handleCheckEngine() {
   }
 }
 
-async function fetchSources() {
-  sourceLoading.value = true;
-  try {
-    const { data, error } = await fetchWafSourceList({
-      page: sourcePagination.page as number,
-      pageSize: sourcePagination.pageSize as number,
-      kind: 'crs',
-      name: sourceQuery.name.trim() || undefined
-    });
-    if (!error && data) {
-      const list = data.list || [];
-      const total = data.total || 0;
-
-      if (!sourceQuery.name.trim() && total > 0 && list.length === 0 && (sourcePagination.page as number) > 1) {
-        sourcePagination.page = 1;
-        await fetchSources();
-        return;
-      }
-
-      sourceTable.value = list;
-      mergeJobSourceNameMap(list);
-      sourcePagination.itemCount = total;
-    }
-  } finally {
-    sourceLoading.value = false;
-  }
-}
-
-function resetSourceQuery() {
-  sourceQuery.name = '';
-  sourcePagination.page = 1;
-  fetchSources();
-}
-
-function handleSourcePageChange(page: number) {
-  sourcePagination.page = page;
-  fetchSources();
-}
-
-function handleSourcePageSizeChange(pageSize: number) {
-  sourcePagination.pageSize = pageSize;
-  sourcePagination.page = 1;
-  fetchSources();
-}
-
-function resetSourceForm() {
-  sourceForm.id = 0;
-  sourceForm.name = '';
-  sourceForm.kind = 'crs';
-  sourceForm.mode = 'remote';
-  sourceForm.url = '';
-  sourceForm.checksumUrl = '';
-  sourceForm.proxyUrl = '';
-  sourceForm.authType = 'none';
-  sourceForm.authSecret = '';
-  sourceForm.schedule = '';
-  sourceForm.enabled = true;
-  sourceForm.autoCheck = true;
-  sourceForm.autoDownload = true;
-  sourceForm.autoActivate = false;
-  sourceForm.meta = '';
-}
-
-function handleAddSource() {
-  sourceModalMode.value = 'add';
-  resetSourceForm();
-  applyDefaultSource();
-  sourceModalVisible.value = true;
-}
-
-function buildAvailableSourceName(baseName: string) {
-  const normalized = baseName.trim();
-  if (!normalized) return baseName;
-
-  const names = new Set(sourceTable.value.map(item => item.name));
-  if (!names.has(normalized)) {
-    return normalized;
-  }
-
-  let index = 2;
-  let candidate = `${normalized}-${index}`;
-  while (names.has(candidate)) {
-    index += 1;
-    candidate = `${normalized}-${index}`;
-  }
-  return candidate;
-}
-
-function applyDefaultSource() {
-  sourceForm.kind = 'crs';
-  sourceForm.mode = 'remote';
-  sourceForm.authType = 'none';
-  sourceForm.authSecret = '';
-  sourceForm.enabled = true;
-  sourceForm.autoCheck = true;
-  sourceForm.autoDownload = true;
-  sourceForm.autoActivate = false;
-
-  sourceForm.name = buildAvailableSourceName('default-crs');
-  sourceForm.url = 'https://codeload.github.com/coreruleset/coreruleset/tar.gz/refs/heads/main';
-  sourceForm.checksumUrl = '';
-  sourceForm.proxyUrl = '';
-  sourceForm.schedule = '0 0 */6 * * *';
-  sourceForm.meta = '{"default":true,"official":true,"repo":"https://github.com/coreruleset/coreruleset"}';
-}
-
-function handleEditSource(row: WafSourceItem) {
-  sourceModalMode.value = 'edit';
-  sourceForm.id = row.id;
-  sourceForm.name = row.name;
-  sourceForm.kind = row.kind;
-  sourceForm.mode = row.mode;
-  sourceForm.url = row.url;
-  sourceForm.checksumUrl = row.checksumUrl;
-  sourceForm.proxyUrl = row.proxyUrl || '';
-  sourceForm.authType = row.authType;
-  sourceForm.authSecret = '';
-  sourceForm.schedule = row.schedule;
-  sourceForm.enabled = row.enabled;
-  sourceForm.autoCheck = row.autoCheck;
-  sourceForm.autoDownload = row.autoDownload;
-  sourceForm.autoActivate = row.autoActivate;
-  sourceForm.meta = '';
-  sourceModalVisible.value = true;
-}
-
-async function handleSubmitSource() {
-  await sourceFormRef.value?.validate();
-  sourceSubmitting.value = true;
-  try {
-    const payload = {
-      name: sourceForm.name.trim(),
-      kind: sourceForm.kind,
-      mode: sourceForm.mode,
-      url: sourceForm.url.trim(),
-      checksumUrl: sourceForm.checksumUrl.trim(),
-      proxyUrl: sourceForm.proxyUrl.trim(),
-      authType: sourceForm.authType,
-      authSecret: sourceForm.authSecret.trim(),
-      schedule: sourceForm.schedule.trim(),
-      enabled: sourceForm.enabled,
-      autoCheck: sourceForm.autoCheck,
-      autoDownload: sourceForm.autoDownload,
-      autoActivate: sourceForm.autoActivate,
-      meta: sourceForm.meta.trim()
-    };
-
-    const request =
-      sourceModalMode.value === 'add'
-        ? createWafSource(payload)
-        : updateWafSource(sourceForm.id, payload);
-
-    const { error } = await request;
-    if (!error) {
-      message.success(sourceModalMode.value === 'add' ? '新增更新源成功' : '更新更新源成功');
-      sourceModalVisible.value = false;
-      fetchSources();
-    }
-  } finally {
-    sourceSubmitting.value = false;
-  }
-}
-
-function handleDeleteSource(row: WafSourceItem) {
-  deleteWafSource(row.id).then(({ error }) => {
-    if (!error) {
-      message.success('删除成功');
-      fetchSources();
-    }
-  });
-}
-
-
 function syncCrsTuningFromPolicy(policy: WafPolicyItem | null | undefined) {
   if (!policy) {
     crsTuningForm.policyId = 0;
@@ -3884,35 +3682,6 @@ function handleDeleteBinding(row: WafPolicyBindingItem) {
     if (!error) {
       message.success('策略绑定删除成功');
       fetchBindings();
-    }
-  });
-}
-
-function handleSyncSource(row: WafSourceItem, activateNow: boolean) {
-  const allowActivate = activateNow;
-  const content = allowActivate ? '将下载、校验并立即激活该源对应版本，确认继续？' : '将下载并校验该源对应版本，确认继续？';
-
-  dialog.warning({
-    title: allowActivate ? '同步并激活确认' : '同步确认',
-    content,
-    positiveText: '确认',
-    negativeText: '取消',
-    async onPositiveClick() {
-      const { error } = await syncWafSource(row.id, allowActivate);
-      if (!error) {
-        message.success(allowActivate ? '同步并激活成功' : '同步成功');
-        fetchSources();
-        fetchReleases();
-        if (activeTab.value === 'job') {
-          fetchJobs();
-        }
-      } else {
-        const backendMsg = (error as any)?.response?.data?.msg;
-        const rawMessage = String(backendMsg || error.message || '');
-        if (rawMessage.includes('context deadline exceeded')) {
-          message.error('同步超时：请配置代理后重试，或稍后再试');
-        }
-      }
     }
   });
 }
