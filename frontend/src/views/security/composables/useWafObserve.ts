@@ -1,14 +1,10 @@
 import { computed, reactive, ref, type Ref } from 'vue';
-import type { PaginationProps } from 'naive-ui';
 import {
-  fetchWafPolicyFalsePositiveFeedbackList,
   fetchWafPolicyStats,
-  type WafPolicyFalsePositiveFeedbackItem,
   type WafPolicyStatsDimensionItem,
   type WafPolicyStatsItem,
   type WafPolicyStatsTrendItem
 } from '@/service/api/caddy';
-import { mergePolicyFeedbackCheckedRowKeys } from '../policy-feedback-draft';
 
 export type PolicyStatsDimensionType = 'host' | 'path' | 'method';
 
@@ -38,7 +34,7 @@ export type PolicyStatsSnapshot = {
 
 interface UseWafObserveOptions {
   crsPolicyOptions: Ref<Array<{ label: string; value: number }>>;
-  ensureUserNamesByIds?: (values: unknown[]) => Promise<void>;
+  onAfterStatsLoaded?: () => void;
 }
 
 function formatDateTime(date: Date) {
@@ -47,7 +43,7 @@ function formatDateTime(date: Date) {
 }
 
 export function useWafObserve(options: UseWafObserveOptions) {
-  const { crsPolicyOptions, ensureUserNamesByIds } = options;
+  const { crsPolicyOptions, onAfterStatsLoaded } = options;
 
   const observeWindowOptions = [
     { label: '最近 1 小时', value: '1h' },
@@ -84,20 +80,6 @@ export function useWafObserve(options: UseWafObserveOptions) {
   const policyStatsRange = ref({ startTime: '', endTime: '', intervalSec: 300 });
   const policyStatsPreviousSnapshot = ref<PolicyStatsSnapshot | null>(null);
 
-  const policyFeedbackLoading = ref(false);
-  const policyFeedbackTable = ref<WafPolicyFalsePositiveFeedbackItem[]>([]);
-  const policyFeedbackCheckedRowKeys = ref<number[]>([]);
-  const policyFeedbackPagination = reactive<PaginationProps>({
-    page: 1,
-    pageSize: 10,
-    itemCount: 0,
-    showSizePicker: true,
-    pageSizes: [10, 20, 50]
-  });
-  const policyFeedbackStatusFilter = ref<'' | 'pending' | 'confirmed' | 'resolved'>('');
-  const policyFeedbackAssigneeFilter = ref('');
-  const policyFeedbackSLAStatusFilter = ref<'all' | 'normal' | 'overdue' | 'resolved'>('all');
-
   const policyStatsPolicyOptions = computed<Array<{ label: string; value: number | '' }>>(() => [
     { label: '全部策略', value: '' },
     ...crsPolicyOptions.value
@@ -106,11 +88,6 @@ export function useWafObserve(options: UseWafObserveOptions) {
   const hasPolicyStatsDrillFilters = computed(
     () => !!(policyStatsQuery.host.trim() || policyStatsQuery.path.trim() || policyStatsQuery.method.trim())
   );
-  const hasPolicyFeedbackSelection = computed(() => policyFeedbackCheckedRowKeys.value.length > 0);
-  const policyFeedbackCheckedRowKeysInPage = computed(() => {
-    const selectedKeySet = new Set(policyFeedbackCheckedRowKeys.value);
-    return policyFeedbackTable.value.map(item => Number(item.id || 0)).filter(id => id > 0 && selectedKeySet.has(id));
-  });
 
   function resolvePolicyStatsWindowRange() {
     const end = new Date();
@@ -171,39 +148,6 @@ export function useWafObserve(options: UseWafObserveOptions) {
     return !!(policyStatsRange.value.startTime || policyStatsRange.value.endTime);
   }
 
-  function resetPolicyFeedbackSelection() {
-    policyFeedbackCheckedRowKeys.value = [];
-  }
-
-  function buildPolicyFeedbackListParams() {
-    return {
-      page: Number(policyFeedbackPagination.page || 1),
-      pageSize: Number(policyFeedbackPagination.pageSize || 10),
-      policyId: policyStatsQuery.policyId ? Number(policyStatsQuery.policyId) : undefined,
-      host: policyStatsQuery.host.trim() || undefined,
-      path: policyStatsQuery.path.trim() || undefined,
-      method: policyStatsQuery.method.trim().toUpperCase() || undefined,
-      feedbackStatus: policyFeedbackStatusFilter.value || undefined,
-      assignee: policyFeedbackAssigneeFilter.value.trim() || undefined,
-      slaStatus: policyFeedbackSLAStatusFilter.value || undefined
-    };
-  }
-
-  async function fetchPolicyFalsePositiveFeedbacks() {
-    policyFeedbackLoading.value = true;
-    try {
-      const { data, error } = await fetchWafPolicyFalsePositiveFeedbackList(buildPolicyFeedbackListParams());
-      if (!error && data) {
-        const list = data.list || [];
-        await ensureUserNamesByIds?.(list.flatMap(item => [item.operator, item.processedBy, item.assignee]));
-        policyFeedbackTable.value = list;
-        policyFeedbackPagination.itemCount = data.total || 0;
-      }
-    } finally {
-      policyFeedbackLoading.value = false;
-    }
-  }
-
   async function fetchPolicyStats() {
     const previousSnapshot = shouldCapturePolicyStatsSnapshot() ? buildCurrentPolicyStatsSnapshot() : null;
     policyStatsLoading.value = true;
@@ -240,8 +184,7 @@ export function useWafObserve(options: UseWafObserveOptions) {
     } finally {
       policyStatsLoading.value = false;
     }
-    resetPolicyFeedbackSelection();
-    fetchPolicyFalsePositiveFeedbacks();
+    onAfterStatsLoaded?.();
   }
 
   function resetPolicyStatsQuery() {
@@ -276,40 +219,6 @@ export function useWafObserve(options: UseWafObserveOptions) {
     fetchPolicyStats();
   }
 
-  function handlePolicyFeedbackPageChange(page: number) {
-    policyFeedbackPagination.page = page;
-    fetchPolicyFalsePositiveFeedbacks();
-  }
-
-  function handlePolicyFeedbackPageSizeChange(pageSize: number) {
-    policyFeedbackPagination.pageSize = pageSize;
-    policyFeedbackPagination.page = 1;
-    fetchPolicyFalsePositiveFeedbacks();
-  }
-
-  function handlePolicyFeedbackStatusFilterChange() {
-    policyFeedbackPagination.page = 1;
-    resetPolicyFeedbackSelection();
-    fetchPolicyFalsePositiveFeedbacks();
-  }
-
-  function handlePolicyFeedbackCheckedRowKeysChange(keys: Array<string | number>) {
-    const currentPageIDs = policyFeedbackTable.value.map(item => Number(item.id || 0)).filter(id => id > 0);
-    policyFeedbackCheckedRowKeys.value = mergePolicyFeedbackCheckedRowKeys(policyFeedbackCheckedRowKeys.value, currentPageIDs, keys);
-  }
-
-  function setPolicyFeedbackStatusFilter(value: '' | 'pending' | 'confirmed' | 'resolved') {
-    policyFeedbackStatusFilter.value = value;
-  }
-
-  function setPolicyFeedbackAssigneeFilter(value: string) {
-    policyFeedbackAssigneeFilter.value = value;
-  }
-
-  function setPolicyFeedbackSlaStatusFilter(value: 'all' | 'normal' | 'overdue' | 'resolved') {
-    policyFeedbackSLAStatusFilter.value = value;
-  }
-
   return {
     observeWindowOptions,
     policyStatsQuery,
@@ -322,29 +231,12 @@ export function useWafObserve(options: UseWafObserveOptions) {
     policyStatsTopMethods,
     policyStatsRange,
     policyStatsPreviousSnapshot,
-    policyFeedbackLoading,
-    policyFeedbackTable,
-    policyFeedbackCheckedRowKeys,
-    policyFeedbackPagination,
-    policyFeedbackStatusFilter,
-    policyFeedbackAssigneeFilter,
-    policyFeedbackSLAStatusFilter,
     policyStatsPolicyOptions,
     hasPolicyStatsDrillFilters,
-    hasPolicyFeedbackSelection,
-    policyFeedbackCheckedRowKeysInPage,
     fetchPolicyStats,
     resetPolicyStatsQuery,
     clearPolicyStatsDrillFilters,
     clearPolicyStatsDrillLevel,
-    fetchPolicyFalsePositiveFeedbacks,
-    handlePolicyFeedbackPageChange,
-    handlePolicyFeedbackPageSizeChange,
-    handlePolicyFeedbackStatusFilterChange,
-    handlePolicyFeedbackCheckedRowKeysChange,
-    resetPolicyFeedbackSelection,
-    setPolicyFeedbackStatusFilter,
-    setPolicyFeedbackAssigneeFilter,
-    setPolicyFeedbackSlaStatusFilter
+    buildCurrentPolicyStatsSnapshot
   };
 }
