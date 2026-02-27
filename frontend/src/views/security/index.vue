@@ -58,106 +58,44 @@
         :class="['security-tabs-by-route', { 'security-tabs-hide-nav': !isMenuTabNavVisible }]"
       >
         <n-tab-pane v-if="isTabVisible('source')" name="source" tab="更新源配置">
-          <div class="mb-3 flex flex-wrap gap-2 items-center">
-            <n-input v-model:value="sourceQuery.name" placeholder="按名称搜索" clearable class="w-220px" @keyup.enter="fetchSources" />
-            <n-button type="primary" @click="fetchSources">
-              <template #icon>
-                <icon-carbon-search />
-              </template>
-              查询
-            </n-button>
-            <n-button @click="resetSourceQuery">重置</n-button>
-            <n-button type="primary" @click="handleAddSource">
-              <template #icon>
-                <icon-ic-round-plus />
-              </template>
-              新增源
-            </n-button>
-            <n-button type="success" @click="openUploadModal">
-              <template #icon>
-                <icon-carbon-cloud-upload />
-              </template>
-              上传规则包
-            </n-button>
-          </div>
-
-          <n-data-table
-            remote
-            :columns="sourceColumns"
-            :data="sourceTable"
-            :loading="sourceLoading"
-            :pagination="sourcePagination"
-            :row-key="row => row.id"
-            :max-height="tableFixedHeight"
-            class="min-h-260px"
-            @update:page="handleSourcePageChange"
-            @update:page-size="handleSourcePageSizeChange"
+          <SourceTabContent
+            :source-query="sourceQuery"
+            :source-columns="sourceColumns"
+            :source-table="sourceTable"
+            :source-loading="sourceLoading"
+            :source-pagination="sourcePagination"
+            :table-fixed-height="tableFixedHeight"
+            :fetch-sources="fetchSources"
+            :reset-source-query="resetSourceQuery"
+            :handle-add-source="handleAddSource"
+            :open-upload-modal="openUploadModal"
+            :handle-source-page-change="handleSourcePageChange"
+            :handle-source-page-size-change="handleSourcePageSizeChange"
           />
         </n-tab-pane>
 
         <n-tab-pane v-if="isTabVisible('runtime')" name="runtime" tab="运行模式">
-          <n-alert type="warning" :show-icon="true" class="mb-3">
-            建议先使用 DetectionOnly（仅检测）观察，再切换到 On（阻断）。On 模式发布会触发二次确认。
-          </n-alert>
-
-          <div class="mb-3 flex flex-wrap gap-2 items-center">
-            <n-input v-model:value="policyQuery.name" placeholder="按策略名称搜索" clearable class="w-220px" @keyup.enter="fetchPolicies" />
-            <n-button type="primary" @click="fetchPolicies">
-              <template #icon>
-                <icon-carbon-search />
-              </template>
-              查询
-            </n-button>
-            <n-button @click="resetPolicyQuery">重置</n-button>
-            <n-button type="primary" @click="handleAddPolicy">
-              <template #icon>
-                <icon-ic-round-plus />
-              </template>
-              新增策略
-            </n-button>
-          </div>
-
-          <n-data-table
-            remote
-            :columns="policyColumns"
-            :data="policyTable"
-            :loading="policyLoading"
-            :pagination="policyPagination"
-            :row-key="row => row.id"
-            :max-height="tableFixedHeight"
-            class="min-h-260px"
-            :scroll-x="1700"
-            :resizable="true"
-            @update:page="handlePolicyPageChange"
-            @update:page-size="handlePolicyPageSizeChange"
-          />
-
-          <n-card :bordered="false" size="small" class="mt-3">
-            <div class="text-sm font-semibold mb-2">策略指令预览 {{ policyPreviewPolicyName ? `(${policyPreviewPolicyName})` : '' }}</div>
-            <n-spin :show="policyPreviewLoading">
-              <n-input
-                :value="policyPreviewDirectives"
-                type="textarea"
-                :autosize="{ minRows: 8, maxRows: 14 }"
-                readonly
-                placeholder="点击策略列表中的“预览”查看渲染后的 Coraza directives"
-              />
-            </n-spin>
-          </n-card>
-
-          <div class="mt-3 text-sm font-semibold">最近发布记录</div>
-          <n-data-table
-            remote
-            class="mt-2 min-h-220px"
-            :columns="policyRevisionColumns"
-            :data="policyRevisionTable"
-            :loading="policyRevisionLoading"
-            :pagination="policyRevisionPagination"
-            :row-key="row => row.id"
-            :scroll-x="1100"
-            :resizable="true"
-            @update:page="handlePolicyRevisionPageChange"
-            @update:page-size="handlePolicyRevisionPageSizeChange"
+          <RuntimeTabContent
+            :policy-query="policyQuery"
+            :policy-columns="policyColumns"
+            :policy-table="policyTable"
+            :policy-loading="policyLoading"
+            :policy-pagination="policyPagination"
+            :table-fixed-height="tableFixedHeight"
+            :fetch-policies="fetchPolicies"
+            :reset-policy-query="resetPolicyQuery"
+            :handle-add-policy="handleAddPolicy"
+            :handle-policy-page-change="handlePolicyPageChange"
+            :handle-policy-page-size-change="handlePolicyPageSizeChange"
+            :policy-preview-policy-name="policyPreviewPolicyName"
+            :policy-preview-loading="policyPreviewLoading"
+            :policy-preview-directives="policyPreviewDirectives"
+            :policy-revision-columns="policyRevisionColumns"
+            :policy-revision-table="policyRevisionTable"
+            :policy-revision-loading="policyRevisionLoading"
+            :policy-revision-pagination="policyRevisionPagination"
+            :handle-policy-revision-page-change="handlePolicyRevisionPageChange"
+            :handle-policy-revision-page-size-change="handlePolicyRevisionPageSizeChange"
           />
         </n-tab-pane>
 
@@ -1010,6 +948,8 @@ import {
   parseExclusionCandidateKey,
   parseExclusionFromFeedbackSuggestion
 } from './policy-feedback-draft';
+import SourceTabContent from './tabs/SourceTabContent.vue';
+import RuntimeTabContent from './tabs/RuntimeTabContent.vue';
 import ObserveTabContent from './tabs/ObserveTabContent.vue';
 import ReleaseTabContent from './tabs/ReleaseTabContent.vue';
 import JobTabContent from './tabs/JobTabContent.vue';
