@@ -891,7 +891,6 @@ import {
   deleteWafSource,
   fetchWafEngineStatus,
   fetchWafJobList,
-  fetchWafPolicyFalsePositiveFeedbackList,
   fetchWafPolicyBindingList,
   fetchWafPolicyList,
   fetchWafPolicyStats,
@@ -919,8 +918,8 @@ import {
   type WafPolicyItem,
   type WafPolicyBindingItem,
   type WafPolicyBindingPayload,
-  type WafPolicyFalsePositiveFeedbackItem,
   type WafPolicyFalsePositiveFeedbackBatchStatusUpdatePayload,
+  type WafPolicyFalsePositiveFeedbackItem,
   type WafPolicyFalsePositiveFeedbackPayload,
   type WafPolicyFalsePositiveFeedbackStatusUpdatePayload,
   type WafPolicyRemoveType,
@@ -944,7 +943,6 @@ import {
 import {
   buildExclusionCandidateKey,
   collectExclusionCandidatesFromFeedbackSuggestion,
-  mergePolicyFeedbackCheckedRowKeys,
   parseExclusionCandidateKey,
   parseExclusionFromFeedbackSuggestion
 } from './policy-feedback-draft';
@@ -1273,33 +1271,33 @@ const {
   policyStatsTopMethods,
   policyStatsRange,
   policyStatsPreviousSnapshot,
+  policyFeedbackLoading,
+  policyFeedbackTable,
+  policyFeedbackCheckedRowKeys,
+  policyFeedbackPagination,
+  policyFeedbackStatusFilter,
+  policyFeedbackAssigneeFilter,
+  policyFeedbackSLAStatusFilter,
   policyStatsPolicyOptions,
   hasPolicyStatsDrillFilters,
+  hasPolicyFeedbackSelection,
+  policyFeedbackCheckedRowKeysInPage,
   fetchPolicyStats,
   resetPolicyStatsQuery,
   clearPolicyStatsDrillFilters,
   clearPolicyStatsDrillLevel,
+  fetchPolicyFalsePositiveFeedbacks,
+  resetPolicyFeedbackSelection,
+  handlePolicyFeedbackPageChange,
+  handlePolicyFeedbackPageSizeChange,
+  handlePolicyFeedbackStatusFilterChange,
+  handlePolicyFeedbackCheckedRowKeysChange,
   buildCurrentPolicyStatsSnapshot
 } = useWafObserve({
   crsPolicyOptions,
-  onAfterStatsLoaded: () => {
-    resetPolicyFeedbackSelection();
-    fetchPolicyFalsePositiveFeedbacks();
-  }
+  ensureUserNamesByIds
 });
-const policyFeedbackLoading = ref(false);
-const policyFeedbackTable = ref<WafPolicyFalsePositiveFeedbackItem[]>([]);
-const policyFeedbackCheckedRowKeys = ref<number[]>([]);
-const policyFeedbackPagination = reactive<PaginationProps>({
-  page: 1,
-  pageSize: 10,
-  itemCount: 0,
-  showSizePicker: true,
-  pageSizes: [10, 20, 50]
-});
-const policyFeedbackStatusFilter = ref<'' | 'pending' | 'confirmed' | 'resolved'>('');
-const policyFeedbackAssigneeFilter = ref('');
-const policyFeedbackSLAStatusFilter = ref<'all' | 'normal' | 'overdue' | 'resolved'>('all');
+
 const policyFeedbackModalVisible = ref(false);
 const policyFeedbackSubmitting = ref(false);
 const policyFeedbackFormRef = ref<FormInst | null>(null);
@@ -1372,11 +1370,6 @@ const observeWindowValueSet = new Set(observeWindowOptions.map(item => item.valu
 const observeRouteSyncing = ref(false);
 
 
-const hasPolicyFeedbackSelection = computed(() => policyFeedbackCheckedRowKeys.value.length > 0);
-const policyFeedbackCheckedRowKeysInPage = computed(() => {
-  const selectedKeySet = new Set(policyFeedbackCheckedRowKeys.value);
-  return policyFeedbackTable.value.map(item => Number(item.id || 0)).filter(id => id > 0 && selectedKeySet.has(id));
-});
 const policyFeedbackExclusionCandidateOptions = computed(() => {
   const candidates = policyFeedbackExclusionDraft.value?.candidates || [];
   return candidates.map(item => ({
@@ -3230,39 +3223,6 @@ async function handleCopyPolicyStatsLink() {
   }
 }
 
-function buildPolicyFeedbackListParams() {
-  return {
-    page: Number(policyFeedbackPagination.page || 1),
-    pageSize: Number(policyFeedbackPagination.pageSize || 10),
-    policyId: policyStatsQuery.policyId ? Number(policyStatsQuery.policyId) : undefined,
-    host: policyStatsQuery.host.trim() || undefined,
-    path: policyStatsQuery.path.trim() || undefined,
-    method: policyStatsQuery.method.trim().toUpperCase() || undefined,
-    feedbackStatus: policyFeedbackStatusFilter.value || undefined,
-    assignee: policyFeedbackAssigneeFilter.value.trim() || undefined,
-    slaStatus: policyFeedbackSLAStatusFilter.value || undefined
-  };
-}
-
-async function fetchPolicyFalsePositiveFeedbacks() {
-  policyFeedbackLoading.value = true;
-  try {
-    const { data, error } = await fetchWafPolicyFalsePositiveFeedbackList(buildPolicyFeedbackListParams());
-    if (!error && data) {
-      const list = data.list || [];
-      await ensureUserNamesByIds(list.flatMap(item => [item.operator, item.processedBy, item.assignee]));
-      policyFeedbackTable.value = list;
-      policyFeedbackPagination.itemCount = data.total || 0;
-    }
-  } finally {
-    policyFeedbackLoading.value = false;
-  }
-}
-
-function resetPolicyFeedbackSelection() {
-  policyFeedbackCheckedRowKeys.value = [];
-}
-
 function resetPolicyFeedbackForm() {
   policyFeedbackForm.policyId = policyStatsQuery.policyId ? Number(policyStatsQuery.policyId) : null;
   policyFeedbackForm.host = policyStatsQuery.host.trim();
@@ -3279,28 +3239,6 @@ function resetPolicyFeedbackForm() {
 function openPolicyFeedbackModal() {
   resetPolicyFeedbackForm();
   policyFeedbackModalVisible.value = true;
-}
-
-function handlePolicyFeedbackPageChange(page: number) {
-  policyFeedbackPagination.page = page;
-  fetchPolicyFalsePositiveFeedbacks();
-}
-
-function handlePolicyFeedbackPageSizeChange(pageSize: number) {
-  policyFeedbackPagination.pageSize = pageSize;
-  policyFeedbackPagination.page = 1;
-  fetchPolicyFalsePositiveFeedbacks();
-}
-
-function handlePolicyFeedbackStatusFilterChange() {
-  policyFeedbackPagination.page = 1;
-  resetPolicyFeedbackSelection();
-  fetchPolicyFalsePositiveFeedbacks();
-}
-
-function handlePolicyFeedbackCheckedRowKeysChange(keys: Array<string | number>) {
-  const currentPageIDs = policyFeedbackTable.value.map(item => Number(item.id || 0)).filter(id => id > 0);
-  policyFeedbackCheckedRowKeys.value = mergePolicyFeedbackCheckedRowKeys(policyFeedbackCheckedRowKeys.value, currentPageIDs, keys);
 }
 
 function openPolicyFeedbackProcessModal(row: WafPolicyFalsePositiveFeedbackItem) {
