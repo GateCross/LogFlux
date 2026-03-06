@@ -939,6 +939,11 @@ import RuntimeTabContent from './tabs/RuntimeTabContent.vue';
 import ObserveTabContent from './tabs/ObserveTabContent.vue';
 import ReleaseTabContent from './tabs/ReleaseTabContent.vue';
 import JobTabContent from './tabs/JobTabContent.vue';
+import {
+  pickRouteQueryValue,
+  type SecurityTabKey
+} from './navigation';
+import { useSecurityNavigation } from './composables/useSecurityNavigation';
 import { useWafPolicy } from './composables/useWafPolicy';
 import { useWafObserve } from './composables/useWafObserve';
 import { useWafObserveFeedback } from './composables/useWafObserveFeedback';
@@ -952,69 +957,17 @@ const dialog = useDialog();
 const route = useRoute();
 const router = useRouter();
 
-type SecurityTabKey = 'source' | 'runtime' | 'crs' | 'exclusion' | 'binding' | 'observe' | 'release' | 'job';
-type SecurityMenuKey = 'source' | 'policy' | 'observe' | 'ops';
-
-const securityMenuRouteNameMap: Record<SecurityMenuKey, string> = {
-  source: 'security_source',
-  policy: 'security_policy',
-  observe: 'security_observe',
-  ops: 'security_ops'
-};
-
-const securityMenuTabGroupMap: Record<SecurityMenuKey, SecurityTabKey[]> = {
-  source: ['source'],
-  policy: ['runtime', 'crs', 'exclusion', 'binding'],
-  observe: ['observe'],
-  ops: ['release', 'job']
-};
-
-const observeQueryKeys = ['policyId', 'window', 'intervalSec', 'topN', 'host', 'path', 'method'];
-
-const securityTabMenuMap: Record<SecurityTabKey, SecurityMenuKey> = {
-  source: 'source',
-  runtime: 'policy',
-  crs: 'policy',
-  exclusion: 'policy',
-  binding: 'policy',
-  observe: 'observe',
-  release: 'ops',
-  job: 'ops'
-};
-
-const securityRouteNameMenuMap: Record<string, SecurityMenuKey> = {
-  security_source: 'source',
-  security_policy: 'policy',
-  security_observe: 'observe',
-  security_ops: 'ops',
-  security_runtime: 'policy',
-  security_crs: 'policy',
-  security_exclusion: 'policy',
-  security_binding: 'policy',
-  security_release: 'ops',
-  security_job: 'ops'
-};
-
-const securityTabTitleMap: Record<SecurityTabKey, string> = {
-  source: '更新源配置',
-  runtime: '运行模式',
-  crs: 'CRS 调优',
-  exclusion: '规则例外',
-  binding: '策略绑定',
-  observe: '策略观测',
-  release: '版本发布管理',
-  job: '任务日志'
-};
-
 
 const engineLoading = ref(false);
 const engineChecking = ref(false);
 const engineUnavailable = ref(false);
 const engineStatus = ref<WafEngineStatusResp | null>(null);
 
-const activeMenu = ref<SecurityMenuKey>('source');
-const activeTab = ref<SecurityTabKey>('source');
-const isMenuTabNavVisible = computed(() => securityMenuTabGroupMap[activeMenu.value].length > 1);
+const { activeMenu, activeTab, isMenuTabNavVisible, pageTitle, isTabVisible, navigateToSecurityTab } = useSecurityNavigation({
+  route,
+  router
+});
+
 const tableFixedHeight = 480;
 
 const modeOptions = [
@@ -1163,12 +1116,6 @@ const {
     }
   }
 });
-
-const pageTitle = computed(() => `安全管理 · ${securityTabTitleMap[activeTab.value]}`);
-
-function isTabVisible(tab: SecurityTabKey) {
-  return securityMenuTabGroupMap[activeMenu.value].includes(tab);
-}
 
 const crsTuningSubmitting = ref(false);
 const crsTuningFormRef = ref<FormInst | null>(null);
@@ -2922,45 +2869,6 @@ function formatDateTime(date: Date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
-function pickRouteQueryValue(value: unknown) {
-  if (Array.isArray(value)) {
-    return String(value[0] ?? '').trim();
-  }
-  if (value == null) {
-    return '';
-  }
-  return String(value).trim();
-}
-
-function isSecurityTabKey(value: string): value is SecurityTabKey {
-  return value in securityTabMenuMap;
-}
-
-function resolveSecurityMenuFromRoute() {
-  const routeName = String(route.name || '');
-  const matched = securityRouteNameMenuMap[routeName];
-  if (matched) {
-    return matched;
-  }
-
-  const legacyTab = pickRouteQueryValue(route.query.activeTab);
-  if (isSecurityTabKey(legacyTab)) {
-    return securityTabMenuMap[legacyTab];
-  }
-
-  return 'source';
-}
-
-function resolveSecurityTabFromRoute(menu: SecurityMenuKey) {
-  const groupTabs = securityMenuTabGroupMap[menu] || ['source'];
-  const routeTab = pickRouteQueryValue(route.query.activeTab);
-  if (isSecurityTabKey(routeTab) && groupTabs.includes(routeTab)) {
-    return routeTab;
-  }
-
-  return groupTabs[0];
-}
-
 function isNumericUserId(value: unknown) {
   return /^\d+$/.test(String(value ?? '').trim());
 }
@@ -3025,35 +2933,6 @@ async function ensureUserNamesByIds(values: unknown[]) {
   } finally {
     userNameLoading.value = false;
   }
-}
-
-async function navigateToSecurityTab(tab: SecurityTabKey, replace = false) {
-  const menu = securityTabMenuMap[tab];
-  const targetRouteName = securityMenuRouteNameMap[menu];
-  if (!targetRouteName) {
-    return;
-  }
-
-  const query: Record<string, string> = {};
-  if (tab === 'observe') {
-    observeQueryKeys.forEach(key => {
-      const value = pickRouteQueryValue(route.query[key]);
-      if (value) {
-        query[key] = value;
-      }
-    });
-  } else {
-    const defaultTab = securityMenuTabGroupMap[menu][0];
-    if (tab !== defaultTab) {
-      query.activeTab = tab;
-    }
-  }
-
-  const navigationMethod = replace ? router.replace : router.push;
-  await navigationMethod({
-    name: targetRouteName as any,
-    query
-  });
 }
 
 function displayEngineValue(value: unknown) {
@@ -3696,21 +3575,6 @@ function openUploadModal() {
 }
 
 watch(
-  () => [route.name, route.query.activeTab],
-  () => {
-    const nextMenu = resolveSecurityMenuFromRoute();
-    const nextTab = resolveSecurityTabFromRoute(nextMenu);
-    if (activeMenu.value !== nextMenu) {
-      activeMenu.value = nextMenu;
-    }
-    if (activeTab.value !== nextTab) {
-      activeTab.value = nextTab;
-    }
-  },
-  { immediate: true }
-);
-
-watch(
   () => route.query,
   query => {
     if (observeRouteSyncing.value) {
@@ -3851,73 +3715,52 @@ async function handleSubmitUpload() {
   }
 }
 
-function refreshCurrentTab() {
-  if (activeTab.value === 'source') {
+const securityTabRefreshMap: Record<SecurityTabKey, () => void> = {
+  source: () => {
+    fetchEngineStatus();
     fetchSources();
-    return;
-  }
-  if (activeTab.value === 'runtime') {
+  },
+  runtime: () => {
     fetchPolicies();
     fetchPolicyRevisions();
-    return;
-  }
-  if (activeTab.value === 'crs') {
+  },
+  crs: () => {
     fetchPolicies();
     fetchPolicyRevisions(getCurrentRevisionPolicyId());
-    return;
-  }
-  if (activeTab.value === 'exclusion') {
+  },
+  exclusion: () => {
     fetchPolicies();
     fetchExclusions();
-    return;
-  }
-  if (activeTab.value === 'binding') {
+  },
+  binding: () => {
     fetchPolicies();
     fetchBindings();
-    return;
-  }
-  if (activeTab.value === 'observe') {
+  },
+  observe: () => {
     fetchPolicies();
     fetchPolicyStats();
-    return;
-  }
-  if (activeTab.value === 'release') {
+  },
+  release: () => {
     fetchReleases();
-    return;
+  },
+  job: () => {
+    fetchJobs();
   }
-  fetchJobs();
+};
+
+function refreshSecurityTab(tab: SecurityTabKey) {
+  securityTabRefreshMap[tab]?.();
+}
+
+function refreshCurrentTab() {
+  refreshSecurityTab(activeTab.value);
 }
 
 watch(activeTab, value => {
-  if (value === 'source') {
-    fetchEngineStatus();
-    fetchSources();
-  } else if (value === 'runtime') {
-    fetchPolicies();
-    fetchPolicyRevisions();
-  } else if (value === 'crs') {
-    fetchPolicies();
-    fetchPolicyRevisions(getCurrentRevisionPolicyId());
-  } else if (value === 'exclusion') {
-    fetchPolicies();
-    fetchExclusions();
-  } else if (value === 'binding') {
-    fetchPolicies();
-    fetchBindings();
-  } else if (value === 'observe') {
-    fetchPolicies();
-    fetchPolicyStats();
-  } else if (value === 'release') {
-    fetchReleases();
-  } else {
-    fetchJobs();
-  }
+  refreshSecurityTab(value);
 });
 
 onMounted(() => {
-  if (activeTab.value === 'source') {
-    fetchEngineStatus();
-  }
   refreshCurrentTab();
 });
 </script>
