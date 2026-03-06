@@ -1,394 +1,213 @@
 <template>
   <div class="h-full flex flex-col gap-3">
-    <n-alert v-if="activeTab === 'source'" type="info" :show-icon="true" class="rounded-8px">
-      <template #header>{{ pageTitle }}</template>
-      <div>
-        CRS 支持在线同步（含检查）、上传、激活与回滚；Coraza 引擎依赖 Caddy 二进制，仅提供 GitHub Release 版本检查，不支持在线替换引擎。
-      </div>
-    </n-alert>
-
-    <n-card v-if="activeTab === 'source'" :bordered="false" class="rounded-8px shadow-sm">
+    <n-card :bordered="false" class="rounded-8px shadow-sm">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div class="text-base font-semibold">Coraza 引擎版本检查</div>
-          <div class="text-xs text-gray-500 mt-1">用于发现 Coraza 引擎新版本并生成升级建议（需通过镜像发布流程升级）。</div>
+          <div class="text-base font-semibold">安全管理</div>
+          <div class="mt-1 text-xs text-gray-500">{{ activeMenuDescription }}</div>
         </div>
-        <div class="flex gap-2">
-          <n-button size="small" :loading="engineLoading" @click="handleRefreshEngineStatus">刷新状态</n-button>
-          <n-button size="small" type="primary" :loading="engineChecking" @click="handleCheckEngine">检查上游版本</n-button>
+        <div class="flex items-center gap-2 text-xs text-gray-500">
+          <span>{{ pageTitle }}</span>
+          <n-button secondary size="small" @click="refreshCurrentDomain">刷新当前领域</n-button>
         </div>
       </div>
 
-      <n-grid cols="4" x-gap="12" y-gap="10" class="mt-4">
-        <n-gi>
-          <div class="text-xs text-gray-500">当前版本</div>
-          <div class="text-sm font-medium">{{ displayEngineValue(engineStatus?.currentVersion) }}</div>
-        </n-gi>
-        <n-gi>
-          <div class="text-xs text-gray-500">最新版本</div>
-          <div class="text-sm font-medium">{{ displayEngineValue(engineStatus?.latestVersion) }}</div>
-        </n-gi>
-        <n-gi>
-          <div class="text-xs text-gray-500">可升级</div>
-          <div class="text-sm font-medium">
-            <n-tag :type="engineStatus?.canUpgrade ? 'warning' : 'success'" :bordered="false">
-              {{ engineStatus?.canUpgrade ? '是' : '否' }}
-            </n-tag>
-          </div>
-        </n-gi>
-        <n-gi>
-          <div class="text-xs text-gray-500">最近检查时间</div>
-          <div class="text-sm font-medium">{{ displayEngineValue(engineStatus?.checkedAt) }}</div>
+      <n-grid cols="4" x-gap="12" y-gap="12" class="mt-4">
+        <n-gi v-for="item in securityMenus" :key="item.key">
+          <n-card
+            size="small"
+            :bordered="activeMenu !== item.key"
+            class="cursor-pointer transition-all duration-200"
+            :class="activeMenu === item.key ? 'shadow-sm ring-1 ring-primary/30' : 'opacity-88 hover:opacity-100'"
+            @click="handleNavigateToMenu(item.key)"
+          >
+            <div class="text-sm font-semibold">{{ item.title }}</div>
+            <div class="mt-1 text-xs text-gray-500">{{ securityMenuDescriptionMap[item.key] }}</div>
+          </n-card>
         </n-gi>
       </n-grid>
-
-      <n-alert v-if="engineUnavailable" type="warning" :show-icon="true" class="mt-4">
-        当前引擎状态接口暂不可用，已切换为占位模式，请检查后端日志。
-      </n-alert>
-      <n-alert v-else-if="engineStatus?.message" type="info" :show-icon="true" class="mt-4">
-        {{ engineStatus?.message }}
-      </n-alert>
     </n-card>
 
-    <n-card :bordered="false" class="rounded-8px shadow-sm">
-      <n-tabs
-        v-model:value="activeTab"
-        type="line"
-        animated
-        :class="['security-tabs-by-route', { 'security-tabs-hide-nav': !isMenuTabNavVisible }]"
-      >
-        <n-tab-pane v-if="isTabVisible('source')" name="source" tab="更新源配置">
-          <SourceTabContent
-            :source-query="sourceQuery"
-            :source-columns="sourceColumns"
-            :source-table="sourceTable"
-            :source-loading="sourceLoading"
-            :source-pagination="sourcePagination"
-            :table-fixed-height="tableFixedHeight"
-            :fetch-sources="fetchSources"
-            :reset-source-query="resetSourceQuery"
-            :handle-add-source="handleAddSource"
-            :open-upload-modal="openUploadModal"
-            :handle-source-page-change="handleSourcePageChange"
-            :handle-source-page-size-change="handleSourcePageSizeChange"
-          />
-        </n-tab-pane>
+    <SecuritySourcePage
+      v-if="activeMenu === 'source'"
+      :page-title="pageTitle"
+      :engine-loading="engineLoading"
+      :engine-checking="engineChecking"
+      :engine-unavailable="engineUnavailable"
+      :engine-status="engineStatus"
+      :handle-refresh-engine-status="handleRefreshEngineStatus"
+      :handle-check-engine="handleCheckEngine"
+      :display-engine-value="displayEngineValue"
+      :source-query="sourceQuery"
+      :source-columns="sourceColumns"
+      :source-table="sourceTable"
+      :source-loading="sourceLoading"
+      :source-pagination="sourcePagination"
+      :table-fixed-height="tableFixedHeight"
+      :fetch-sources="fetchSources"
+      :reset-source-query="resetSourceQuery"
+      :handle-add-source="handleAddSource"
+      :open-upload-modal="openUploadModal"
+      :handle-source-page-change="handleSourcePageChange"
+      :handle-source-page-size-change="handleSourcePageSizeChange"
+    />
 
-        <n-tab-pane v-if="isTabVisible('runtime')" name="runtime" tab="运行模式">
-          <RuntimeTabContent
-            :policy-query="policyQuery"
-            :policy-columns="policyColumns"
-            :policy-table="policyTable"
-            :policy-loading="policyLoading"
-            :policy-pagination="policyPagination"
-            :table-fixed-height="tableFixedHeight"
-            :fetch-policies="fetchPolicies"
-            :reset-policy-query="resetPolicyQuery"
-            :handle-add-policy="handleAddPolicy"
-            :handle-policy-page-change="handlePolicyPageChange"
-            :handle-policy-page-size-change="handlePolicyPageSizeChange"
-            :policy-preview-policy-name="policyPreviewPolicyName"
-            :policy-preview-loading="policyPreviewLoading"
-            :policy-preview-directives="policyPreviewDirectives"
-            :policy-revision-columns="policyRevisionColumns"
-            :policy-revision-table="policyRevisionTable"
-            :policy-revision-loading="policyRevisionLoading"
-            :policy-revision-pagination="policyRevisionPagination"
-            :handle-policy-revision-page-change="handlePolicyRevisionPageChange"
-            :handle-policy-revision-page-size-change="handlePolicyRevisionPageSizeChange"
-          />
-        </n-tab-pane>
+    <SecurityPolicyPage
+      v-else-if="activeMenu === 'policy'"
+      :active-section="activePolicySection"
+      :navigate-to-tab="handleNavigateToPolicySection"
+      :policy-query="policyQuery"
+      :policy-columns="policyColumns"
+      :policy-table="policyTable"
+      :policy-loading="policyLoading"
+      :policy-pagination="policyPagination"
+      :table-fixed-height="tableFixedHeight"
+      :fetch-policies="fetchPolicies"
+      :reset-policy-query="resetPolicyQuery"
+      :handle-add-policy="handleAddPolicy"
+      :handle-policy-page-change="handlePolicyPageChange"
+      :handle-policy-page-size-change="handlePolicyPageSizeChange"
+      :policy-preview-policy-name="policyPreviewPolicyName"
+      :policy-preview-loading="policyPreviewLoading"
+      :policy-preview-directives="policyPreviewDirectives"
+      :policy-revision-columns="policyRevisionColumns"
+      :policy-revision-table="policyRevisionTable"
+      :policy-revision-loading="policyRevisionLoading"
+      :policy-revision-pagination="policyRevisionPagination"
+      :handle-policy-revision-page-change="handlePolicyRevisionPageChange"
+      :handle-policy-revision-page-size-change="handlePolicyRevisionPageSizeChange"
+      :default-policy-name="defaultPolicyName"
+      :selected-policy-name="selectedPolicyName"
+      :active-section-label="securityPolicySectionLabelMap[activePolicySection]"
+      :has-pending-crs-tuning-changes="hasPolicyWorkspaceDraft"
+      :policy-workspace-actions="policyWorkspaceActions"
+      :exclusion-total="Number(exclusionPagination.itemCount || 0)"
+      :crs-tuning-submitting="crsTuningSubmitting"
+      :crs-tuning-form-ref="crsTuningFormRef"
+      :crs-tuning-form="crsTuningForm"
+      :crs-policy-options="crsPolicyOptions"
+      :crs-tuning-rules="crsTuningRules"
+      :handle-crs-policy-change="handleCrsPolicyChange"
+      :map-crs-template-label="mapCrsTemplateLabel"
+      :handle-refresh-crs-policy="handleRefreshCrsPolicy"
+      :apply-crs-template-preset="applyCrsTemplatePreset"
+      :handle-save-crs-tuning="handleSaveCrsTuning"
+      :handle-preview-crs-tuning="handlePreviewCrsTuning"
+      :handle-validate-crs-tuning="handleValidateCrsTuning"
+      :handle-publish-crs-tuning="handlePublishCrsTuning"
+      :exclusion-query="exclusionQuery"
+      :scope-type-options="scopeTypeOptions"
+      :fetch-exclusions="fetchExclusions"
+      :reset-exclusion-query="resetExclusionQuery"
+      :handle-add-exclusion="handleAddExclusion"
+      :exclusion-columns="exclusionColumns"
+      :exclusion-table="exclusionTable"
+      :exclusion-loading="exclusionLoading"
+      :exclusion-pagination="exclusionPagination"
+      :handle-exclusion-page-change="handleExclusionPageChange"
+      :handle-exclusion-page-size-change="handleExclusionPageSizeChange"
+      :binding-query="bindingQuery"
+      :fetch-bindings="fetchBindings"
+      :reset-binding-query="resetBindingQuery"
+      :handle-add-binding="handleAddBinding"
+      :binding-columns="bindingColumns"
+      :binding-table="bindingTable"
+      :binding-loading="bindingLoading"
+      :binding-pagination="bindingPagination"
+      :handle-binding-page-change="handleBindingPageChange"
+      :handle-binding-page-size-change="handleBindingPageSizeChange"
+      :binding-conflict-groups="bindingConflictGroups"
+      :binding-effective-columns="bindingEffectiveColumns"
+      :binding-effective-preview="bindingEffectivePreview"
+    />
 
-        <n-tab-pane v-if="isTabVisible('crs')" name="crs" tab="CRS 调优">
-          <n-alert type="info" :show-icon="true" class="mb-3">
-            可按模板快速设置 `tx.paranoia_level` 与 anomaly 阈值，并独立发布 CRS 调优参数。
-          </n-alert>
+    <SecurityObservePage
+      v-else-if="activeMenu === 'observe'"
+      :active-view="observeActiveView"
+      :set-active-view="setObserveActiveView"
+      :policy-stats-query="policyStatsQuery"
+      :policy-stats-policy-options="policyStatsPolicyOptions"
+      :observe-window-options="observeWindowOptions"
+      :policy-stats-loading="policyStatsLoading"
+      :fetch-policy-stats="fetchPolicyStats"
+      :reset-policy-stats-query="resetPolicyStatsQuery"
+      :has-policy-stats-drill-filters="hasPolicyStatsDrillFilters"
+      :clear-policy-stats-drill-filters="clearPolicyStatsDrillFilters"
+      :handle-copy-policy-stats-link="handleCopyPolicyStatsLink"
+      :handle-export-policy-stats-compare-csv="handleExportPolicyStatsCompareCsv"
+      :handle-export-policy-stats-csv="handleExportPolicyStatsCsv"
+      :policy-stats-summary="policyStatsSummary"
+      :policy-stats-range="policyStatsRange"
+      :policy-stats-previous-snapshot="policyStatsPreviousSnapshot"
+      :format-rate-percent="formatRatePercent"
+      :clear-policy-stats-drill-level="clearPolicyStatsDrillLevel"
+      :policy-stats-trend-columns="policyStatsTrendColumns"
+      :policy-stats-trend="policyStatsTrend"
+      :policy-stats-columns="policyStatsColumns"
+      :policy-stats-table="policyStatsTable"
+      :policy-stats-drill-hint="policyStatsDrillHint"
+      :policy-stats-drill-status-label="policyStatsDrillStatusLabel"
+      :is-policy-stats-drill-unlocked="isPolicyStatsDrillUnlocked"
+      :policy-stats-dimension-columns="policyStatsDimensionColumns"
+      :policy-stats-top-hosts="policyStatsTopHosts"
+      :policy-stats-top-paths="policyStatsTopPaths"
+      :policy-stats-top-methods="policyStatsTopMethods"
+      :build-policy-stats-dimension-row-props="buildPolicyStatsDimensionRowProps"
+      :policy-feedback-status-filter="policyFeedbackStatusFilter"
+      :policy-feedback-status-filter-options="policyFeedbackStatusFilterOptions"
+      :set-policy-feedback-status-filter="(value: '' | 'pending' | 'confirmed' | 'resolved') => { policyFeedbackStatusFilter = value; }"
+      :policy-feedback-assignee-filter="policyFeedbackAssigneeFilter"
+      :set-policy-feedback-assignee-filter="(value: string) => { policyFeedbackAssigneeFilter = value; }"
+      :policy-feedback-sla-status-filter="policyFeedbackSLAStatusFilter"
+      :policy-feedback-sla-status-options="policyFeedbackSLAStatusOptions"
+      :set-policy-feedback-sla-status-filter="(value: 'all' | 'normal' | 'overdue' | 'resolved') => { policyFeedbackSLAStatusFilter = value; }"
+      :handle-policy-feedback-status-filter-change="handlePolicyFeedbackStatusFilterChange"
+      :open-policy-feedback-modal="openPolicyFeedbackModal"
+      :open-policy-feedback-batch-process-modal="openPolicyFeedbackBatchProcessModal"
+      :has-policy-feedback-selection="hasPolicyFeedbackSelection"
+      :policy-feedback-checked-row-keys="policyFeedbackCheckedRowKeys"
+      :policy-feedback-loading="policyFeedbackLoading"
+      :fetch-policy-false-positive-feedbacks="fetchPolicyFalsePositiveFeedbacks"
+      :policy-feedback-columns="policyFeedbackColumns"
+      :policy-feedback-table="policyFeedbackTable"
+      :policy-feedback-pagination="policyFeedbackPagination"
+      :policy-feedback-checked-row-keys-in-page="policyFeedbackCheckedRowKeysInPage"
+      :handle-policy-feedback-checked-row-keys-change="handlePolicyFeedbackCheckedRowKeysChange"
+      :handle-policy-feedback-page-change="handlePolicyFeedbackPageChange"
+      :handle-policy-feedback-page-size-change="handlePolicyFeedbackPageSizeChange"
+    />
 
-          <n-alert v-if="crsTuningForm.crsParanoiaLevel >= 3" type="warning" :show-icon="true" class="mb-3">
-            当前 PL={{ crsTuningForm.crsParanoiaLevel }}，误拦截风险上升。建议先在 DetectionOnly 观察并完成业务回归后再发布。
-          </n-alert>
-
-          <div class="mb-3 flex flex-wrap gap-2 items-center">
-            <n-select
-              v-model:value="crsTuningForm.policyId"
-              :options="crsPolicyOptions"
-              placeholder="选择要调优的策略"
-              class="w-320px"
-              @update:value="handleCrsPolicyChange"
-            />
-            <n-tag :bordered="false" type="info">当前模板：{{ mapCrsTemplateLabel(crsTuningForm.crsTemplate) }}</n-tag>
-            <n-button @click="handleRefreshCrsPolicy">刷新策略</n-button>
-          </div>
-
-          <div class="mb-3 flex flex-wrap gap-2 items-center">
-            <n-button secondary @click="applyCrsTemplatePreset('low_fp')">低误报模板</n-button>
-            <n-button secondary @click="applyCrsTemplatePreset('balanced')">平衡模板</n-button>
-            <n-button secondary @click="applyCrsTemplatePreset('high_blocking')">高拦截模板</n-button>
-          </div>
-
-          <n-form ref="crsTuningFormRef" :model="crsTuningForm" :rules="crsTuningRules" label-placement="left" label-width="220">
-            <n-grid cols="3" x-gap="12">
-              <n-form-item-gi label="Paranoia Level (PL)" path="crsParanoiaLevel">
-                <n-input-number
-                  v-model:value="crsTuningForm.crsParanoiaLevel"
-                  :show-button="false"
-                  :min="1"
-                  :max="4"
-                  class="w-full"
-                />
-              </n-form-item-gi>
-              <n-form-item-gi label="Inbound 阈值" path="crsInboundAnomalyThreshold">
-                <n-input-number
-                  v-model:value="crsTuningForm.crsInboundAnomalyThreshold"
-                  :show-button="false"
-                  :min="1"
-                  :max="20"
-                  class="w-full"
-                />
-              </n-form-item-gi>
-              <n-form-item-gi label="Outbound 阈值" path="crsOutboundAnomalyThreshold">
-                <n-input-number
-                  v-model:value="crsTuningForm.crsOutboundAnomalyThreshold"
-                  :show-button="false"
-                  :min="1"
-                  :max="20"
-                  class="w-full"
-                />
-              </n-form-item-gi>
-            </n-grid>
-          </n-form>
-
-          <div class="mb-3 flex flex-wrap gap-2 items-center">
-            <n-button type="primary" :loading="crsTuningSubmitting" @click="handleSaveCrsTuning">保存调优参数</n-button>
-            <n-button type="info" secondary :loading="policyPreviewLoading" @click="handlePreviewCrsTuning">预览</n-button>
-            <n-button type="success" secondary :loading="crsTuningSubmitting" @click="handleValidateCrsTuning">校验</n-button>
-            <n-button type="warning" secondary :loading="crsTuningSubmitting" @click="handlePublishCrsTuning">发布</n-button>
-          </div>
-
-          <n-card :bordered="false" size="small">
-            <div class="text-sm font-semibold mb-2">CRS 调优指令预览 {{ policyPreviewPolicyName ? `(${policyPreviewPolicyName})` : '' }}</div>
-            <n-spin :show="policyPreviewLoading">
-              <n-input
-                :value="policyPreviewDirectives"
-                type="textarea"
-                :autosize="{ minRows: 8, maxRows: 14 }"
-                readonly
-                placeholder="点击“预览”查看 CRS 调优参数渲染后的 directives"
-              />
-            </n-spin>
-          </n-card>
-
-          <div class="mt-3 text-sm font-semibold">调优发布记录</div>
-          <n-data-table
-            remote
-            class="mt-2 min-h-220px"
-            :columns="policyRevisionColumns"
-            :data="policyRevisionTable"
-            :loading="policyRevisionLoading"
-            :pagination="policyRevisionPagination"
-            :row-key="row => row.id"
-            :scroll-x="1100"
-            :resizable="true"
-            @update:page="handlePolicyRevisionPageChange"
-            @update:page-size="handlePolicyRevisionPageSizeChange"
-          />
-        </n-tab-pane>
-
-        <n-tab-pane v-if="isTabVisible('exclusion')" name="exclusion" tab="规则例外">
-          <n-alert type="info" :show-icon="true" class="mb-3">
-            用于处理误报，支持按全局/站点/路由维度配置 `removeById/removeByTag`。
-          </n-alert>
-
-          <div class="mb-3 flex flex-wrap gap-2 items-center">
-            <n-select v-model:value="exclusionQuery.policyId" :options="crsPolicyOptions" clearable placeholder="策略" class="w-240px" />
-            <n-select v-model:value="exclusionQuery.scopeType" :options="scopeTypeOptions" clearable placeholder="作用域" class="w-180px" />
-            <n-input v-model:value="exclusionQuery.name" placeholder="按名称搜索" clearable class="w-220px" @keyup.enter="fetchExclusions" />
-            <n-button type="primary" @click="fetchExclusions">
-              <template #icon>
-                <icon-carbon-search />
-              </template>
-              查询
-            </n-button>
-            <n-button @click="resetExclusionQuery">重置</n-button>
-            <n-button type="primary" @click="handleAddExclusion">
-              <template #icon>
-                <icon-ic-round-plus />
-              </template>
-              新增例外
-            </n-button>
-          </div>
-
-          <n-data-table
-            remote
-            :columns="exclusionColumns"
-            :data="exclusionTable"
-            :loading="exclusionLoading"
-            :pagination="exclusionPagination"
-            :row-key="row => row.id"
-            :max-height="tableFixedHeight"
-            class="min-h-260px"
-            :scroll-x="1600"
-            :resizable="true"
-            @update:page="handleExclusionPageChange"
-            @update:page-size="handleExclusionPageSizeChange"
-          />
-        </n-tab-pane>
-
-        <n-tab-pane v-if="isTabVisible('binding')" name="binding" tab="策略绑定">
-          <n-alert type="warning" :show-icon="true" class="mb-3">
-            同一作用域 + 同一优先级仅允许一个生效绑定，冲突会阻止策略发布。
-          </n-alert>
-
-          <div class="mb-3 flex flex-wrap gap-2 items-center">
-            <n-select v-model:value="bindingQuery.policyId" :options="crsPolicyOptions" clearable placeholder="策略" class="w-240px" />
-            <n-select v-model:value="bindingQuery.scopeType" :options="scopeTypeOptions" clearable placeholder="作用域" class="w-180px" />
-            <n-input v-model:value="bindingQuery.name" placeholder="按名称搜索" clearable class="w-220px" @keyup.enter="fetchBindings" />
-            <n-button type="primary" @click="fetchBindings">
-              <template #icon>
-                <icon-carbon-search />
-              </template>
-              查询
-            </n-button>
-            <n-button @click="resetBindingQuery">重置</n-button>
-            <n-button type="primary" @click="handleAddBinding">
-              <template #icon>
-                <icon-ic-round-plus />
-              </template>
-              新增绑定
-            </n-button>
-          </div>
-
-          <n-data-table
-            remote
-            :columns="bindingColumns"
-            :data="bindingTable"
-            :loading="bindingLoading"
-            :pagination="bindingPagination"
-            :row-key="row => row.id"
-            :max-height="tableFixedHeight"
-            class="min-h-260px"
-            :scroll-x="1600"
-            :resizable="true"
-            @update:page="handleBindingPageChange"
-            @update:page-size="handleBindingPageSizeChange"
-          />
-
-          <n-alert v-if="bindingConflictGroups.length > 0" type="error" :show-icon="true" class="mt-3">
-            检测到 {{ bindingConflictGroups.length }} 组作用域冲突（同作用域 + 同优先级），发布会被阻断。首条冲突：
-            {{ bindingConflictGroups[0].scopeType }} /
-            {{ bindingConflictGroups[0].host || '-' }} /
-            {{ bindingConflictGroups[0].path || '-' }} /
-            {{ bindingConflictGroups[0].method || '-' }} /
-            priority={{ bindingConflictGroups[0].priority }} /
-            count={{ bindingConflictGroups[0].count }}
-          </n-alert>
-
-          <n-card :bordered="false" size="small" class="mt-3">
-            <div class="text-sm font-semibold mb-2">策略叠加执行顺序（当前列表）</div>
-            <n-data-table
-              :columns="bindingEffectiveColumns"
-              :data="bindingEffectivePreview"
-              :pagination="false"
-              :row-key="row => row.id"
-              :max-height="280"
-              class="min-h-120px"
-            />
-          </n-card>
-        </n-tab-pane>
-
-        <n-tab-pane v-if="isTabVisible('observe')" name="observe" tab="策略观测">
-          <ObserveTabContent
-            :policy-stats-query="policyStatsQuery"
-            :policy-stats-policy-options="policyStatsPolicyOptions"
-            :observe-window-options="observeWindowOptions"
-            :policy-stats-loading="policyStatsLoading"
-            :fetch-policy-stats="fetchPolicyStats"
-            :reset-policy-stats-query="resetPolicyStatsQuery"
-            :has-policy-stats-drill-filters="hasPolicyStatsDrillFilters"
-            :clear-policy-stats-drill-filters="clearPolicyStatsDrillFilters"
-            :policy-feedback-status-filter="policyFeedbackStatusFilter"
-            :policy-feedback-status-filter-options="policyFeedbackStatusFilterOptions"
-            :set-policy-feedback-status-filter="(value: '' | 'pending' | 'confirmed' | 'resolved') => { policyFeedbackStatusFilter = value; }"
-            :policy-feedback-assignee-filter="policyFeedbackAssigneeFilter"
-            :set-policy-feedback-assignee-filter="(value: string) => { policyFeedbackAssigneeFilter = value; }"
-            :policy-feedback-sla-status-filter="policyFeedbackSLAStatusFilter"
-            :policy-feedback-sla-status-options="policyFeedbackSLAStatusOptions"
-            :set-policy-feedback-sla-status-filter="(value: 'all' | 'normal' | 'overdue' | 'resolved') => { policyFeedbackSLAStatusFilter = value; }"
-            :handle-policy-feedback-status-filter-change="handlePolicyFeedbackStatusFilterChange"
-            :open-policy-feedback-modal="openPolicyFeedbackModal"
-            :open-policy-feedback-batch-process-modal="openPolicyFeedbackBatchProcessModal"
-            :has-policy-feedback-selection="hasPolicyFeedbackSelection"
-            :policy-feedback-checked-row-keys="policyFeedbackCheckedRowKeys"
-            :policy-feedback-loading="policyFeedbackLoading"
-            :fetch-policy-false-positive-feedbacks="fetchPolicyFalsePositiveFeedbacks"
-            :handle-copy-policy-stats-link="handleCopyPolicyStatsLink"
-            :handle-export-policy-stats-compare-csv="handleExportPolicyStatsCompareCsv"
-            :handle-export-policy-stats-csv="handleExportPolicyStatsCsv"
-            :policy-stats-summary="policyStatsSummary"
-            :policy-stats-range="policyStatsRange"
-            :policy-stats-previous-snapshot="policyStatsPreviousSnapshot"
-            :format-rate-percent="formatRatePercent"
-            :clear-policy-stats-drill-level="clearPolicyStatsDrillLevel"
-            :policy-stats-trend-columns="policyStatsTrendColumns"
-            :policy-stats-trend="policyStatsTrend"
-            :policy-stats-columns="policyStatsColumns"
-            :policy-stats-table="policyStatsTable"
-            :policy-feedback-columns="policyFeedbackColumns"
-            :policy-feedback-table="policyFeedbackTable"
-            :policy-feedback-pagination="policyFeedbackPagination"
-            :policy-feedback-checked-row-keys-in-page="policyFeedbackCheckedRowKeysInPage"
-            :handle-policy-feedback-checked-row-keys-change="handlePolicyFeedbackCheckedRowKeysChange"
-            :handle-policy-feedback-page-change="handlePolicyFeedbackPageChange"
-            :handle-policy-feedback-page-size-change="handlePolicyFeedbackPageSizeChange"
-            :policy-stats-drill-hint="policyStatsDrillHint"
-            :policy-stats-drill-status-label="policyStatsDrillStatusLabel"
-            :is-policy-stats-drill-unlocked="isPolicyStatsDrillUnlocked"
-            :policy-stats-dimension-columns="policyStatsDimensionColumns"
-            :policy-stats-top-hosts="policyStatsTopHosts"
-            :policy-stats-top-paths="policyStatsTopPaths"
-            :policy-stats-top-methods="policyStatsTopMethods"
-            :build-policy-stats-dimension-row-props="buildPolicyStatsDimensionRowProps"
-          />
-        </n-tab-pane>
-
-        <n-tab-pane v-if="isTabVisible('release')" name="release" tab="版本发布管理">
-          <ReleaseTabContent
-            :release-query="releaseQuery"
-            :release-status-options="releaseStatusOptions"
-            :fetch-releases="fetchReleases"
-            :reset-release-query="resetReleaseQuery"
-            :open-rollback-modal="openRollbackModal"
-            :handle-clear-releases="handleClearReleases"
-            :release-columns="releaseColumns"
-            :release-table="releaseTable"
-            :release-loading="releaseLoading"
-            :release-pagination="releasePagination"
-            :table-fixed-height="tableFixedHeight"
-            :handle-release-page-change="handleReleasePageChange"
-            :handle-release-page-size-change="handleReleasePageSizeChange"
-          />
-        </n-tab-pane>
-
-        <n-tab-pane v-if="isTabVisible('job')" name="job" tab="任务日志">
-          <JobTabContent
-            :job-query="jobQuery"
-            :job-status-options="jobStatusOptions"
-            :job-action-options="jobActionOptions"
-            :fetch-jobs="fetchJobs"
-            :reset-job-query="resetJobQuery"
-            :refresh-current-tab="refreshCurrentTab"
-            :handle-clear-jobs="handleClearJobs"
-            :job-columns="jobColumns"
-            :job-table="jobTable"
-            :job-loading="jobLoading"
-            :job-pagination="jobPagination"
-            :table-fixed-height="tableFixedHeight"
-            :handle-job-page-change="handleJobPageChange"
-            :handle-job-page-size-change="handleJobPageSizeChange"
-          />
-        </n-tab-pane>
-      </n-tabs>
-    </n-card>
+    <SecurityOpsPage
+      v-else
+      :active-section="activeOpsSection"
+      :navigate-to-tab="handleNavigateToOpsSection"
+      :release-query="releaseQuery"
+      :release-status-options="releaseStatusOptions"
+      :fetch-releases="fetchReleases"
+      :reset-release-query="resetReleaseQuery"
+      :open-rollback-modal="openRollbackModal"
+      :handle-clear-releases="handleClearReleases"
+      :release-columns="releaseColumns"
+      :release-table="releaseTable"
+      :release-loading="releaseLoading"
+      :release-pagination="releasePagination"
+      :table-fixed-height="tableFixedHeight"
+      :handle-release-page-change="handleReleasePageChange"
+      :handle-release-page-size-change="handleReleasePageSizeChange"
+      :job-query="jobQuery"
+      :job-status-options="jobStatusOptions"
+      :job-action-options="jobActionOptions"
+      :fetch-jobs="fetchJobs"
+      :reset-job-query="resetJobQuery"
+      :refresh-current-section="refreshCurrentDomain"
+      :handle-clear-jobs="handleClearJobs"
+      :job-columns="jobColumns"
+      :job-table="jobTable"
+      :job-loading="jobLoading"
+      :job-pagination="jobPagination"
+      :handle-job-page-change="handleJobPageChange"
+      :handle-job-page-size-change="handleJobPageSizeChange"
+    />
 
     <n-modal v-model:show="sourceModalVisible" preset="card" :title="sourceModalTitle" class="w-720px">
       <n-form ref="sourceFormRef" :model="sourceForm" :rules="sourceRules" label-placement="left" label-width="120">
@@ -874,75 +693,65 @@ import {
   type PaginationProps,
   type UploadFileInfo
 } from 'naive-ui';
+import { checkWafEngine, fetchWafEngineStatus, fetchWafSourceList, uploadWafPackage, type WafAuthType, type WafEngineStatusResp, type WafKind, type WafMode, type WafSourceItem } from '@/service/api/caddy-source';
 import {
-  checkWafEngine,
   createWafPolicyBinding,
   createWafPolicy,
   createWafRuleExclusion,
-  createWafSource,
   deleteWafPolicyBinding,
   deleteWafPolicy,
   deleteWafRuleExclusion,
-  deleteWafSource,
-  fetchWafEngineStatus,
   fetchWafPolicyBindingList,
   fetchWafPolicyList,
-  fetchWafPolicyStats,
   fetchWafPolicyRevisionList,
   fetchWafRuleExclusionList,
-  fetchWafSourceList,
   previewWafPolicy,
   publishWafPolicy,
   rollbackWafPolicy,
-  syncWafSource,
   updateWafPolicyBinding,
   updateWafPolicy,
   updateWafRuleExclusion,
-  updateWafSource,
-  uploadWafPackage,
   validateWafPolicy,
-  type WafAuthType,
   type WafPolicyAuditEngine,
   type WafPolicyAuditLogFormat,
+  type WafPolicyBindingItem,
+  type WafPolicyBindingPayload,
   type WafPolicyCrsTemplate,
   type WafPolicyEngineMode,
   type WafPolicyItem,
-  type WafPolicyBindingItem,
-  type WafPolicyBindingPayload,
-  type WafPolicyFalsePositiveFeedbackItem,
   type WafPolicyRemoveType,
-  type WafPolicyStatsDimensionItem,
-  type WafPolicyStatsItem,
-  type WafPolicyStatsTrendItem,
   type WafPolicyRevisionItem,
   type WafPolicyRevisionStatus,
   type WafPolicyScopeType,
   type WafRuleExclusionItem,
-  type WafRuleExclusionPayload,
-  type WafJobItem,
-  type WafJobStatus,
-  type WafKind,
-  type WafMode,
-  type WafEngineStatusResp,
-  type WafReleaseItem,
-  type WafReleaseStatus,
-  type WafSourceItem
-} from '@/service/api/caddy';
+  type WafRuleExclusionPayload
+} from '@/service/api/caddy-policy';
+import {
+  type WafPolicyFalsePositiveFeedbackItem,
+  type WafPolicyStatsDimensionItem,
+  type WafPolicyStatsItem,
+  type WafPolicyStatsTrendItem
+} from '@/service/api/caddy-observe';
+import { type WafJobItem, type WafJobStatus, type WafReleaseItem, type WafReleaseStatus } from '@/service/api/caddy-release-job';
 import {
   buildExclusionCandidateKey,
   collectExclusionCandidatesFromFeedbackSuggestion,
   parseExclusionCandidateKey,
   parseExclusionFromFeedbackSuggestion
 } from './policy-feedback-draft';
-import SourceTabContent from './tabs/SourceTabContent.vue';
-import RuntimeTabContent from './tabs/RuntimeTabContent.vue';
-import ObserveTabContent from './tabs/ObserveTabContent.vue';
-import ReleaseTabContent from './tabs/ReleaseTabContent.vue';
-import JobTabContent from './tabs/JobTabContent.vue';
 import {
-  pickRouteQueryValue,
-  type SecurityTabKey
-} from './navigation';
+  buildPolicyWorkspaceActions,
+  formatBytes,
+  mapCrsTemplateLabel,
+  mapPolicyEngineModeLabel,
+  mapPolicyRevisionStatusLabel,
+  mapScopeTypeLabel
+} from './security-policy-utils';
+import { SECURITY_MENU_SCHEMA, pickRouteQueryValue, type SecurityMenuKey, type SecurityTabKey } from './navigation';
+import SecuritySourcePage from './pages/SecuritySourcePage.vue';
+import SecurityPolicyPage from './pages/SecurityPolicyPage.vue';
+import SecurityObservePage from './pages/SecurityObservePage.vue';
+import SecurityOpsPage from './pages/SecurityOpsPage.vue';
 import { useSecurityNavigation } from './composables/useSecurityNavigation';
 import { useWafPolicy } from './composables/useWafPolicy';
 import { useWafObserve } from './composables/useWafObserve';
@@ -963,10 +772,33 @@ const engineChecking = ref(false);
 const engineUnavailable = ref(false);
 const engineStatus = ref<WafEngineStatusResp | null>(null);
 
-const { activeMenu, activeTab, isMenuTabNavVisible, pageTitle, isTabVisible, navigateToSecurityTab } = useSecurityNavigation({
+const { activeMenu, activeTab, pageTitle, navigateToSecurityTab } = useSecurityNavigation({
   route,
   router
 });
+
+const securityMenus = Object.values(SECURITY_MENU_SCHEMA);
+const securityMenuDescriptionMap: Record<SecurityMenuKey, string> = {
+  source: '更新源、规则包上传与引擎检查。',
+  policy: '运行模式、CRS、例外和绑定统一收束。',
+  observe: '效果分析、下钻和误报处置。',
+  ops: '版本发布、回滚、任务审计与清理。'
+};
+const securityPolicySectionLabelMap = {
+  runtime: '基础设置',
+  crs: 'CRS 调优',
+  exclusion: '规则例外',
+  binding: '策略绑定'
+} as const;
+const activeMenuDescription = computed(() => securityMenuDescriptionMap[activeMenu.value]);
+const activePolicySection = computed(() => {
+  if (activeTab.value === 'crs' || activeTab.value === 'exclusion' || activeTab.value === 'binding') {
+    return activeTab.value;
+  }
+  return 'runtime';
+});
+const activeOpsSection = computed(() => (activeTab.value === 'job' ? 'job' : 'release'));
+const observeActiveView = ref<'analysis' | 'feedback'>('analysis');
 
 const tableFixedHeight = 480;
 
@@ -2563,47 +2395,6 @@ function mapPolicyEngineModeType(mode: WafPolicyEngineMode) {
   }
 }
 
-function mapPolicyEngineModeLabel(mode: WafPolicyEngineMode) {
-  switch (mode) {
-    case 'on':
-      return 'On（阻断）';
-    case 'detectiononly':
-      return 'DetectionOnly（仅检测）';
-    case 'off':
-      return 'Off（关闭）';
-    default:
-      return mode || '-';
-  }
-}
-
-function mapCrsTemplateLabel(template: WafPolicyCrsTemplate | string) {
-  switch (template) {
-    case 'low_fp':
-      return '低误报';
-    case 'balanced':
-      return '平衡';
-    case 'high_blocking':
-      return '高拦截';
-    case 'custom':
-      return '自定义';
-    default:
-      return template || '-';
-  }
-}
-
-function mapScopeTypeLabel(scopeType: WafPolicyScopeType | string) {
-  switch (scopeType) {
-    case 'global':
-      return '全局';
-    case 'site':
-      return '站点';
-    case 'route':
-      return '路由';
-    default:
-      return scopeType || '-';
-  }
-}
-
 function inferCrsTemplateByValues(crsParanoiaLevel: number, crsInboundAnomalyThreshold: number, crsOutboundAnomalyThreshold: number): WafPolicyCrsTemplate {
   for (const option of crsTemplateOptions) {
     if (option.value === 'custom') {
@@ -2629,19 +2420,6 @@ function mapPolicyRevisionStatusType(status: WafPolicyRevisionStatus) {
       return 'warning';
     default:
       return 'default';
-  }
-}
-
-function mapPolicyRevisionStatusLabel(status: WafPolicyRevisionStatus) {
-  switch (status) {
-    case 'draft':
-      return '草稿';
-    case 'published':
-      return '已发布';
-    case 'rolled_back':
-      return '已回滚';
-    default:
-      return status || '-';
   }
 }
 
@@ -2738,6 +2516,22 @@ function mapJobSourceName(row: WafJobItem) {
 
   return mapSourceNameById(Number(row.sourceId || 0));
 }
+
+const defaultPolicyName = computed(() => {
+  const target = policyTable.value.find(item => item.isDefault) || policyTable.value[0];
+  return target?.name || '-';
+});
+
+const selectedPolicyName = computed(() => getCurrentCrsPolicy()?.name || defaultPolicyName.value || '-');
+const hasPolicyWorkspaceDraft = computed(() => hasPendingCrsTuningChanges());
+const policyWorkspaceActions = computed(() =>
+  buildPolicyWorkspaceActions({
+    activeSection: activePolicySection.value,
+    hasPendingCrsTuningChanges: hasPolicyWorkspaceDraft.value,
+    bindingConflictCount: bindingConflictGroups.value.length,
+    selectedPolicyName: selectedPolicyName.value
+  })
+);
 
 function mergeJobSourceNameMap(sourceList: WafSourceItem[]) {
   if (!Array.isArray(sourceList) || sourceList.length === 0) {
@@ -2844,18 +2638,6 @@ function mapJobMessage(rawMessage: string) {
   return localizedMessage;
 }
 
-function formatBytes(size: number) {
-  if (!size || size <= 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB'];
-  let value = size;
-  let unitIndex = 0;
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024;
-    unitIndex += 1;
-  }
-  return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unitIndex]}`;
-}
-
 function formatRatePercent(value: number) {
   const numeric = Number(value || 0);
   if (!Number.isFinite(numeric) || numeric <= 0) {
@@ -2940,6 +2722,22 @@ function displayEngineValue(value: unknown) {
     return '-';
   }
   return String(value);
+}
+
+function setObserveActiveView(view: 'analysis' | 'feedback') {
+  observeActiveView.value = view;
+}
+
+function handleNavigateToMenu(menu: SecurityMenuKey) {
+  return navigateToSecurityTab(SECURITY_MENU_SCHEMA[menu].defaultTab);
+}
+
+function handleNavigateToPolicySection(tab: 'runtime' | 'crs' | 'exclusion' | 'binding') {
+  return navigateToSecurityTab(tab);
+}
+
+function handleNavigateToOpsSection(tab: 'release' | 'job') {
+  return navigateToSecurityTab(tab);
 }
 
 async function fetchEngineStatus() {
@@ -3380,7 +3178,7 @@ function handleConfirmPolicyFeedbackExclusionDraft() {
   policyFeedbackExclusionDraftModalVisible.value = false;
   policyFeedbackExclusionDraft.value = null;
   policyFeedbackExclusionDraftCandidateKey.value = '';
-  void navigateToSecurityTab('exclusion');
+  void handleNavigateToPolicySection('exclusion');
   shouldFocusExclusionRemoveValue.value = !exclusionForm.removeValue;
   exclusionModalVisible.value = true;
   if (!exclusionForm.removeValue) {
@@ -3748,6 +3546,27 @@ const securityTabRefreshMap: Record<SecurityTabKey, () => void> = {
   }
 };
 
+const securityDomainRefreshMap: Record<SecurityMenuKey, () => void> = {
+  source: () => {
+    fetchEngineStatus();
+    fetchSources();
+  },
+  policy: () => {
+    fetchPolicies();
+    fetchPolicyRevisions(getCurrentRevisionPolicyId());
+    fetchExclusions();
+    fetchBindings();
+  },
+  observe: () => {
+    fetchPolicies();
+    fetchPolicyStats();
+  },
+  ops: () => {
+    fetchReleases();
+    fetchJobs();
+  }
+};
+
 function refreshSecurityTab(tab: SecurityTabKey) {
   securityTabRefreshMap[tab]?.();
 }
@@ -3756,12 +3575,20 @@ function refreshCurrentTab() {
   refreshSecurityTab(activeTab.value);
 }
 
+function refreshCurrentDomain() {
+  securityDomainRefreshMap[activeMenu.value]?.();
+}
+
 watch(activeTab, value => {
   refreshSecurityTab(value);
 });
 
+watch(activeMenu, value => {
+  securityDomainRefreshMap[value]?.();
+});
+
 onMounted(() => {
-  refreshCurrentTab();
+  refreshCurrentDomain();
 });
 </script>
 

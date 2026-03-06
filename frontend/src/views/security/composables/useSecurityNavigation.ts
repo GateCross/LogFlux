@@ -35,7 +35,7 @@ export function useSecurityNavigation(options: UseSecurityNavigationOptions) {
 
   function syncNavigationStateFromRoute() {
     const nextMenu = resolveSecurityMenuFromRoute(String(route.name || ''), route.query.activeTab);
-    const nextTab = resolveSecurityTabFromRoute(nextMenu, route.query.activeTab);
+    const nextTab = resolveSecurityTabFromRoute(nextMenu, String(route.name || ''), route.query.activeTab);
 
     if (activeMenu.value !== nextMenu) {
       activeMenu.value = nextMenu;

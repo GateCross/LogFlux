@@ -33,7 +33,7 @@
 
 <script setup lang="ts">
 import type { DataTableColumns, PaginationProps } from 'naive-ui';
-import type { WafJobItem } from '@/service/api/caddy';
+import type { WafJobItem } from '@/service/api/caddy-release-job';
 
 defineProps<{
   jobQuery: { status: string; action: string };
