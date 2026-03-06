@@ -269,7 +269,7 @@ import type {
   WafPolicyStatsItem,
   WafPolicyStatsTrendItem,
   WafPolicyFalsePositiveFeedbackItem
-} from '@/service/api/caddy';
+} from '@/service/api/caddy-observe';
 
 type DrillLevel = 'host' | 'path' | 'method';
 

@@ -21,6 +21,14 @@
       </n-button>
     </div>
 
+    <n-card :bordered="false" size="small" class="mb-3 bg-#fafafc">
+      <div class="mb-1 text-sm font-semibold">统一操作区</div>
+      <div class="text-xs text-gray-500">当前策略：{{ selectedPolicyName }} / 当前分区：{{ activeSectionLabel }}</div>
+      <div class="mt-2 flex flex-col gap-1 text-xs text-gray-500">
+        <div v-for="item in policyWorkspaceActions" :key="item">- {{ item }}</div>
+      </div>
+    </n-card>
+
     <n-data-table
       remote
       :columns="policyColumns"
@@ -68,7 +76,7 @@
 
 <script setup lang="ts">
 import type { DataTableColumns, PaginationProps } from 'naive-ui';
-import type { WafPolicyItem, WafPolicyRevisionItem } from '@/service/api/caddy';
+import type { WafPolicyItem, WafPolicyRevisionItem } from '@/service/api/caddy-policy';
 
 defineProps<{
   policyQuery: { name: string };
@@ -82,6 +90,9 @@ defineProps<{
   handleAddPolicy: () => void;
   handlePolicyPageChange: (page: number) => void;
   handlePolicyPageSizeChange: (pageSize: number) => void;
+  selectedPolicyName: string;
+  activeSectionLabel: string;
+  policyWorkspaceActions: string[];
 
   policyPreviewPolicyName: string;
   policyPreviewLoading: boolean;

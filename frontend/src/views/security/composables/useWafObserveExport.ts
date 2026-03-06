@@ -3,7 +3,7 @@ import type { Router, RouteLocationNormalizedLoaded } from 'vue-router';
 import type {
   WafPolicyStatsDimensionItem,
   WafPolicyStatsItem
-} from '@/service/api/caddy';
+} from '@/service/api/caddy-observe';
 import type { PolicyStatsSnapshot } from './useWafObserve';
 
 type MessageApi = {

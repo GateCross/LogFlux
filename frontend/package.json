@@ -43,7 +43,7 @@
     "prepare": "simple-git-hooks",
     "preview": "vite preview",
     "release": "sa release",
-    "test:regression": "tsx --test src/views/security/policy-feedback-draft.test.ts",
+    "test:regression": "tsx --test src/views/security/policy-feedback-draft.test.ts src/views/security/security-policy-utils.test.ts",
     "typecheck": "vue-tsc --noEmit --skipLibCheck",
     "update-pkg": "sa update-pkg"
   },

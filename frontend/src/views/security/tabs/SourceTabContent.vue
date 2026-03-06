@@ -40,7 +40,7 @@
 
 <script setup lang="ts">
 import type { DataTableColumns, PaginationProps } from 'naive-ui';
-import type { WafSourceItem } from '@/service/api/caddy';
+import type { WafSourceItem } from '@/service/api/caddy-source';
 
 defineProps<{
   sourceQuery: { name: string };

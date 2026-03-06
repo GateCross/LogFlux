@@ -67,6 +67,19 @@ export const SECURITY_ROUTE_NAME_MENU_MAP: Record<string, SecurityMenuKey> = {
   security_job: 'ops'
 };
 
+export const SECURITY_ROUTE_NAME_TAB_MAP: Partial<Record<string, SecurityTabKey>> = {
+  security_source: 'source',
+  security_policy: 'runtime',
+  security_runtime: 'runtime',
+  security_crs: 'crs',
+  security_exclusion: 'exclusion',
+  security_binding: 'binding',
+  security_observe: 'observe',
+  security_ops: 'release',
+  security_release: 'release',
+  security_job: 'job'
+};
+
 export const SECURITY_TAB_TITLE_MAP: Record<SecurityTabKey, string> = {
   source: '更新源配置',
   runtime: '运行模式',
@@ -108,8 +121,13 @@ export function resolveSecurityMenuFromRoute(routeName: string, routeQueryActive
   return 'source';
 }
 
-export function resolveSecurityTabFromRoute(menu: SecurityMenuKey, routeQueryActiveTab: unknown) {
+export function resolveSecurityTabFromRoute(menu: SecurityMenuKey, routeName: string, routeQueryActiveTab: unknown) {
   const groupTabs = SECURITY_MENU_SCHEMA[menu]?.tabs || ['source'];
+  const routeNameTab = SECURITY_ROUTE_NAME_TAB_MAP[String(routeName || '')];
+  if (routeNameTab && groupTabs.includes(routeNameTab)) {
+    return routeNameTab;
+  }
+
   const routeTab = pickRouteQueryValue(routeQueryActiveTab);
   if (isSecurityTabKey(routeTab) && groupTabs.includes(routeTab)) {
     return routeTab;

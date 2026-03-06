@@ -30,7 +30,7 @@
 
 <script setup lang="ts">
 import type { DataTableColumns, PaginationProps } from 'naive-ui';
-import type { WafReleaseItem } from '@/service/api/caddy';
+import type { WafReleaseItem } from '@/service/api/caddy-release-job';
 
 defineProps<{
   releaseQuery: { status: string };
