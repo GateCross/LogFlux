@@ -27,7 +27,6 @@
         <n-gi>
           <n-statistic label="绑定冲突" :value="bindingConflictGroups.length" />
         </n-gi>
-        </n-gi>
       </n-grid>
 
       <n-grid cols="24" x-gap="12" y-gap="12" class="mt-4">
