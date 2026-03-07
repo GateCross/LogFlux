@@ -157,8 +157,12 @@ export const request = createFlatRequest(
       const isWafEngineOptionalApi =
         requestUrl.includes('/api/caddy/waf/engine/status') ||
         requestUrl.includes('/api/caddy/waf/engine/check') ||
+        requestUrl.includes('/api/caddy/waf/integration/status') ||
+        requestUrl.includes('/api/caddy/waf/integration/apply') ||
         requestUrl.includes('/caddy/waf/engine/status') ||
-        requestUrl.includes('/caddy/waf/engine/check');
+        requestUrl.includes('/caddy/waf/engine/check') ||
+        requestUrl.includes('/caddy/waf/integration/status') ||
+        requestUrl.includes('/caddy/waf/integration/apply');
 
       if (isWafEngineOptionalApi && (error.response?.status === 404 || error.response?.status === 405)) {
         return;

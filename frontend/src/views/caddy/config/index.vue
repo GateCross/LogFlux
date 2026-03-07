@@ -7,8 +7,10 @@ import { fetchCaddyServers, fetchCaddyConfig, updateCaddyConfigRaw, updateCaddyC
 import ConfigPreviewPanel from './components/ConfigPreviewPanel.vue';
 import RawEditorPanel from './components/RawEditorPanel.vue';
 import StructuredEditorPanel from './components/StructuredEditorPanel.vue';
+import WafIntegrationCard from './components/WafIntegrationCard.vue';
 import SvgIcon from '@/components/custom/svg-icon.vue';
 import type { CaddyFormModel, Route, RouteMatch, Site } from './types';
+import { applyWafIntegration, fetchWafIntegrationStatus, type WafIntegrationStatusResp } from '@/service/api/caddy-integration';
 
 // Configure Monaco Editor loader to use npmmirror for better performance in China
 loader.config({
@@ -110,6 +112,13 @@ const serverFormModel = ref<Omit<CaddyServer, 'id'> & { id?: number }>({
   type: 'local',
   token: ''
 });
+const wafIntegrationLoading = ref(false);
+const wafIntegrationSubmitting = ref(false);
+const wafIntegrationPreviewing = ref(false);
+const wafIntegrationUnavailable = ref(false);
+const wafIntegrationStatus = ref<WafIntegrationStatusResp | null>(null);
+const selectedWafIntegrationSites = ref<string[]>([]);
+const wafIntegrationPreviewActions = ref<string[]>([]);
 
 // Computed
 const isPreview = computed(() => viewMode.value === 'preview');
@@ -216,6 +225,128 @@ async function getConfig() {
       ensureStructuredForEdit();
     }
   }
+}
+
+function syncSelectedWafIntegrationSites(status: WafIntegrationStatusResp | null) {
+  const available = Array.isArray(status?.availableSites) ? status.availableSites : [];
+  const imported = Array.isArray(status?.importedSites) ? status.importedSites : [];
+
+  if (imported.length > 0) {
+    selectedWafIntegrationSites.value = imported.filter(item => available.includes(item));
+    return;
+  }
+
+  const preserved = selectedWafIntegrationSites.value.filter(item => available.includes(item));
+  if (preserved.length > 0) {
+    selectedWafIntegrationSites.value = preserved;
+    return;
+  }
+
+  selectedWafIntegrationSites.value = [...available];
+}
+
+async function fetchWafIntegrationState() {
+  if (!currentServerId.value || wafIntegrationUnavailable.value) {
+    return;
+  }
+
+  wafIntegrationLoading.value = true;
+  try {
+    const { data, error } = await fetchWafIntegrationStatus();
+    if (!error && data) {
+      if (data.serverId && data.serverId !== currentServerId.value) {
+        wafIntegrationStatus.value = null;
+        selectedWafIntegrationSites.value = [];
+        return;
+      }
+      wafIntegrationStatus.value = data;
+      wafIntegrationUnavailable.value = false;
+      syncSelectedWafIntegrationSites(data);
+      return;
+    }
+
+    if (error) {
+      const status = Number((error as any)?.response?.status || 0);
+      if (status === 404 || status === 405) {
+        wafIntegrationUnavailable.value = true;
+      }
+    }
+  } finally {
+    wafIntegrationLoading.value = false;
+  }
+}
+
+function handleRefreshWafIntegrationState() {
+  fetchWafIntegrationState();
+}
+
+function handleWafIntegrationSiteChange(value: Array<string | number>) {
+  selectedWafIntegrationSites.value = value.map(item => String(item));
+}
+
+async function submitWafIntegration(enabled: boolean, dryRun: boolean) {
+  if (!currentServerId.value) {
+    message.warning('请先选择 Caddy 服务器');
+    return;
+  }
+  if (wafIntegrationUnavailable.value) {
+    message.warning('当前接入开关接口暂不可用');
+    return;
+  }
+
+  const siteAddresses = selectedWafIntegrationSites.value.filter(item => item.trim());
+  if (siteAddresses.length === 0) {
+    message.warning('请至少选择一个站点');
+    return;
+  }
+
+  if (dryRun) {
+    wafIntegrationPreviewing.value = true;
+  } else {
+    wafIntegrationSubmitting.value = true;
+  }
+
+  try {
+    const { data, error } = await applyWafIntegration({
+      serverId: currentServerId.value,
+      enabled,
+      siteAddresses,
+      dryRun
+    });
+    if (error || !data) {
+      const status = Number((error as any)?.response?.status || 0);
+      if (status === 404 || status === 405) {
+        wafIntegrationUnavailable.value = true;
+        message.warning('当前接入开关接口暂不可用');
+      }
+      return;
+    }
+
+    wafIntegrationPreviewActions.value = data.actions || [];
+    if (dryRun) {
+      message.success(data.message || '已生成 WAF 接入预览');
+      return;
+    }
+
+    message.success(data.message || (enabled ? 'WAF 接入已应用' : 'WAF 接入已取消'));
+    await getConfig();
+    await fetchWafIntegrationState();
+  } finally {
+    wafIntegrationPreviewing.value = false;
+    wafIntegrationSubmitting.value = false;
+  }
+}
+
+function handlePreviewWafIntegration() {
+  return submitWafIntegration(true, true);
+}
+
+function handleEnableWafIntegration() {
+  return submitWafIntegration(true, false);
+}
+
+function handleDisableWafIntegration() {
+  return submitWafIntegration(false, false);
 }
 
 async function saveRawConfig() {
@@ -1720,6 +1851,8 @@ async function handleRollback(historyId: number) {
 watch(currentServerId, () => {
   if (currentServerId.value) {
     getConfig();
+    wafIntegrationUnavailable.value = false;
+    fetchWafIntegrationState();
   }
 });
 
@@ -1852,6 +1985,21 @@ onBeforeUnmount(() => {
       </template>
       
       <div class="flex-1 min-h-0 flex flex-col gap-4 overflow-hidden">
+        <WafIntegrationCard
+          v-if="servers.length > 0"
+          :loading="wafIntegrationLoading"
+          :submitting="wafIntegrationSubmitting"
+          :previewing="wafIntegrationPreviewing"
+          :unavailable="wafIntegrationUnavailable"
+          :status="wafIntegrationStatus"
+          :selected-sites="selectedWafIntegrationSites"
+          :preview-actions="wafIntegrationPreviewActions"
+          :on-refresh="handleRefreshWafIntegrationState"
+          :on-preview="handlePreviewWafIntegration"
+          :on-enable="handleEnableWafIntegration"
+          :on-disable="handleDisableWafIntegration"
+          :on-site-change="handleWafIntegrationSiteChange"
+        />
         <div v-if="servers.length === 0" class="flex flex-col items-center justify-center p-8 text-gray-400 h-full">
            <div class="text-lg">未找到 Caddy 服务器</div>
            <div class="text-sm mt-2">请点击上方“+”按钮添加服务器</div>

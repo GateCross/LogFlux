@@ -632,12 +632,42 @@ type UserRouteResp struct {
 }
 
 type WafEngineStatusResp struct {
+	ServerId       uint   `json:"serverId"`
 	CurrentVersion string `json:"currentVersion,optional"`
 	LatestVersion  string `json:"latestVersion,optional"`
 	CanUpgrade     bool   `json:"canUpgrade"`
 	CheckedAt      string `json:"checkedAt,optional"`
 	Source         string `json:"source,optional"`
 	Message        string `json:"message,optional"`
+}
+
+type WafIntegrationApplyReq struct {
+	ServerId      uint     `json:"serverId,optional"`
+	Enabled       bool     `json:"enabled"`
+	ApplyAll      bool     `json:"applyAll,optional"`
+	SiteAddresses []string `json:"siteAddresses,optional"`
+	DryRun        bool     `json:"dryRun,optional"`
+}
+
+type WafIntegrationApplyResp struct {
+	ServerId      uint     `json:"serverId"`
+	Enabled       bool     `json:"enabled"`
+	Changed       bool     `json:"changed"`
+	ImportedSites []string `json:"importedSites"`
+	Actions       []string `json:"actions"`
+	Config        string   `json:"config,optional"`
+	Message       string   `json:"message,optional"`
+}
+
+type WafIntegrationStatusResp struct {
+	ServerId       uint     `json:"serverId"`
+	Integrated     bool     `json:"integrated"`
+	OrderReady     bool     `json:"orderReady"`
+	SnippetReady   bool     `json:"snippetReady"`
+	DirectiveReady bool     `json:"directiveReady"`
+	ImportedSites  []string `json:"importedSites"`
+	AvailableSites []string `json:"availableSites"`
+	Message        string   `json:"message,optional"`
 }
 
 type WafJobItem struct {
