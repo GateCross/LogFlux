@@ -34,7 +34,9 @@ type (
 		UpdatedAt   string `json:"updatedAt"`
 	}
 	TestChannelReq {
-		ID uint `json:"id"`
+		ID      uint   `json:"id"`
+		Title   string `json:"title,optional"`
+		Content string `json:"content,optional"`
 	}
 	// Notification Rule
 	RuleReq {

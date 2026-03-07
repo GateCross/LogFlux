@@ -40,7 +40,7 @@ const activeTab = defineModel<'basic' | 'routes' | 'advanced'>('activeTab', { re
 </script>
 
 <template>
-  <div class="h-full flex flex-col lg:flex-row overflow-hidden min-w-0 caddy-split" :style="{ '--sidebar-width': props.sidebarWidth + 'px' }">
+  <div class="h-full min-h-0 flex flex-col lg:flex-row overflow-hidden min-w-0 caddy-split" :style="{ '--sidebar-width': props.sidebarWidth + 'px' }">
     <div class="caddy-sidebar flex-shrink-0 min-w-0">
       <SiteListPanel
         class="h-full"
@@ -54,7 +54,7 @@ const activeTab = defineModel<'basic' | 'routes' | 'advanced'>('activeTab', { re
       />
     </div>
     <div class="caddy-resizer hidden lg:block" @mousedown="props.onStartResize"></div>
-    <div class="flex-1 min-w-0 flex flex-col gap-3 overflow-auto">
+    <div class="flex-1 min-w-0 min-h-0 flex flex-col gap-3 overflow-auto caddy-main-panel">
       <div class="flex flex-wrap gap-2 items-center">
         <n-button size="small" @click="props.onApplyPreset">应用默认模板</n-button>
         <n-button size="small" @click="props.onImportRawToStructured">从原始配置解析</n-button>
@@ -113,6 +113,11 @@ const activeTab = defineModel<'basic' | 'routes' | 'advanced'>('activeTab', { re
 
 .caddy-sidebar {
   width: 100%;
+  min-height: 0;
+}
+
+.caddy-main-panel {
+  padding-right: 4px;
 }
 
 .global-preview {
@@ -134,6 +139,7 @@ const activeTab = defineModel<'basic' | 'routes' | 'advanced'>('activeTab', { re
 @media (min-width: 1024px) {
   .caddy-sidebar {
     width: var(--sidebar-width);
+    min-width: 240px;
   }
 
   .caddy-resizer {

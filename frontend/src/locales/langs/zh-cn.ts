@@ -361,12 +361,71 @@ const local: App.I18n.Schema = {
         deleteConfirmContent: '确认删除渠道 "{name}" 吗?',
         testSuccess: '测试通知已发送',
         testFailed: '测试失败',
+        validation: {
+          invalidJson: '配置必须是合法 JSON',
+          eventsRequired: '至少填写一个事件'
+        },
         placeholder: {
           name: '渠道名称',
           type: '选择类型',
           config: 'JSON 配置 (例如: { "webhook_url": "..." })',
           events: '["*"] 或 ["error", "caddy"]',
           description: '描述'
+        },
+        webhook: {
+          help: '已适配消息接口模式，可直接拆分填写 URL、apiKey、标题字段和内容字段，无需手写整段 JSON。',
+          url: '请求地址',
+          method: '请求方法',
+          payloadMode: '负载模式',
+          apiKey: 'API Key',
+          apiKeyHeader: 'API Key 请求头',
+          titleField: '标题字段名',
+          contentField: '内容字段名',
+          headers: '附加请求头',
+          sections: {
+            headers: '请求头',
+            body: '请求内容字段'
+          },
+          bodyHint: '按字段定义请求体内容。可把字段值映射为标题、内容、消息级别，或直接填写固定值。',
+          bodySources: {
+            title: '通知标题',
+            content: '渲染内容',
+            message: '原始消息',
+            level: '级别',
+            type: '事件类型',
+            timestamp: '发送时间',
+            data: '事件数据',
+            custom: '固定值'
+          },
+          payloadModes: {
+            default: '系统默认结构',
+            messageApi: '消息接口结构'
+          },
+          placeholder: {
+            url: '例如: https://your-domain.com/api/v1/message/openSend',
+            apiKey: '输入接口要求的 apiKey',
+            apiKeyHeader: '默认 apiKey',
+            titleField: '默认 title',
+            contentField: '默认 content',
+            headerKey: '请求头名称',
+            headerValue: '请求头值',
+            bodyFieldKey: '请求体字段名',
+            customValue: '固定值内容'
+          },
+          validation: {
+	          urlRequired: 'Webhook 地址不能为空',
+	          bodyFieldsRequired: '至少配置一个请求内容字段'
+          }
+        },
+        testDialog: {
+          title: '发送测试通知',
+          channel: '目标渠道',
+          titleField: '测试标题',
+          contentField: '测试内容',
+          placeholder: {
+            title: '输入要发送的标题',
+            content: '输入要发送的内容'
+          }
         }
       },
       rule: {

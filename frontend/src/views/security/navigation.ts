@@ -123,12 +123,18 @@ export function resolveSecurityMenuFromRoute(routeName: string, routeQueryActive
 
 export function resolveSecurityTabFromRoute(menu: SecurityMenuKey, routeName: string, routeQueryActiveTab: unknown) {
   const groupTabs = SECURITY_MENU_SCHEMA[menu]?.tabs || ['source'];
+  const menuRouteName = SECURITY_MENU_SCHEMA[menu]?.routeName;
+
+  const routeTab = pickRouteQueryValue(routeQueryActiveTab);
+  if (routeName === menuRouteName && isSecurityTabKey(routeTab) && groupTabs.includes(routeTab)) {
+    return routeTab;
+  }
+
   const routeNameTab = SECURITY_ROUTE_NAME_TAB_MAP[String(routeName || '')];
   if (routeNameTab && groupTabs.includes(routeNameTab)) {
     return routeNameTab;
   }
 
-  const routeTab = pickRouteQueryValue(routeQueryActiveTab);
   if (isSecurityTabKey(routeTab) && groupTabs.includes(routeTab)) {
     return routeTab;
   }

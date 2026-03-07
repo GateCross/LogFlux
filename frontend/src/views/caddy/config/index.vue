@@ -1986,7 +1986,7 @@ onBeforeUnmount(() => {
       
       <div class="flex-1 min-h-0 flex flex-col gap-4 overflow-hidden">
         <WafIntegrationCard
-          v-if="servers.length > 0"
+          v-if="servers.length > 0 && viewMode === 'edit' && editMode === 'structured'"
           :loading="wafIntegrationLoading"
           :submitting="wafIntegrationSubmitting"
           :previewing="wafIntegrationPreviewing"
@@ -2005,7 +2005,7 @@ onBeforeUnmount(() => {
            <div class="text-sm mt-2">请点击上方“+”按钮添加服务器</div>
         </div>
         
-        <NSpin :show="loading" class="h-full" content-class="h-full" v-else>
+        <NSpin :show="loading" class="flex-1 min-h-0" content-class="h-full min-h-0" v-else>
           <ConfigPreviewPanel
             v-if="viewMode === 'preview'"
             :config-content="formattedConfigContent"

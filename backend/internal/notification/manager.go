@@ -2,6 +2,7 @@ package notification
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"logflux/internal/notification/template"
 	"logflux/model"
@@ -69,6 +70,40 @@ func (m *Manager) RegisterProvider(provider NotificationProvider) error {
 	m.providers[providerType] = provider
 	m.logger.Infof("Registered notification provider: %s", providerType)
 	return nil
+}
+
+// SendToChannel 直接向指定渠道发送通知，不依赖事件订阅规则
+func (m *Manager) SendToChannel(ctx context.Context, channelID uint, event *Event) error {
+	m.mu.RLock()
+	channel, exists := m.channels[channelID]
+	provider := m.providers[channel.Type]
+	m.mu.RUnlock()
+
+	if !exists || channel == nil {
+		return fmt.Errorf("channel %d not found", channelID)
+	}
+
+	if provider == nil {
+		return fmt.Errorf("provider %s not found", channel.Type)
+	}
+
+	if m.templateMgr != nil {
+		templateName := m.determineTemplateName(channel, nil)
+		if content, err := m.templateMgr.Render(templateName, event); err == nil {
+			if event.Data == nil {
+				event.Data = make(map[string]interface{})
+			}
+			event.Data["rendered_content"] = content
+		} else {
+			m.logger.Errorf("Failed to render template %s: %v", templateName, err)
+		}
+	}
+
+	err := provider.Send(ctx, map[string]interface{}(channel.Config), event)
+	if err != nil && errors.Is(err, context.DeadlineExceeded) {
+		m.logger.Errorf("SendToChannel deadline exceeded for channel %d: %v", channelID, err)
+	}
+	return err
 }
 
 // Start 启动通知管理器
@@ -433,7 +468,7 @@ func (m *Manager) determineTemplateName(channel *model.NotificationChannel, rule
 	case "telegram":
 		return "default_markdown"
 	case "webhook":
-		return "default_markdown"
+		return "default_webhook"
 	}
 
 	return "default_markdown" // Fallback

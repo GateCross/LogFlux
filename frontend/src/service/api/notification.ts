@@ -12,6 +12,35 @@ export interface ChannelItem {
     updatedAt: string;
 }
 
+export interface WebhookHeaderItem {
+    key: string;
+    value: string;
+}
+
+export interface WebhookBodyFieldItem {
+    key: string;
+    source: 'title' | 'content' | 'message' | 'level' | 'type' | 'timestamp' | 'data' | 'custom';
+    customValue: string;
+}
+
+export interface WebhookConfigForm {
+    url: string;
+    method: string;
+    payload_mode: 'default' | 'message_api';
+    api_key: string;
+    api_key_header: string;
+    title_field: string;
+    content_field: string;
+    headers: WebhookHeaderItem[];
+    body_fields: WebhookBodyFieldItem[];
+}
+
+export interface TestChannelPayload {
+    id: number;
+    title?: string;
+    content?: string;
+}
+
 export interface RuleItem {
     id: number;
     name: string;
@@ -77,8 +106,8 @@ export function deleteChannel(id: number) {
     return request<any>({ url: `/api/notification/channel/${id}`, method: 'delete' });
 }
 
-export function testChannel(id: number) {
-    return request<any>({ url: '/api/notification/channel/test', method: 'post', data: { id } });
+export function testChannel(data: TestChannelPayload) {
+    return request<any>({ url: '/api/notification/channel/test', method: 'post', data });
 }
 
 export function getRuleList() {

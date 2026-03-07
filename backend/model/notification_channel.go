@@ -165,9 +165,15 @@ const (
 
 // Webhook 配置结构
 type WebhookConfig struct {
-	URL     string            `json:"url"`
-	Method  string            `json:"method"` // POST, GET, PUT
-	Headers map[string]string `json:"headers,omitempty"`
+	URL          string            `json:"url"`
+	Method       string            `json:"method"` // POST, GET, PUT, PATCH
+	Headers      map[string]string `json:"headers,omitempty"`
+	BodyFields   map[string]string `json:"body_fields,omitempty"`
+	PayloadMode  string            `json:"payload_mode,omitempty"` // default | message_api
+	APIKey       string            `json:"api_key,omitempty"`
+	APIKeyHeader string            `json:"api_key_header,omitempty"`
+	TitleField   string            `json:"title_field,omitempty"`
+	ContentField string            `json:"content_field,omitempty"`
 }
 
 // Email 配置结构

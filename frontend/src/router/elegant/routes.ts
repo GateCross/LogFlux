@@ -214,12 +214,104 @@ export const generatedRoutes = [
   {
     name: 'security',
     path: '/security',
-    component: 'layout.base$view.security',
+    component: 'layout.base',
     meta: {
       title: 'security',
       i18nKey: 'route.security',
       icon: 'carbon:security'
-    }
+    },
+    children: [
+      {
+        name: 'security_binding',
+        path: '/security/binding',
+        component: 'view.security_binding',
+        meta: {
+          title: 'security_binding',
+          i18nKey: 'route.security_binding'
+        }
+      },
+      {
+        name: 'security_crs',
+        path: '/security/crs',
+        component: 'view.security_crs',
+        meta: {
+          title: 'security_crs',
+          i18nKey: 'route.security_crs'
+        }
+      },
+      {
+        name: 'security_exclusion',
+        path: '/security/exclusion',
+        component: 'view.security_exclusion',
+        meta: {
+          title: 'security_exclusion',
+          i18nKey: 'route.security_exclusion'
+        }
+      },
+      {
+        name: 'security_job',
+        path: '/security/job',
+        component: 'view.security_job',
+        meta: {
+          title: 'security_job',
+          i18nKey: 'route.security_job'
+        }
+      },
+      {
+        name: 'security_observe',
+        path: '/security/observe',
+        component: 'view.security_observe',
+        meta: {
+          title: 'security_observe',
+          i18nKey: 'route.security_observe'
+        }
+      },
+      {
+        name: 'security_ops',
+        path: '/security/ops',
+        component: 'view.security_ops',
+        meta: {
+          title: 'security_ops',
+          i18nKey: 'route.security_ops'
+        }
+      },
+      {
+        name: 'security_policy',
+        path: '/security/policy',
+        component: 'view.security_policy',
+        meta: {
+          title: 'security_policy',
+          i18nKey: 'route.security_policy'
+        }
+      },
+      {
+        name: 'security_release',
+        path: '/security/release',
+        component: 'view.security_release',
+        meta: {
+          title: 'security_release',
+          i18nKey: 'route.security_release'
+        }
+      },
+      {
+        name: 'security_runtime',
+        path: '/security/runtime',
+        component: 'view.security_runtime',
+        meta: {
+          title: 'security_runtime',
+          i18nKey: 'route.security_runtime'
+        }
+      },
+      {
+        name: 'security_source',
+        path: '/security/source',
+        component: 'view.security_source',
+        meta: {
+          title: 'security_source',
+          i18nKey: 'route.security_source'
+        }
+      }
+    ]
   },
   {
     name: 'user',

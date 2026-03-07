@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"logflux/internal/notification"
 	"logflux/model"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -34,15 +36,7 @@ func (w *WebhookProvider) Send(ctx context.Context, config map[string]interface{
 		return fmt.Errorf("invalid webhook config: %w", err)
 	}
 
-	// 构建请求体
-	payload := map[string]interface{}{
-		"type":      event.Type,
-		"level":     event.Level,
-		"title":     event.Title,
-		"message":   event.Message,
-		"data":      event.Data,
-		"timestamp": event.Timestamp.Format(time.RFC3339),
-	}
+	payload := buildWebhookPayload(webhookConfig, event)
 
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
@@ -69,9 +63,20 @@ func (w *WebhookProvider) Send(ctx context.Context, config map[string]interface{
 		req.Header.Set(key, value)
 	}
 
+	if webhookConfig.APIKey != "" {
+		headerName := webhookConfig.APIKeyHeader
+		if headerName == "" {
+			headerName = "apiKey"
+		}
+		req.Header.Set(headerName, webhookConfig.APIKey)
+	}
+
 	// 发送请求
 	resp, err := w.client.Do(req)
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return fmt.Errorf("webhook request timed out: %w", err)
+		}
 		return fmt.Errorf("failed to send request: %w", err)
 	}
 	defer resp.Body.Close()
@@ -121,7 +126,98 @@ func validateWebhookConfig(config *model.WebhookConfig) error {
 		}
 	}
 
+	if config.PayloadMode != "" {
+		validModes := map[string]bool{"default": true, "message_api": true}
+		if !validModes[config.PayloadMode] {
+			return fmt.Errorf("invalid payload mode: %s", config.PayloadMode)
+		}
+	}
+
+	for key := range config.BodyFields {
+		if strings.TrimSpace(key) == "" {
+			return fmt.Errorf("body field key cannot be empty")
+		}
+	}
+
 	return nil
+}
+
+func buildWebhookPayload(config *model.WebhookConfig, event *notification.Event) map[string]interface{} {
+	if len(config.BodyFields) > 0 {
+		return buildCustomWebhookPayload(config, event)
+	}
+
+	payloadMode := strings.TrimSpace(config.PayloadMode)
+	if payloadMode == "" {
+		payloadMode = "default"
+	}
+
+	switch payloadMode {
+	case "message_api":
+		titleField := strings.TrimSpace(config.TitleField)
+		if titleField == "" {
+			titleField = "title"
+		}
+
+		contentField := strings.TrimSpace(config.ContentField)
+		if contentField == "" {
+			contentField = "content"
+		}
+
+		return map[string]interface{}{
+			titleField:   event.Title,
+			contentField: resolveWebhookContent(event),
+		}
+	default:
+		return map[string]interface{}{
+			"type":      event.Type,
+			"level":     event.Level,
+			"title":     event.Title,
+			"message":   event.Message,
+			"data":      event.Data,
+			"timestamp": event.Timestamp.Format(time.RFC3339),
+		}
+	}
+}
+
+func buildCustomWebhookPayload(config *model.WebhookConfig, event *notification.Event) map[string]interface{} {
+	payload := make(map[string]interface{}, len(config.BodyFields))
+	for key, valueType := range config.BodyFields {
+		fieldName := strings.TrimSpace(key)
+		if fieldName == "" {
+			continue
+		}
+
+		switch strings.TrimSpace(valueType) {
+		case "title":
+			payload[fieldName] = event.Title
+		case "content":
+			payload[fieldName] = resolveWebhookContent(event)
+		case "message":
+			payload[fieldName] = event.Message
+		case "level":
+			payload[fieldName] = event.Level
+		case "type":
+			payload[fieldName] = event.Type
+		case "timestamp":
+			payload[fieldName] = event.Timestamp.Format(time.RFC3339)
+		case "data":
+			payload[fieldName] = event.Data
+		default:
+			payload[fieldName] = valueType
+		}
+	}
+	return payload
+}
+
+func resolveWebhookContent(event *notification.Event) string {
+	content := event.Message
+	if event.Data != nil {
+		if renderedContent, ok := event.Data["rendered_content"].(string); ok && strings.TrimSpace(renderedContent) != "" {
+			content = renderedContent
+		}
+	}
+	return content
 }
 
 // isValidURL 验证 URL 格式

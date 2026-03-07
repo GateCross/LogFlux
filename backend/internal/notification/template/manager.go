@@ -250,6 +250,15 @@ Message: {{.Message}}
 {{if .Data}}Details: {{.Data}}{{end}}
 `,
 		},
+		{
+			Name:   "default_webhook",
+			Format: "text",
+			Content: `{{.Message}}
+{{if .Data}}
+
+Details: {{.Data}}
+{{end}}`,
+		},
 	}
 }
 

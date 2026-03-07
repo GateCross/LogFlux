@@ -39,16 +39,16 @@ declare module "@elegant-router/types" {
     "notification_rule": "/notification/rule";
     "notification_template": "/notification/template";
     "security": "/security";
-    "security_source": "/security/source";
-    "security_policy": "/security/policy";
-    "security_runtime": "/security/runtime";
+    "security_binding": "/security/binding";
     "security_crs": "/security/crs";
     "security_exclusion": "/security/exclusion";
-    "security_binding": "/security/binding";
+    "security_job": "/security/job";
     "security_observe": "/security/observe";
     "security_ops": "/security/ops";
+    "security_policy": "/security/policy";
     "security_release": "/security/release";
-    "security_job": "/security/job";
+    "security_runtime": "/security/runtime";
+    "security_source": "/security/source";
     "user": "/user";
     "user_center": "/user/center";
   };
@@ -126,21 +126,21 @@ declare module "@elegant-router/types" {
     | "manage_user"
     | "notification_channel"
     | "notification"
-      | "notification_log"
-      | "notification_rule"
-      | "notification_template"
-      | "security"
-      | "security_source"
-      | "security_policy"
-      | "security_runtime"
-      | "security_crs"
-      | "security_exclusion"
-      | "security_binding"
-      | "security_observe"
-      | "security_ops"
-      | "security_release"
-      | "security_job"
-      | "user_center"
+    | "notification_log"
+    | "notification_rule"
+    | "notification_template"
+    | "security_binding"
+    | "security_crs"
+    | "security_exclusion"
+    | "security"
+    | "security_job"
+    | "security_observe"
+    | "security_ops"
+    | "security_policy"
+    | "security_release"
+    | "security_runtime"
+    | "security_source"
+    | "user_center"
   >;
 
   /**

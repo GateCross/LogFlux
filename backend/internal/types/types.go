@@ -554,7 +554,9 @@ type TemplateUpdateReq struct {
 }
 
 type TestChannelReq struct {
-	ID uint `json:"id"`
+	ID      uint   `json:"id"`
+	Title   string `json:"title,optional"`
+	Content string `json:"content,optional"`
 }
 
 type TriggerTaskReq struct {

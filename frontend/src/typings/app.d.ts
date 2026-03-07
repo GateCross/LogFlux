@@ -582,12 +582,71 @@ declare namespace App {
             deleteConfirmContent: string;
             testSuccess: string;
             testFailed: string;
+            validation: {
+              invalidJson: string;
+              eventsRequired: string;
+            };
             placeholder: {
               name: string;
               type: string;
               config: string;
               events: string;
               description: string;
+            };
+            webhook: {
+              help: string;
+              url: string;
+              method: string;
+              payloadMode: string;
+              apiKey: string;
+              apiKeyHeader: string;
+              titleField: string;
+              contentField: string;
+              headers: string;
+              sections: {
+                headers: string;
+                body: string;
+              };
+              bodyHint: string;
+              bodySources: {
+                title: string;
+                content: string;
+                message: string;
+                level: string;
+                type: string;
+                timestamp: string;
+                data: string;
+                custom: string;
+              };
+              payloadModes: {
+                default: string;
+                messageApi: string;
+              };
+              placeholder: {
+                url: string;
+                apiKey: string;
+                apiKeyHeader: string;
+                titleField: string;
+                contentField: string;
+                headerKey: string;
+                headerValue: string;
+                bodyFieldKey: string;
+                customValue: string;
+              };
+              validation: {
+                urlRequired: string;
+                bodyFieldsRequired: string;
+              };
+            };
+            testDialog: {
+              title: string;
+              channel: string;
+              titleField: string;
+              contentField: string;
+              placeholder: {
+                title: string;
+                content: string;
+              };
             };
           };
           rule: {
