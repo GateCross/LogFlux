@@ -208,7 +208,7 @@ async function fetchDependencies() {
         templateOptions.value = data.list.map((t: any) => ({ label: t.name, value: t.name }));
      }
      // Add default templates manually if not in list
-     ['default_email', 'default_telegram', 'default_webhook'].forEach(t => {
+     ['default_email', 'default_markdown', 'default_text', 'default_webhook'].forEach(t => {
         if (!templateOptions.value.find(o => o.value === t)) {
            templateOptions.value.push({ label: t + ' (System)', value: t });
         }

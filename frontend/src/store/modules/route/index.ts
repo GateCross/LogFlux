@@ -34,7 +34,7 @@ const securityChildRouteTemplates: ElegantConstRoute[] = [
   {
     name: 'security_source',
     path: '/security/source',
-    component: 'view.security',
+    component: 'view.security_source',
     meta: {
       title: 'security_source',
       i18nKey: 'route.security_source',
@@ -44,7 +44,7 @@ const securityChildRouteTemplates: ElegantConstRoute[] = [
   {
     name: 'security_policy',
     path: '/security/policy',
-    component: 'view.security',
+    component: 'view.security_policy',
     meta: {
       title: 'security_policy',
       i18nKey: 'route.security_policy',
@@ -54,7 +54,7 @@ const securityChildRouteTemplates: ElegantConstRoute[] = [
   {
     name: 'security_observe',
     path: '/security/observe',
-    component: 'view.security',
+    component: 'view.security_observe',
     meta: {
       title: 'security_observe',
       i18nKey: 'route.security_observe',
@@ -64,7 +64,7 @@ const securityChildRouteTemplates: ElegantConstRoute[] = [
   {
     name: 'security_ops',
     path: '/security/ops',
-    component: 'view.security',
+    component: 'view.security_ops',
     meta: {
       title: 'security_ops',
       i18nKey: 'route.security_ops',
@@ -74,7 +74,7 @@ const securityChildRouteTemplates: ElegantConstRoute[] = [
   {
     name: 'security_runtime',
     path: '/security/runtime',
-    component: 'view.security',
+    component: 'view.security_runtime',
     meta: {
       title: 'security_runtime',
       i18nKey: 'route.security_runtime',
@@ -84,7 +84,7 @@ const securityChildRouteTemplates: ElegantConstRoute[] = [
   {
     name: 'security_crs',
     path: '/security/crs',
-    component: 'view.security',
+    component: 'view.security_crs',
     meta: {
       title: 'security_crs',
       i18nKey: 'route.security_crs',
@@ -94,7 +94,7 @@ const securityChildRouteTemplates: ElegantConstRoute[] = [
   {
     name: 'security_exclusion',
     path: '/security/exclusion',
-    component: 'view.security',
+    component: 'view.security_exclusion',
     meta: {
       title: 'security_exclusion',
       i18nKey: 'route.security_exclusion',
@@ -104,7 +104,7 @@ const securityChildRouteTemplates: ElegantConstRoute[] = [
   {
     name: 'security_binding',
     path: '/security/binding',
-    component: 'view.security',
+    component: 'view.security_binding',
     meta: {
       title: 'security_binding',
       i18nKey: 'route.security_binding',
@@ -114,7 +114,7 @@ const securityChildRouteTemplates: ElegantConstRoute[] = [
   {
     name: 'security_release',
     path: '/security/release',
-    component: 'view.security',
+    component: 'view.security_release',
     meta: {
       title: 'security_release',
       i18nKey: 'route.security_release',
@@ -124,7 +124,7 @@ const securityChildRouteTemplates: ElegantConstRoute[] = [
   {
     name: 'security_job',
     path: '/security/job',
-    component: 'view.security',
+    component: 'view.security_job',
     meta: {
       title: 'security_job',
       i18nKey: 'route.security_job',
@@ -148,18 +148,25 @@ function normalizeSecurityRoutes(routes: ElegantConstRoute[]): ElegantConstRoute
     }
 
     const inheritedRoles = (normalized.meta?.roles || []) as string[];
-    const children = securityChildRouteTemplates.map(template => ({
-      ...template,
-      meta: {
-        ...template.meta,
-        roles: inheritedRoles
-      }
-    })) as ElegantConstRoute[];
+    const currentChildren = normalized.children || [];
+    const currentChildNames = new Set(currentChildren.map(child => child.name));
+
+    const missingChildren = securityChildRouteTemplates
+      .filter(template => !currentChildNames.has(template.name))
+      .map(template => ({
+        ...template,
+        meta: {
+          ...template.meta,
+          roles: inheritedRoles
+        }
+      })) as ElegantConstRoute[];
+
+    const children = [...currentChildren, ...missingChildren];
 
     return {
       ...normalized,
       component: 'layout.base',
-      redirect: '/security/source',
+      redirect: normalized.redirect || '/security/source',
       children
     } as ElegantConstRoute;
   });

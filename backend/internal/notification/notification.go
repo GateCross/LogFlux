@@ -29,4 +29,7 @@ type NotificationManager interface {
 
 	// ReloadTemplates 重新加载通知模板
 	ReloadTemplates() error
+
+	// SendToChannel 直接向指定渠道发送通知
+	SendToChannel(ctx context.Context, channelID uint, event *Event) error
 }

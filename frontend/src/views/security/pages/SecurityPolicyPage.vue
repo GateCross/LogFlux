@@ -44,6 +44,7 @@ const props = defineProps<{
   policyWorkspaceActions: string[];
   exclusionTotal: number;
   crsTuningSubmitting: boolean;
+  crsTuningFormRef: any;
   crsTuningForm: {
     policyId: number;
     crsTemplate: WafPolicyCrsTemplate;
@@ -233,7 +234,7 @@ const bindingQueryModel = computed({
         <NButton secondary @click="applyCrsTemplatePreset('high_blocking')">高拦截模板</NButton>
       </div>
 
-      <NForm :model="crsTuningFormModel" :rules="crsTuningRules" label-placement="left" label-width="220">
+      <NForm ref="props.crsTuningFormRef" :model="crsTuningFormModel" :rules="crsTuningRules" label-placement="left" label-width="220">
         <NGrid cols="3" x-gap="12">
           <NFormItemGi label="Paranoia Level (PL)" path="crsParanoiaLevel">
             <NInputNumber

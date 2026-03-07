@@ -365,12 +365,71 @@ const local: App.I18n.Schema = {
         deleteConfirmContent: 'Are you sure to delete channel "{name}"?',
         testSuccess: 'Test notification sent',
         testFailed: 'Test failed',
+        validation: {
+          invalidJson: 'Config must be valid JSON',
+          eventsRequired: 'At least one event is required'
+        },
         placeholder: {
           name: 'Channel Name',
           type: 'Select Type',
           config: 'JSON Configuration (e.g., { "webhook_url": "..." })',
           events: '["*"] or ["error", "caddy"]',
           description: 'Description'
+        },
+        webhook: {
+          help: 'Message API mode is supported. Fill URL, apiKey, title field, and content field directly instead of writing raw JSON.',
+          url: 'Request URL',
+          method: 'HTTP Method',
+          payloadMode: 'Payload Mode',
+          apiKey: 'API Key',
+          apiKeyHeader: 'API Key Header',
+          titleField: 'Title Field',
+          contentField: 'Content Field',
+          headers: 'Extra Headers',
+          sections: {
+            headers: 'Request Headers',
+            body: 'Request Body Fields'
+          },
+          bodyHint: 'Define request body fields here. Each field can map to title, rendered content, level, or a fixed value.',
+          bodySources: {
+            title: 'Notification Title',
+            content: 'Rendered Content',
+            message: 'Raw Message',
+            level: 'Level',
+            type: 'Event Type',
+            timestamp: 'Timestamp',
+            data: 'Event Data',
+            custom: 'Fixed Value'
+          },
+          payloadModes: {
+            default: 'Default Event Payload',
+            messageApi: 'Message API Payload'
+          },
+          placeholder: {
+            url: 'e.g. https://your-domain.com/api/v1/message/openSend',
+            apiKey: 'Enter the required apiKey',
+            apiKeyHeader: 'Default apiKey',
+            titleField: 'Default title',
+            contentField: 'Default content',
+            headerKey: 'Header name',
+            headerValue: 'Header value',
+            bodyFieldKey: 'Body field name',
+            customValue: 'Fixed value content'
+          },
+          validation: {
+	          urlRequired: 'Webhook URL is required',
+	          bodyFieldsRequired: 'At least one body field is required'
+          }
+        },
+        testDialog: {
+          title: 'Send Test Notification',
+          channel: 'Target Channel',
+          titleField: 'Test Title',
+          contentField: 'Test Content',
+          placeholder: {
+            title: 'Enter the title to send',
+            content: 'Enter the content to send'
+          }
         }
       },
       rule: {
