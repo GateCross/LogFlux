@@ -352,12 +352,39 @@ type (
 		Total int64        `json:"total"`
 	}
 	WafEngineStatusResp {
+		ServerId        uint   `json:"serverId"`
 		CurrentVersion string `json:"currentVersion,optional"`
 		LatestVersion  string `json:"latestVersion,optional"`
 		CanUpgrade     bool   `json:"canUpgrade"`
 		CheckedAt      string `json:"checkedAt,optional"`
 		Source         string `json:"source,optional"`
 		Message        string `json:"message,optional"`
+	}
+	WafIntegrationStatusResp {
+		ServerId        uint     `json:"serverId"`
+		Integrated      bool     `json:"integrated"`
+		OrderReady      bool     `json:"orderReady"`
+		SnippetReady    bool     `json:"snippetReady"`
+		DirectiveReady  bool     `json:"directiveReady"`
+		ImportedSites   []string `json:"importedSites"`
+		AvailableSites  []string `json:"availableSites"`
+		Message         string   `json:"message,optional"`
+	}
+	WafIntegrationApplyReq {
+		ServerId      uint     `json:"serverId,optional"`
+		Enabled       bool     `json:"enabled"`
+		ApplyAll      bool     `json:"applyAll,optional"`
+		SiteAddresses []string `json:"siteAddresses,optional"`
+		DryRun        bool     `json:"dryRun,optional"`
+	}
+	WafIntegrationApplyResp {
+		ServerId      uint     `json:"serverId"`
+		Enabled       bool     `json:"enabled"`
+		Changed       bool     `json:"changed"`
+		ImportedSites []string `json:"importedSites"`
+		Actions       []string `json:"actions"`
+		Config        string   `json:"config,optional"`
+		Message       string   `json:"message,optional"`
 	}
 	WafPolicyReq {
 		Name                     string `json:"name"`
@@ -797,6 +824,12 @@ service logflux-api {
 
 	@handler CheckWafEngine
 	post /caddy/waf/engine/check returns (BaseResp)
+
+	@handler GetWafIntegrationStatus
+	get /caddy/waf/integration/status returns (WafIntegrationStatusResp)
+
+	@handler ApplyWafIntegration
+	post /caddy/waf/integration/apply (WafIntegrationApplyReq) returns (WafIntegrationApplyResp)
 
 	@handler ListWafReleases
 	get /caddy/waf/release (WafReleaseListReq) returns (WafReleaseListResp)

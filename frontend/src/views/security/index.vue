@@ -1,20 +1,1391 @@
+<script setup lang="ts">
+import { computed, reactive, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { type FormInst, type FormRules, NSelect, NSwitch, type UploadFileInfo, useDialog, useMessage } from 'naive-ui';
+import { type WafKind, type WafSourceItem, fetchWafSourceList, uploadWafPackage } from '@/service/api/caddy-source';
+import {
+  type WafPolicyCrsTemplate,
+  type WafPolicyEngineMode,
+  type WafPolicyRemoveType,
+  type WafPolicyRevisionStatus,
+  type WafPolicyScopeType
+} from '@/service/api/caddy-policy';
+import { type WafPolicyFalsePositiveFeedbackItem } from '@/service/api/caddy-observe';
+import { type WafJobItem, type WafJobStatus, type WafReleaseStatus } from '@/service/api/caddy-release-job';
+import { request } from '@/service/request';
+import {
+  buildPolicyWorkspaceActions,
+  formatBytes,
+  mapCrsTemplateLabel,
+  mapPolicyEngineModeLabel,
+  mapPolicyRevisionStatusLabel,
+  mapScopeTypeLabel
+} from './security-policy-utils';
+import {
+  createBindingColumns,
+  createBindingEffectiveColumns,
+  createExclusionColumns,
+  createJobColumns,
+  createPolicyColumns,
+  createPolicyFeedbackColumns,
+  createPolicyRevisionColumns,
+  createPolicyStatsColumns,
+  createPolicyStatsDimensionColumns,
+  createPolicyStatsTrendColumns,
+  createReleaseColumns,
+  createSourceColumns
+} from './security-columns';
+import { SECURITY_MENU_SCHEMA, type SecurityMenuKey, type SecurityTabKey } from './navigation';
+import SecuritySourcePage from './pages/SecuritySourcePage.vue';
+import SecurityPolicyPage from './pages/SecurityPolicyPage.vue';
+import SecurityObservePage from './pages/SecurityObservePage.vue';
+import SecurityOpsPage from './pages/SecurityOpsPage.vue';
+import { useSecurityNavigation } from './composables/useSecurityNavigation';
+import { useWafPolicy } from './composables/useWafPolicy';
+import { useWafObserve } from './composables/useWafObserve';
+import { useWafObserveFeedback } from './composables/useWafObserveFeedback';
+import { useWafObserveExport } from './composables/useWafObserveExport';
+import { useWafReleaseJob } from './composables/useWafReleaseJob';
+import { useWafCrsTuning } from './composables/useWafCrsTuning';
+import { useWafExclusion } from './composables/useWafExclusion';
+import { useWafBinding } from './composables/useWafBinding';
+import { useObserveDrilldown } from './composables/useObserveDrilldown';
+import { usePolicyFeedbackExclusionDraft } from './composables/usePolicyFeedbackExclusionDraft';
+import { useSecurityRefresh } from './composables/useSecurityRefresh';
+import { useWafSource } from './composables/useWafSource';
+import { useWafSourceRuntime } from './composables/useWafSourceRuntime';
+
+const message = useMessage();
+const dialog = useDialog();
+const route = useRoute();
+const router = useRouter();
+const { activeMenu, activeTab, pageTitle, navigateToSecurityTab } = useSecurityNavigation({
+  route,
+  router
+});
+
+const securityMenus = Object.values(SECURITY_MENU_SCHEMA);
+const securityMenuDescriptionMap: Record<SecurityMenuKey, string> = {
+  source: '更新源、规则包上传与引擎检查。',
+  policy: '运行模式、CRS、例外和绑定统一收束。',
+  observe: '效果分析、下钻和误报处置。',
+  ops: '版本发布、回滚、任务审计与清理。'
+};
+const securityPolicySectionLabelMap = {
+  runtime: '基础设置',
+  crs: 'CRS 调优',
+  exclusion: '规则例外',
+  binding: '策略绑定'
+} as const;
+const activeMenuDescription = computed(() => securityMenuDescriptionMap[activeMenu.value]);
+const activePolicySection = computed(() => {
+  if (activeTab.value === 'crs' || activeTab.value === 'exclusion' || activeTab.value === 'binding') {
+    return activeTab.value;
+  }
+  return 'runtime';
+});
+const activeOpsSection = computed(() => (activeTab.value === 'job' ? 'job' : 'release'));
+const observeActiveView = ref<'analysis' | 'feedback'>('analysis');
+
+const tableFixedHeight = 480;
+
+const modeOptions = [
+  { label: '远程同步 (remote)', value: 'remote' },
+  { label: '手动管理 (manual)', value: 'manual' }
+];
+
+const authTypeOptions = [
+  { label: '无鉴权', value: 'none' },
+  { label: 'Token', value: 'token' },
+  { label: 'Basic', value: 'basic' }
+];
+
+const policyEngineModeOptions = [
+  { label: 'On（阻断）', value: 'on' },
+  { label: 'Off（关闭）', value: 'off' },
+  { label: 'DetectionOnly（仅检测）', value: 'detectiononly' }
+];
+
+const policyAuditEngineOptions = [
+  { label: 'RelevantOnly（推荐）', value: 'relevantonly' },
+  { label: 'On（全量）', value: 'on' },
+  { label: 'Off（关闭）', value: 'off' }
+];
+
+const policyAuditLogFormatOptions = [
+  { label: 'JSON', value: 'json' },
+  { label: 'Native', value: 'native' }
+];
+
+const scopeTypeOptions = [
+  { label: '全局', value: 'global' as WafPolicyScopeType },
+  { label: '站点', value: 'site' as WafPolicyScopeType },
+  { label: '路由', value: 'route' as WafPolicyScopeType }
+];
+
+const removeTypeOptions = [
+  { label: 'removeById', value: 'id' as WafPolicyRemoveType },
+  { label: 'removeByTag', value: 'tag' as WafPolicyRemoveType }
+];
+
+const methodOptions = [
+  { label: 'GET', value: 'GET' },
+  { label: 'POST', value: 'POST' },
+  { label: 'PUT', value: 'PUT' },
+  { label: 'PATCH', value: 'PATCH' },
+  { label: 'DELETE', value: 'DELETE' },
+  { label: 'OPTIONS', value: 'OPTIONS' },
+  { label: 'HEAD', value: 'HEAD' }
+];
+
+const policyFeedbackStatusOptions = [
+  { label: '待确认', value: 'pending' as const },
+  { label: '已确认', value: 'confirmed' as const },
+  { label: '已处理', value: 'resolved' as const }
+];
+
+const policyFeedbackStatusFilterOptions = [{ label: '全部状态', value: '' }, ...policyFeedbackStatusOptions];
+
+const policyFeedbackSLAStatusOptions = [
+  { label: '全部SLA', value: 'all' as const },
+  { label: '正常', value: 'normal' as const },
+  { label: '已超时', value: 'overdue' as const },
+  { label: '已解决', value: 'resolved' as const }
+];
+
+const crsTemplatePresetMap: Record<
+  Exclude<WafPolicyCrsTemplate, 'custom'>,
+  {
+    crsParanoiaLevel: number;
+    crsInboundAnomalyThreshold: number;
+    crsOutboundAnomalyThreshold: number;
+  }
+> = {
+  low_fp: {
+    crsParanoiaLevel: 1,
+    crsInboundAnomalyThreshold: 10,
+    crsOutboundAnomalyThreshold: 8
+  },
+  balanced: {
+    crsParanoiaLevel: 2,
+    crsInboundAnomalyThreshold: 5,
+    crsOutboundAnomalyThreshold: 4
+  },
+  high_blocking: {
+    crsParanoiaLevel: 3,
+    crsInboundAnomalyThreshold: 3,
+    crsOutboundAnomalyThreshold: 2
+  }
+};
+
+const releaseStatusOptions = [
+  { label: '全部', value: '' },
+  { label: 'downloaded', value: 'downloaded' },
+  { label: 'verified', value: 'verified' },
+  { label: 'active', value: 'active' },
+  { label: 'failed', value: 'failed' },
+  { label: 'rolled_back', value: 'rolled_back' }
+];
+
+const jobStatusOptions = [
+  { label: '全部', value: '' },
+  { label: 'running', value: 'running' },
+  { label: 'success', value: 'success' },
+  { label: 'failed', value: 'failed' }
+];
+
+const jobActionOptions = [
+  { label: '全部', value: '' },
+  { label: '检查', value: 'check' },
+  { label: '下载', value: 'download' },
+  { label: '校验', value: 'verify' },
+  { label: '激活', value: 'activate' },
+  { label: '回滚', value: 'rollback' },
+  { label: '引擎检查', value: 'engine_check' }
+];
+
+const jobSourceNameMap = ref<Record<number, string>>({});
+const userNameMap = ref<Record<string, string>>({});
+const userNameLoading = ref(false);
+const fetchReleasesRef = ref<() => void | Promise<void>>(() => undefined);
+const fetchJobsRef = ref<() => void | Promise<void>>(() => undefined);
+
+const {
+  sourceQuery,
+  sourceLoading,
+  sourceTable,
+  sourcePagination,
+  sourceModalVisible,
+  sourceSubmitting,
+  sourceFormRef,
+  sourceForm,
+  sourceModalTitle,
+  sourceRules,
+  fetchSources,
+  resetSourceQuery,
+  handleSourcePageChange,
+  handleSourcePageSizeChange,
+  handleAddSource,
+  handleEditSource,
+  handleSubmitSource,
+  handleDeleteSource,
+  handleSyncSource,
+  applyDefaultSource
+} = useWafSource({
+  message,
+  dialog,
+  mergeJobSourceNameMap,
+  onSyncSuccess: () => {
+    Promise.resolve(fetchReleasesRef.value()).catch(() => undefined);
+    if (activeTab.value === 'job') {
+      Promise.resolve(fetchJobsRef.value()).catch(() => undefined);
+    }
+  }
+});
+
+const {
+  engineLoading,
+  engineChecking,
+  engineUnavailable,
+  engineStatus,
+  integrationLoading,
+  integrationSubmitting,
+  integrationPreviewing,
+  integrationUnavailable,
+  integrationStatus,
+  selectedIntegrationSites,
+  integrationPreviewActions,
+  displayEngineValue,
+  fetchIntegrationStatus,
+  handleRefreshIntegrationStatus,
+  handleIntegrationSiteChange,
+  handlePreviewIntegration,
+  handleEnableIntegration,
+  handleDisableIntegration,
+  fetchEngineStatus,
+  handleRefreshEngineStatus,
+  handleCheckEngine
+} = useWafSourceRuntime({
+  message,
+  onEngineChecked: () => {
+    if (activeTab.value === 'job') {
+      Promise.resolve(fetchJobsRef.value()).catch(() => undefined);
+    }
+  }
+});
+
+let resolveCurrentRevisionPolicyId: (() => number | undefined) | undefined;
+
+const {
+  policyQuery,
+  policyLoading,
+  policyTable,
+  policyPagination,
+  policyModalVisible,
+  policySubmitting,
+  policyFormRef,
+  policyForm,
+  policyModalTitle,
+  policyPreviewLoading,
+  policyPreviewPolicyName,
+  policyPreviewDirectives,
+  policyRevisionLoading,
+  policyRevisionTable,
+  policyRevisionPagination,
+  crsPolicyOptions,
+  fetchPolicies,
+  resetPolicyQuery,
+  handlePolicyPageChange,
+  handlePolicyPageSizeChange,
+  handleAddPolicy,
+  handleEditPolicy,
+  handleSubmitPolicy,
+  handleDeletePolicy,
+  handlePreviewPolicy,
+  handleValidatePolicy,
+  handlePublishPolicy,
+  fetchPolicyRevisions,
+  handlePolicyRevisionPageChange,
+  handlePolicyRevisionPageSizeChange,
+  handleRollbackPolicyRevision,
+  getDefaultPolicyId
+} = useWafPolicy({
+  message,
+  dialog,
+  ensureUserNamesByIds,
+  getCurrentRevisionPolicyId: () => resolveCurrentRevisionPolicyId?.()
+});
+
+const {
+  crsTuningSubmitting,
+  crsTuningFormRef,
+  crsTuningForm,
+  crsTuningRules,
+  hasPolicyWorkspaceDraft,
+  getCurrentRevisionPolicyId,
+  handleCrsPolicyChange,
+  handleRefreshCrsPolicy,
+  applyCrsTemplatePreset,
+  handleSaveCrsTuning,
+  handlePreviewCrsTuning,
+  handleValidateCrsTuning,
+  handlePublishCrsTuning
+} = useWafCrsTuning({
+  message,
+  dialog,
+  activeTab,
+  policyTable,
+  crsTemplatePresetMap,
+  previewPolicy: handlePreviewPolicy,
+  validatePolicy: handleValidatePolicy,
+  fetchPolicies,
+  fetchPolicyRevisions,
+  resetPolicyRevisionPage: () => {
+    policyRevisionPagination.page = 1;
+  }
+});
+
+resolveCurrentRevisionPolicyId = getCurrentRevisionPolicyId;
+
+const {
+  observeWindowOptions,
+  policyStatsQuery,
+  policyStatsLoading,
+  policyStatsSummary,
+  policyStatsTable,
+  policyStatsTrend,
+  policyStatsTopHosts,
+  policyStatsTopPaths,
+  policyStatsTopMethods,
+  policyStatsRange,
+  policyStatsPreviousSnapshot,
+  policyFeedbackLoading,
+  policyFeedbackTable,
+  policyFeedbackCheckedRowKeys,
+  policyFeedbackPagination,
+  policyFeedbackStatusFilter,
+  policyFeedbackAssigneeFilter,
+  policyFeedbackSLAStatusFilter,
+  policyStatsPolicyOptions,
+  hasPolicyStatsDrillFilters,
+  hasPolicyFeedbackSelection,
+  policyFeedbackCheckedRowKeysInPage,
+  fetchPolicyStats,
+  resetPolicyStatsQuery,
+  clearPolicyStatsDrillFilters,
+  clearPolicyStatsDrillLevel,
+  fetchPolicyFalsePositiveFeedbacks,
+  resetPolicyFeedbackSelection,
+  handlePolicyFeedbackPageChange,
+  handlePolicyFeedbackPageSizeChange,
+  handlePolicyFeedbackStatusFilterChange,
+  handlePolicyFeedbackCheckedRowKeysChange,
+  buildCurrentPolicyStatsSnapshot
+} = useWafObserve({
+  crsPolicyOptions,
+  ensureUserNamesByIds
+});
+
+const {
+  policyFeedbackModalVisible,
+  policyFeedbackSubmitting,
+  policyFeedbackFormRef,
+  policyFeedbackForm,
+  policyFeedbackProcessModalVisible,
+  policyFeedbackProcessSubmitting,
+  policyFeedbackProcessFormRef,
+  policyFeedbackProcessForm,
+  policyFeedbackBatchProcessModalVisible,
+  policyFeedbackBatchProcessSubmitting,
+  policyFeedbackBatchProcessFormRef,
+  policyFeedbackBatchProcessForm,
+  openPolicyFeedbackModal,
+  openPolicyFeedbackProcessModal,
+  openPolicyFeedbackBatchProcessModal,
+  handleSubmitPolicyFeedback,
+  handleSubmitPolicyFeedbackProcess,
+  handleSubmitPolicyFeedbackBatchProcess
+} = useWafObserveFeedback({
+  message,
+  policyStatsQuery,
+  policyFeedbackAssigneeFilter,
+  policyFeedbackCheckedRowKeys,
+  policyFeedbackPagination,
+  resetPolicyFeedbackSelection,
+  fetchPolicyFalsePositiveFeedbacks
+});
+
+const observeExport = useWafObserveExport({
+  message,
+  route,
+  router,
+  activeTab,
+  observeWindowOptions,
+  policyStatsQuery,
+  policyStatsRange,
+  policyStatsSummary,
+  policyStatsTable,
+  policyStatsTrend,
+  policyStatsTopHosts,
+  policyStatsTopPaths,
+  policyStatsTopMethods,
+  policyStatsPreviousSnapshot,
+  buildCurrentPolicyStatsSnapshot,
+  formatRatePercent,
+  formatDateTime
+});
+const { handleCopyPolicyStatsLink, handleExportPolicyStatsCsv, handleExportPolicyStatsCompareCsv } = observeExport;
+const policyFeedbackRules: FormRules = {
+  method: {
+    validator(_rule, value: string) {
+      const normalized = String(value || '')
+        .trim()
+        .toUpperCase();
+      if (!normalized) {
+        return true;
+      }
+      if (!methodOptions.some(item => item.value === normalized)) {
+        return new Error('Method 不合法');
+      }
+      return true;
+    },
+    trigger: ['blur', 'change']
+  },
+  status: {
+    validator(_rule, value: number) {
+      const num = Number(value);
+      if (!Number.isFinite(num) || num < 100 || num > 599) {
+        return new Error('状态码必须在 100-599 之间');
+      }
+      return true;
+    },
+    trigger: ['blur', 'change']
+  },
+  dueAt: {
+    validator(_rule, value: string) {
+      const text = String(value || '').trim();
+      if (!text) {
+        return true;
+      }
+      if (!/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}$/.test(text)) {
+        return new Error('截止时间格式应为 YYYY-MM-DD HH:mm:ss');
+      }
+      return true;
+    },
+    trigger: ['blur', 'input']
+  },
+  reason: {
+    required: true,
+    message: '请填写误报原因',
+    trigger: ['blur', 'input']
+  }
+};
+
+const policyFeedbackProcessRules: FormRules = {
+  feedbackStatus: {
+    required: true,
+    message: '请选择处理状态',
+    trigger: 'change'
+  },
+  dueAt: {
+    validator(_rule, value: string) {
+      const text = String(value || '').trim();
+      if (!text) {
+        return true;
+      }
+      if (!/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}$/.test(text)) {
+        return new Error('截止时间格式应为 YYYY-MM-DD HH:mm:ss');
+      }
+      return true;
+    },
+    trigger: ['blur', 'input']
+  }
+};
+
+const policyRules: FormRules = {
+  name: { required: true, message: '请输入策略名称', trigger: 'blur' },
+  engineMode: { required: true, message: '请选择引擎模式', trigger: 'change' },
+  auditEngine: { required: true, message: '请选择审计模式', trigger: 'change' },
+  auditLogFormat: {
+    required: true,
+    message: '请选择审计日志格式',
+    trigger: 'change'
+  },
+  auditRelevantStatus: {
+    validator(_rule, value: string) {
+      const raw = String(value || '').trim();
+      if (!raw) {
+        return new Error('请输入审计状态匹配表达式');
+      }
+      try {
+        // eslint-disable-next-line no-new
+        new RegExp(raw);
+        return true;
+      } catch {
+        return new Error('审计状态匹配表达式格式不合法');
+      }
+    },
+    trigger: ['blur', 'input']
+  },
+  requestBodyLimit: {
+    validator(_rule, value: number) {
+      const num = Number(value);
+      if (!Number.isFinite(num) || num <= 0) {
+        return new Error('请求体限制必须大于 0');
+      }
+      if (num > 1024 * 1024 * 1024) {
+        return new Error('请求体限制不能超过 1 GiB');
+      }
+      return true;
+    },
+    trigger: ['blur', 'change']
+  },
+  requestBodyNoFilesLimit: {
+    validator(_rule, value: number) {
+      const num = Number(value);
+      if (!Number.isFinite(num) || num <= 0) {
+        return new Error('无文件请求体限制必须大于 0');
+      }
+      if (num > 1024 * 1024 * 1024) {
+        return new Error('无文件请求体限制不能超过 1 GiB');
+      }
+      return true;
+    },
+    trigger: ['blur', 'change']
+  },
+  config: {
+    validator(_rule, value: string) {
+      const raw = String(value || '').trim();
+      if (!raw) return true;
+      try {
+        JSON.parse(raw);
+        return true;
+      } catch {
+        return new Error('扩展配置必须是合法 JSON');
+      }
+    },
+    trigger: 'blur'
+  }
+};
+
+const {
+  exclusionQuery,
+  exclusionLoading,
+  exclusionTable,
+  exclusionPagination,
+  exclusionModalVisible,
+  exclusionModalMode,
+  exclusionSubmitting,
+  exclusionFormRef,
+  exclusionRemoveValueInputRef,
+  shouldFocusExclusionRemoveValue,
+  exclusionForm,
+  exclusionModalTitle,
+  exclusionRules,
+  fetchExclusions,
+  resetExclusionQuery,
+  handleExclusionPageChange,
+  handleExclusionPageSizeChange,
+  resetExclusionForm,
+  handleAddExclusion,
+  handleEditExclusion,
+  handleSubmitExclusion,
+  handleDeleteExclusion
+} = useWafExclusion({
+  message,
+  getDefaultPolicyId
+});
+
+const {
+  policyFeedbackExclusionDraftModalVisible,
+  policyFeedbackExclusionDraft,
+  policyFeedbackExclusionDraftCandidateKey,
+  policyFeedbackExclusionCandidateOptions,
+  policyFeedbackExclusionDraftDiffItems,
+  handleCreateExclusionDraftFromFeedback,
+  handlePolicyFeedbackExclusionCandidateChange,
+  handlePolicyFeedbackExclusionDraftScopeChange,
+  handleConfirmPolicyFeedbackExclusionDraft
+} = usePolicyFeedbackExclusionDraft({
+  message,
+  policyTable,
+  resetExclusionForm,
+  getDefaultPolicyId,
+  mapPolicyNameById,
+  mapScopeTypeLabel,
+  openExclusionEditor: (payload, focusRemoveValue) => {
+    exclusionModalMode.value = 'add';
+    exclusionForm.policyId = Number(payload.policyId);
+    exclusionForm.name = String(payload.name || '').trim();
+    exclusionForm.description = payload.description || '';
+    exclusionForm.enabled = Boolean(payload.enabled);
+    exclusionForm.scopeType = (payload.scopeType || 'global') as WafPolicyScopeType;
+    exclusionForm.host = payload.host || '';
+    exclusionForm.path = payload.path || '';
+    exclusionForm.method = payload.method || '';
+    exclusionForm.removeType = (payload.removeType || 'id') as WafPolicyRemoveType;
+    exclusionForm.removeValue = payload.removeValue || '';
+    shouldFocusExclusionRemoveValue.value = focusRemoveValue;
+    exclusionModalVisible.value = true;
+  },
+  navigateToPolicyExclusion: () => handleNavigateToPolicySection('exclusion')
+});
+
+const {
+  bindingQuery,
+  bindingLoading,
+  bindingTable,
+  bindingPagination,
+  bindingModalVisible,
+  bindingSubmitting,
+  bindingFormRef,
+  bindingForm,
+  bindingModalTitle,
+  bindingRules,
+  bindingConflictGroups,
+  bindingEffectivePreview,
+  fetchBindings,
+  resetBindingQuery,
+  handleBindingPageChange,
+  handleBindingPageSizeChange,
+  handleAddBinding,
+  handleEditBinding,
+  handleSubmitBinding,
+  handleDeleteBinding
+} = useWafBinding({
+  message,
+  getDefaultPolicyId,
+  mapPolicyNameById
+});
+
+const {
+  releaseQuery,
+  releaseLoading,
+  releaseTable,
+  releasePagination,
+  rollbackModalVisible,
+  rollbackSubmitting,
+  rollbackFormRef,
+  rollbackForm,
+  jobQuery,
+  jobLoading,
+  jobTable,
+  jobPagination,
+  fetchReleases,
+  resetReleaseQuery,
+  handleReleasePageChange,
+  handleReleasePageSizeChange,
+  handleActivateRelease,
+  handleClearReleases,
+  openRollbackModal,
+  handleSubmitRollback,
+  fetchJobs,
+  resetJobQuery,
+  handleJobPageChange,
+  handleJobPageSizeChange,
+  handleClearJobs
+} = useWafReleaseJob({
+  message,
+  dialog,
+  ensureSourceNamesByIds,
+  ensureUserNamesByIds
+});
+
+const triggerOpsRefresh = () => {
+  Promise.resolve(fetchReleases()).catch(() => undefined);
+  Promise.resolve(fetchJobs()).catch(() => undefined);
+};
+fetchReleasesRef.value = fetchReleases;
+fetchJobsRef.value = fetchJobs;
+
+const uploadModalVisible = ref(false);
+const uploadSubmitting = ref(false);
+const uploadFormRef = ref<FormInst | null>(null);
+const uploadForm = reactive({
+  kind: 'crs' as WafKind,
+  version: '',
+  checksum: '',
+  activateNow: false,
+  file: null as File | null
+});
+
+const uploadRules: FormRules = {
+  kind: { required: true, message: '请选择规则类型', trigger: 'change' },
+  version: { required: true, message: '请输入版本号', trigger: 'blur' },
+  file: {
+    validator() {
+      if (!uploadForm.file) {
+        return new Error('请选择待上传规则包');
+      }
+      return true;
+    },
+    trigger: 'change'
+  }
+};
+
+const rollbackRules: FormRules = {
+  target: { required: true, message: '请选择回滚目标', trigger: 'change' },
+  version: {
+    validator() {
+      if (rollbackForm.target === 'version' && !rollbackForm.version.trim()) {
+        return new Error('指定版本回滚时必须填写版本号');
+      }
+      return true;
+    },
+    trigger: 'blur'
+  }
+};
+
+const sourceColumns = createSourceColumns({
+  handleSyncSource,
+  handleEditSource,
+  handleDeleteSource
+});
+
+const policyColumns = createPolicyColumns({
+  mapPolicyEngineModeType,
+  mapPolicyEngineModeLabel,
+  mapCrsTemplateLabel,
+  formatBytes,
+  handlePreviewPolicy,
+  handleValidatePolicy,
+  handlePublishPolicy,
+  handleEditPolicy,
+  handleDeletePolicy
+});
+
+const policyRevisionColumns = createPolicyRevisionColumns({
+  mapPolicyRevisionStatusType,
+  mapPolicyRevisionStatusLabel,
+  displayOperatorName,
+  handleRollbackPolicyRevision
+});
+
+const exclusionColumns = createExclusionColumns({
+  mapScopeTypeLabel,
+  handleEditExclusion,
+  handleDeleteExclusion
+});
+
+const bindingColumns = createBindingColumns({
+  mapScopeTypeLabel,
+  handleEditBinding,
+  handleDeleteBinding
+});
+
+const bindingEffectiveColumns = createBindingEffectiveColumns({
+  mapScopeTypeLabel
+});
+
+const policyStatsTrendColumns = createPolicyStatsTrendColumns();
+
+const policyStatsColumns = createPolicyStatsColumns({
+  formatRatePercent
+});
+
+const policyStatsDimensionColumns = createPolicyStatsDimensionColumns({
+  formatRatePercent
+});
+
+function mapPolicyFeedbackStatusLabel(status: string) {
+  switch (
+    String(status || '')
+      .trim()
+      .toLowerCase()
+  ) {
+    case 'confirmed':
+      return '已确认';
+    case 'resolved':
+      return '已处理';
+    default:
+      return '待确认';
+  }
+}
+
+function mapPolicyFeedbackStatusTagType(status: string): 'default' | 'warning' | 'success' {
+  switch (
+    String(status || '')
+      .trim()
+      .toLowerCase()
+  ) {
+    case 'confirmed':
+      return 'warning';
+    case 'resolved':
+      return 'success';
+    default:
+      return 'default';
+  }
+}
+
+function mapPolicyFeedbackSLAStatusLabel(row: WafPolicyFalsePositiveFeedbackItem) {
+  if ((row.feedbackStatus || '') === 'resolved') {
+    return '已解决';
+  }
+  return row.isOverdue ? '已超时' : '正常';
+}
+
+function mapPolicyFeedbackSLAStatusTagType(row: WafPolicyFalsePositiveFeedbackItem): 'default' | 'warning' | 'success' {
+  if ((row.feedbackStatus || '') === 'resolved') {
+    return 'success';
+  }
+  return row.isOverdue ? 'warning' : 'default';
+}
+
+const policyFeedbackColumns = createPolicyFeedbackColumns({
+  displayOperatorName,
+  mapPolicyFeedbackStatusTagType,
+  mapPolicyFeedbackStatusLabel,
+  mapPolicyFeedbackSLAStatusTagType,
+  mapPolicyFeedbackSLAStatusLabel,
+  handleCreateExclusionDraftFromFeedback,
+  openPolicyFeedbackProcessModal
+});
+
+const {
+  policyStatsDrillHint,
+  policyStatsDrillStatusLabel,
+  isPolicyStatsDrillUnlocked,
+  buildPolicyStatsDimensionRowProps
+} = useObserveDrilldown({
+  message,
+  route,
+  activeTab,
+  observeRouteSyncing: observeExport.observeRouteSyncing,
+  policyStatsQuery,
+  applyObserveQueryFromRoute: observeExport.applyObserveQueryFromRoute,
+  syncObserveStateToRouteQuery: observeExport.syncObserveStateToRouteQuery,
+  fetchPolicyStats
+});
+
+const releaseColumns = createReleaseColumns({
+  mapSourceNameById,
+  formatBytes,
+  mapReleaseStatusType,
+  handleActivateRelease
+});
+
+const jobColumns = createJobColumns({
+  mapJobSourceName,
+  mapJobActionLabel,
+  mapJobTriggerModeLabel,
+  mapJobStatusType,
+  mapJobStatusLabel,
+  displayOperatorName,
+  mapJobMessage
+});
+
+function mapReleaseStatusType(status: WafReleaseStatus) {
+  switch (status) {
+    case 'active':
+      return 'success';
+    case 'verified':
+      return 'info';
+    case 'failed':
+      return 'error';
+    case 'rolled_back':
+      return 'warning';
+    default:
+      return 'default';
+  }
+}
+
+function mapPolicyEngineModeType(mode: WafPolicyEngineMode) {
+  switch (mode) {
+    case 'on':
+      return 'error';
+    case 'detectiononly':
+      return 'warning';
+    case 'off':
+      return 'default';
+    default:
+      return 'default';
+  }
+}
+
+function mapPolicyRevisionStatusType(status: WafPolicyRevisionStatus) {
+  switch (status) {
+    case 'published':
+      return 'success';
+    case 'rolled_back':
+      return 'warning';
+    default:
+      return 'default';
+  }
+}
+
+function mapJobStatusType(status: WafJobStatus) {
+  switch (status) {
+    case 'success':
+      return 'success';
+    case 'failed':
+      return 'error';
+    default:
+      return 'warning';
+  }
+}
+
+function mapJobStatusLabel(status: string) {
+  switch (status) {
+    case 'running':
+      return '执行中';
+    case 'success':
+      return '成功';
+    case 'failed':
+      return '失败';
+    default:
+      return status || '-';
+  }
+}
+
+function mapJobActionLabel(action: string) {
+  switch (action) {
+    case 'check':
+      return '检查';
+    case 'download':
+      return '下载';
+    case 'verify':
+      return '校验';
+    case 'activate':
+      return '激活';
+    case 'rollback':
+      return '回滚';
+    case 'engine_check':
+      return '引擎检查';
+    default:
+      return action || '-';
+  }
+}
+
+function mapJobTriggerModeLabel(triggerMode: string) {
+  switch (triggerMode) {
+    case 'manual':
+      return '手动';
+    case 'upload':
+      return '上传';
+    case 'schedule':
+      return '定时';
+    case 'auto':
+      return '自动';
+    case 'system':
+      return '系统';
+    default:
+      return triggerMode || '-';
+  }
+}
+
+function mapSourceNameById(sourceId: number) {
+  if (!sourceId || sourceId <= 0) {
+    return '-';
+  }
+
+  const sourceName = jobSourceNameMap.value[sourceId];
+  if (sourceName && sourceName.trim()) {
+    return sourceName.trim();
+  }
+
+  return '未知更新源';
+}
+
+function mapPolicyNameById(policyId: number) {
+  if (!policyId || policyId <= 0) {
+    return '-';
+  }
+
+  const target = policyTable.value.find(item => item.id === policyId);
+  if (!target) {
+    return `#${policyId}`;
+  }
+
+  return target.name ? `${target.name}${target.isDefault ? '（默认）' : ''}` : `#${policyId}`;
+}
+
+function mapJobSourceName(row: WafJobItem) {
+  if (row.action === 'engine_check') {
+    return 'Coraza 引擎';
+  }
+
+  return mapSourceNameById(Number(row.sourceId || 0));
+}
+
+const defaultPolicyName = computed(() => {
+  const target = policyTable.value.find(item => item.isDefault) || policyTable.value[0];
+  return target?.name || '-';
+});
+
+const selectedPolicyName = computed(() => {
+  const target = policyTable.value.find(item => item.id === crsTuningForm.policyId);
+  return target?.name || defaultPolicyName.value || '-';
+});
+const policyWorkspaceActions = computed(() =>
+  buildPolicyWorkspaceActions({
+    activeSection: activePolicySection.value,
+    hasPendingCrsTuningChanges: hasPolicyWorkspaceDraft.value,
+    bindingConflictCount: bindingConflictGroups.value.length,
+    selectedPolicyName: selectedPolicyName.value
+  })
+);
+
+function mergeJobSourceNameMap(sourceList: WafSourceItem[]) {
+  if (!Array.isArray(sourceList) || sourceList.length === 0) {
+    return;
+  }
+
+  const nextMap: Record<number, string> = { ...jobSourceNameMap.value };
+  sourceList.forEach(item => {
+    const sourceId = Number(item?.id || 0);
+    const sourceName = String(item?.name || '').trim();
+    if (sourceId > 0 && sourceName) {
+      nextMap[sourceId] = sourceName;
+    }
+  });
+  jobSourceNameMap.value = nextMap;
+}
+
+async function ensureSourceNamesByIds(sourceIds: number[]) {
+  const pendingIds = Array.from(
+    new Set(sourceIds.filter(sourceId => sourceId > 0 && !jobSourceNameMap.value[sourceId]))
+  );
+  if (pendingIds.length === 0) {
+    return;
+  }
+
+  const pageSize = 200;
+  let currentPage = 1;
+  let total = Number.POSITIVE_INFINITY;
+
+  const loadNextPage = async (): Promise<void> => {
+    if (currentPage > 20 || currentPage * pageSize >= total) {
+      return;
+    }
+
+    const { data, error } = await fetchWafSourceList({
+      page: currentPage,
+      pageSize,
+      name: undefined
+    });
+
+    if (error || !data) {
+      return;
+    }
+
+    const sourceList = data.list || [];
+    mergeJobSourceNameMap(sourceList);
+    total = data.total || 0;
+
+    if (pendingIds.every(sourceId => Boolean(jobSourceNameMap.value[sourceId]))) {
+      return;
+    }
+
+    if (sourceList.length === 0 || currentPage * pageSize >= total) {
+      return;
+    }
+
+    currentPage += 1;
+    await loadNextPage();
+  };
+
+  await loadNextPage();
+}
+
+function mapJobMessage(rawMessage: string) {
+  const messageText = String(rawMessage || '').trim();
+  if (!messageText) {
+    return '-';
+  }
+
+  const exactMap: Record<string, string> = {
+    'check success': '检查成功',
+    'sync success': '同步成功',
+    'upload success': '上传成功',
+    'activate success': '激活成功',
+    'rollback success': '回滚成功',
+    'engine source check success': '引擎源检查成功'
+  };
+
+  if (exactMap[messageText]) {
+    return exactMap[messageText];
+  }
+
+  const replacementRules: Array<[RegExp, string]> = [
+    [/context deadline exceeded/gi, '请求超时'],
+    [/i\/o timeout/gi, '网络超时'],
+    [/invalid proxy url:/gi, '代理地址不合法：'],
+    [/invalid url:/gi, '无效地址：'],
+    [/only https url is allowed/gi, '仅支持 HTTPS 地址'],
+    [/only https scheme is allowed/gi, '仅允许 HTTPS 协议'],
+    [/proxy url scheme must be http or https/gi, '代理地址协议仅支持 http/https'],
+    [/source not found/gi, '未找到更新源'],
+    [/source is disabled/gi, '更新源已禁用'],
+    [/source mode is not remote/gi, '更新源模式不是 remote'],
+    [/source url is empty/gi, '更新源地址为空'],
+    [/move package failed:/gi, '移动安装包失败：'],
+    [/create release dir failed:/gi, '创建版本目录失败：'],
+    [/create release failed:/gi, '创建版本记录失败：'],
+    [/fetch failed:/gi, '下载失败：'],
+    [/host not allowed:/gi, '源域名不在允许列表：'],
+    [/unexpected status code:/gi, '下载返回异常状态码：'],
+    [/write temp file failed:/gi, '写入临时文件失败：'],
+    [/close temp file failed:/gi, '关闭临时文件失败：'],
+    [/move temp file failed:/gi, '移动临时文件失败：'],
+    [/prepare waf store failed:/gi, '准备 Waf 存储目录失败：']
+  ];
+
+  let localizedMessage = messageText;
+  for (const [pattern, replacement] of replacementRules) {
+    localizedMessage = localizedMessage.replace(pattern, replacement);
+  }
+
+  return localizedMessage;
+}
+
+function formatRatePercent(value: number) {
+  const numeric = Number(value || 0);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return '0%';
+  }
+  return `${(numeric * 100).toFixed(2)}%`;
+}
+
+function formatDateTime(date: Date) {
+  const pad = (num: number) => String(num).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
+function isNumericUserId(value: unknown) {
+  return /^\d+$/.test(String(value ?? '').trim());
+}
+
+function displayOperatorName(value: unknown) {
+  const raw = String(value ?? '').trim();
+  if (!raw) {
+    return '-';
+  }
+  if (!isNumericUserId(raw)) {
+    return raw;
+  }
+  return userNameMap.value[raw] || '-';
+}
+
+async function ensureUserNamesByIds(values: unknown[]) {
+  const pendingIds = Array.from(
+    new Set(
+      values
+        .map(value => String(value ?? '').trim())
+        .filter(value => value && isNumericUserId(value) && !userNameMap.value[value])
+    )
+  );
+
+  if (!pendingIds.length || userNameLoading.value) {
+    return;
+  }
+
+  userNameLoading.value = true;
+  try {
+    const unresolved = new Set(pendingIds);
+    const pageSize = 100;
+    const loadUserPage = async (page: number, total = Number.POSITIVE_INFINITY): Promise<void> => {
+      if (page > 50 || unresolved.size === 0 || page * pageSize >= total) {
+        return;
+      }
+
+      const { data, error } = await request<any>({
+        url: '/api/user/list',
+        params: { page, pageSize }
+      });
+
+      if (error || !data) {
+        return;
+      }
+
+      const list = Array.isArray(data.list) ? data.list : [];
+      list.forEach((item: any) => {
+        const id = String(item?.id ?? '').trim();
+        const username = String(item?.username ?? '').trim();
+        if (!id || !username) {
+          return;
+        }
+        userNameMap.value[id] = username;
+        unresolved.delete(id);
+      });
+
+      const nextTotal = Number(data.total || 0);
+      if (list.length === 0 || page * pageSize >= nextTotal) {
+        return;
+      }
+
+      await loadUserPage(page + 1, nextTotal);
+    };
+
+    await loadUserPage(1);
+  } finally {
+    userNameLoading.value = false;
+  }
+}
+
+function setObserveActiveView(view: 'analysis' | 'feedback') {
+  observeActiveView.value = view;
+}
+
+function handleNavigateToMenu(menu: SecurityMenuKey) {
+  return navigateToSecurityTab(SECURITY_MENU_SCHEMA[menu].defaultTab);
+}
+
+function handleNavigateToPolicySection(tab: 'runtime' | 'crs' | 'exclusion' | 'binding') {
+  return navigateToSecurityTab(tab);
+}
+
+function handleNavigateToOpsSection(tab: 'release' | 'job') {
+  return navigateToSecurityTab(tab);
+}
+
+function openUploadModal() {
+  uploadForm.kind = 'crs';
+  uploadForm.version = '';
+  uploadForm.checksum = '';
+  uploadForm.activateNow = false;
+  uploadForm.file = null;
+  uploadModalVisible.value = true;
+}
+
+watch(
+  () => sourceForm.mode,
+  value => {
+    if (value !== 'remote') {
+      sourceForm.proxyUrl = '';
+    }
+  }
+);
+
+function handleBeforeUpload(data: { file: UploadFileInfo }) {
+  const raw = data.file.file;
+  if (!raw) return false;
+
+  const name = raw.name.toLowerCase();
+  if (!(name.endsWith('.zip') || name.endsWith('.tar.gz'))) {
+    message.error('仅支持 .zip 或 .tar.gz 文件');
+    return false;
+  }
+
+  uploadForm.file = raw;
+  return false;
+}
+
+function handleRemoveUpload() {
+  uploadForm.file = null;
+  return true;
+}
+
+async function handleSubmitUpload() {
+  await uploadFormRef.value?.validate();
+  if (!uploadForm.file) {
+    message.error('请先选择上传文件');
+    return;
+  }
+
+  uploadSubmitting.value = true;
+  try {
+    const formData = new FormData();
+    formData.append('kind', uploadForm.kind);
+    formData.append('version', uploadForm.version.trim());
+    if (uploadForm.checksum.trim()) {
+      formData.append('checksum', uploadForm.checksum.trim());
+    }
+    formData.append('activateNow', String(uploadForm.activateNow));
+    formData.append('file', uploadForm.file);
+
+    const { error } = await uploadWafPackage(formData);
+    if (!error) {
+      message.success('上传成功，规则包已入库');
+      uploadModalVisible.value = false;
+      triggerOpsRefresh();
+    }
+  } finally {
+    uploadSubmitting.value = false;
+  }
+}
+
+const securityTabRefreshMap: Record<SecurityTabKey, () => void> = {
+  source: () => {
+    fetchIntegrationStatus();
+    fetchEngineStatus();
+    fetchSources();
+  },
+  runtime: () => {
+    fetchPolicies();
+    fetchPolicyRevisions();
+  },
+  crs: () => {
+    fetchPolicies();
+    fetchPolicyRevisions(getCurrentRevisionPolicyId());
+  },
+  exclusion: () => {
+    fetchPolicies();
+    fetchExclusions();
+  },
+  binding: () => {
+    fetchPolicies();
+    fetchBindings();
+  },
+  observe: () => {
+    fetchPolicies();
+    fetchPolicyStats();
+  },
+  release: () => {
+    Promise.resolve(fetchReleases()).catch(() => undefined);
+  },
+  job: () => {
+    Promise.resolve(fetchJobs()).catch(() => undefined);
+  }
+};
+
+const securityDomainRefreshMap: Record<SecurityMenuKey, () => void> = {
+  source: () => {
+    fetchIntegrationStatus();
+    fetchEngineStatus();
+    fetchSources();
+  },
+  policy: () => {
+    fetchPolicies();
+    fetchPolicyRevisions(getCurrentRevisionPolicyId());
+    fetchExclusions();
+    fetchBindings();
+  },
+  observe: () => {
+    fetchPolicies();
+    fetchPolicyStats();
+  },
+  ops: () => {
+    triggerOpsRefresh();
+  }
+};
+
+const { refreshCurrentDomain } = useSecurityRefresh({
+  activeMenu,
+  activeTab,
+  refreshByTab: securityTabRefreshMap,
+  refreshByMenu: securityDomainRefreshMap
+});
+</script>
+
 <template>
   <div class="h-full flex flex-col gap-3">
-    <n-card :bordered="false" class="rounded-8px shadow-sm">
+    <NCard :bordered="false" class="rounded-8px shadow-sm">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div class="text-base font-semibold">安全管理</div>
-          <div class="mt-1 text-xs text-gray-500">{{ activeMenuDescription }}</div>
+          <div class="mt-1 text-xs text-gray-500">
+            {{ activeMenuDescription }}
+          </div>
         </div>
         <div class="flex items-center gap-2 text-xs text-gray-500">
           <span>{{ pageTitle }}</span>
-          <n-button secondary size="small" @click="refreshCurrentDomain">刷新当前领域</n-button>
+          <NButton secondary size="small" @click="refreshCurrentDomain">刷新当前领域</NButton>
         </div>
       </div>
 
-      <n-grid cols="4" x-gap="12" y-gap="12" class="mt-4">
-        <n-gi v-for="item in securityMenus" :key="item.key">
-          <n-card
+      <NGrid cols="4" x-gap="12" y-gap="12" class="mt-4">
+        <NGi v-for="item in securityMenus" :key="item.key">
+          <NCard
             size="small"
             :bordered="activeMenu !== item.key"
             class="cursor-pointer transition-all duration-200"
@@ -22,15 +1393,29 @@
             @click="handleNavigateToMenu(item.key)"
           >
             <div class="text-sm font-semibold">{{ item.title }}</div>
-            <div class="mt-1 text-xs text-gray-500">{{ securityMenuDescriptionMap[item.key] }}</div>
-          </n-card>
-        </n-gi>
-      </n-grid>
-    </n-card>
+            <div class="mt-1 text-xs text-gray-500">
+              {{ securityMenuDescriptionMap[item.key] }}
+            </div>
+          </NCard>
+        </NGi>
+      </NGrid>
+    </NCard>
 
     <SecuritySourcePage
       v-if="activeMenu === 'source'"
       :page-title="pageTitle"
+      :integration-loading="integrationLoading"
+      :integration-submitting="integrationSubmitting"
+      :integration-previewing="integrationPreviewing"
+      :integration-unavailable="integrationUnavailable"
+      :integration-status="integrationStatus"
+      :selected-integration-sites="selectedIntegrationSites"
+      :handle-refresh-integration-status="handleRefreshIntegrationStatus"
+      :handle-preview-integration="handlePreviewIntegration"
+      :handle-enable-integration="handleEnableIntegration"
+      :handle-disable-integration="handleDisableIntegration"
+      :handle-integration-site-change="handleIntegrationSiteChange"
+      :integration-preview-actions="integrationPreviewActions"
       :engine-loading="engineLoading"
       :engine-checking="engineChecking"
       :engine-unavailable="engineUnavailable"
@@ -155,12 +1540,24 @@
       :build-policy-stats-dimension-row-props="buildPolicyStatsDimensionRowProps"
       :policy-feedback-status-filter="policyFeedbackStatusFilter"
       :policy-feedback-status-filter-options="policyFeedbackStatusFilterOptions"
-      :set-policy-feedback-status-filter="(value: '' | 'pending' | 'confirmed' | 'resolved') => { policyFeedbackStatusFilter = value; }"
+      :set-policy-feedback-status-filter="
+        (value: '' | 'pending' | 'confirmed' | 'resolved') => {
+          policyFeedbackStatusFilter = value;
+        }
+      "
       :policy-feedback-assignee-filter="policyFeedbackAssigneeFilter"
-      :set-policy-feedback-assignee-filter="(value: string) => { policyFeedbackAssigneeFilter = value; }"
+      :set-policy-feedback-assignee-filter="
+        (value: string) => {
+          policyFeedbackAssigneeFilter = value;
+        }
+      "
       :policy-feedback-sla-status-filter="policyFeedbackSLAStatusFilter"
       :policy-feedback-sla-status-options="policyFeedbackSLAStatusOptions"
-      :set-policy-feedback-sla-status-filter="(value: 'all' | 'normal' | 'overdue' | 'resolved') => { policyFeedbackSLAStatusFilter = value; }"
+      :set-policy-feedback-sla-status-filter="
+        (value: 'all' | 'normal' | 'overdue' | 'resolved') => {
+          policyFeedbackSLAStatusFilter = value;
+        }
+      "
       :handle-policy-feedback-status-filter-change="handlePolicyFeedbackStatusFilterChange"
       :open-policy-feedback-modal="openPolicyFeedbackModal"
       :open-policy-feedback-batch-process-modal="openPolicyFeedbackBatchProcessModal"
@@ -209,160 +1606,179 @@
       :handle-job-page-size-change="handleJobPageSizeChange"
     />
 
-    <n-modal v-model:show="sourceModalVisible" preset="card" :title="sourceModalTitle" class="w-720px">
-      <n-form ref="sourceFormRef" :model="sourceForm" :rules="sourceRules" label-placement="left" label-width="120">
-        <n-grid cols="2" x-gap="12">
-          <n-form-item-gi label="名称" path="name">
-            <n-input v-model:value="sourceForm.name" placeholder="例如：official-crs" />
-          </n-form-item-gi>
-          <n-form-item-gi label="类型" path="kind">
-            <n-input value="crs" disabled />
-          </n-form-item-gi>
-          <n-form-item-gi label="模式" path="mode">
-            <n-select v-model:value="sourceForm.mode" :options="modeOptions" />
-          </n-form-item-gi>
-          <n-form-item-gi label="鉴权类型" path="authType">
-            <n-select v-model:value="sourceForm.authType" :options="authTypeOptions" />
-          </n-form-item-gi>
-        </n-grid>
+    <NModal v-model:show="sourceModalVisible" preset="card" :title="sourceModalTitle" class="w-720px">
+      <NForm ref="sourceFormRef" :model="sourceForm" :rules="sourceRules" label-placement="left" label-width="120">
+        <NGrid cols="2" x-gap="12">
+          <NFormItemGi label="名称" path="name">
+            <NInput v-model:value="sourceForm.name" placeholder="例如：official-crs" />
+          </NFormItemGi>
+          <NFormItemGi label="类型" path="kind">
+            <NInput value="crs" disabled />
+          </NFormItemGi>
+          <NFormItemGi label="模式" path="mode">
+            <NSelect v-model:value="sourceForm.mode" :options="modeOptions" />
+          </NFormItemGi>
+          <NFormItemGi label="鉴权类型" path="authType">
+            <NSelect v-model:value="sourceForm.authType" :options="authTypeOptions" />
+          </NFormItemGi>
+        </NGrid>
 
-        <n-form-item label="默认源">
+        <NFormItem label="默认源">
           <div class="flex flex-wrap gap-2">
-            <n-button size="small" secondary @click="applyDefaultSource">应用 CRS 默认源</n-button>
+            <NButton size="small" secondary @click="applyDefaultSource">应用 CRS 默认源</NButton>
           </div>
-        </n-form-item>
+        </NFormItem>
 
-        <n-form-item label="源地址" path="url" v-if="sourceForm.mode === 'remote'">
-          <n-input v-model:value="sourceForm.url" placeholder="https://api.github.com/repos/coreruleset/coreruleset/releases/latest" />
-        </n-form-item>
+        <NFormItem v-if="sourceForm.mode === 'remote'" label="源地址" path="url">
+          <NInput
+            v-model:value="sourceForm.url"
+            placeholder="https://api.github.com/repos/coreruleset/coreruleset/releases/latest"
+          />
+        </NFormItem>
 
-        <n-form-item label="校验地址" path="checksumUrl" v-if="sourceForm.mode === 'remote'">
-          <n-input v-model:value="sourceForm.checksumUrl" placeholder="可选，SHA256 清单地址" />
-        </n-form-item>
+        <NFormItem v-if="sourceForm.mode === 'remote'" label="校验地址" path="checksumUrl">
+          <NInput v-model:value="sourceForm.checksumUrl" placeholder="可选，SHA256 清单地址" />
+        </NFormItem>
 
-        <n-form-item label="代理地址" path="proxyUrl" v-if="sourceForm.mode === 'remote'">
-          <n-input v-model:value="sourceForm.proxyUrl" placeholder="可选，例如：http://127.0.0.1:7890" />
-        </n-form-item>
+        <NFormItem v-if="sourceForm.mode === 'remote'" label="代理地址" path="proxyUrl">
+          <NInput v-model:value="sourceForm.proxyUrl" placeholder="可选，例如：http://127.0.0.1:7890" />
+        </NFormItem>
 
-        <n-form-item label="鉴权密钥" path="authSecret" v-if="sourceForm.authType !== 'none'">
-          <n-input v-model:value="sourceForm.authSecret" type="password" show-password-on="mousedown" placeholder="Token 或 user:password" />
-        </n-form-item>
+        <NFormItem v-if="sourceForm.authType !== 'none'" label="鉴权密钥" path="authSecret">
+          <NInput
+            v-model:value="sourceForm.authSecret"
+            type="password"
+            show-password-on="mousedown"
+            placeholder="Token 或 user:password"
+          />
+        </NFormItem>
 
-        <n-form-item label="调度表达式" path="schedule">
-          <n-input v-model:value="sourceForm.schedule" placeholder="例如：0 0 */6 * * *" />
-        </n-form-item>
+        <NFormItem label="调度表达式" path="schedule">
+          <NInput v-model:value="sourceForm.schedule" placeholder="例如：0 0 */6 * * *" />
+        </NFormItem>
 
-        <n-form-item label="附加元数据" path="meta">
-          <n-input v-model:value="sourceForm.meta" type="textarea" :autosize="{ minRows: 2, maxRows: 5 }" placeholder="JSON 字符串，可选" />
-        </n-form-item>
+        <NFormItem label="附加元数据" path="meta">
+          <NInput
+            v-model:value="sourceForm.meta"
+            type="textarea"
+            :autosize="{ minRows: 2, maxRows: 5 }"
+            placeholder="JSON 字符串，可选"
+          />
+        </NFormItem>
 
-        <n-grid cols="2" x-gap="12">
-          <n-form-item-gi label="启用">
-            <n-switch v-model:value="sourceForm.enabled" />
-          </n-form-item-gi>
-          <n-form-item-gi label="自动检查">
-            <n-switch v-model:value="sourceForm.autoCheck" />
-          </n-form-item-gi>
-          <n-form-item-gi label="自动下载">
-            <n-switch v-model:value="sourceForm.autoDownload" />
-          </n-form-item-gi>
-          <n-form-item-gi label="自动激活">
-            <n-switch v-model:value="sourceForm.autoActivate" />
-          </n-form-item-gi>
-        </n-grid>
-      </n-form>
+        <NGrid cols="2" x-gap="12">
+          <NFormItemGi label="启用">
+            <NSwitch v-model:value="sourceForm.enabled" />
+          </NFormItemGi>
+          <NFormItemGi label="自动检查">
+            <NSwitch v-model:value="sourceForm.autoCheck" />
+          </NFormItemGi>
+          <NFormItemGi label="自动下载">
+            <NSwitch v-model:value="sourceForm.autoDownload" />
+          </NFormItemGi>
+          <NFormItemGi label="自动激活">
+            <NSwitch v-model:value="sourceForm.autoActivate" />
+          </NFormItemGi>
+        </NGrid>
+      </NForm>
 
       <template #footer>
         <div class="flex justify-end gap-2">
-          <n-button @click="sourceModalVisible = false">取消</n-button>
-          <n-button type="primary" :loading="sourceSubmitting" @click="handleSubmitSource">保存</n-button>
+          <NButton @click="sourceModalVisible = false">取消</NButton>
+          <NButton type="primary" :loading="sourceSubmitting" @click="handleSubmitSource">保存</NButton>
         </div>
       </template>
-    </n-modal>
+    </NModal>
 
-    <n-modal v-model:show="policyModalVisible" preset="card" :title="policyModalTitle" class="w-760px">
-      <n-form ref="policyFormRef" :model="policyForm" :rules="policyRules" label-placement="left" label-width="150">
-        <n-grid cols="2" x-gap="12">
-          <n-form-item-gi label="策略名称" path="name">
-            <n-input v-model:value="policyForm.name" placeholder="例如：default-runtime-policy" />
-          </n-form-item-gi>
-          <n-form-item-gi label="是否默认策略">
-            <n-switch v-model:value="policyForm.isDefault" />
-          </n-form-item-gi>
-          <n-form-item-gi label="引擎模式" path="engineMode">
-            <n-select v-model:value="policyForm.engineMode" :options="policyEngineModeOptions" />
-          </n-form-item-gi>
-          <n-form-item-gi label="审计模式" path="auditEngine">
-            <n-select v-model:value="policyForm.auditEngine" :options="policyAuditEngineOptions" />
-          </n-form-item-gi>
-          <n-form-item-gi label="审计日志格式" path="auditLogFormat">
-            <n-select v-model:value="policyForm.auditLogFormat" :options="policyAuditLogFormatOptions" />
-          </n-form-item-gi>
-          <n-form-item-gi label="请求体访问">
-            <n-switch v-model:value="policyForm.requestBodyAccess" />
-          </n-form-item-gi>
-          <n-form-item-gi label="启用策略">
-            <n-switch v-model:value="policyForm.enabled" />
-          </n-form-item-gi>
-        </n-grid>
+    <NModal v-model:show="policyModalVisible" preset="card" :title="policyModalTitle" class="w-760px">
+      <NForm ref="policyFormRef" :model="policyForm" :rules="policyRules" label-placement="left" label-width="150">
+        <NGrid cols="2" x-gap="12">
+          <NFormItemGi label="策略名称" path="name">
+            <NInput v-model:value="policyForm.name" placeholder="例如：default-runtime-policy" />
+          </NFormItemGi>
+          <NFormItemGi label="是否默认策略">
+            <NSwitch v-model:value="policyForm.isDefault" />
+          </NFormItemGi>
+          <NFormItemGi label="引擎模式" path="engineMode">
+            <NSelect v-model:value="policyForm.engineMode" :options="policyEngineModeOptions" />
+          </NFormItemGi>
+          <NFormItemGi label="审计模式" path="auditEngine">
+            <NSelect v-model:value="policyForm.auditEngine" :options="policyAuditEngineOptions" />
+          </NFormItemGi>
+          <NFormItemGi label="审计日志格式" path="auditLogFormat">
+            <NSelect v-model:value="policyForm.auditLogFormat" :options="policyAuditLogFormatOptions" />
+          </NFormItemGi>
+          <NFormItemGi label="请求体访问">
+            <NSwitch v-model:value="policyForm.requestBodyAccess" />
+          </NFormItemGi>
+          <NFormItemGi label="启用策略">
+            <NSwitch v-model:value="policyForm.enabled" />
+          </NFormItemGi>
+        </NGrid>
 
-        <n-form-item label="描述" path="description">
-          <n-input v-model:value="policyForm.description" placeholder="可选，记录策略用途与变更说明" />
-        </n-form-item>
+        <NFormItem label="描述" path="description">
+          <NInput v-model:value="policyForm.description" placeholder="可选，记录策略用途与变更说明" />
+        </NFormItem>
 
-        <n-form-item label="审计状态匹配" path="auditRelevantStatus">
-          <n-input v-model:value="policyForm.auditRelevantStatus" placeholder="例如：^(?:5|4(?!04))" />
-        </n-form-item>
+        <NFormItem label="审计状态匹配" path="auditRelevantStatus">
+          <NInput v-model:value="policyForm.auditRelevantStatus" placeholder="例如：^(?:5|4(?!04))" />
+        </NFormItem>
 
-        <n-grid cols="2" x-gap="12">
-          <n-form-item-gi label="请求体限制（字节）" path="requestBodyLimit">
-            <n-input-number v-model:value="policyForm.requestBodyLimit" :show-button="false" :min="1" :max="1024 * 1024 * 1024" class="w-full" />
-          </n-form-item-gi>
-          <n-form-item-gi label="无文件请求体限制（字节）" path="requestBodyNoFilesLimit">
-            <n-input-number
+        <NGrid cols="2" x-gap="12">
+          <NFormItemGi label="请求体限制（字节）" path="requestBodyLimit">
+            <NInputNumber
+              v-model:value="policyForm.requestBodyLimit"
+              :show-button="false"
+              :min="1"
+              :max="1024 * 1024 * 1024"
+              class="w-full"
+            />
+          </NFormItemGi>
+          <NFormItemGi label="无文件请求体限制（字节）" path="requestBodyNoFilesLimit">
+            <NInputNumber
               v-model:value="policyForm.requestBodyNoFilesLimit"
               :show-button="false"
               :min="1"
               :max="1024 * 1024 * 1024"
               class="w-full"
             />
-          </n-form-item-gi>
-        </n-grid>
+          </NFormItemGi>
+        </NGrid>
 
-        <n-form-item label="扩展配置(JSON)" path="config">
-          <n-input
+        <NFormItem label="扩展配置(JSON)" path="config">
+          <NInput
             v-model:value="policyForm.config"
             type="textarea"
             :autosize="{ minRows: 2, maxRows: 6 }"
             placeholder='可选，例如：{"custom_tag":"runtime"}'
           />
-        </n-form-item>
-      </n-form>
+        </NFormItem>
+      </NForm>
 
       <template #footer>
         <div class="flex justify-end gap-2">
-          <n-button @click="policyModalVisible = false">取消</n-button>
-          <n-button type="primary" :loading="policySubmitting" @click="handleSubmitPolicy">保存</n-button>
+          <NButton @click="policyModalVisible = false">取消</NButton>
+          <NButton type="primary" :loading="policySubmitting" @click="handleSubmitPolicy">保存</NButton>
         </div>
       </template>
-    </n-modal>
+    </NModal>
 
-    <n-modal v-model:show="uploadModalVisible" preset="card" title="上传规则包" class="w-640px">
-      <n-form ref="uploadFormRef" :model="uploadForm" :rules="uploadRules" label-placement="left" label-width="110">
-        <n-form-item label="类型" path="kind">
-          <n-input value="crs" disabled />
-        </n-form-item>
-        <n-form-item label="版本号" path="version">
-          <n-input v-model:value="uploadForm.version" placeholder="例如：v4.23.0-custom.1" />
-        </n-form-item>
-        <n-form-item label="SHA256" path="checksum">
-          <n-input v-model:value="uploadForm.checksum" placeholder="可选，建议填写" />
-        </n-form-item>
-        <n-form-item label="立即激活" path="activateNow">
-          <n-switch v-model:value="uploadForm.activateNow" />
-        </n-form-item>
-        <n-form-item label="规则包" path="file">
-          <n-upload
+    <NModal v-model:show="uploadModalVisible" preset="card" title="上传规则包" class="w-640px">
+      <NForm ref="uploadFormRef" :model="uploadForm" :rules="uploadRules" label-placement="left" label-width="110">
+        <NFormItem label="类型" path="kind">
+          <NInput value="crs" disabled />
+        </NFormItem>
+        <NFormItem label="版本号" path="version">
+          <NInput v-model:value="uploadForm.version" placeholder="例如：v4.23.0-custom.1" />
+        </NFormItem>
+        <NFormItem label="SHA256" path="checksum">
+          <NInput v-model:value="uploadForm.checksum" placeholder="可选，建议填写" />
+        </NFormItem>
+        <NFormItem label="立即激活" path="activateNow">
+          <NSwitch v-model:value="uploadForm.activateNow" />
+        </NFormItem>
+        <NFormItem label="规则包" path="file">
+          <NUpload
             :default-upload="false"
             :max="1"
             :show-file-list="true"
@@ -370,259 +1786,334 @@
             @before-upload="handleBeforeUpload"
             @remove="handleRemoveUpload"
           >
-            <n-button>选择文件</n-button>
-          </n-upload>
-        </n-form-item>
-      </n-form>
+            <NButton>选择文件</NButton>
+          </NUpload>
+        </NFormItem>
+      </NForm>
 
       <template #footer>
         <div class="flex justify-end gap-2">
-          <n-button @click="uploadModalVisible = false">取消</n-button>
-          <n-button type="primary" :loading="uploadSubmitting" @click="handleSubmitUpload">上传并入库</n-button>
+          <NButton @click="uploadModalVisible = false">取消</NButton>
+          <NButton type="primary" :loading="uploadSubmitting" @click="handleSubmitUpload">上传并入库</NButton>
         </div>
       </template>
-    </n-modal>
+    </NModal>
 
-    <n-modal v-model:show="exclusionModalVisible" preset="card" :title="exclusionModalTitle" class="w-760px">
-      <n-form ref="exclusionFormRef" :model="exclusionForm" :rules="exclusionRules" label-placement="left" label-width="140">
-        <n-grid cols="2" x-gap="12">
-          <n-form-item-gi label="规则名称" path="name">
-            <n-input v-model:value="exclusionForm.name" placeholder="例如：ignore-login-fp" />
-          </n-form-item-gi>
-          <n-form-item-gi label="关联策略" path="policyId">
-            <n-select v-model:value="exclusionForm.policyId" :options="crsPolicyOptions" />
-          </n-form-item-gi>
-          <n-form-item-gi label="作用域" path="scopeType">
-            <n-select v-model:value="exclusionForm.scopeType" :options="scopeTypeOptions" />
-          </n-form-item-gi>
-          <n-form-item-gi label="移除类型" path="removeType">
-            <n-select v-model:value="exclusionForm.removeType" :options="removeTypeOptions" />
-          </n-form-item-gi>
-          <n-form-item-gi label="Host" path="host" v-if="exclusionForm.scopeType !== 'global'">
-            <n-input v-model:value="exclusionForm.host" placeholder="例如：app.example.com" />
-          </n-form-item-gi>
-          <n-form-item-gi label="Path" path="path" v-if="exclusionForm.scopeType === 'route'">
-            <n-input v-model:value="exclusionForm.path" placeholder="例如：/api/login" />
-          </n-form-item-gi>
-          <n-form-item-gi label="Method" path="method" v-if="exclusionForm.scopeType === 'route'">
-            <n-select v-model:value="exclusionForm.method" :options="methodOptions" clearable placeholder="可选" />
-          </n-form-item-gi>
-          <n-form-item-gi label="是否启用">
-            <n-switch v-model:value="exclusionForm.enabled" />
-          </n-form-item-gi>
-        </n-grid>
+    <NModal v-model:show="exclusionModalVisible" preset="card" :title="exclusionModalTitle" class="w-760px">
+      <NForm
+        ref="exclusionFormRef"
+        :model="exclusionForm"
+        :rules="exclusionRules"
+        label-placement="left"
+        label-width="140"
+      >
+        <NGrid cols="2" x-gap="12">
+          <NFormItemGi label="规则名称" path="name">
+            <NInput v-model:value="exclusionForm.name" placeholder="例如：ignore-login-fp" />
+          </NFormItemGi>
+          <NFormItemGi label="关联策略" path="policyId">
+            <NSelect v-model:value="exclusionForm.policyId" :options="crsPolicyOptions" />
+          </NFormItemGi>
+          <NFormItemGi label="作用域" path="scopeType">
+            <NSelect v-model:value="exclusionForm.scopeType" :options="scopeTypeOptions" />
+          </NFormItemGi>
+          <NFormItemGi label="移除类型" path="removeType">
+            <NSelect v-model:value="exclusionForm.removeType" :options="removeTypeOptions" />
+          </NFormItemGi>
+          <NFormItemGi v-if="exclusionForm.scopeType !== 'global'" label="Host" path="host">
+            <NInput v-model:value="exclusionForm.host" placeholder="例如：app.example.com" />
+          </NFormItemGi>
+          <NFormItemGi v-if="exclusionForm.scopeType === 'route'" label="Path" path="path">
+            <NInput v-model:value="exclusionForm.path" placeholder="例如：/api/login" />
+          </NFormItemGi>
+          <NFormItemGi v-if="exclusionForm.scopeType === 'route'" label="Method" path="method">
+            <NSelect v-model:value="exclusionForm.method" :options="methodOptions" clearable placeholder="可选" />
+          </NFormItemGi>
+          <NFormItemGi label="是否启用">
+            <NSwitch v-model:value="exclusionForm.enabled" />
+          </NFormItemGi>
+        </NGrid>
 
-        <n-form-item label="移除值" path="removeValue">
-          <n-input
+        <NFormItem label="移除值" path="removeValue">
+          <NInput
             ref="exclusionRemoveValueInputRef"
             v-model:value="exclusionForm.removeValue"
             :placeholder="exclusionForm.removeType === 'id' ? '例如：920350' : '例如：attack-sqli'"
           />
-        </n-form-item>
-        <n-form-item label="描述" path="description">
-          <n-input v-model:value="exclusionForm.description" placeholder="可选，记录误报场景与原因" />
-        </n-form-item>
-      </n-form>
+        </NFormItem>
+        <NFormItem label="描述" path="description">
+          <NInput v-model:value="exclusionForm.description" placeholder="可选，记录误报场景与原因" />
+        </NFormItem>
+      </NForm>
       <template #footer>
         <div class="flex justify-end gap-2">
-          <n-button @click="exclusionModalVisible = false">取消</n-button>
-          <n-button type="primary" :loading="exclusionSubmitting" @click="handleSubmitExclusion">保存</n-button>
+          <NButton @click="exclusionModalVisible = false">取消</NButton>
+          <NButton type="primary" :loading="exclusionSubmitting" @click="handleSubmitExclusion">保存</NButton>
         </div>
       </template>
-    </n-modal>
+    </NModal>
 
-    <n-modal v-model:show="bindingModalVisible" preset="card" :title="bindingModalTitle" class="w-760px">
-      <n-form ref="bindingFormRef" :model="bindingForm" :rules="bindingRules" label-placement="left" label-width="140">
-        <n-grid cols="2" x-gap="12">
-          <n-form-item-gi label="绑定名称" path="name">
-            <n-input v-model:value="bindingForm.name" placeholder="例如：site-main-binding" />
-          </n-form-item-gi>
-          <n-form-item-gi label="关联策略" path="policyId">
-            <n-select v-model:value="bindingForm.policyId" :options="crsPolicyOptions" />
-          </n-form-item-gi>
-          <n-form-item-gi label="作用域" path="scopeType">
-            <n-select v-model:value="bindingForm.scopeType" :options="scopeTypeOptions" />
-          </n-form-item-gi>
-          <n-form-item-gi label="优先级" path="priority">
-            <n-input-number v-model:value="bindingForm.priority" :show-button="false" :min="1" :max="1000" class="w-full" />
-          </n-form-item-gi>
-          <n-form-item-gi label="Host" path="host" v-if="bindingForm.scopeType !== 'global'">
-            <n-input v-model:value="bindingForm.host" placeholder="例如：app.example.com" />
-          </n-form-item-gi>
-          <n-form-item-gi label="Path" path="path" v-if="bindingForm.scopeType === 'route'">
-            <n-input v-model:value="bindingForm.path" placeholder="例如：/api" />
-          </n-form-item-gi>
-          <n-form-item-gi label="Method" path="method" v-if="bindingForm.scopeType === 'route'">
-            <n-select v-model:value="bindingForm.method" :options="methodOptions" clearable placeholder="可选" />
-          </n-form-item-gi>
-          <n-form-item-gi label="是否启用">
-            <n-switch v-model:value="bindingForm.enabled" />
-          </n-form-item-gi>
-        </n-grid>
+    <NModal v-model:show="bindingModalVisible" preset="card" :title="bindingModalTitle" class="w-760px">
+      <NForm ref="bindingFormRef" :model="bindingForm" :rules="bindingRules" label-placement="left" label-width="140">
+        <NGrid cols="2" x-gap="12">
+          <NFormItemGi label="绑定名称" path="name">
+            <NInput v-model:value="bindingForm.name" placeholder="例如：site-main-binding" />
+          </NFormItemGi>
+          <NFormItemGi label="关联策略" path="policyId">
+            <NSelect v-model:value="bindingForm.policyId" :options="crsPolicyOptions" />
+          </NFormItemGi>
+          <NFormItemGi label="作用域" path="scopeType">
+            <NSelect v-model:value="bindingForm.scopeType" :options="scopeTypeOptions" />
+          </NFormItemGi>
+          <NFormItemGi label="优先级" path="priority">
+            <NInputNumber
+              v-model:value="bindingForm.priority"
+              :show-button="false"
+              :min="1"
+              :max="1000"
+              class="w-full"
+            />
+          </NFormItemGi>
+          <NFormItemGi v-if="bindingForm.scopeType !== 'global'" label="Host" path="host">
+            <NInput v-model:value="bindingForm.host" placeholder="例如：app.example.com" />
+          </NFormItemGi>
+          <NFormItemGi v-if="bindingForm.scopeType === 'route'" label="Path" path="path">
+            <NInput v-model:value="bindingForm.path" placeholder="例如：/api" />
+          </NFormItemGi>
+          <NFormItemGi v-if="bindingForm.scopeType === 'route'" label="Method" path="method">
+            <NSelect v-model:value="bindingForm.method" :options="methodOptions" clearable placeholder="可选" />
+          </NFormItemGi>
+          <NFormItemGi label="是否启用">
+            <NSwitch v-model:value="bindingForm.enabled" />
+          </NFormItemGi>
+        </NGrid>
 
-        <n-form-item label="描述" path="description">
-          <n-input v-model:value="bindingForm.description" placeholder="可选，记录生效范围和意图" />
-        </n-form-item>
-      </n-form>
+        <NFormItem label="描述" path="description">
+          <NInput v-model:value="bindingForm.description" placeholder="可选，记录生效范围和意图" />
+        </NFormItem>
+      </NForm>
       <template #footer>
         <div class="flex justify-end gap-2">
-          <n-button @click="bindingModalVisible = false">取消</n-button>
-          <n-button type="primary" :loading="bindingSubmitting" @click="handleSubmitBinding">保存</n-button>
+          <NButton @click="bindingModalVisible = false">取消</NButton>
+          <NButton type="primary" :loading="bindingSubmitting" @click="handleSubmitBinding">保存</NButton>
         </div>
       </template>
-    </n-modal>
+    </NModal>
 
-    <n-modal v-model:show="policyFeedbackModalVisible" preset="card" title="标记误报反馈" class="w-760px">
-      <n-form ref="policyFeedbackFormRef" :model="policyFeedbackForm" :rules="policyFeedbackRules" label-placement="left" label-width="130">
-        <n-grid cols="2" x-gap="12">
-          <n-form-item-gi label="关联策略" path="policyId">
-            <n-select v-model:value="policyFeedbackForm.policyId" :options="crsPolicyOptions" clearable placeholder="可选，不填表示全部策略" />
-          </n-form-item-gi>
-          <n-form-item-gi label="状态码" path="status">
-            <n-input-number v-model:value="policyFeedbackForm.status" :show-button="false" :min="100" :max="599" class="w-full" />
-          </n-form-item-gi>
-          <n-form-item-gi label="责任人" path="assignee">
-            <n-input v-model:value="policyFeedbackForm.assignee" placeholder="可选，例如 alice" />
-          </n-form-item-gi>
-          <n-form-item-gi label="截止时间" path="dueAt">
-            <n-input v-model:value="policyFeedbackForm.dueAt" placeholder="可选，YYYY-MM-DD HH:mm:ss" />
-          </n-form-item-gi>
-          <n-form-item-gi label="Host" path="host">
-            <n-input v-model:value="policyFeedbackForm.host" placeholder="可选，例如 app.example.com" />
-          </n-form-item-gi>
-          <n-form-item-gi label="Path" path="path">
-            <n-input v-model:value="policyFeedbackForm.path" placeholder="可选，例如 /api/login" />
-          </n-form-item-gi>
-          <n-form-item-gi label="Method" path="method">
-            <n-select v-model:value="policyFeedbackForm.method" :options="methodOptions" clearable placeholder="可选" />
-          </n-form-item-gi>
-          <n-form-item-gi label="示例 URI" path="sampleUri">
-            <n-input v-model:value="policyFeedbackForm.sampleUri" placeholder="可选，记录原始 URI 便于复盘" />
-          </n-form-item-gi>
-        </n-grid>
-        <n-form-item label="误报原因" path="reason">
-          <n-input v-model:value="policyFeedbackForm.reason" type="textarea" :autosize="{ minRows: 2, maxRows: 4 }" placeholder="必填：为何判断为误报" />
-        </n-form-item>
-        <n-form-item label="建议动作" path="suggestion">
-          <n-input
+    <NModal v-model:show="policyFeedbackModalVisible" preset="card" title="标记误报反馈" class="w-760px">
+      <NForm
+        ref="policyFeedbackFormRef"
+        :model="policyFeedbackForm"
+        :rules="policyFeedbackRules"
+        label-placement="left"
+        label-width="130"
+      >
+        <NGrid cols="2" x-gap="12">
+          <NFormItemGi label="关联策略" path="policyId">
+            <NSelect
+              v-model:value="policyFeedbackForm.policyId"
+              :options="crsPolicyOptions"
+              clearable
+              placeholder="可选，不填表示全部策略"
+            />
+          </NFormItemGi>
+          <NFormItemGi label="状态码" path="status">
+            <NInputNumber
+              v-model:value="policyFeedbackForm.status"
+              :show-button="false"
+              :min="100"
+              :max="599"
+              class="w-full"
+            />
+          </NFormItemGi>
+          <NFormItemGi label="责任人" path="assignee">
+            <NInput v-model:value="policyFeedbackForm.assignee" placeholder="可选，例如 alice" />
+          </NFormItemGi>
+          <NFormItemGi label="截止时间" path="dueAt">
+            <NInput v-model:value="policyFeedbackForm.dueAt" placeholder="可选，YYYY-MM-DD HH:mm:ss" />
+          </NFormItemGi>
+          <NFormItemGi label="Host" path="host">
+            <NInput v-model:value="policyFeedbackForm.host" placeholder="可选，例如 app.example.com" />
+          </NFormItemGi>
+          <NFormItemGi label="Path" path="path">
+            <NInput v-model:value="policyFeedbackForm.path" placeholder="可选，例如 /api/login" />
+          </NFormItemGi>
+          <NFormItemGi label="Method" path="method">
+            <NSelect v-model:value="policyFeedbackForm.method" :options="methodOptions" clearable placeholder="可选" />
+          </NFormItemGi>
+          <NFormItemGi label="示例 URI" path="sampleUri">
+            <NInput v-model:value="policyFeedbackForm.sampleUri" placeholder="可选，记录原始 URI 便于复盘" />
+          </NFormItemGi>
+        </NGrid>
+        <NFormItem label="误报原因" path="reason">
+          <NInput
+            v-model:value="policyFeedbackForm.reason"
+            type="textarea"
+            :autosize="{ minRows: 2, maxRows: 4 }"
+            placeholder="必填：为何判断为误报"
+          />
+        </NFormItem>
+        <NFormItem label="建议动作" path="suggestion">
+          <NInput
             v-model:value="policyFeedbackForm.suggestion"
             type="textarea"
             :autosize="{ minRows: 2, maxRows: 4 }"
             placeholder="可选：例如建议添加 removeById、放宽阈值或补白名单"
           />
-        </n-form-item>
-      </n-form>
+        </NFormItem>
+      </NForm>
       <template #footer>
         <div class="flex justify-end gap-2">
-          <n-button @click="policyFeedbackModalVisible = false">取消</n-button>
-          <n-button type="warning" :loading="policyFeedbackSubmitting" @click="handleSubmitPolicyFeedback">提交反馈</n-button>
+          <NButton @click="policyFeedbackModalVisible = false">取消</NButton>
+          <NButton type="warning" :loading="policyFeedbackSubmitting" @click="handleSubmitPolicyFeedback">
+            提交反馈
+          </NButton>
         </div>
       </template>
-    </n-modal>
+    </NModal>
 
-    <n-modal v-model:show="policyFeedbackProcessModalVisible" preset="card" title="处理误报反馈" class="w-640px">
-      <n-form ref="policyFeedbackProcessFormRef" :model="policyFeedbackProcessForm" :rules="policyFeedbackProcessRules" label-placement="left" label-width="120">
-        <n-form-item label="处理状态" path="feedbackStatus">
-          <n-select v-model:value="policyFeedbackProcessForm.feedbackStatus" :options="policyFeedbackStatusOptions" />
-        </n-form-item>
-        <n-form-item label="责任人" path="assignee">
-          <n-input v-model:value="policyFeedbackProcessForm.assignee" placeholder="可选，例如 alice" />
-        </n-form-item>
-        <n-form-item label="截止时间" path="dueAt">
-          <n-input v-model:value="policyFeedbackProcessForm.dueAt" placeholder="可选，YYYY-MM-DD HH:mm:ss" />
-        </n-form-item>
-        <n-form-item label="处理备注" path="processNote">
-          <n-input
+    <NModal v-model:show="policyFeedbackProcessModalVisible" preset="card" title="处理误报反馈" class="w-640px">
+      <NForm
+        ref="policyFeedbackProcessFormRef"
+        :model="policyFeedbackProcessForm"
+        :rules="policyFeedbackProcessRules"
+        label-placement="left"
+        label-width="120"
+      >
+        <NFormItem label="处理状态" path="feedbackStatus">
+          <NSelect v-model:value="policyFeedbackProcessForm.feedbackStatus" :options="policyFeedbackStatusOptions" />
+        </NFormItem>
+        <NFormItem label="责任人" path="assignee">
+          <NInput v-model:value="policyFeedbackProcessForm.assignee" placeholder="可选，例如 alice" />
+        </NFormItem>
+        <NFormItem label="截止时间" path="dueAt">
+          <NInput v-model:value="policyFeedbackProcessForm.dueAt" placeholder="可选，YYYY-MM-DD HH:mm:ss" />
+        </NFormItem>
+        <NFormItem label="处理备注" path="processNote">
+          <NInput
             v-model:value="policyFeedbackProcessForm.processNote"
             type="textarea"
             :autosize="{ minRows: 2, maxRows: 4 }"
             placeholder="可选，记录确认依据或处理结果"
           />
-        </n-form-item>
-      </n-form>
+        </NFormItem>
+      </NForm>
       <template #footer>
         <div class="flex justify-end gap-2">
-          <n-button @click="policyFeedbackProcessModalVisible = false">取消</n-button>
-          <n-button type="warning" :loading="policyFeedbackProcessSubmitting" @click="handleSubmitPolicyFeedbackProcess">保存状态</n-button>
+          <NButton @click="policyFeedbackProcessModalVisible = false">取消</NButton>
+          <NButton type="warning" :loading="policyFeedbackProcessSubmitting" @click="handleSubmitPolicyFeedbackProcess">
+            保存状态
+          </NButton>
         </div>
       </template>
-    </n-modal>
+    </NModal>
 
-    <n-modal v-model:show="policyFeedbackBatchProcessModalVisible" preset="card" title="批量处理误报反馈" class="w-640px">
+    <NModal
+      v-model:show="policyFeedbackBatchProcessModalVisible"
+      preset="card"
+      title="批量处理误报反馈"
+      class="w-640px"
+    >
       <div class="mb-3 text-sm text-gray-600">已选择 {{ policyFeedbackCheckedRowKeys.length }} 条反馈记录</div>
-      <n-form ref="policyFeedbackBatchProcessFormRef" :model="policyFeedbackBatchProcessForm" :rules="policyFeedbackProcessRules" label-placement="left" label-width="120">
-        <n-form-item label="处理状态" path="feedbackStatus">
-          <n-select v-model:value="policyFeedbackBatchProcessForm.feedbackStatus" :options="policyFeedbackStatusOptions" />
-        </n-form-item>
-        <n-form-item label="责任人" path="assignee">
-          <n-input v-model:value="policyFeedbackBatchProcessForm.assignee" placeholder="可选，例如 alice" />
-        </n-form-item>
-        <n-form-item label="截止时间" path="dueAt">
-          <n-input v-model:value="policyFeedbackBatchProcessForm.dueAt" placeholder="可选，YYYY-MM-DD HH:mm:ss" />
-        </n-form-item>
-        <n-form-item label="处理备注" path="processNote">
-          <n-input
+      <NForm
+        ref="policyFeedbackBatchProcessFormRef"
+        :model="policyFeedbackBatchProcessForm"
+        :rules="policyFeedbackProcessRules"
+        label-placement="left"
+        label-width="120"
+      >
+        <NFormItem label="处理状态" path="feedbackStatus">
+          <NSelect
+            v-model:value="policyFeedbackBatchProcessForm.feedbackStatus"
+            :options="policyFeedbackStatusOptions"
+          />
+        </NFormItem>
+        <NFormItem label="责任人" path="assignee">
+          <NInput v-model:value="policyFeedbackBatchProcessForm.assignee" placeholder="可选，例如 alice" />
+        </NFormItem>
+        <NFormItem label="截止时间" path="dueAt">
+          <NInput v-model:value="policyFeedbackBatchProcessForm.dueAt" placeholder="可选，YYYY-MM-DD HH:mm:ss" />
+        </NFormItem>
+        <NFormItem label="处理备注" path="processNote">
+          <NInput
             v-model:value="policyFeedbackBatchProcessForm.processNote"
             type="textarea"
             :autosize="{ minRows: 2, maxRows: 4 }"
             placeholder="可选，批量处理说明"
           />
-        </n-form-item>
-      </n-form>
+        </NFormItem>
+      </NForm>
       <template #footer>
         <div class="flex justify-end gap-2">
-          <n-button @click="policyFeedbackBatchProcessModalVisible = false">取消</n-button>
-          <n-button type="warning" :loading="policyFeedbackBatchProcessSubmitting" @click="handleSubmitPolicyFeedbackBatchProcess">批量保存</n-button>
+          <NButton @click="policyFeedbackBatchProcessModalVisible = false">取消</NButton>
+          <NButton
+            type="warning"
+            :loading="policyFeedbackBatchProcessSubmitting"
+            @click="handleSubmitPolicyFeedbackBatchProcess"
+          >
+            批量保存
+          </NButton>
         </div>
       </template>
-    </n-modal>
+    </NModal>
 
-    <n-modal v-model:show="policyFeedbackExclusionDraftModalVisible" preset="card" title="确认生成例外草稿" class="w-760px">
+    <NModal
+      v-model:show="policyFeedbackExclusionDraftModalVisible"
+      preset="card"
+      title="确认生成例外草稿"
+      class="w-760px"
+    >
       <div v-if="policyFeedbackExclusionDraft" class="space-y-3">
         <div class="text-sm text-gray-600">来源反馈 #{{ policyFeedbackExclusionDraft.feedbackId }}</div>
-        <n-form :model="policyFeedbackExclusionDraft" label-placement="left" label-width="120">
-          <n-grid cols="2" x-gap="12">
-            <n-form-item-gi label="关联策略">
-              <n-select v-model:value="policyFeedbackExclusionDraft.policyId" :options="crsPolicyOptions" />
-            </n-form-item-gi>
-            <n-form-item-gi label="作用域">
-              <n-select
+        <NForm :model="policyFeedbackExclusionDraft" label-placement="left" label-width="120">
+          <NGrid cols="2" x-gap="12">
+            <NFormItemGi label="关联策略">
+              <NSelect v-model:value="policyFeedbackExclusionDraft.policyId" :options="crsPolicyOptions" />
+            </NFormItemGi>
+            <NFormItemGi label="作用域">
+              <NSelect
                 v-model:value="policyFeedbackExclusionDraft.scopeType"
                 :options="scopeTypeOptions"
                 @update:value="handlePolicyFeedbackExclusionDraftScopeChange"
               />
-            </n-form-item-gi>
-            <n-form-item-gi label="Host" v-if="policyFeedbackExclusionDraft.scopeType !== 'global'">
-              <n-input v-model:value="policyFeedbackExclusionDraft.host" placeholder="例如：app.example.com" />
-            </n-form-item-gi>
-            <n-form-item-gi label="Path" v-if="policyFeedbackExclusionDraft.scopeType === 'route'">
-              <n-input v-model:value="policyFeedbackExclusionDraft.path" placeholder="例如：/api/login" />
-            </n-form-item-gi>
-            <n-form-item-gi label="Method" v-if="policyFeedbackExclusionDraft.scopeType === 'route'">
-              <n-select v-model:value="policyFeedbackExclusionDraft.method" :options="methodOptions" clearable placeholder="可选" />
-            </n-form-item-gi>
-            <n-form-item-gi label="移除类型">
-              <n-select v-model:value="policyFeedbackExclusionDraft.removeType" :options="removeTypeOptions" />
-            </n-form-item-gi>
-          </n-grid>
-          <n-form-item label="规则名称">
-            <n-input v-model:value="policyFeedbackExclusionDraft.name" />
-          </n-form-item>
-        </n-form>
-        <n-alert type="info" :show-icon="false">
+            </NFormItemGi>
+            <NFormItemGi v-if="policyFeedbackExclusionDraft.scopeType !== 'global'" label="Host">
+              <NInput v-model:value="policyFeedbackExclusionDraft.host" placeholder="例如：app.example.com" />
+            </NFormItemGi>
+            <NFormItemGi v-if="policyFeedbackExclusionDraft.scopeType === 'route'" label="Path">
+              <NInput v-model:value="policyFeedbackExclusionDraft.path" placeholder="例如：/api/login" />
+            </NFormItemGi>
+            <NFormItemGi v-if="policyFeedbackExclusionDraft.scopeType === 'route'" label="Method">
+              <NSelect
+                v-model:value="policyFeedbackExclusionDraft.method"
+                :options="methodOptions"
+                clearable
+                placeholder="可选"
+              />
+            </NFormItemGi>
+            <NFormItemGi label="移除类型">
+              <NSelect v-model:value="policyFeedbackExclusionDraft.removeType" :options="removeTypeOptions" />
+            </NFormItemGi>
+          </NGrid>
+          <NFormItem label="规则名称">
+            <NInput v-model:value="policyFeedbackExclusionDraft.name" />
+          </NFormItem>
+        </NForm>
+        <NAlert type="info" :show-icon="false">
           <template #header>草稿差异对比</template>
           <div v-if="policyFeedbackExclusionDraftDiffItems.length === 0" class="text-xs text-gray-500">
             当前草稿与原反馈关键字段一致
           </div>
           <ul v-else class="text-xs text-gray-600 leading-6">
             <li v-for="item in policyFeedbackExclusionDraftDiffItems" :key="item.field">
-              {{ item.field }}：{{ item.before || '空' }} -> {{ item.after || '空' }}
+              {{ item.field }}：{{ item.before || '空' }} ->
+              {{ item.after || '空' }}
             </li>
           </ul>
-        </n-alert>
+        </NAlert>
         <div v-if="policyFeedbackExclusionCandidateOptions.length > 1">
-          <div class="text-xs text-gray-500 mb-1">候选移除值（建议文本匹配到多个候选）</div>
-          <n-select
+          <div class="mb-1 text-xs text-gray-500">候选移除值（建议文本匹配到多个候选）</div>
+          <NSelect
             v-model:value="policyFeedbackExclusionDraftCandidateKey"
             :options="policyFeedbackExclusionCandidateOptions"
             placeholder="请选择 remove 值候选"
@@ -631,2966 +2122,61 @@
         </div>
         <div>
           <div class="text-xs text-gray-500">移除值</div>
-          <n-input v-model:value="policyFeedbackExclusionDraft.removeValue" :placeholder="policyFeedbackExclusionDraft.removeType === 'id' ? '例如：920350' : '例如：attack-sqli'" />
+          <NInput
+            v-model:value="policyFeedbackExclusionDraft.removeValue"
+            :placeholder="policyFeedbackExclusionDraft.removeType === 'id' ? '例如：920350' : '例如：attack-sqli'"
+          />
         </div>
         <div>
           <div class="text-xs text-gray-500">描述草稿</div>
-          <n-input v-model:value="policyFeedbackExclusionDraft.description" type="textarea" :autosize="{ minRows: 2, maxRows: 4 }" />
+          <NInput
+            v-model:value="policyFeedbackExclusionDraft.description"
+            type="textarea"
+            :autosize="{ minRows: 2, maxRows: 4 }"
+          />
         </div>
-        <n-alert v-if="!policyFeedbackExclusionDraft.removeValue" type="warning" :show-icon="true">
+        <NAlert v-if="!policyFeedbackExclusionDraft.removeValue" type="warning" :show-icon="true">
           建议文本未解析到可用的 remove 值，请在下一步表单中补充后再保存。
-        </n-alert>
+        </NAlert>
       </div>
       <template #footer>
         <div class="flex justify-end gap-2">
-          <n-button @click="policyFeedbackExclusionDraftModalVisible = false">取消</n-button>
-          <n-button type="primary" @click="handleConfirmPolicyFeedbackExclusionDraft">确认生成</n-button>
+          <NButton @click="policyFeedbackExclusionDraftModalVisible = false">取消</NButton>
+          <NButton type="primary" @click="handleConfirmPolicyFeedbackExclusionDraft">确认生成</NButton>
         </div>
       </template>
-    </n-modal>
+    </NModal>
 
-    <n-modal v-model:show="rollbackModalVisible" preset="card" title="回滚版本" class="w-520px">
-      <n-form ref="rollbackFormRef" :model="rollbackForm" :rules="rollbackRules" label-placement="left" label-width="110">
-        <n-form-item label="回滚目标" path="target">
-          <n-radio-group v-model:value="rollbackForm.target">
-            <n-space>
-              <n-radio value="last_good">last_good</n-radio>
-              <n-radio value="version">指定版本</n-radio>
-            </n-space>
-          </n-radio-group>
-        </n-form-item>
-        <n-form-item label="版本号" path="version" v-if="rollbackForm.target === 'version'">
-          <n-input v-model:value="rollbackForm.version" placeholder="例如：v4.23.0" />
-        </n-form-item>
-      </n-form>
+    <NModal v-model:show="rollbackModalVisible" preset="card" title="回滚版本" class="w-520px">
+      <NForm
+        ref="rollbackFormRef"
+        :model="rollbackForm"
+        :rules="rollbackRules"
+        label-placement="left"
+        label-width="110"
+      >
+        <NFormItem label="回滚目标" path="target">
+          <NRadioGroup v-model:value="rollbackForm.target">
+            <NSpace>
+              <NRadio value="last_good">last_good</NRadio>
+              <NRadio value="version">指定版本</NRadio>
+            </NSpace>
+          </NRadioGroup>
+        </NFormItem>
+        <NFormItem v-if="rollbackForm.target === 'version'" label="版本号" path="version">
+          <NInput v-model:value="rollbackForm.version" placeholder="例如：v4.23.0" />
+        </NFormItem>
+      </NForm>
 
       <template #footer>
         <div class="flex justify-end gap-2">
-          <n-button @click="rollbackModalVisible = false">取消</n-button>
-          <n-button type="warning" :loading="rollbackSubmitting" @click="handleSubmitRollback">确认回滚</n-button>
+          <NButton @click="rollbackModalVisible = false">取消</NButton>
+          <NButton type="warning" :loading="rollbackSubmitting" @click="handleSubmitRollback">确认回滚</NButton>
         </div>
       </template>
-    </n-modal>
+    </NModal>
   </div>
 </template>
-
-<script setup lang="ts">
-import { computed, h, nextTick, onMounted, reactive, ref, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
-import {
-  NButton,
-  NPopconfirm,
-  NSelect,
-  NSpace,
-  NSwitch,
-  NTag,
-  useDialog,
-  useMessage,
-  type DataTableColumns,
-  type FormInst,
-  type FormRules,
-  type InputInst,
-  type PaginationProps,
-  type UploadFileInfo
-} from 'naive-ui';
-import { checkWafEngine, fetchWafEngineStatus, fetchWafSourceList, uploadWafPackage, type WafAuthType, type WafEngineStatusResp, type WafKind, type WafMode, type WafSourceItem } from '@/service/api/caddy-source';
-import {
-  createWafPolicyBinding,
-  createWafPolicy,
-  createWafRuleExclusion,
-  deleteWafPolicyBinding,
-  deleteWafPolicy,
-  deleteWafRuleExclusion,
-  fetchWafPolicyBindingList,
-  fetchWafPolicyList,
-  fetchWafPolicyRevisionList,
-  fetchWafRuleExclusionList,
-  previewWafPolicy,
-  publishWafPolicy,
-  rollbackWafPolicy,
-  updateWafPolicyBinding,
-  updateWafPolicy,
-  updateWafRuleExclusion,
-  validateWafPolicy,
-  type WafPolicyAuditEngine,
-  type WafPolicyAuditLogFormat,
-  type WafPolicyBindingItem,
-  type WafPolicyBindingPayload,
-  type WafPolicyCrsTemplate,
-  type WafPolicyEngineMode,
-  type WafPolicyItem,
-  type WafPolicyRemoveType,
-  type WafPolicyRevisionItem,
-  type WafPolicyRevisionStatus,
-  type WafPolicyScopeType,
-  type WafRuleExclusionItem,
-  type WafRuleExclusionPayload
-} from '@/service/api/caddy-policy';
-import {
-  type WafPolicyFalsePositiveFeedbackItem,
-  type WafPolicyStatsDimensionItem,
-  type WafPolicyStatsItem,
-  type WafPolicyStatsTrendItem
-} from '@/service/api/caddy-observe';
-import { type WafJobItem, type WafJobStatus, type WafReleaseItem, type WafReleaseStatus } from '@/service/api/caddy-release-job';
-import {
-  buildExclusionCandidateKey,
-  collectExclusionCandidatesFromFeedbackSuggestion,
-  parseExclusionCandidateKey,
-  parseExclusionFromFeedbackSuggestion
-} from './policy-feedback-draft';
-import {
-  buildPolicyWorkspaceActions,
-  formatBytes,
-  mapCrsTemplateLabel,
-  mapPolicyEngineModeLabel,
-  mapPolicyRevisionStatusLabel,
-  mapScopeTypeLabel
-} from './security-policy-utils';
-import { SECURITY_MENU_SCHEMA, pickRouteQueryValue, type SecurityMenuKey, type SecurityTabKey } from './navigation';
-import SecuritySourcePage from './pages/SecuritySourcePage.vue';
-import SecurityPolicyPage from './pages/SecurityPolicyPage.vue';
-import SecurityObservePage from './pages/SecurityObservePage.vue';
-import SecurityOpsPage from './pages/SecurityOpsPage.vue';
-import { useSecurityNavigation } from './composables/useSecurityNavigation';
-import { useWafPolicy } from './composables/useWafPolicy';
-import { useWafObserve } from './composables/useWafObserve';
-import { useWafObserveFeedback } from './composables/useWafObserveFeedback';
-import { useWafObserveExport } from './composables/useWafObserveExport';
-import { useWafReleaseJob } from './composables/useWafReleaseJob';
-import { useWafSource } from './composables/useWafSource';
-import { request } from '@/service/request';
-
-const message = useMessage();
-const dialog = useDialog();
-const route = useRoute();
-const router = useRouter();
-
-
-const engineLoading = ref(false);
-const engineChecking = ref(false);
-const engineUnavailable = ref(false);
-const engineStatus = ref<WafEngineStatusResp | null>(null);
-
-const { activeMenu, activeTab, pageTitle, navigateToSecurityTab } = useSecurityNavigation({
-  route,
-  router
-});
-
-const securityMenus = Object.values(SECURITY_MENU_SCHEMA);
-const securityMenuDescriptionMap: Record<SecurityMenuKey, string> = {
-  source: '更新源、规则包上传与引擎检查。',
-  policy: '运行模式、CRS、例外和绑定统一收束。',
-  observe: '效果分析、下钻和误报处置。',
-  ops: '版本发布、回滚、任务审计与清理。'
-};
-const securityPolicySectionLabelMap = {
-  runtime: '基础设置',
-  crs: 'CRS 调优',
-  exclusion: '规则例外',
-  binding: '策略绑定'
-} as const;
-const activeMenuDescription = computed(() => securityMenuDescriptionMap[activeMenu.value]);
-const activePolicySection = computed(() => {
-  if (activeTab.value === 'crs' || activeTab.value === 'exclusion' || activeTab.value === 'binding') {
-    return activeTab.value;
-  }
-  return 'runtime';
-});
-const activeOpsSection = computed(() => (activeTab.value === 'job' ? 'job' : 'release'));
-const observeActiveView = ref<'analysis' | 'feedback'>('analysis');
-
-const tableFixedHeight = 480;
-
-const modeOptions = [
-  { label: '远程同步 (remote)', value: 'remote' },
-  { label: '手动管理 (manual)', value: 'manual' }
-];
-
-const authTypeOptions = [
-  { label: '无鉴权', value: 'none' },
-  { label: 'Token', value: 'token' },
-  { label: 'Basic', value: 'basic' }
-];
-
-const policyEngineModeOptions = [
-  { label: 'On（阻断）', value: 'on' },
-  { label: 'Off（关闭）', value: 'off' },
-  { label: 'DetectionOnly（仅检测）', value: 'detectiononly' }
-];
-
-const policyAuditEngineOptions = [
-  { label: 'RelevantOnly（推荐）', value: 'relevantonly' },
-  { label: 'On（全量）', value: 'on' },
-  { label: 'Off（关闭）', value: 'off' }
-];
-
-const policyAuditLogFormatOptions = [
-  { label: 'JSON', value: 'json' },
-  { label: 'Native', value: 'native' }
-];
-
-const scopeTypeOptions = [
-  { label: '全局', value: 'global' as WafPolicyScopeType },
-  { label: '站点', value: 'site' as WafPolicyScopeType },
-  { label: '路由', value: 'route' as WafPolicyScopeType }
-];
-
-const removeTypeOptions = [
-  { label: 'removeById', value: 'id' as WafPolicyRemoveType },
-  { label: 'removeByTag', value: 'tag' as WafPolicyRemoveType }
-];
-
-const methodOptions = [
-  { label: 'GET', value: 'GET' },
-  { label: 'POST', value: 'POST' },
-  { label: 'PUT', value: 'PUT' },
-  { label: 'PATCH', value: 'PATCH' },
-  { label: 'DELETE', value: 'DELETE' },
-  { label: 'OPTIONS', value: 'OPTIONS' },
-  { label: 'HEAD', value: 'HEAD' }
-];
-
-const policyFeedbackStatusOptions = [
-  { label: '待确认', value: 'pending' as const },
-  { label: '已确认', value: 'confirmed' as const },
-  { label: '已处理', value: 'resolved' as const }
-];
-
-const policyFeedbackStatusFilterOptions = [
-  { label: '全部状态', value: '' },
-  ...policyFeedbackStatusOptions
-];
-
-const policyFeedbackSLAStatusOptions = [
-  { label: '全部SLA', value: 'all' as const },
-  { label: '正常', value: 'normal' as const },
-  { label: '已超时', value: 'overdue' as const },
-  { label: '已解决', value: 'resolved' as const }
-];
-
-const crsTemplateOptions = [
-  { label: '低误报（PL1 / In 10 / Out 8）', value: 'low_fp' as WafPolicyCrsTemplate },
-  { label: '平衡（PL2 / In 5 / Out 4）', value: 'balanced' as WafPolicyCrsTemplate },
-  { label: '高拦截（PL3 / In 3 / Out 2）', value: 'high_blocking' as WafPolicyCrsTemplate },
-  { label: '自定义', value: 'custom' as WafPolicyCrsTemplate }
-];
-
-const crsTemplatePresetMap: Record<
-  Exclude<WafPolicyCrsTemplate, 'custom'>,
-  { crsParanoiaLevel: number; crsInboundAnomalyThreshold: number; crsOutboundAnomalyThreshold: number }
-> = {
-  low_fp: { crsParanoiaLevel: 1, crsInboundAnomalyThreshold: 10, crsOutboundAnomalyThreshold: 8 },
-  balanced: { crsParanoiaLevel: 2, crsInboundAnomalyThreshold: 5, crsOutboundAnomalyThreshold: 4 },
-  high_blocking: { crsParanoiaLevel: 3, crsInboundAnomalyThreshold: 3, crsOutboundAnomalyThreshold: 2 }
-};
-
-const releaseStatusOptions = [
-  { label: '全部', value: '' },
-  { label: 'downloaded', value: 'downloaded' },
-  { label: 'verified', value: 'verified' },
-  { label: 'active', value: 'active' },
-  { label: 'failed', value: 'failed' },
-  { label: 'rolled_back', value: 'rolled_back' }
-];
-
-const jobStatusOptions = [
-  { label: '全部', value: '' },
-  { label: 'running', value: 'running' },
-  { label: 'success', value: 'success' },
-  { label: 'failed', value: 'failed' }
-];
-
-const jobActionOptions = [
-  { label: '全部', value: '' },
-  { label: '检查', value: 'check' },
-  { label: '下载', value: 'download' },
-  { label: '校验', value: 'verify' },
-  { label: '激活', value: 'activate' },
-  { label: '回滚', value: 'rollback' },
-  { label: '引擎检查', value: 'engine_check' }
-];
-
-const jobSourceNameMap = ref<Record<number, string>>({});
-const userNameMap = ref<Record<string, string>>({});
-const userNameLoading = ref(false);
-
-const {
-  sourceQuery,
-  sourceLoading,
-  sourceTable,
-  sourcePagination,
-  sourceModalVisible,
-  sourceModalMode,
-  sourceSubmitting,
-  sourceFormRef,
-  sourceForm,
-  sourceModalTitle,
-  sourceRules,
-  fetchSources,
-  resetSourceQuery,
-  handleSourcePageChange,
-  handleSourcePageSizeChange,
-  handleAddSource,
-  handleEditSource,
-  handleSubmitSource,
-  handleDeleteSource,
-  handleSyncSource,
-  applyDefaultSource
-} = useWafSource({
-  message,
-  dialog,
-  mergeJobSourceNameMap,
-  onSyncSuccess: () => {
-    fetchReleases();
-    if (activeTab.value === 'job') {
-      fetchJobs();
-    }
-  }
-});
-
-const crsTuningSubmitting = ref(false);
-const crsTuningFormRef = ref<FormInst | null>(null);
-const crsTuningForm = reactive({
-  policyId: 0,
-  crsTemplate: 'low_fp' as WafPolicyCrsTemplate,
-  crsParanoiaLevel: 1,
-  crsInboundAnomalyThreshold: 10,
-  crsOutboundAnomalyThreshold: 8
-});
-
-const {
-  policyQuery,
-  policyLoading,
-  policyTable,
-  policyPagination,
-  policyModalVisible,
-  policyModalMode,
-  policySubmitting,
-  policyFormRef,
-  policyForm,
-  policyModalTitle,
-  policyPreviewLoading,
-  policyPreviewPolicyName,
-  policyPreviewDirectives,
-  policyRevisionLoading,
-  policyRevisionTable,
-  policyRevisionPagination,
-  crsPolicyOptions,
-  fetchPolicies,
-  resetPolicyQuery,
-  handlePolicyPageChange,
-  handlePolicyPageSizeChange,
-  handleAddPolicy,
-  handleEditPolicy,
-  handleSubmitPolicy,
-  handleDeletePolicy,
-  handlePreviewPolicy,
-  handleValidatePolicy,
-  handlePublishPolicy,
-  fetchPolicyRevisions,
-  handlePolicyRevisionPageChange,
-  handlePolicyRevisionPageSizeChange,
-  handleRollbackPolicyRevision,
-  getDefaultPolicyId
-} = useWafPolicy({
-  message,
-  dialog,
-  ensureUserNamesByIds,
-  onPolicyListSynced: syncCrsTuningFromPolicyTable,
-  getCurrentRevisionPolicyId
-});
-
-const {
-  observeWindowOptions,
-  policyStatsQuery,
-  policyStatsLoading,
-  policyStatsSummary,
-  policyStatsTable,
-  policyStatsTrend,
-  policyStatsTopHosts,
-  policyStatsTopPaths,
-  policyStatsTopMethods,
-  policyStatsRange,
-  policyStatsPreviousSnapshot,
-  policyFeedbackLoading,
-  policyFeedbackTable,
-  policyFeedbackCheckedRowKeys,
-  policyFeedbackPagination,
-  policyFeedbackStatusFilter,
-  policyFeedbackAssigneeFilter,
-  policyFeedbackSLAStatusFilter,
-  policyStatsPolicyOptions,
-  hasPolicyStatsDrillFilters,
-  hasPolicyFeedbackSelection,
-  policyFeedbackCheckedRowKeysInPage,
-  fetchPolicyStats,
-  resetPolicyStatsQuery,
-  clearPolicyStatsDrillFilters,
-  clearPolicyStatsDrillLevel,
-  fetchPolicyFalsePositiveFeedbacks,
-  resetPolicyFeedbackSelection,
-  handlePolicyFeedbackPageChange,
-  handlePolicyFeedbackPageSizeChange,
-  handlePolicyFeedbackStatusFilterChange,
-  handlePolicyFeedbackCheckedRowKeysChange,
-  buildCurrentPolicyStatsSnapshot
-} = useWafObserve({
-  crsPolicyOptions,
-  ensureUserNamesByIds
-});
-
-const {
-  policyFeedbackModalVisible,
-  policyFeedbackSubmitting,
-  policyFeedbackFormRef,
-  policyFeedbackForm,
-  policyFeedbackProcessModalVisible,
-  policyFeedbackProcessSubmitting,
-  policyFeedbackProcessFormRef,
-  policyFeedbackProcessForm,
-  policyFeedbackBatchProcessModalVisible,
-  policyFeedbackBatchProcessSubmitting,
-  policyFeedbackBatchProcessFormRef,
-  policyFeedbackBatchProcessForm,
-  openPolicyFeedbackModal,
-  openPolicyFeedbackProcessModal,
-  openPolicyFeedbackBatchProcessModal,
-  handleSubmitPolicyFeedback,
-  handleSubmitPolicyFeedbackProcess,
-  handleSubmitPolicyFeedbackBatchProcess
-} = useWafObserveFeedback({
-  message,
-  policyStatsQuery,
-  policyFeedbackAssigneeFilter,
-  policyFeedbackCheckedRowKeys,
-  policyFeedbackPagination,
-  resetPolicyFeedbackSelection,
-  fetchPolicyFalsePositiveFeedbacks
-});
-
-const {
-  observeRouteSyncing,
-  applyObserveQueryFromRoute,
-  syncObserveStateToRouteQuery,
-  handleCopyPolicyStatsLink,
-  handleExportPolicyStatsCsv,
-  handleExportPolicyStatsCompareCsv
-} = useWafObserveExport({
-  message,
-  route,
-  router,
-  activeTab,
-  observeWindowOptions,
-  policyStatsQuery,
-  policyStatsRange,
-  policyStatsSummary,
-  policyStatsTable,
-  policyStatsTrend,
-  policyStatsTopHosts,
-  policyStatsTopPaths,
-  policyStatsTopMethods,
-  policyStatsPreviousSnapshot,
-  buildCurrentPolicyStatsSnapshot,
-  formatRatePercent,
-  formatDateTime
-});
-type PolicyFeedbackExclusionDraft = {
-  feedbackId: number;
-  policyId: number;
-  policyName: string;
-  name: string;
-  description: string;
-  scopeType: WafPolicyScopeType;
-  host: string;
-  path: string;
-  method: string;
-  removeType: WafPolicyRemoveType;
-  removeValue: string;
-  candidates: Array<{
-    removeType: WafPolicyRemoveType;
-    removeValue: string;
-  }>;
-  baseline: {
-    policyId: number;
-    scopeType: WafPolicyScopeType;
-    host: string;
-    path: string;
-    method: string;
-    removeType: WafPolicyRemoveType;
-    removeValue: string;
-  };
-};
-type PolicyFeedbackExclusionDraftDiffItem = {
-  field: string;
-  before: string;
-  after: string;
-};
-const policyFeedbackExclusionDraftModalVisible = ref(false);
-const policyFeedbackExclusionDraft = ref<PolicyFeedbackExclusionDraft | null>(null);
-const policyFeedbackExclusionDraftCandidateKey = ref('');
-
-
-const policyFeedbackExclusionCandidateOptions = computed(() => {
-  const candidates = policyFeedbackExclusionDraft.value?.candidates || [];
-  return candidates.map(item => ({
-    label: `${item.removeType === 'id' ? 'removeById' : 'removeByTag'}: ${item.removeValue}`,
-    value: buildExclusionCandidateKey(item.removeType, item.removeValue)
-  }));
-});
-const policyFeedbackExclusionDraftDiffItems = computed<PolicyFeedbackExclusionDraftDiffItem[]>(() => {
-  const draft = policyFeedbackExclusionDraft.value;
-  if (!draft) {
-    return [];
-  }
-
-  const baseline = draft.baseline;
-  const diffItems: PolicyFeedbackExclusionDraftDiffItem[] = [];
-  const appendDiff = (field: string, beforeValue: string, afterValue: string) => {
-    const beforeText = String(beforeValue || '').trim();
-    const afterText = String(afterValue || '').trim();
-    if (beforeText === afterText) {
-      return;
-    }
-    diffItems.push({
-      field,
-      before: beforeText,
-      after: afterText
-    });
-  };
-
-  const baselinePolicyName = mapPolicyNameById(Number(baseline.policyId || 0)) || String(baseline.policyId || '');
-  const currentPolicyName = mapPolicyNameById(Number(draft.policyId || 0)) || String(draft.policyId || '');
-  appendDiff('关联策略', baselinePolicyName, currentPolicyName);
-  appendDiff('作用域', mapScopeTypeLabel(baseline.scopeType), mapScopeTypeLabel(draft.scopeType));
-  appendDiff('Host', baseline.host, draft.host);
-  appendDiff('Path', baseline.path, draft.path);
-  appendDiff('Method', baseline.method, String(draft.method || '').trim().toUpperCase());
-  appendDiff('移除类型', baseline.removeType === 'id' ? 'removeById' : 'removeByTag', draft.removeType === 'id' ? 'removeById' : 'removeByTag');
-  appendDiff('移除值', baseline.removeValue, draft.removeValue);
-  return diffItems;
-});
-
-const policyFeedbackRules: FormRules = {
-  method: {
-    validator(_rule, value: string) {
-      const normalized = String(value || '').trim().toUpperCase();
-      if (!normalized) {
-        return true;
-      }
-      if (!methodOptions.some(item => item.value === normalized)) {
-        return new Error('Method 不合法');
-      }
-      return true;
-    },
-    trigger: ['blur', 'change']
-  },
-  status: {
-    validator(_rule, value: number) {
-      const num = Number(value);
-      if (!Number.isFinite(num) || num < 100 || num > 599) {
-        return new Error('状态码必须在 100-599 之间');
-      }
-      return true;
-    },
-    trigger: ['blur', 'change']
-  },
-  dueAt: {
-    validator(_rule, value: string) {
-      const text = String(value || '').trim();
-      if (!text) {
-        return true;
-      }
-      if (!/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}$/.test(text)) {
-        return new Error('截止时间格式应为 YYYY-MM-DD HH:mm:ss');
-      }
-      return true;
-    },
-    trigger: ['blur', 'input']
-  },
-  reason: {
-    required: true,
-    message: '请填写误报原因',
-    trigger: ['blur', 'input']
-  }
-};
-
-const policyFeedbackProcessRules: FormRules = {
-  feedbackStatus: {
-    required: true,
-    message: '请选择处理状态',
-    trigger: 'change'
-  },
-  dueAt: {
-    validator(_rule, value: string) {
-      const text = String(value || '').trim();
-      if (!text) {
-        return true;
-      }
-      if (!/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}$/.test(text)) {
-        return new Error('截止时间格式应为 YYYY-MM-DD HH:mm:ss');
-      }
-      return true;
-    },
-    trigger: ['blur', 'input']
-  }
-};
-
-const policyRules: FormRules = {
-  name: { required: true, message: '请输入策略名称', trigger: 'blur' },
-  engineMode: { required: true, message: '请选择引擎模式', trigger: 'change' },
-  auditEngine: { required: true, message: '请选择审计模式', trigger: 'change' },
-  auditLogFormat: { required: true, message: '请选择审计日志格式', trigger: 'change' },
-  auditRelevantStatus: {
-    validator(_rule, value: string) {
-      const raw = String(value || '').trim();
-      if (!raw) {
-        return new Error('请输入审计状态匹配表达式');
-      }
-      try {
-        // eslint-disable-next-line no-new
-        new RegExp(raw);
-        return true;
-      } catch {
-        return new Error('审计状态匹配表达式格式不合法');
-      }
-    },
-    trigger: ['blur', 'input']
-  },
-  requestBodyLimit: {
-    validator(_rule, value: number) {
-      const num = Number(value);
-      if (!Number.isFinite(num) || num <= 0) {
-        return new Error('请求体限制必须大于 0');
-      }
-      if (num > 1024 * 1024 * 1024) {
-        return new Error('请求体限制不能超过 1 GiB');
-      }
-      return true;
-    },
-    trigger: ['blur', 'change']
-  },
-  requestBodyNoFilesLimit: {
-    validator(_rule, value: number) {
-      const num = Number(value);
-      if (!Number.isFinite(num) || num <= 0) {
-        return new Error('无文件请求体限制必须大于 0');
-      }
-      if (num > 1024 * 1024 * 1024) {
-        return new Error('无文件请求体限制不能超过 1 GiB');
-      }
-      return true;
-    },
-    trigger: ['blur', 'change']
-  },
-  config: {
-    validator(_rule, value: string) {
-      const raw = String(value || '').trim();
-      if (!raw) return true;
-      try {
-        JSON.parse(raw);
-        return true;
-      } catch {
-        return new Error('扩展配置必须是合法 JSON');
-      }
-    },
-    trigger: 'blur'
-  }
-};
-
-const crsTuningRules: FormRules = {
-  policyId: {
-    validator(_rule, value: number) {
-      if (!Number(value)) {
-        return new Error('请选择策略');
-      }
-      return true;
-    },
-    trigger: 'change'
-  },
-  crsParanoiaLevel: {
-    validator(_rule, value: number) {
-      const num = Number(value);
-      if (!Number.isFinite(num) || num < 1 || num > 4) {
-        return new Error('PL 必须在 1 到 4 之间');
-      }
-      return true;
-    },
-    trigger: ['blur', 'change']
-  },
-  crsInboundAnomalyThreshold: {
-    validator(_rule, value: number) {
-      const num = Number(value);
-      if (!Number.isFinite(num) || num < 1 || num > 20) {
-        return new Error('Inbound 阈值必须在 1 到 20 之间');
-      }
-      return true;
-    },
-    trigger: ['blur', 'change']
-  },
-  crsOutboundAnomalyThreshold: {
-    validator(_rule, value: number) {
-      const num = Number(value);
-      if (!Number.isFinite(num) || num < 1 || num > 20) {
-        return new Error('Outbound 阈值必须在 1 到 20 之间');
-      }
-      return true;
-    },
-    trigger: ['blur', 'change']
-  }
-};
-
-const exclusionQuery = reactive({
-  policyId: null as number | null,
-  scopeType: '' as '' | WafPolicyScopeType | null,
-  name: ''
-});
-
-const exclusionLoading = ref(false);
-const exclusionTable = ref<WafRuleExclusionItem[]>([]);
-const exclusionPagination = reactive<PaginationProps>({
-  page: 1,
-  pageSize: 20,
-  itemCount: 0,
-  showSizePicker: true,
-  pageSizes: [10, 20, 50, 100]
-});
-
-const exclusionModalVisible = ref(false);
-const exclusionModalMode = ref<'add' | 'edit'>('add');
-const exclusionSubmitting = ref(false);
-const exclusionFormRef = ref<FormInst | null>(null);
-const exclusionRemoveValueInputRef = ref<InputInst | null>(null);
-const shouldFocusExclusionRemoveValue = ref(false);
-const exclusionForm = reactive({
-  id: 0,
-  policyId: 0,
-  name: '',
-  description: '',
-  enabled: true,
-  scopeType: 'global' as WafPolicyScopeType,
-  host: '',
-  path: '',
-  method: '' as string | null,
-  removeType: 'id' as WafPolicyRemoveType,
-  removeValue: ''
-});
-
-const exclusionModalTitle = computed(() => (exclusionModalMode.value === 'add' ? '新增规则例外' : '编辑规则例外'));
-const exclusionRules: FormRules = {
-  policyId: {
-    validator(_rule, value: number) {
-      if (!Number(value)) return new Error('请选择关联策略');
-      return true;
-    },
-    trigger: 'change'
-  },
-  scopeType: { required: true, message: '请选择作用域', trigger: 'change' },
-  removeType: { required: true, message: '请选择移除类型', trigger: 'change' },
-  removeValue: { required: true, message: '请输入移除值', trigger: 'blur' },
-  host: {
-    validator(_rule, value: string) {
-      if (exclusionForm.scopeType === 'site' && !String(value || '').trim()) {
-        return new Error('站点作用域必须填写 host');
-      }
-      return true;
-    },
-    trigger: ['blur', 'input']
-  },
-  path: {
-    validator(_rule, value: string) {
-      if (exclusionForm.scopeType === 'route' && !String(value || '').trim()) {
-        return new Error('路由作用域必须填写 path');
-      }
-      return true;
-    },
-    trigger: ['blur', 'input']
-  }
-};
-
-const bindingQuery = reactive({
-  policyId: null as number | null,
-  scopeType: '' as '' | WafPolicyScopeType | null,
-  name: ''
-});
-
-const bindingLoading = ref(false);
-const bindingTable = ref<WafPolicyBindingItem[]>([]);
-const bindingPagination = reactive<PaginationProps>({
-  page: 1,
-  pageSize: 20,
-  itemCount: 0,
-  showSizePicker: true,
-  pageSizes: [10, 20, 50, 100]
-});
-
-const bindingModalVisible = ref(false);
-const bindingModalMode = ref<'add' | 'edit'>('add');
-const bindingSubmitting = ref(false);
-const bindingFormRef = ref<FormInst | null>(null);
-const bindingForm = reactive({
-  id: 0,
-  policyId: 0,
-  name: '',
-  description: '',
-  enabled: true,
-  scopeType: 'global' as WafPolicyScopeType,
-  host: '',
-  path: '',
-  method: '' as string | null,
-  priority: 100
-});
-
-const bindingModalTitle = computed(() => (bindingModalMode.value === 'add' ? '新增策略绑定' : '编辑策略绑定'));
-const bindingRules: FormRules = {
-  policyId: {
-    validator(_rule, value: number) {
-      if (!Number(value)) return new Error('请选择关联策略');
-      return true;
-    },
-    trigger: 'change'
-  },
-  scopeType: { required: true, message: '请选择作用域', trigger: 'change' },
-  priority: {
-    validator(_rule, value: number) {
-      const num = Number(value);
-      if (!Number.isFinite(num) || num < 1 || num > 1000) {
-        return new Error('优先级必须在 1 到 1000 之间');
-      }
-      return true;
-    },
-    trigger: ['blur', 'change']
-  },
-  host: {
-    validator(_rule, value: string) {
-      if (bindingForm.scopeType === 'site' && !String(value || '').trim()) {
-        return new Error('站点作用域必须填写 host');
-      }
-      return true;
-    },
-    trigger: ['blur', 'input']
-  },
-  path: {
-    validator(_rule, value: string) {
-      if (bindingForm.scopeType === 'route' && !String(value || '').trim()) {
-        return new Error('路由作用域必须填写 path');
-      }
-      return true;
-    },
-    trigger: ['blur', 'input']
-  }
-};
-
-const {
-  releaseQuery,
-  releaseLoading,
-  releaseTable,
-  releasePagination,
-  rollbackModalVisible,
-  rollbackSubmitting,
-  rollbackFormRef,
-  rollbackForm,
-  jobQuery,
-  jobLoading,
-  jobTable,
-  jobPagination,
-  fetchReleases,
-  resetReleaseQuery,
-  handleReleasePageChange,
-  handleReleasePageSizeChange,
-  handleActivateRelease,
-  handleClearReleases,
-  openRollbackModal,
-  handleSubmitRollback,
-  fetchJobs,
-  resetJobQuery,
-  handleJobPageChange,
-  handleJobPageSizeChange,
-  handleClearJobs
-} = useWafReleaseJob({
-  message,
-  dialog,
-  ensureSourceNamesByIds,
-  ensureUserNamesByIds
-});
-
-const uploadModalVisible = ref(false);
-const uploadSubmitting = ref(false);
-const uploadFormRef = ref<FormInst | null>(null);
-const uploadForm = reactive({
-  kind: 'crs' as WafKind,
-  version: '',
-  checksum: '',
-  activateNow: false,
-  file: null as File | null
-});
-
-const uploadRules: FormRules = {
-  kind: { required: true, message: '请选择规则类型', trigger: 'change' },
-  version: { required: true, message: '请输入版本号', trigger: 'blur' },
-  file: {
-    validator() {
-      if (!uploadForm.file) {
-        return new Error('请选择待上传规则包');
-      }
-      return true;
-    },
-    trigger: 'change'
-  }
-};
-
-const rollbackRules: FormRules = {
-
-  target: { required: true, message: '请选择回滚目标', trigger: 'change' },
-  version: {
-    validator() {
-      if (rollbackForm.target === 'version' && !rollbackForm.version.trim()) {
-        return new Error('指定版本回滚时必须填写版本号');
-      }
-      return true;
-    },
-    trigger: 'blur'
-  }
-};
-
-const sourceColumns: DataTableColumns<WafSourceItem> = [
-  { title: 'ID', key: 'id', width: 80 },
-  { title: '名称', key: 'name', minWidth: 140 },
-  {
-    title: '类型',
-    key: 'kind',
-    width: 130,
-    render(row) {
-      return h(NTag, { type: row.kind === 'crs' ? 'success' : 'warning', bordered: false }, { default: () => row.kind });
-    }
-  },
-  {
-    title: '模式',
-    key: 'mode',
-    width: 110,
-    render(row) {
-      return h(NTag, { type: row.mode === 'remote' ? 'info' : 'default', bordered: false }, { default: () => row.mode });
-    }
-  },
-  {
-    title: '地址',
-    key: 'url',
-    minWidth: 260,
-    ellipsis: { tooltip: true },
-    render(row) {
-      return row.url || '-';
-    }
-  },
-  {
-    title: '代理',
-    key: 'proxyUrl',
-    minWidth: 180,
-    ellipsis: { tooltip: true },
-    render(row) {
-      return row.proxyUrl || '-';
-    }
-  },
-  { title: '调度', key: 'schedule', width: 160, ellipsis: { tooltip: true }, render: row => row.schedule || '-' },
-  {
-    title: '开关',
-    key: 'switches',
-    minWidth: 200,
-    render(row) {
-      const labels = [
-        row.enabled ? '启用' : '禁用',
-        row.autoCheck ? '自动检查' : '手动检查',
-        row.autoDownload ? '自动下载' : '手动下载',
-        row.autoActivate ? '自动激活' : '手动激活'
-      ];
-      return h(
-        NSpace,
-        { size: 4, wrapItem: true },
-        {
-          default: () => labels.map(label => h(NTag, { size: 'small', bordered: false }, { default: () => label }))
-        }
-      );
-    }
-  },
-  { title: '最近版本', key: 'lastRelease', width: 140, render: row => row.lastRelease || '-' },
-  {
-    title: '最近错误',
-    key: 'lastError',
-    minWidth: 220,
-    ellipsis: { tooltip: true },
-    render(row) {
-      if (!row.lastError) return '-';
-      return h(NTag, { type: 'error', bordered: false }, { default: () => row.lastError });
-    }
-  },
-  { title: '更新时间', key: 'updatedAt', width: 180 },
-  {
-    title: '操作',
-    key: 'action',
-    width: 280,
-    fixed: 'right',
-    render(row) {
-      return h(
-        NSpace,
-        { size: 4 },
-        {
-          default: () => [
-            h(
-              NButton,
-              {
-                size: 'small',
-                type: 'primary',
-                secondary: true,
-                onClick: () => handleSyncSource(row, false)
-              },
-              { default: () => '同步' }
-            ),
-            h(
-              NButton,
-              {
-                size: 'small',
-                type: 'success',
-                secondary: true,
-                onClick: () => handleSyncSource(row, true)
-              },
-              { default: () => '同步并激活' }
-            ),
-            h(
-              NButton,
-              {
-                size: 'small',
-                onClick: () => handleEditSource(row)
-              },
-              { default: () => '编辑' }
-            ),
-            h(
-              NPopconfirm,
-              { onPositiveClick: () => handleDeleteSource(row) },
-              {
-                trigger: () => h(NButton, { size: 'small', type: 'error', secondary: true }, { default: () => '删除' }),
-                default: () => '删除后不可恢复，确认继续吗？'
-              }
-            )
-          ]
-        }
-      );
-    }
-  }
-];
-
-const policyColumns: DataTableColumns<WafPolicyItem> = [
-  { title: 'ID', key: 'id', width: 80 },
-  { title: '策略名称', key: 'name', minWidth: 180 },
-  {
-    title: '默认策略',
-    key: 'isDefault',
-    width: 110,
-    render(row) {
-      return h(NTag, { type: row.isDefault ? 'success' : 'default', bordered: false }, { default: () => (row.isDefault ? '是' : '否') });
-    }
-  },
-  {
-    title: '启用',
-    key: 'enabled',
-    width: 100,
-    render(row) {
-      return h(NTag, { type: row.enabled ? 'success' : 'warning', bordered: false }, { default: () => (row.enabled ? '启用' : '禁用') });
-    }
-  },
-  {
-    title: '引擎模式',
-    key: 'engineMode',
-    width: 170,
-    render(row) {
-      return h(
-        NTag,
-        { type: mapPolicyEngineModeType(row.engineMode), bordered: false },
-        { default: () => mapPolicyEngineModeLabel(row.engineMode) }
-      );
-    }
-  },
-  { title: '审计模式', key: 'auditEngine', width: 130 },
-  {
-    title: 'CRS 模板',
-    key: 'crsTemplate',
-    width: 140,
-    render(row) {
-      return mapCrsTemplateLabel(row.crsTemplate);
-    }
-  },
-  { title: 'PL', key: 'crsParanoiaLevel', width: 90 },
-  { title: '请求体限制', key: 'requestBodyLimit', width: 150, render: row => formatBytes(row.requestBodyLimit) },
-  { title: '更新时间', key: 'updatedAt', width: 180 },
-  {
-    title: '操作',
-    key: 'action',
-    width: 380,
-    fixed: 'right',
-    render(row) {
-      return h(
-        NSpace,
-        { size: 4 },
-        {
-          default: () => [
-            h(
-              NButton,
-              {
-                size: 'small',
-                type: 'info',
-                secondary: true,
-                onClick: () => handlePreviewPolicy(row)
-              },
-              { default: () => '预览' }
-            ),
-            h(
-              NButton,
-              {
-                size: 'small',
-                type: 'success',
-                secondary: true,
-                onClick: () => handleValidatePolicy(row)
-              },
-              { default: () => '校验' }
-            ),
-            h(
-              NButton,
-              {
-                size: 'small',
-                type: 'warning',
-                secondary: true,
-                onClick: () => handlePublishPolicy(row)
-              },
-              { default: () => '发布' }
-            ),
-            h(
-              NButton,
-              {
-                size: 'small',
-                onClick: () => handleEditPolicy(row)
-              },
-              { default: () => '编辑' }
-            ),
-            h(
-              NPopconfirm,
-              { onPositiveClick: () => handleDeletePolicy(row) },
-              {
-                trigger: () => h(NButton, { size: 'small', type: 'error', secondary: true }, { default: () => '删除' }),
-                default: () => '删除后不可恢复，确认继续吗？'
-              }
-            )
-          ]
-        }
-      );
-    }
-  }
-];
-
-const policyRevisionColumns: DataTableColumns<WafPolicyRevisionItem> = [
-  { title: 'ID', key: 'id', width: 80 },
-  { title: '策略', key: 'policyName', minWidth: 180, render: row => row.policyName || `#${row.policyId}` },
-  { title: '策略ID', key: 'policyId', width: 100 },
-  { title: '版本', key: 'version', width: 100, render: row => `v${row.version}` },
-  {
-    title: '状态',
-    key: 'status',
-    width: 120,
-    render(row) {
-      return h(
-        NTag,
-        { type: mapPolicyRevisionStatusType(row.status), bordered: false },
-        { default: () => mapPolicyRevisionStatusLabel(row.status) }
-      );
-    }
-  },
-  { title: '操作人', key: 'operator', width: 120, render: row => displayOperatorName(row.operator) },
-  { title: '变更摘要', key: 'changeSummary', minWidth: 220, ellipsis: { tooltip: true }, render: row => row.changeSummary || row.message || '-' },
-  { title: '描述', key: 'message', minWidth: 160, ellipsis: { tooltip: true }, render: row => row.message || '-' },
-  { title: '创建时间', key: 'createdAt', width: 180 },
-  {
-    title: '操作',
-    key: 'action',
-    width: 140,
-    fixed: 'right',
-    render(row) {
-      return h(
-        NButton,
-        {
-          size: 'small',
-          type: 'warning',
-          secondary: true,
-          onClick: () => handleRollbackPolicyRevision(row)
-        },
-        { default: () => '回滚到此版本' }
-      );
-    }
-  }
-];
-
-const exclusionColumns: DataTableColumns<WafRuleExclusionItem> = [
-  { title: 'ID', key: 'id', width: 80 },
-  { title: '策略ID', key: 'policyId', width: 100 },
-  { title: '名称', key: 'name', minWidth: 160, render: row => row.name || '-' },
-  {
-    title: '启用',
-    key: 'enabled',
-    width: 100,
-    render(row) {
-      return h(NTag, { type: row.enabled ? 'success' : 'warning', bordered: false }, { default: () => (row.enabled ? '启用' : '禁用') });
-    }
-  },
-  { title: '作用域', key: 'scopeType', width: 100, render: row => mapScopeTypeLabel(row.scopeType) },
-  { title: 'Host', key: 'host', minWidth: 180, ellipsis: { tooltip: true }, render: row => row.host || '-' },
-  { title: 'Path', key: 'path', minWidth: 180, ellipsis: { tooltip: true }, render: row => row.path || '-' },
-  { title: 'Method', key: 'method', width: 100, render: row => row.method || '-' },
-  { title: '类型', key: 'removeType', width: 120, render: row => (row.removeType === 'id' ? 'removeById' : 'removeByTag') },
-  { title: '移除值', key: 'removeValue', minWidth: 180, ellipsis: { tooltip: true } },
-  { title: '更新时间', key: 'updatedAt', width: 180 },
-  {
-    title: '操作',
-    key: 'action',
-    width: 180,
-    fixed: 'right',
-    render(row) {
-      return h(
-        NSpace,
-        { size: 4 },
-        {
-          default: () => [
-            h(
-              NButton,
-              {
-                size: 'small',
-                onClick: () => handleEditExclusion(row)
-              },
-              { default: () => '编辑' }
-            ),
-            h(
-              NPopconfirm,
-              { onPositiveClick: () => handleDeleteExclusion(row) },
-              {
-                trigger: () => h(NButton, { size: 'small', type: 'error', secondary: true }, { default: () => '删除' }),
-                default: () => '删除后不可恢复，确认继续吗？'
-              }
-            )
-          ]
-        }
-      );
-    }
-  }
-];
-
-const bindingColumns: DataTableColumns<WafPolicyBindingItem> = [
-  { title: 'ID', key: 'id', width: 80 },
-  { title: '策略ID', key: 'policyId', width: 100 },
-  { title: '名称', key: 'name', minWidth: 160, render: row => row.name || '-' },
-  {
-    title: '启用',
-    key: 'enabled',
-    width: 100,
-    render(row) {
-      return h(NTag, { type: row.enabled ? 'success' : 'warning', bordered: false }, { default: () => (row.enabled ? '启用' : '禁用') });
-    }
-  },
-  { title: '作用域', key: 'scopeType', width: 100, render: row => mapScopeTypeLabel(row.scopeType) },
-  { title: 'Host', key: 'host', minWidth: 180, ellipsis: { tooltip: true }, render: row => row.host || '-' },
-  { title: 'Path', key: 'path', minWidth: 180, ellipsis: { tooltip: true }, render: row => row.path || '-' },
-  { title: 'Method', key: 'method', width: 100, render: row => row.method || '-' },
-  { title: '优先级', key: 'priority', width: 100 },
-  { title: '更新时间', key: 'updatedAt', width: 180 },
-  {
-    title: '操作',
-    key: 'action',
-    width: 180,
-    fixed: 'right',
-    render(row) {
-      return h(
-        NSpace,
-        { size: 4 },
-        {
-          default: () => [
-            h(
-              NButton,
-              {
-                size: 'small',
-                onClick: () => handleEditBinding(row)
-              },
-              { default: () => '编辑' }
-            ),
-            h(
-              NPopconfirm,
-              { onPositiveClick: () => handleDeleteBinding(row) },
-              {
-                trigger: () => h(NButton, { size: 'small', type: 'error', secondary: true }, { default: () => '删除' }),
-                default: () => '删除后不可恢复，确认继续吗？'
-              }
-            )
-          ]
-        }
-      );
-    }
-  }
-];
-
-interface BindingConflictGroup {
-  scopeType: string;
-  host: string;
-  path: string;
-  method: string;
-  priority: number;
-  count: number;
-}
-
-interface BindingEffectiveItem {
-  id: number;
-  order: number;
-  policyId: number;
-  policyName: string;
-  scopeType: string;
-  host: string;
-  path: string;
-  method: string;
-  priority: number;
-}
-
-const bindingConflictGroups = computed<BindingConflictGroup[]>(() => {
-  const groups = new Map<string, BindingConflictGroup>();
-  bindingTable.value
-    .filter(item => item.enabled)
-    .forEach(item => {
-      const key = [
-        item.scopeType || '',
-        String(item.host || '').toLowerCase(),
-        item.path || '',
-        String(item.method || '').toUpperCase(),
-        Number(item.priority || 0)
-      ].join('|');
-      const current = groups.get(key);
-      if (!current) {
-        groups.set(key, {
-          scopeType: item.scopeType,
-          host: item.host || '',
-          path: item.path || '',
-          method: item.method || '',
-          priority: Number(item.priority || 0),
-          count: 1
-        });
-      } else {
-        current.count += 1;
-      }
-    });
-
-  return Array.from(groups.values())
-    .filter(item => item.count > 1)
-    .sort((a, b) => b.count - a.count || a.priority - b.priority);
-});
-
-const bindingEffectivePreview = computed<BindingEffectiveItem[]>(() => {
-  const scopeWeightMap: Record<string, number> = {
-    global: 1,
-    site: 2,
-    route: 3
-  };
-
-  const sorted = [...bindingTable.value]
-    .filter(item => item.enabled)
-    .sort((a, b) => {
-      const scopeWeightA = scopeWeightMap[a.scopeType] || 99;
-      const scopeWeightB = scopeWeightMap[b.scopeType] || 99;
-      if (scopeWeightA !== scopeWeightB) return scopeWeightA - scopeWeightB;
-      if (a.priority !== b.priority) return a.priority - b.priority;
-      return a.id - b.id;
-    });
-
-  return sorted.map((item, index) => ({
-    id: item.id,
-    order: index + 1,
-    policyId: item.policyId,
-    policyName: mapPolicyNameById(item.policyId),
-    scopeType: item.scopeType,
-    host: item.host || '',
-    path: item.path || '',
-    method: item.method || '',
-    priority: item.priority
-  }));
-});
-
-const bindingEffectiveColumns: DataTableColumns<BindingEffectiveItem> = [
-  { title: '顺位', key: 'order', width: 80 },
-  { title: '策略', key: 'policyName', minWidth: 180, render: row => row.policyName || `#${row.policyId}` },
-  { title: '作用域', key: 'scopeType', width: 100, render: row => mapScopeTypeLabel(row.scopeType) },
-  { title: 'Host', key: 'host', minWidth: 180, ellipsis: { tooltip: true }, render: row => row.host || '-' },
-  { title: 'Path', key: 'path', minWidth: 180, ellipsis: { tooltip: true }, render: row => row.path || '-' },
-  { title: 'Method', key: 'method', width: 100, render: row => row.method || '-' },
-  { title: '优先级', key: 'priority', width: 100 }
-];
-
-const policyStatsTrendColumns: DataTableColumns<WafPolicyStatsTrendItem> = [
-  { title: '时间', key: 'time', width: 140 },
-  { title: '命中', key: 'hitCount', width: 100 },
-  { title: '拦截', key: 'blockedCount', width: 100 },
-  { title: '放行', key: 'allowedCount', width: 100 }
-];
-
-const policyStatsColumns: DataTableColumns<WafPolicyStatsItem> = [
-  { title: '策略', key: 'policyName', minWidth: 180, render: row => row.policyName || `#${row.policyId}` },
-  { title: '命中', key: 'hitCount', width: 100 },
-  { title: '拦截', key: 'blockedCount', width: 100 },
-  { title: '放行', key: 'allowedCount', width: 100 },
-  { title: '疑似误报', key: 'suspectedFalsePositiveCount', width: 120 },
-  {
-    title: '拦截率',
-    key: 'blockRate',
-    width: 120,
-    render: row => formatRatePercent(row.blockRate)
-  }
-];
-
-const policyStatsDimensionColumns: DataTableColumns<WafPolicyStatsDimensionItem> = [
-  { title: '维度值', key: 'key', minWidth: 180, ellipsis: { tooltip: true }, render: row => row.key || '-' },
-  { title: '命中', key: 'hitCount', width: 100 },
-  { title: '拦截', key: 'blockedCount', width: 100 },
-  { title: '放行', key: 'allowedCount', width: 100 },
-  {
-    title: '拦截率',
-    key: 'blockRate',
-    width: 120,
-    render: row => formatRatePercent(row.blockRate)
-  }
-];
-
-function mapPolicyFeedbackStatusLabel(status: string) {
-  switch (String(status || '').trim().toLowerCase()) {
-    case 'confirmed':
-      return '已确认';
-    case 'resolved':
-      return '已处理';
-    default:
-      return '待确认';
-  }
-}
-
-function mapPolicyFeedbackStatusTagType(status: string): 'default' | 'warning' | 'success' {
-  switch (String(status || '').trim().toLowerCase()) {
-    case 'confirmed':
-      return 'warning';
-    case 'resolved':
-      return 'success';
-    default:
-      return 'default';
-  }
-}
-
-function mapPolicyFeedbackSLAStatusLabel(row: WafPolicyFalsePositiveFeedbackItem) {
-  if ((row.feedbackStatus || '') === 'resolved') {
-    return '已解决';
-  }
-  return row.isOverdue ? '已超时' : '正常';
-}
-
-function mapPolicyFeedbackSLAStatusTagType(row: WafPolicyFalsePositiveFeedbackItem): 'default' | 'warning' | 'success' {
-  if ((row.feedbackStatus || '') === 'resolved') {
-    return 'success';
-  }
-  return row.isOverdue ? 'warning' : 'default';
-}
-
-const policyFeedbackColumns: DataTableColumns<WafPolicyFalsePositiveFeedbackItem> = [
-  {
-    type: 'selection',
-    width: 48
-  },
-  { title: '策略', key: 'policyName', minWidth: 160, render: row => row.policyName || `#${row.policyId}` },
-  { title: 'Host', key: 'host', minWidth: 160, ellipsis: { tooltip: true }, render: row => row.host || '-' },
-  { title: 'Path', key: 'path', minWidth: 180, ellipsis: { tooltip: true }, render: row => row.path || '-' },
-  { title: 'Method', key: 'method', width: 100, render: row => row.method || '-' },
-  {
-    title: '状态码',
-    key: 'status',
-    width: 100,
-    render: row => (row.status > 0 ? row.status : '-')
-  },
-  {
-    title: '处理状态',
-    key: 'feedbackStatus',
-    width: 110,
-    render: row => h(NTag, { bordered: false, type: mapPolicyFeedbackStatusTagType(row.feedbackStatus) }, { default: () => mapPolicyFeedbackStatusLabel(row.feedbackStatus) })
-  },
-  { title: '责任人', key: 'assignee', width: 120, render: row => displayOperatorName(row.assignee) },
-  { title: '截止时间', key: 'dueAt', width: 180, render: row => row.dueAt || '-' },
-  {
-    title: 'SLA',
-    key: 'isOverdue',
-    width: 90,
-    render: row => h(NTag, { bordered: false, type: mapPolicyFeedbackSLAStatusTagType(row) }, { default: () => mapPolicyFeedbackSLAStatusLabel(row) })
-  },
-  { title: '误报原因', key: 'reason', minWidth: 220, ellipsis: { tooltip: true }, render: row => row.reason || '-' },
-  { title: '建议动作', key: 'suggestion', minWidth: 180, ellipsis: { tooltip: true }, render: row => row.suggestion || '-' },
-  { title: '处理备注', key: 'processNote', minWidth: 180, ellipsis: { tooltip: true }, render: row => row.processNote || '-' },
-  { title: '处理人', key: 'processedBy', width: 120, render: row => displayOperatorName(row.processedBy) },
-  { title: '处理时间', key: 'processedAt', width: 180, render: row => row.processedAt || '-' },
-  { title: '提交人', key: 'operator', width: 120, render: row => displayOperatorName(row.operator) },
-  { title: '提交时间', key: 'createdAt', width: 180 },
-  {
-    title: '操作',
-    key: 'actions',
-    width: 230,
-    fixed: 'right',
-    render: row =>
-      h(
-        NSpace,
-        { size: 6 },
-        {
-          default: () => [
-            h(
-              NButton,
-              {
-                size: 'small',
-                tertiary: true,
-                type: 'info',
-                onClick: () => handleCreateExclusionDraftFromFeedback(row)
-              },
-              { default: () => '生成例外草稿' }
-            ),
-            h(
-              NButton,
-              {
-                size: 'small',
-                tertiary: true,
-                type: 'warning',
-                onClick: () => openPolicyFeedbackProcessModal(row)
-              },
-              { default: () => '处理' }
-            )
-          ]
-        }
-      )
-  }
-];
-
-type PolicyStatsDimensionType = 'host' | 'path' | 'method';
-
-function normalizePolicyStatsDrillValue(type: PolicyStatsDimensionType, raw: string) {
-  const text = String(raw || '').trim();
-  if (type === 'host') {
-    if (text === '(empty)') return '(empty)';
-    return text.toLowerCase();
-  }
-  if (type === 'method') {
-    return text.toUpperCase();
-  }
-  return text;
-}
-
-function isPolicyStatsDrillUnlocked(type: PolicyStatsDimensionType) {
-  if (type === 'host') return true;
-  if (type === 'path') return !!policyStatsQuery.host.trim();
-  return !!(policyStatsQuery.host.trim() && policyStatsQuery.path.trim());
-}
-
-function policyStatsDrillStatusLabel(type: PolicyStatsDimensionType) {
-  if (type === 'host') return '入口层';
-  return isPolicyStatsDrillUnlocked(type) ? '已解锁' : '待解锁';
-}
-
-function policyStatsDrillHint(type: PolicyStatsDimensionType) {
-  if (type === 'host') {
-    return '第一层下钻入口：点击 Host 可进入 Host 维度过滤。';
-  }
-  if (type === 'path') {
-    if (!isPolicyStatsDrillUnlocked(type)) {
-      return '待解锁：请先在 Top Host 中选择一个 Host。';
-    }
-    return `已解锁：当前 Host=${policyStatsQuery.host || '-'}，点击 Path 继续下钻。`;
-  }
-  if (!isPolicyStatsDrillUnlocked(type)) {
-    return '待解锁：请先完成 Host + Path 下钻。';
-  }
-  return `已解锁：当前 Host=${policyStatsQuery.host || '-'}，Path=${policyStatsQuery.path || '-'}。点击 Method 继续下钻。`;
-}
-
-function canPolicyStatsDrillDimension(type: PolicyStatsDimensionType) {
-  if (type === 'host') return true;
-  if (type === 'path') return !!policyStatsQuery.host.trim();
-  return !!(policyStatsQuery.host.trim() && policyStatsQuery.path.trim());
-}
-
-function isPolicyStatsDimensionSelected(type: PolicyStatsDimensionType, row: WafPolicyStatsDimensionItem) {
-  const key = normalizePolicyStatsDrillValue(type, String(row?.key || ''));
-  if (!key || key === '-') return false;
-  if (type === 'host') {
-    return key === normalizePolicyStatsDrillValue('host', policyStatsQuery.host);
-  }
-  if (type === 'path') {
-    return key === normalizePolicyStatsDrillValue('path', policyStatsQuery.path);
-  }
-  return key === normalizePolicyStatsDrillValue('method', policyStatsQuery.method);
-}
-
-function handlePolicyStatsDimensionDrill(type: PolicyStatsDimensionType, row: WafPolicyStatsDimensionItem) {
-  const key = String(row?.key || '').trim();
-  if (!key || key === '-') {
-    return;
-  }
-
-  if (!canPolicyStatsDrillDimension(type)) {
-    if (type === 'path') {
-      message.warning('请先从 Top Host 选择一个 Host，再下钻 Path');
-    } else if (type === 'method') {
-      message.warning('请先完成 Host + Path 下钻，再下钻 Method');
-    }
-    return;
-  }
-
-  if (type === 'host') {
-    policyStatsQuery.host = key;
-    policyStatsQuery.path = '';
-    policyStatsQuery.method = '';
-  } else if (type === 'path') {
-    policyStatsQuery.path = key;
-    policyStatsQuery.method = '';
-  } else {
-    policyStatsQuery.method = key;
-  }
-
-  fetchPolicyStats();
-}
-
-function buildPolicyStatsDimensionRowProps(type: PolicyStatsDimensionType) {
-  return (row: WafPolicyStatsDimensionItem) => {
-    const clickable = canPolicyStatsDrillDimension(type);
-    const selected = isPolicyStatsDimensionSelected(type, row);
-    const styleParts = ['transition: background-color 0.2s ease'];
-    if (clickable) {
-      styleParts.push('cursor: pointer');
-    } else {
-      styleParts.push('cursor: not-allowed');
-      styleParts.push('opacity: 0.65');
-    }
-    if (selected) {
-      styleParts.push('background: rgba(24, 160, 88, 0.14)');
-      styleParts.push('font-weight: 600');
-      styleParts.push('box-shadow: inset 3px 0 0 rgba(24, 160, 88, 0.9)');
-    }
-    const lockedHint = type === 'path' ? '请先从 Top Host 选择一个 Host' : '请先完成 Host + Path 下钻';
-    return {
-      style: styleParts.join(';'),
-      title: clickable ? '点击下钻' : lockedHint,
-      onClick: () => {
-        if (!clickable) return;
-        handlePolicyStatsDimensionDrill(type, row);
-      }
-    };
-  };
-}
-
-const releaseColumns: DataTableColumns<WafReleaseItem> = [
-  { title: 'ID', key: 'id', width: 80 },
-  { title: '更新源', key: 'sourceName', minWidth: 160, render: row => mapSourceNameById(row.sourceId) },
-  { title: '版本', key: 'version', minWidth: 180, ellipsis: { tooltip: true } },
-  { title: '包类型', key: 'artifactType', width: 110 },
-  {
-    title: '大小',
-    key: 'sizeBytes',
-    width: 120,
-    render(row) {
-      return formatBytes(row.sizeBytes);
-    }
-  },
-  { title: '校验值', key: 'checksum', minWidth: 220, ellipsis: { tooltip: true }, render: row => row.checksum || '-' },
-  {
-    title: '状态',
-    key: 'status',
-    width: 120,
-    render(row) {
-      return h(NTag, { type: mapReleaseStatusType(row.status), bordered: false }, { default: () => row.status });
-    }
-  },
-  {
-    title: '路径',
-    key: 'storagePath',
-    minWidth: 260,
-    ellipsis: { tooltip: true }
-  },
-  { title: '更新时间', key: 'updatedAt', width: 180 },
-  {
-    title: '操作',
-    key: 'action',
-    width: 120,
-    fixed: 'right',
-    render(row) {
-      return h(
-        NSpace,
-        { size: 4 },
-        {
-          default: () => [
-            h(
-              NButton,
-              {
-                size: 'small',
-                type: 'primary',
-                secondary: true,
-                disabled: row.status === 'active',
-                onClick: () => handleActivateRelease(row)
-              },
-              { default: () => '激活' }
-            )
-          ]
-        }
-      );
-    }
-  }
-];
-
-const jobColumns: DataTableColumns<WafJobItem> = [
-  { title: 'ID', key: 'id', width: 80 },
-  { title: '更新源', key: 'sourceName', minWidth: 160, render: row => mapJobSourceName(row) },
-  { title: '动作', key: 'action', width: 120, render: row => mapJobActionLabel(row.action) },
-  { title: '触发方式', key: 'triggerMode', width: 120, render: row => mapJobTriggerModeLabel(row.triggerMode) },
-  {
-    title: '状态',
-    key: 'status',
-    width: 110,
-    render(row) {
-      return h(NTag, { type: mapJobStatusType(row.status), bordered: false }, { default: () => mapJobStatusLabel(row.status) });
-    }
-  },
-  { title: '操作人', key: 'operator', width: 120, render: row => displayOperatorName(row.operator) },
-  { title: '开始时间', key: 'startedAt', width: 180, render: row => row.startedAt || '-' },
-  { title: '结束时间', key: 'finishedAt', width: 180, render: row => row.finishedAt || '-' },
-  {
-    title: '消息',
-    key: 'message',
-    minWidth: 320,
-    ellipsis: { tooltip: true },
-    render(row) {
-      return mapJobMessage(row.message);
-    }
-  }
-];
-
-function mapReleaseStatusType(status: WafReleaseStatus) {
-  switch (status) {
-    case 'active':
-      return 'success';
-    case 'verified':
-      return 'info';
-    case 'failed':
-      return 'error';
-    case 'rolled_back':
-      return 'warning';
-    default:
-      return 'default';
-  }
-}
-
-function mapPolicyEngineModeType(mode: WafPolicyEngineMode) {
-  switch (mode) {
-    case 'on':
-      return 'error';
-    case 'detectiononly':
-      return 'warning';
-    case 'off':
-      return 'default';
-    default:
-      return 'default';
-  }
-}
-
-function inferCrsTemplateByValues(crsParanoiaLevel: number, crsInboundAnomalyThreshold: number, crsOutboundAnomalyThreshold: number): WafPolicyCrsTemplate {
-  for (const option of crsTemplateOptions) {
-    if (option.value === 'custom') {
-      continue;
-    }
-    const preset = crsTemplatePresetMap[option.value];
-    if (
-      preset.crsParanoiaLevel === crsParanoiaLevel &&
-      preset.crsInboundAnomalyThreshold === crsInboundAnomalyThreshold &&
-      preset.crsOutboundAnomalyThreshold === crsOutboundAnomalyThreshold
-    ) {
-      return option.value;
-    }
-  }
-  return 'custom';
-}
-
-function mapPolicyRevisionStatusType(status: WafPolicyRevisionStatus) {
-  switch (status) {
-    case 'published':
-      return 'success';
-    case 'rolled_back':
-      return 'warning';
-    default:
-      return 'default';
-  }
-}
-
-function mapJobStatusType(status: WafJobStatus) {
-  switch (status) {
-    case 'success':
-      return 'success';
-    case 'failed':
-      return 'error';
-    default:
-      return 'warning';
-  }
-}
-
-function mapJobStatusLabel(status: string) {
-  switch (status) {
-    case 'running':
-      return '执行中';
-    case 'success':
-      return '成功';
-    case 'failed':
-      return '失败';
-    default:
-      return status || '-';
-  }
-}
-
-function mapJobActionLabel(action: string) {
-  switch (action) {
-    case 'check':
-      return '检查';
-    case 'download':
-      return '下载';
-    case 'verify':
-      return '校验';
-    case 'activate':
-      return '激活';
-    case 'rollback':
-      return '回滚';
-    case 'engine_check':
-      return '引擎检查';
-    default:
-      return action || '-';
-  }
-}
-
-function mapJobTriggerModeLabel(triggerMode: string) {
-  switch (triggerMode) {
-    case 'manual':
-      return '手动';
-    case 'upload':
-      return '上传';
-    case 'schedule':
-      return '定时';
-    case 'auto':
-      return '自动';
-    case 'system':
-      return '系统';
-    default:
-      return triggerMode || '-';
-  }
-}
-
-function mapSourceNameById(sourceId: number) {
-  if (!sourceId || sourceId <= 0) {
-    return '-';
-  }
-
-  const sourceName = jobSourceNameMap.value[sourceId];
-  if (sourceName && sourceName.trim()) {
-    return sourceName.trim();
-  }
-
-  return '未知更新源';
-}
-
-function mapPolicyNameById(policyId: number) {
-  if (!policyId || policyId <= 0) {
-    return '-';
-  }
-
-  const target = policyTable.value.find(item => item.id === policyId);
-  if (!target) {
-    return `#${policyId}`;
-  }
-
-  return target.name ? `${target.name}${target.isDefault ? '（默认）' : ''}` : `#${policyId}`;
-}
-
-function mapJobSourceName(row: WafJobItem) {
-  if (row.action === 'engine_check') {
-    return 'Coraza 引擎';
-  }
-
-  return mapSourceNameById(Number(row.sourceId || 0));
-}
-
-const defaultPolicyName = computed(() => {
-  const target = policyTable.value.find(item => item.isDefault) || policyTable.value[0];
-  return target?.name || '-';
-});
-
-const selectedPolicyName = computed(() => getCurrentCrsPolicy()?.name || defaultPolicyName.value || '-');
-const hasPolicyWorkspaceDraft = computed(() => hasPendingCrsTuningChanges());
-const policyWorkspaceActions = computed(() =>
-  buildPolicyWorkspaceActions({
-    activeSection: activePolicySection.value,
-    hasPendingCrsTuningChanges: hasPolicyWorkspaceDraft.value,
-    bindingConflictCount: bindingConflictGroups.value.length,
-    selectedPolicyName: selectedPolicyName.value
-  })
-);
-
-function mergeJobSourceNameMap(sourceList: WafSourceItem[]) {
-  if (!Array.isArray(sourceList) || sourceList.length === 0) {
-    return;
-  }
-
-  const nextMap: Record<number, string> = { ...jobSourceNameMap.value };
-  sourceList.forEach(item => {
-    const sourceId = Number(item?.id || 0);
-    const sourceName = String(item?.name || '').trim();
-    if (sourceId > 0 && sourceName) {
-      nextMap[sourceId] = sourceName;
-    }
-  });
-  jobSourceNameMap.value = nextMap;
-}
-
-async function ensureSourceNamesByIds(sourceIds: number[]) {
-  const pendingIds = Array.from(new Set(sourceIds.filter(sourceId => sourceId > 0 && !jobSourceNameMap.value[sourceId])));
-  if (pendingIds.length === 0) {
-    return;
-  }
-
-  const pageSize = 200;
-  let page = 1;
-  let total = 0;
-
-  while (page <= 20) {
-    const { data, error } = await fetchWafSourceList({
-      page,
-      pageSize,
-      name: undefined
-    });
-
-    if (error || !data) {
-      break;
-    }
-
-    const sourceList = data.list || [];
-    mergeJobSourceNameMap(sourceList);
-    total = data.total || 0;
-
-    const hasAllPending = pendingIds.every(sourceId => !!jobSourceNameMap.value[sourceId]);
-    if (hasAllPending) {
-      break;
-    }
-
-    if (sourceList.length === 0 || page * pageSize >= total) {
-      break;
-    }
-
-    page += 1;
-  }
-}
-
-function mapJobMessage(rawMessage: string) {
-  const messageText = String(rawMessage || '').trim();
-  if (!messageText) {
-    return '-';
-  }
-
-  const exactMap: Record<string, string> = {
-    'check success': '检查成功',
-    'sync success': '同步成功',
-    'upload success': '上传成功',
-    'activate success': '激活成功',
-    'rollback success': '回滚成功',
-    'engine source check success': '引擎源检查成功'
-  };
-
-  if (exactMap[messageText]) {
-    return exactMap[messageText];
-  }
-
-  const replacementRules: Array<[RegExp, string]> = [
-    [/context deadline exceeded/gi, '请求超时'],
-    [/i\/o timeout/gi, '网络超时'],
-    [/invalid proxy url:/gi, '代理地址不合法：'],
-    [/invalid url:/gi, '无效地址：'],
-    [/only https url is allowed/gi, '仅支持 HTTPS 地址'],
-    [/only https scheme is allowed/gi, '仅允许 HTTPS 协议'],
-    [/proxy url scheme must be http or https/gi, '代理地址协议仅支持 http/https'],
-    [/source not found/gi, '未找到更新源'],
-    [/source is disabled/gi, '更新源已禁用'],
-    [/source mode is not remote/gi, '更新源模式不是 remote'],
-    [/source url is empty/gi, '更新源地址为空'],
-    [/move package failed:/gi, '移动安装包失败：'],
-    [/create release dir failed:/gi, '创建版本目录失败：'],
-    [/create release failed:/gi, '创建版本记录失败：'],
-    [/fetch failed:/gi, '下载失败：'],
-    [/host not allowed:/gi, '源域名不在允许列表：'],
-    [/unexpected status code:/gi, '下载返回异常状态码：'],
-    [/write temp file failed:/gi, '写入临时文件失败：'],
-    [/close temp file failed:/gi, '关闭临时文件失败：'],
-    [/move temp file failed:/gi, '移动临时文件失败：'],
-    [/prepare waf store failed:/gi, '准备 Waf 存储目录失败：']
-  ];
-
-  let localizedMessage = messageText;
-  for (const [pattern, replacement] of replacementRules) {
-    localizedMessage = localizedMessage.replace(pattern, replacement);
-  }
-
-  return localizedMessage;
-}
-
-function formatRatePercent(value: number) {
-  const numeric = Number(value || 0);
-  if (!Number.isFinite(numeric) || numeric <= 0) {
-    return '0%';
-  }
-  return `${(numeric * 100).toFixed(2)}%`;
-}
-
-function formatDateTime(date: Date) {
-  const pad = (num: number) => String(num).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
-}
-
-function isNumericUserId(value: unknown) {
-  return /^\d+$/.test(String(value ?? '').trim());
-}
-
-function displayOperatorName(value: unknown) {
-  const raw = String(value ?? '').trim();
-  if (!raw) {
-    return '-';
-  }
-  if (!isNumericUserId(raw)) {
-    return raw;
-  }
-  return userNameMap.value[raw] || '-';
-}
-
-async function ensureUserNamesByIds(values: unknown[]) {
-  const pendingIds = Array.from(
-    new Set(
-      values
-        .map(value => String(value ?? '').trim())
-        .filter(value => value && isNumericUserId(value) && !userNameMap.value[value])
-    )
-  );
-
-  if (!pendingIds.length || userNameLoading.value) {
-    return;
-  }
-
-  userNameLoading.value = true;
-  try {
-    const unresolved = new Set(pendingIds);
-    let page = 1;
-    const pageSize = 100;
-
-    while (unresolved.size > 0) {
-      const { data, error } = await request<any>({
-        url: '/api/user/list',
-        params: { page, pageSize }
-      });
-
-      if (error || !data) {
-        break;
-      }
-
-      const list = Array.isArray(data.list) ? data.list : [];
-      list.forEach((item: any) => {
-        const id = String(item?.id ?? '').trim();
-        const username = String(item?.username ?? '').trim();
-        if (!id || !username) {
-          return;
-        }
-        userNameMap.value[id] = username;
-        unresolved.delete(id);
-      });
-
-      const total = Number(data.total || 0);
-      if (list.length === 0 || page * pageSize >= total) {
-        break;
-      }
-      page += 1;
-    }
-  } finally {
-    userNameLoading.value = false;
-  }
-}
-
-function displayEngineValue(value: unknown) {
-  if (value === undefined || value === null || value === '') {
-    return '-';
-  }
-  return String(value);
-}
-
-function setObserveActiveView(view: 'analysis' | 'feedback') {
-  observeActiveView.value = view;
-}
-
-function handleNavigateToMenu(menu: SecurityMenuKey) {
-  return navigateToSecurityTab(SECURITY_MENU_SCHEMA[menu].defaultTab);
-}
-
-function handleNavigateToPolicySection(tab: 'runtime' | 'crs' | 'exclusion' | 'binding') {
-  return navigateToSecurityTab(tab);
-}
-
-function handleNavigateToOpsSection(tab: 'release' | 'job') {
-  return navigateToSecurityTab(tab);
-}
-
-async function fetchEngineStatus() {
-  if (engineUnavailable.value) {
-    return;
-  }
-
-  engineLoading.value = true;
-  try {
-    const { data, error } = await fetchWafEngineStatus();
-    if (!error && data) {
-      engineStatus.value = data;
-      engineUnavailable.value = false;
-      return;
-    }
-
-    if (error) {
-      const status = Number((error as any)?.response?.status || 0);
-      if (status === 404 || status === 405) {
-        engineUnavailable.value = true;
-      }
-    }
-  } finally {
-    engineLoading.value = false;
-  }
-}
-
-function handleRefreshEngineStatus() {
-  fetchEngineStatus();
-}
-
-async function handleCheckEngine() {
-  if (engineUnavailable.value) {
-    message.warning('后端接口尚未开放，当前仅展示占位状态');
-    return;
-  }
-
-  engineChecking.value = true;
-  try {
-    const { error } = await checkWafEngine();
-    if (!error) {
-      message.success('引擎检查任务已提交');
-      fetchEngineStatus();
-      if (activeTab.value === 'job') {
-        fetchJobs();
-      }
-      return;
-    }
-
-    const status = Number((error as any)?.response?.status || 0);
-    if (status === 404 || status === 405) {
-      engineUnavailable.value = true;
-      message.warning('后端接口尚未开放，已切换占位模式');
-      return;
-    }
-  } finally {
-    engineChecking.value = false;
-  }
-}
-
-function syncCrsTuningFromPolicy(policy: WafPolicyItem | null | undefined) {
-  if (!policy) {
-    crsTuningForm.policyId = 0;
-    crsTuningForm.crsTemplate = 'low_fp';
-    crsTuningForm.crsParanoiaLevel = 1;
-    crsTuningForm.crsInboundAnomalyThreshold = 10;
-    crsTuningForm.crsOutboundAnomalyThreshold = 8;
-    return;
-  }
-
-  const crsParanoiaLevel = Number(policy.crsParanoiaLevel || 1);
-  const crsInboundAnomalyThreshold = Number(policy.crsInboundAnomalyThreshold || 10);
-  const crsOutboundAnomalyThreshold = Number(policy.crsOutboundAnomalyThreshold || 8);
-  const inferredTemplate = inferCrsTemplateByValues(crsParanoiaLevel, crsInboundAnomalyThreshold, crsOutboundAnomalyThreshold);
-
-  crsTuningForm.policyId = policy.id;
-  crsTuningForm.crsParanoiaLevel = crsParanoiaLevel;
-  crsTuningForm.crsInboundAnomalyThreshold = crsInboundAnomalyThreshold;
-  crsTuningForm.crsOutboundAnomalyThreshold = crsOutboundAnomalyThreshold;
-  crsTuningForm.crsTemplate = (policy.crsTemplate as WafPolicyCrsTemplate) || inferredTemplate;
-}
-
-function syncCrsTuningFromPolicyTable() {
-  if (!policyTable.value.length) {
-    syncCrsTuningFromPolicy(null);
-    return;
-  }
-
-  const current = policyTable.value.find(item => item.id === crsTuningForm.policyId);
-  if (current) {
-    syncCrsTuningFromPolicy(current);
-    return;
-  }
-
-  const preferred = policyTable.value.find(item => item.isDefault) || policyTable.value[0];
-  syncCrsTuningFromPolicy(preferred);
-}
-
-function getCurrentRevisionPolicyId() {
-  return activeTab.value === 'crs' ? crsTuningForm.policyId || undefined : undefined;
-}
-
-function handleCrsPolicyChange(policyId: number | null) {
-  const policy = policyTable.value.find(item => item.id === Number(policyId || 0));
-  syncCrsTuningFromPolicy(policy);
-  policyRevisionPagination.page = 1;
-  fetchPolicyRevisions(getCurrentRevisionPolicyId());
-}
-
-function handleRefreshCrsPolicy() {
-  fetchPolicies();
-  fetchPolicyRevisions(getCurrentRevisionPolicyId());
-}
-
-function applyCrsTemplatePreset(template: Exclude<WafPolicyCrsTemplate, 'custom'>) {
-  const preset = crsTemplatePresetMap[template];
-  crsTuningForm.crsTemplate = template;
-  crsTuningForm.crsParanoiaLevel = preset.crsParanoiaLevel;
-  crsTuningForm.crsInboundAnomalyThreshold = preset.crsInboundAnomalyThreshold;
-  crsTuningForm.crsOutboundAnomalyThreshold = preset.crsOutboundAnomalyThreshold;
-}
-
-function buildCrsTuningPayload() {
-  const crsParanoiaLevel = Number(crsTuningForm.crsParanoiaLevel);
-  const crsInboundAnomalyThreshold = Number(crsTuningForm.crsInboundAnomalyThreshold);
-  const crsOutboundAnomalyThreshold = Number(crsTuningForm.crsOutboundAnomalyThreshold);
-  const inferredTemplate = inferCrsTemplateByValues(
-    crsParanoiaLevel,
-    crsInboundAnomalyThreshold,
-    crsOutboundAnomalyThreshold
-  );
-
-  return {
-    crsTemplate: inferredTemplate,
-    crsParanoiaLevel,
-    crsInboundAnomalyThreshold,
-    crsOutboundAnomalyThreshold
-  };
-}
-
-function getCurrentCrsPolicy() {
-  return policyTable.value.find(item => item.id === crsTuningForm.policyId) || null;
-}
-
-function hasPendingCrsTuningChanges() {
-  const policy = getCurrentCrsPolicy();
-  if (!policy) {
-    return false;
-  }
-
-  const payload = buildCrsTuningPayload();
-  const currentTemplate = inferCrsTemplateByValues(
-    Number(policy.crsParanoiaLevel || 1),
-    Number(policy.crsInboundAnomalyThreshold || 10),
-    Number(policy.crsOutboundAnomalyThreshold || 8)
-  );
-
-  return (
-    Number(payload.crsParanoiaLevel) !== Number(policy.crsParanoiaLevel) ||
-    Number(payload.crsInboundAnomalyThreshold) !== Number(policy.crsInboundAnomalyThreshold) ||
-    Number(payload.crsOutboundAnomalyThreshold) !== Number(policy.crsOutboundAnomalyThreshold) ||
-    payload.crsTemplate !== currentTemplate
-  );
-}
-
-async function persistCrsTuning(showSuccessMessage = true) {
-  await crsTuningFormRef.value?.validate();
-  if (!crsTuningForm.policyId) {
-    message.warning('请先选择策略');
-    return false;
-  }
-
-  const { error } = await updateWafPolicy(crsTuningForm.policyId, buildCrsTuningPayload());
-  if (error) {
-    return false;
-  }
-
-  if (showSuccessMessage) {
-    message.success('CRS 调优参数已保存');
-  }
-  await fetchPolicies();
-  await fetchPolicyRevisions(getCurrentRevisionPolicyId());
-  return true;
-}
-
-async function handleSaveCrsTuning() {
-  crsTuningSubmitting.value = true;
-  try {
-    await persistCrsTuning(true);
-  } finally {
-    crsTuningSubmitting.value = false;
-  }
-}
-
-async function handlePreviewCrsTuning() {
-  if (!crsTuningForm.policyId) {
-    message.warning('请先选择策略');
-    return;
-  }
-  if (hasPendingCrsTuningChanges()) {
-    message.warning('当前调优参数尚未保存，请先点击“保存调优参数”');
-    return;
-  }
-
-  const policy = getCurrentCrsPolicy();
-  if (policy) {
-    await handlePreviewPolicy(policy);
-  }
-}
-
-async function handleValidateCrsTuning() {
-  if (!crsTuningForm.policyId) {
-    message.warning('请先选择策略');
-    return;
-  }
-  if (hasPendingCrsTuningChanges()) {
-    message.warning('当前调优参数尚未保存，请先点击“保存调优参数”');
-    return;
-  }
-
-  const policy = getCurrentCrsPolicy();
-  if (policy) {
-    await handleValidatePolicy(policy);
-  }
-}
-
-function handlePublishCrsTuning() {
-  if (!crsTuningForm.policyId) {
-    message.warning('请先选择策略');
-    return;
-  }
-
-  const policy = policyTable.value.find(item => item.id === crsTuningForm.policyId);
-  if (!policy) {
-    message.warning('未找到对应策略，请先刷新');
-    return;
-  }
-
-  const highRisk = Number(crsTuningForm.crsParanoiaLevel) >= 3;
-  const content = highRisk
-    ? `当前 PL=${crsTuningForm.crsParanoiaLevel}，误拦截风险较高。确认保存调优参数并发布策略 ${policy.name} 吗？`
-    : `确认保存调优参数并发布策略 ${policy.name} 吗？`;
-
-  dialog.warning({
-    title: highRisk ? '高风险调优发布确认' : 'CRS 调优发布确认',
-    content,
-    positiveText: '确认发布',
-    negativeText: '取消',
-    async onPositiveClick() {
-      crsTuningSubmitting.value = true;
-      try {
-        if (hasPendingCrsTuningChanges()) {
-          const persisted = await persistCrsTuning(false);
-          if (!persisted) {
-            return;
-          }
-        }
-
-        const { error } = await publishWafPolicy(crsTuningForm.policyId);
-        if (!error) {
-          message.success('CRS 调优参数发布成功');
-          await fetchPolicies();
-          await fetchPolicyRevisions(getCurrentRevisionPolicyId());
-        }
-      } finally {
-        crsTuningSubmitting.value = false;
-      }
-    }
-  });
-}
-
-async function fetchExclusions() {
-  exclusionLoading.value = true;
-  try {
-    const { data, error } = await fetchWafRuleExclusionList({
-      page: exclusionPagination.page as number,
-      pageSize: exclusionPagination.pageSize as number,
-      policyId: exclusionQuery.policyId || undefined,
-      scopeType: exclusionQuery.scopeType || undefined,
-      name: exclusionQuery.name.trim() || undefined
-    });
-    if (!error && data) {
-      exclusionTable.value = data.list || [];
-      exclusionPagination.itemCount = data.total || 0;
-    }
-  } finally {
-    exclusionLoading.value = false;
-  }
-}
-
-function resetExclusionQuery() {
-  exclusionQuery.policyId = null;
-  exclusionQuery.scopeType = '';
-  exclusionQuery.name = '';
-  exclusionPagination.page = 1;
-  fetchExclusions();
-}
-
-function handleExclusionPageChange(page: number) {
-  exclusionPagination.page = page;
-  fetchExclusions();
-}
-
-function handleExclusionPageSizeChange(pageSize: number) {
-  exclusionPagination.pageSize = pageSize;
-  exclusionPagination.page = 1;
-  fetchExclusions();
-}
-
-function resetExclusionForm() {
-  exclusionForm.id = 0;
-  exclusionForm.policyId = getDefaultPolicyId();
-  exclusionForm.name = '';
-  exclusionForm.description = '';
-  exclusionForm.enabled = true;
-  exclusionForm.scopeType = 'global';
-  exclusionForm.host = '';
-  exclusionForm.path = '';
-  exclusionForm.method = '';
-  exclusionForm.removeType = 'id';
-  exclusionForm.removeValue = '';
-}
-
-function handleAddExclusion() {
-  exclusionModalMode.value = 'add';
-  resetExclusionForm();
-  exclusionModalVisible.value = true;
-}
-
-function buildExclusionDraftFromFeedback(row: WafPolicyFalsePositiveFeedbackItem): PolicyFeedbackExclusionDraft {
-  const policyId = Number(row.policyId || 0) > 0 ? Number(row.policyId) : getDefaultPolicyId();
-  const host = String(row.host || '').trim();
-  const path = String(row.path || '').trim();
-  const method = String(row.method || '').trim().toUpperCase() || '';
-  const scopeType: WafPolicyScopeType = path ? 'route' : host ? 'site' : 'global';
-  const candidates = collectExclusionCandidatesFromFeedbackSuggestion(row.suggestion || '');
-  const parsed = parseExclusionFromFeedbackSuggestion(row.suggestion || '');
-  const reason = String(row.reason || '').trim();
-  const suggestion = String(row.suggestion || '').trim();
-
-  return {
-    feedbackId: Number(row.id || 0),
-    policyId,
-    policyName: mapPolicyNameById(policyId),
-    name: `fp-${Number(row.id || 0) || Date.now()}`,
-    description: suggestion ? `来源反馈#${row.id}：${reason}；建议：${suggestion}` : `来源反馈#${row.id}：${reason}`,
-    scopeType,
-    host,
-    path,
-    method,
-    removeType: parsed.removeType,
-    removeValue: parsed.removeValue,
-    candidates,
-    baseline: {
-      policyId,
-      scopeType,
-      host,
-      path,
-      method,
-      removeType: parsed.removeType,
-      removeValue: parsed.removeValue
-    }
-  };
-}
-
-function handleCreateExclusionDraftFromFeedback(row: WafPolicyFalsePositiveFeedbackItem) {
-  const draft = buildExclusionDraftFromFeedback(row);
-  policyFeedbackExclusionDraft.value = draft;
-  policyFeedbackExclusionDraftCandidateKey.value =
-    draft.removeValue ? buildExclusionCandidateKey(draft.removeType, draft.removeValue) : '';
-  policyFeedbackExclusionDraftModalVisible.value = true;
-}
-
-function handlePolicyFeedbackExclusionCandidateChange(value: string) {
-  const draft = policyFeedbackExclusionDraft.value;
-  if (!draft) {
-    return;
-  }
-  const selected = parseExclusionCandidateKey(value);
-  if (!selected) {
-    return;
-  }
-  draft.removeType = selected.removeType;
-  draft.removeValue = selected.removeValue;
-}
-
-function handlePolicyFeedbackExclusionDraftScopeChange(scopeType: WafPolicyScopeType) {
-  const draft = policyFeedbackExclusionDraft.value;
-  if (!draft) {
-    return;
-  }
-  draft.scopeType = scopeType;
-  if (scopeType === 'global') {
-    draft.host = '';
-    draft.path = '';
-    draft.method = '';
-  } else if (scopeType === 'site') {
-    draft.path = '';
-    draft.method = '';
-  }
-}
-
-function handleConfirmPolicyFeedbackExclusionDraft() {
-  const draft = policyFeedbackExclusionDraft.value;
-  if (!draft) {
-    message.warning('例外草稿为空');
-    return;
-  }
-  if (!Number(draft.policyId || 0)) {
-    message.warning('请选择关联策略');
-    return;
-  }
-  if (draft.scopeType === 'site' && !String(draft.host || '').trim()) {
-    message.warning('站点作用域必须填写 Host');
-    return;
-  }
-  if (draft.scopeType === 'route' && !String(draft.path || '').trim()) {
-    message.warning('路由作用域必须填写 Path');
-    return;
-  }
-  if (!String(draft.name || '').trim()) {
-    message.warning('请填写规则名称');
-    return;
-  }
-
-  exclusionModalMode.value = 'add';
-  resetExclusionForm();
-  exclusionForm.policyId = Number(draft.policyId);
-  exclusionForm.name = String(draft.name || '').trim();
-  exclusionForm.description = draft.description;
-  exclusionForm.scopeType = draft.scopeType;
-  exclusionForm.host = String(draft.host || '').trim();
-  exclusionForm.path = String(draft.path || '').trim();
-  exclusionForm.method = String(draft.method || '').trim().toUpperCase();
-  exclusionForm.removeType = draft.removeType;
-  exclusionForm.removeValue = String(draft.removeValue || '').trim();
-
-  policyFeedbackExclusionDraftModalVisible.value = false;
-  policyFeedbackExclusionDraft.value = null;
-  policyFeedbackExclusionDraftCandidateKey.value = '';
-  void handleNavigateToPolicySection('exclusion');
-  shouldFocusExclusionRemoveValue.value = !exclusionForm.removeValue;
-  exclusionModalVisible.value = true;
-  if (!exclusionForm.removeValue) {
-    message.warning('已生成例外草稿，请补充移除值（removeById / removeByTag）后保存');
-  } else {
-    message.success('已根据误报反馈生成例外草稿');
-  }
-}
-
-function handleEditExclusion(row: WafRuleExclusionItem) {
-  exclusionModalMode.value = 'edit';
-  exclusionForm.id = row.id;
-  exclusionForm.policyId = row.policyId;
-  exclusionForm.name = row.name || '';
-  exclusionForm.description = row.description || '';
-  exclusionForm.enabled = row.enabled;
-  exclusionForm.scopeType = row.scopeType;
-  exclusionForm.host = row.host || '';
-  exclusionForm.path = row.path || '';
-  exclusionForm.method = row.method || '';
-  exclusionForm.removeType = row.removeType;
-  exclusionForm.removeValue = row.removeValue || '';
-  exclusionModalVisible.value = true;
-}
-
-function buildExclusionPayload(): WafRuleExclusionPayload {
-  return {
-    policyId: Number(exclusionForm.policyId),
-    name: exclusionForm.name.trim(),
-    description: exclusionForm.description.trim(),
-    enabled: exclusionForm.enabled,
-    scopeType: exclusionForm.scopeType,
-    host: exclusionForm.host.trim(),
-    path: exclusionForm.path.trim(),
-    method: String(exclusionForm.method || '').trim(),
-    removeType: exclusionForm.removeType,
-    removeValue: exclusionForm.removeValue.trim()
-  };
-}
-
-async function handleSubmitExclusion() {
-  await exclusionFormRef.value?.validate();
-  exclusionSubmitting.value = true;
-  try {
-    const payload = buildExclusionPayload();
-    const request =
-      exclusionModalMode.value === 'add'
-        ? createWafRuleExclusion(payload)
-        : updateWafRuleExclusion(exclusionForm.id, payload);
-    const { error } = await request;
-    if (!error) {
-      message.success(exclusionModalMode.value === 'add' ? '规则例外创建成功' : '规则例外更新成功');
-      exclusionModalVisible.value = false;
-      fetchExclusions();
-    }
-  } finally {
-    exclusionSubmitting.value = false;
-  }
-}
-
-function handleDeleteExclusion(row: WafRuleExclusionItem) {
-  deleteWafRuleExclusion(row.id).then(({ error }) => {
-    if (!error) {
-      message.success('规则例外删除成功');
-      fetchExclusions();
-    }
-  });
-}
-
-async function fetchBindings() {
-  bindingLoading.value = true;
-  try {
-    const { data, error } = await fetchWafPolicyBindingList({
-      page: bindingPagination.page as number,
-      pageSize: bindingPagination.pageSize as number,
-      policyId: bindingQuery.policyId || undefined,
-      scopeType: bindingQuery.scopeType || undefined,
-      name: bindingQuery.name.trim() || undefined
-    });
-    if (!error && data) {
-      bindingTable.value = data.list || [];
-      bindingPagination.itemCount = data.total || 0;
-    }
-  } finally {
-    bindingLoading.value = false;
-  }
-}
-
-function resetBindingQuery() {
-  bindingQuery.policyId = null;
-  bindingQuery.scopeType = '';
-  bindingQuery.name = '';
-  bindingPagination.page = 1;
-  fetchBindings();
-}
-
-function handleBindingPageChange(page: number) {
-  bindingPagination.page = page;
-  fetchBindings();
-}
-
-function handleBindingPageSizeChange(pageSize: number) {
-  bindingPagination.pageSize = pageSize;
-  bindingPagination.page = 1;
-  fetchBindings();
-}
-
-function resetBindingForm() {
-  bindingForm.id = 0;
-  bindingForm.policyId = getDefaultPolicyId();
-  bindingForm.name = '';
-  bindingForm.description = '';
-  bindingForm.enabled = true;
-  bindingForm.scopeType = 'global';
-  bindingForm.host = '';
-  bindingForm.path = '';
-  bindingForm.method = '';
-  bindingForm.priority = 100;
-}
-
-function handleAddBinding() {
-  bindingModalMode.value = 'add';
-  resetBindingForm();
-  bindingModalVisible.value = true;
-}
-
-function handleEditBinding(row: WafPolicyBindingItem) {
-  bindingModalMode.value = 'edit';
-  bindingForm.id = row.id;
-  bindingForm.policyId = row.policyId;
-  bindingForm.name = row.name || '';
-  bindingForm.description = row.description || '';
-  bindingForm.enabled = row.enabled;
-  bindingForm.scopeType = row.scopeType;
-  bindingForm.host = row.host || '';
-  bindingForm.path = row.path || '';
-  bindingForm.method = row.method || '';
-  bindingForm.priority = row.priority;
-  bindingModalVisible.value = true;
-}
-
-function buildBindingPayload(): WafPolicyBindingPayload {
-  return {
-    policyId: Number(bindingForm.policyId),
-    name: bindingForm.name.trim(),
-    description: bindingForm.description.trim(),
-    enabled: bindingForm.enabled,
-    scopeType: bindingForm.scopeType,
-    host: bindingForm.host.trim(),
-    path: bindingForm.path.trim(),
-    method: String(bindingForm.method || '').trim(),
-    priority: Number(bindingForm.priority)
-  };
-}
-
-async function handleSubmitBinding() {
-  await bindingFormRef.value?.validate();
-  bindingSubmitting.value = true;
-  try {
-    const payload = buildBindingPayload();
-    const request =
-      bindingModalMode.value === 'add'
-        ? createWafPolicyBinding(payload)
-        : updateWafPolicyBinding(bindingForm.id, payload);
-    const { error } = await request;
-    if (!error) {
-      message.success(bindingModalMode.value === 'add' ? '策略绑定创建成功' : '策略绑定更新成功');
-      bindingModalVisible.value = false;
-      fetchBindings();
-    }
-  } finally {
-    bindingSubmitting.value = false;
-  }
-}
-
-function handleDeleteBinding(row: WafPolicyBindingItem) {
-  deleteWafPolicyBinding(row.id).then(({ error }) => {
-    if (!error) {
-      message.success('策略绑定删除成功');
-      fetchBindings();
-    }
-  });
-}
-
-function openUploadModal() {
-  uploadForm.kind = 'crs';
-  uploadForm.version = '';
-  uploadForm.checksum = '';
-  uploadForm.activateNow = false;
-  uploadForm.file = null;
-  uploadModalVisible.value = true;
-}
-
-watch(
-  () => route.query,
-  query => {
-    if (observeRouteSyncing.value) {
-      return;
-    }
-    const prevTab = activeTab.value;
-    const queryChanged = applyObserveQueryFromRoute(query as Record<string, unknown>);
-    if (queryChanged && prevTab === 'observe' && activeTab.value === 'observe') {
-      fetchPolicyStats();
-    }
-  },
-  { immediate: true }
-);
-
-watch(
-  () => [
-    activeTab.value,
-    policyStatsQuery.policyId,
-    policyStatsQuery.window,
-    policyStatsQuery.intervalSec,
-    policyStatsQuery.topN,
-    policyStatsQuery.host,
-    policyStatsQuery.path,
-    policyStatsQuery.method
-  ],
-  () => {
-    if (observeRouteSyncing.value) {
-      return;
-    }
-    void syncObserveStateToRouteQuery();
-  }
-);
-
-watch(
-  () => sourceForm.mode,
-  value => {
-    if (value !== 'remote') {
-      sourceForm.proxyUrl = '';
-    }
-  }
-);
-
-watch(
-  () => [crsTuningForm.crsParanoiaLevel, crsTuningForm.crsInboundAnomalyThreshold, crsTuningForm.crsOutboundAnomalyThreshold],
-  values => {
-    const [crsParanoiaLevel, crsInboundAnomalyThreshold, crsOutboundAnomalyThreshold] = values.map(value => Number(value));
-    if (!Number.isFinite(crsParanoiaLevel) || !Number.isFinite(crsInboundAnomalyThreshold) || !Number.isFinite(crsOutboundAnomalyThreshold)) {
-      return;
-    }
-    crsTuningForm.crsTemplate = inferCrsTemplateByValues(crsParanoiaLevel, crsInboundAnomalyThreshold, crsOutboundAnomalyThreshold);
-  }
-);
-
-watch(
-  () => exclusionForm.scopeType,
-  value => {
-    if (value === 'global') {
-      exclusionForm.host = '';
-      exclusionForm.path = '';
-      exclusionForm.method = '';
-    } else if (value === 'site') {
-      exclusionForm.path = '';
-      exclusionForm.method = '';
-    }
-  }
-);
-
-watch(exclusionModalVisible, value => {
-  if (!value || !shouldFocusExclusionRemoveValue.value) {
-    return;
-  }
-  nextTick(() => {
-    exclusionRemoveValueInputRef.value?.focus();
-    shouldFocusExclusionRemoveValue.value = false;
-  });
-});
-
-watch(
-  () => bindingForm.scopeType,
-  value => {
-    if (value === 'global') {
-      bindingForm.host = '';
-      bindingForm.path = '';
-      bindingForm.method = '';
-    } else if (value === 'site') {
-      bindingForm.path = '';
-      bindingForm.method = '';
-    }
-  }
-);
-
-function handleBeforeUpload(data: { file: UploadFileInfo }) {
-  const raw = data.file.file;
-  if (!raw) return false;
-
-  const name = raw.name.toLowerCase();
-  if (!(name.endsWith('.zip') || name.endsWith('.tar.gz'))) {
-    message.error('仅支持 .zip 或 .tar.gz 文件');
-    return false;
-  }
-
-  uploadForm.file = raw;
-  return false;
-}
-
-function handleRemoveUpload() {
-  uploadForm.file = null;
-  return true;
-}
-
-async function handleSubmitUpload() {
-  await uploadFormRef.value?.validate();
-  if (!uploadForm.file) {
-    message.error('请先选择上传文件');
-    return;
-  }
-
-  uploadSubmitting.value = true;
-  try {
-    const formData = new FormData();
-    formData.append('kind', uploadForm.kind);
-    formData.append('version', uploadForm.version.trim());
-    if (uploadForm.checksum.trim()) {
-      formData.append('checksum', uploadForm.checksum.trim());
-    }
-    formData.append('activateNow', String(uploadForm.activateNow));
-    formData.append('file', uploadForm.file);
-
-    const { error } = await uploadWafPackage(formData);
-    if (!error) {
-      message.success('上传成功，规则包已入库');
-      uploadModalVisible.value = false;
-      fetchReleases();
-      fetchJobs();
-    }
-  } finally {
-    uploadSubmitting.value = false;
-  }
-}
-
-const securityTabRefreshMap: Record<SecurityTabKey, () => void> = {
-  source: () => {
-    fetchEngineStatus();
-    fetchSources();
-  },
-  runtime: () => {
-    fetchPolicies();
-    fetchPolicyRevisions();
-  },
-  crs: () => {
-    fetchPolicies();
-    fetchPolicyRevisions(getCurrentRevisionPolicyId());
-  },
-  exclusion: () => {
-    fetchPolicies();
-    fetchExclusions();
-  },
-  binding: () => {
-    fetchPolicies();
-    fetchBindings();
-  },
-  observe: () => {
-    fetchPolicies();
-    fetchPolicyStats();
-  },
-  release: () => {
-    fetchReleases();
-  },
-  job: () => {
-    fetchJobs();
-  }
-};
-
-const securityDomainRefreshMap: Record<SecurityMenuKey, () => void> = {
-  source: () => {
-    fetchEngineStatus();
-    fetchSources();
-  },
-  policy: () => {
-    fetchPolicies();
-    fetchPolicyRevisions(getCurrentRevisionPolicyId());
-    fetchExclusions();
-    fetchBindings();
-  },
-  observe: () => {
-    fetchPolicies();
-    fetchPolicyStats();
-  },
-  ops: () => {
-    fetchReleases();
-    fetchJobs();
-  }
-};
-
-function refreshSecurityTab(tab: SecurityTabKey) {
-  securityTabRefreshMap[tab]?.();
-}
-
-function refreshCurrentTab() {
-  refreshSecurityTab(activeTab.value);
-}
-
-function refreshCurrentDomain() {
-  securityDomainRefreshMap[activeMenu.value]?.();
-}
-
-watch(activeTab, value => {
-  refreshSecurityTab(value);
-});
-
-watch(activeMenu, value => {
-  securityDomainRefreshMap[value]?.();
-});
-
-onMounted(() => {
-  refreshCurrentDomain();
-});
-</script>
 
 <style scoped>
 :deep(.security-tabs-hide-nav > .n-tabs-nav) {

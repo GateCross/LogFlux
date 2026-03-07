@@ -20,6 +20,7 @@ func localizeWafPolicyMessage(rawMessage string) string {
 	}
 
 	exactMap := map[string]string{
+		"invalid waf integration payload":                             "WAF 接入请求参数不合法",
 		"policy id is required":                                       "策略 ID 不能为空",
 		"policy not found":                                            "未找到策略",
 		"invalid policy payload":                                      "策略请求参数不合法",
@@ -57,6 +58,7 @@ func localizeWafPolicyMessage(rawMessage string) string {
 		"coraza directives end tick not found":                        "Coraza directives 结束标记缺失",
 		"last good caddy config is empty":                             "缺少可回滚的 last_good 配置",
 		"caddy config is empty, please save caddy config first":       "Caddy 配置为空，请先保存 Caddy 配置",
+		"site addresses is empty":                                     "至少需要选择一个站点用于接入",
 		"requestBodyLimit must be greater than 0":                     "请求体大小限制必须大于 0",
 		"requestBodyNoFilesLimit must be greater than 0":              "无文件请求体大小限制必须大于 0",
 		"requestBodyLimit is too large":                               "请求体大小限制过大",
@@ -118,7 +120,9 @@ func localizeWafPolicyMessage(rawMessage string) string {
 		{regexp.MustCompile(`(?i)invalid policy method:`), "策略匹配方法不合法："},
 		{regexp.MustCompile(`(?i)binding priority must be between`), "策略绑定优先级不合法："},
 		{regexp.MustCompile(`(?i)query caddy server failed:`), "查询 Caddy 服务失败："},
+		{regexp.MustCompile(`(?i)site not found:`), "未找到目标站点："},
 		{regexp.MustCompile(`(?i)query policy failed:`), "查询策略失败："},
+		{regexp.MustCompile(`(?i)invalid caddy config structure`), "Caddy 配置结构不完整或括号不匹配"},
 		{regexp.MustCompile(`(?i)count policy exclusions failed:`), "查询策略例外总数失败："},
 		{regexp.MustCompile(`(?i)query policy exclusions failed:`), "查询策略例外失败："},
 		{regexp.MustCompile(`(?i)create policy exclusion failed:`), "创建策略例外失败："},

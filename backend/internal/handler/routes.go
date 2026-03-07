@@ -96,6 +96,16 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Handler: caddy.GetWafEngineStatusHandler(serverCtx),
 			},
 			{
+				Method:  http.MethodPost,
+				Path:    "/caddy/waf/integration/apply",
+				Handler: caddy.ApplyWafIntegrationHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/caddy/waf/integration/status",
+				Handler: caddy.GetWafIntegrationStatusHandler(serverCtx),
+			},
+			{
 				Method:  http.MethodGet,
 				Path:    "/caddy/waf/job",
 				Handler: caddy.ListWafJobsHandler(serverCtx),
