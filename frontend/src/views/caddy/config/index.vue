@@ -1,16 +1,23 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch, onBeforeUnmount, h, nextTick } from 'vue';
+import { ref, onMounted, computed, watch, h } from 'vue';
 import { useMessage, useDialog, NTag, NButton } from 'naive-ui';
 import type { DataTableColumns } from 'naive-ui';
 import { VueMonacoEditor, VueMonacoDiffEditor, loader } from '@guolao/vue-monaco-editor';
 import { fetchCaddyServers, fetchCaddyConfig, updateCaddyConfigRaw, updateCaddyConfigStructured, addCaddyServer, updateCaddyServer, deleteCaddyServer, fetchCaddyConfigHistory, fetchCaddyConfigHistoryDetail, rollbackCaddyConfig } from '@/service/api/caddy';
 import ConfigPreviewPanel from './components/ConfigPreviewPanel.vue';
+import QuickConfigPanel from './components/QuickConfigPanel.vue';
 import RawEditorPanel from './components/RawEditorPanel.vue';
-import StructuredEditorPanel from './components/StructuredEditorPanel.vue';
 import WafIntegrationCard from './components/WafIntegrationCard.vue';
 import SvgIcon from '@/components/custom/svg-icon.vue';
 import type { CaddyFormModel, Route, RouteMatch, Site } from './types';
 import { applyWafIntegration, fetchWafIntegrationStatus, type WafIntegrationStatusResp } from '@/service/api/caddy-integration';
+import {
+  buildQuickConfigState,
+  createQuickSiteDraft,
+  mergeQuickConfigDrafts,
+  type ComplexSiteSummary,
+  type QuickSiteDraft
+} from './quick-config-utils';
 
 // Configure Monaco Editor loader to use npmmirror for better performance in China
 loader.config({
@@ -36,14 +43,6 @@ interface CaddyConfigHistoryItem {
   createdAt: string;
 }
 
-type ValidationError = {
-  id: string;
-  message: string;
-  siteId?: string;
-  routeId?: string;
-  tab?: 'basic' | 'routes' | 'advanced';
-};
-
 type DiffRow = {
   left: string | null;
   right: string | null;
@@ -59,10 +58,10 @@ const loading = ref(false);
 const saving = ref(false);
 const servers = ref<CaddyServer[]>([]);
 const currentServerId = ref<number | null>(null);
-const viewMode = ref<'preview' | 'edit'>('preview');
-const editMode = ref<'raw' | 'structured'>('raw');
+const pageMode = ref<'quick' | 'raw' | 'preview'>('quick');
+const lastEditMode = ref<'quick' | 'raw'>('quick');
 const configContent = ref('');
-const showSiteModal = ref(false);
+const showSettingsDrawer = ref(false);
 const structuredAvailable = ref(false);
 const createEmptyFormModel = (): CaddyFormModel => ({
   schemaVersion: 1,
@@ -71,13 +70,9 @@ const createEmptyFormModel = (): CaddyFormModel => ({
   sites: []
 });
 const formModel = ref<CaddyFormModel>(createEmptyFormModel());
-const activeSiteId = ref<string | null>(null);
-const activeSiteTab = ref<'basic' | 'routes' | 'advanced'>('basic');
-const focusRouteId = ref<string | null>(null);
-const sidebarWidth = ref<number>(Number(localStorage.getItem('logflux:caddy.sidebarWidth')) || 288);
-const resizing = ref(false);
-let resizeStartX = 0;
-let resizeStartWidth = 0;
+const quickSiteDrafts = ref<QuickSiteDraft[]>([]);
+const complexSiteSummaries = ref<ComplexSiteSummary[]>([]);
+const activeQuickSiteId = ref<string | null>(null);
 
 const showHistoryModal = ref(false);
 const historyLoading = ref(false);
@@ -94,10 +89,8 @@ const historyDetail = ref<{
 } | null>(null);
 const historyCompareLeft = ref('');
 const historyDiffOnly = ref(false);
-const showGlobalModal = ref(false);
 const showGlobalCompareModal = ref(false);
 const initialGlobalRaw = ref('');
-const globalPreviewExpanded = ref(false);
 const showGlobalDiffOnly = ref(false);
 const diffLeftRef = ref<HTMLElement | null>(null);
 const diffRightRef = ref<HTMLElement | null>(null);
@@ -121,30 +114,7 @@ const selectedWafIntegrationSites = ref<string[]>([]);
 const wafIntegrationPreviewActions = ref<string[]>([]);
 
 // Computed
-const isPreview = computed(() => viewMode.value === 'preview');
-const serverOptions = computed(() => 
-  servers.value.map(s => ({ label: s.name, value: s.id }))
-);
-const activeSite = computed(() => formModel.value.sites.find(s => s.id === activeSiteId.value) || null);
-const activeSiteTitle = computed(() => (activeSite.value?.name ? `预览 - ${activeSite.value.name}` : '预览'));
-const activeSiteModel = computed<Site | null>({
-  get() {
-    return activeSite.value;
-  },
-  set(value) {
-    if (!value) return;
-    const idx = formModel.value.sites.findIndex(s => s.id === value.id);
-    if (idx >= 0) formModel.value.sites[idx] = value;
-  }
-});
-const rawSiteContent = computed(() => {
-  if (!activeSite.value || !configContent.value) return configContent.value;
-  return extractSiteBlock(configContent.value, activeSite.value.domains) || configContent.value;
-});
-const formattedConfigContent = computed(() => formatCaddyfile(configContent.value));
-const formattedRawSiteContent = computed(() => formatCaddyfile(rawSiteContent.value));
-const generatedCaddyfile = computed(() => buildCaddyfile(formModel.value));
-const currentServer = computed(() => servers.value.find(s => s.id === currentServerId.value) || null);
+const serverOptions = computed(() => servers.value.map(s => ({ label: s.name, value: s.id })));
 const structuredReady = computed(() => {
   if (structuredAvailable.value) return true;
   const model = formModel.value;
@@ -152,7 +122,10 @@ const structuredReady = computed(() => {
   if (model.upstreams?.length) return true;
   return Boolean(model.global?.raw?.trim());
 });
-const validationErrors = computed<ValidationError[]>(() => (editMode.value === 'structured' ? validateStructuredConfig() : []));
+const mergedQuickFormModel = computed(() => mergeQuickConfigDrafts(formModel.value, quickSiteDrafts.value));
+const generatedQuickCaddyfile = computed(() => buildCaddyfile(mergedQuickFormModel.value));
+const effectiveConfigContent = computed(() => (lastEditMode.value === 'raw' ? configContent.value : generatedQuickCaddyfile.value));
+const formattedConfigContent = computed(() => formatCaddyfile(effectiveConfigContent.value));
 const globalRawChanged = computed(
   () => (formModel.value.global?.raw ?? '').trim() !== (initialGlobalRaw.value ?? '').trim()
 );
@@ -161,12 +134,49 @@ const globalDiffRows = computed<DiffRow[]>(() => {
   if (!showGlobalDiffOnly.value) return rows;
   return rows.filter(row => row.type !== 'same');
 });
-const globalPreviewText = computed(() => formatGlobalPreview(formModel.value.global?.raw ?? ''));
+const quickValidationErrors = computed(() => {
+  if (!structuredReady.value && configContent.value.trim()) {
+    return [];
+  }
+  return validateStructuredConfig(mergedQuickFormModel.value);
+});
 const historyDetailFormattedConfig = computed(() => (historyDetail.value ? formatCaddyfile(historyDetail.value.config) : ''));
 const historyCompareLeftFormatted = computed(() => formatCaddyfile(historyCompareLeft.value));
 const historyCompareRight = computed(() => formattedConfigContent.value);
+const pageModeOptions = [
+  { label: '快速配置', value: 'quick' },
+  { label: '原始配置', value: 'raw' },
+  { label: '预览', value: 'preview' }
+] as const;
+const pageModeSummary = computed(() => {
+  if (pageMode.value === 'quick') return '只编辑常用站点能力，复杂配置自动保留。';
+  if (pageMode.value === 'raw') return '直接维护完整 Caddyfile，适合高级规则。';
+  return lastEditMode.value === 'raw' ? '展示当前原始配置内容。' : '展示当前快速配置生成结果。';
+});
+const moreOptions = computed(() => [
+  { label: '更多设置', key: 'settings' },
+  { type: 'divider', key: 'divider-1' },
+  { label: '添加服务器', key: 'server:add' },
+  { label: '编辑当前服务器', key: 'server:edit', disabled: !currentServerId.value },
+  { label: '删除当前服务器', key: 'server:delete', disabled: !currentServerId.value },
+  { type: 'divider', key: 'divider-2' },
+  { label: '查看历史版本', key: 'history', disabled: !currentServerId.value },
+  { label: '应用默认模板', key: 'preset' },
+  { label: '从原始配置解析', key: 'import-raw' }
+]);
 
 // Methods
+function syncQuickStateFromForm(model: CaddyFormModel) {
+  const { simpleSites, complexSites } = buildQuickConfigState(model);
+  const nextActiveId = simpleSites.some(item => item.id === activeQuickSiteId.value)
+    ? activeQuickSiteId.value
+    : simpleSites[0]?.id || null;
+
+  quickSiteDrafts.value = simpleSites;
+  complexSiteSummaries.value = complexSites;
+  activeQuickSiteId.value = nextActiveId;
+}
+
 async function getServers() {
   const { data, error } = await fetchCaddyServers();
   if (error) {
@@ -183,6 +193,8 @@ async function getServers() {
     } else {
       currentServerId.value = null;
       configContent.value = '';
+      formModel.value = createEmptyFormModel();
+      syncQuickStateFromForm(formModel.value);
     }
   }
 }
@@ -202,28 +214,28 @@ async function getConfig() {
     configContent.value = data.config || '';
     structuredAvailable.value = false;
     formModel.value = createEmptyFormModel();
-    activeSiteId.value = null;
+    activeQuickSiteId.value = null;
     if (data.modules) {
       try {
         const parsed = JSON.parse(data.modules);
         if (parsed?.sites || parsed?.global) {
           formModel.value = normalizeModules(parsed);
-          activeSiteId.value = formModel.value.sites?.[0]?.id || null;
           structuredAvailable.value = true;
         }
       } catch {
         message.warning('结构化配置解析失败，已忽略');
         formModel.value = createEmptyFormModel();
-        activeSiteId.value = null;
         structuredAvailable.value = false;
       }
     }
-    activeSiteTab.value = 'basic';
-    focusRouteId.value = null;
     initialGlobalRaw.value = formModel.value.global?.raw ?? '';
-    if (viewMode.value === 'edit' && editMode.value === 'structured') {
-      ensureStructuredForEdit();
+    if (!structuredAvailable.value && configContent.value.trim()) {
+      ensureStructuredForEdit(true);
+    } else {
+      syncQuickStateFromForm(formModel.value);
     }
+    pageMode.value = 'quick';
+    lastEditMode.value = 'quick';
   }
 }
 
@@ -362,22 +374,17 @@ async function saveRawConfig() {
   }
   message.success('配置已保存并自动热重载 Caddy');
   structuredAvailable.value = false;
-  viewMode.value = 'preview';
-}
-
-function applyStructuredToRaw() {
-  configContent.value = generatedCaddyfile.value;
-  editMode.value = 'raw';
-  viewMode.value = 'edit';
+  lastEditMode.value = 'raw';
+  pageMode.value = 'preview';
 }
 
 function applyStructuredParsed(parsed: CaddyFormModel, notify?: boolean) {
   formModel.value = parsed;
-  activeSiteId.value = parsed.sites[0]?.id || null;
   structuredAvailable.value = true;
-  editMode.value = 'structured';
-  viewMode.value = 'edit';
   initialGlobalRaw.value = parsed.global?.raw ?? '';
+  syncQuickStateFromForm(parsed);
+  lastEditMode.value = 'quick';
+  pageMode.value = 'quick';
   if (notify) message.success('已从原始配置解析');
 }
 
@@ -410,71 +417,112 @@ function importRawToStructured() {
   });
 }
 
-function ensureStructuredForEdit() {
-  if (structuredReady.value) return;
+function ensureStructuredForEdit(force = false) {
+  if (!force && structuredReady.value && formModel.value.sites.length > 0) return;
   if (!configContent.value.trim()) return;
   const parsed = parseCaddyfileToModules(configContent.value);
   if (parsed.sites.length === 0 && !parsed.global?.raw) return;
   applyStructuredParsed(parsed, false);
 }
 
-async function copyText(content: string) {
-  try {
-    await navigator.clipboard.writeText(content);
-    message.success('已复制');
-  } catch {
-    message.error('复制失败');
+async function saveQuickConfig() {
+  if (!currentServerId.value) return;
+
+  const nextFormModel = mergedQuickFormModel.value;
+  const errors = validateStructuredConfig(nextFormModel);
+  if (errors.length > 0) {
+    message.error(`校验失败：${errors[0]}`);
+    return;
+  }
+
+  const content = buildCaddyfile(nextFormModel);
+  if (!content) {
+    message.error('快速配置为空，无法保存');
+    return;
+  }
+
+  saving.value = true;
+  const modules = JSON.stringify(nextFormModel);
+  const { error } = await updateCaddyConfigStructured(currentServerId.value, content, modules);
+  saving.value = false;
+
+  if (error) {
+    message.error('保存配置失败');
+    return;
+  }
+
+  message.success('配置已保存并自动热重载 Caddy');
+  formModel.value = nextFormModel;
+  configContent.value = content;
+  structuredAvailable.value = true;
+  initialGlobalRaw.value = formModel.value.global?.raw ?? '';
+  syncQuickStateFromForm(formModel.value);
+  lastEditMode.value = 'quick';
+  pageMode.value = 'preview';
+}
+
+function handleModeChange(nextMode: 'quick' | 'raw' | 'preview') {
+  if (nextMode === pageMode.value) return;
+
+  if (nextMode === 'raw') {
+    configContent.value = lastEditMode.value === 'raw' ? configContent.value : generatedQuickCaddyfile.value;
+    lastEditMode.value = 'raw';
+    pageMode.value = 'raw';
+    return;
+  }
+
+  if (nextMode === 'quick') {
+    if (lastEditMode.value === 'raw') {
+      ensureStructuredForEdit(true);
+    } else {
+      syncQuickStateFromForm(formModel.value);
+    }
+    lastEditMode.value = 'quick';
+    pageMode.value = 'quick';
+    return;
+  }
+
+  pageMode.value = 'preview';
+}
+
+function openSettingsDrawer() {
+  showSettingsDrawer.value = true;
+}
+
+function handleMoreAction(key: string) {
+  if (key === 'settings') {
+    openSettingsDrawer();
+    return;
+  }
+  if (key === 'server:add') {
+    openAddServerModal();
+    return;
+  }
+  if (key === 'server:edit') {
+    openEditServerModal();
+    return;
+  }
+  if (key === 'server:delete') {
+    void handleDeleteServer();
+    return;
+  }
+  if (key === 'history') {
+    void openHistoryModal();
+    return;
+  }
+  if (key === 'preset') {
+    applyPreset();
+    return;
+  }
+  if (key === 'import-raw') {
+    importRawToStructured();
   }
 }
 
-function downloadText(filename: string, content: string) {
-  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
-function startResize(event: MouseEvent) {
-  resizing.value = true;
-  resizeStartX = event.clientX;
-  resizeStartWidth = sidebarWidth.value;
-  window.addEventListener('mousemove', handleResize);
-  window.addEventListener('mouseup', stopResize);
-}
-
-function handleResize(event: MouseEvent) {
-  if (!resizing.value) return;
-  const delta = event.clientX - resizeStartX;
-  const next = Math.min(420, Math.max(220, resizeStartWidth + delta));
-  sidebarWidth.value = next;
-}
-
-function stopResize() {
-  if (!resizing.value) return;
-  resizing.value = false;
-  localStorage.setItem('logflux:caddy.sidebarWidth', String(sidebarWidth.value));
-  window.removeEventListener('mousemove', handleResize);
-  window.removeEventListener('mouseup', stopResize);
-}
-
-function validateStructuredConfig(): ValidationError[] {
-  const errors: ValidationError[] = [];
-  const pushError = (
-    message: string,
-    siteId?: string,
-    routeId?: string,
-    tab?: 'basic' | 'routes' | 'advanced'
-  ) => {
-    errors.push({
-      id: `${siteId ?? 'global'}-${routeId ?? 'none'}-${errors.length}`,
-      message,
-      siteId,
-      routeId,
-      tab
-    });
+function validateStructuredConfig(model: CaddyFormModel = formModel.value): string[] {
+  const errors: string[] = [];
+  const pushError = (errorMessage: string) => {
+    errors.push(errorMessage);
   };
   const domainRe = /^(\*\.)?([a-zA-Z0-9-]+\.)+[a-zA-Z0-9-]+$/;
   const portOnlyRe = /^:\d+$/;
@@ -486,80 +534,53 @@ function validateStructuredConfig(): ValidationError[] {
     if (value.startsWith('{') && value.endsWith('}')) return true;
     return false;
   };
-  const enabledSites = formModel.value.sites.filter(s => s.enabled);
+  const enabledSites = model.sites.filter(s => s.enabled);
   const hasSites = enabledSites.length > 0;
-  const hasGlobalRaw = !!formModel.value.global?.raw?.trim();
+  const hasGlobalRaw = !!model.global?.raw?.trim();
   if (!hasSites && !hasGlobalRaw) {
     pushError('至少需要一个站点或全局配置');
   }
   const upstreamNames = new Set<string>();
-  for (const up of formModel.value.upstreams) {
+  for (const up of model.upstreams) {
     if (!up.name) pushError('上游名称不能为空');
     if (upstreamNames.has(up.name)) pushError(`上游名称重复: ${up.name}`);
     upstreamNames.add(up.name);
     if (up.targets.length === 0) pushError(`上游 ${up.name} 至少配置一个目标`);
   }
-  for (const site of formModel.value.sites) {
+  for (const site of model.sites) {
     if (!site.enabled) continue;
-    if (!site.name) pushError('站点名称不能为空', site.id, undefined, 'basic');
-    if (site.domains.length === 0) pushError(`站点 ${site.name || site.id} 至少配置一个域名`, site.id, undefined, 'basic');
+    if (!site.name) pushError('站点名称不能为空');
+    if (site.domains.length === 0) pushError(`站点 ${site.name || site.id} 至少配置一个域名`);
     const hasEnabledRoutes = site.routes.some(route => route.enabled);
     const hasImports = (site.imports ?? []).some(item => item.trim().length > 0);
     if (!hasEnabledRoutes && !hasImports) {
-      pushError(`站点 ${site.name || site.id} 至少配置一个路由或 import`, site.id, undefined, 'routes');
+      pushError(`站点 ${site.name || site.id} 至少配置一个路由或 import`);
     }
     const invalidDomains = site.domains.filter(d => d && !(domainRe.test(d) || portOnlyRe.test(d)));
-    if (invalidDomains.length) pushError(`站点 ${site.name || site.id} 域名格式不合法: ${invalidDomains.join(', ')}`, site.id, undefined, 'basic');
+    if (invalidDomains.length) pushError(`站点 ${site.name || site.id} 域名格式不合法: ${invalidDomains.join(', ')}`);
     if (site.tls?.mode === 'manual' && (!site.tls.certFile || !site.tls.keyFile)) {
-      pushError(`站点 ${site.name || site.id} TLS 手动模式需填写证书和私钥`, site.id, undefined, 'basic');
+      pushError(`站点 ${site.name || site.id} TLS 手动模式需填写证书和私钥`);
     }
     for (const route of site.routes) {
       if (!route.enabled) continue;
-      if (!route.name) pushError(`站点 ${site.name || site.id} 有未命名路由`, site.id, route.id, 'routes');
-      if (route.handles.length === 0) pushError(`路由 ${route.name || route.id} 至少一个 Handler`, site.id, route.id, 'routes');
+      if (!route.name) pushError(`站点 ${site.name || site.id} 有未命名路由`);
+      if (route.handles.length === 0) pushError(`路由 ${route.name || route.id} 至少一个 Handler`);
       if (route.handles.every(h => !h.enabled)) {
-        pushError(`路由 ${route.name || route.id} 至少启用一个 Handler`, site.id, route.id, 'routes');
+        pushError(`路由 ${route.name || route.id} 至少启用一个 Handler`);
       }
       const invalidPaths = route.match.path.filter(p => p && !isValidPathPattern(p));
-      if (invalidPaths.length) pushError(`路由 ${route.name || route.id} Path 格式不合法: ${invalidPaths.join(', ')}`, site.id, route.id, 'routes');
+      if (invalidPaths.length) pushError(`路由 ${route.name || route.id} Path 格式不合法: ${invalidPaths.join(', ')}`);
       const invalidMethods = route.match.method.filter(m => m && !methodAllowList.includes(m.toUpperCase()));
-      if (invalidMethods.length) pushError(`路由 ${route.name || route.id} Method 非法: ${invalidMethods.join(', ')}`, site.id, route.id, 'routes');
+      if (invalidMethods.length) pushError(`路由 ${route.name || route.id} Method 非法: ${invalidMethods.join(', ')}`);
       for (const handle of route.handles) {
         if (!handle.enabled) continue;
         if (handle.type === 'reverse_proxy' && !handle.upstream) {
-          pushError(`路由 ${route.name || route.id} 的 reverse_proxy 未选择上游`, site.id, route.id, 'routes');
+          pushError(`路由 ${route.name || route.id} 的 reverse_proxy 未选择上游`);
         }
       }
     }
   }
   return errors;
-}
-
-async function saveStructuredConfig() {
-  if (!currentServerId.value) return;
-  const content = generatedCaddyfile.value;
-  if (!content) {
-    message.error('结构化配置为空，无法保存');
-    return;
-  }
-  const errors = validateStructuredConfig();
-  if (errors.length > 0) {
-    message.error(`校验失败：${errors[0].message}`);
-    return;
-  }
-  saving.value = true;
-  const modules = JSON.stringify(formModel.value);
-  const { error } = await updateCaddyConfigStructured(currentServerId.value, content, modules);
-  saving.value = false;
-  if (error) {
-    message.error('保存配置失败');
-    return;
-  }
-  message.success('配置已保存并自动热重载 Caddy');
-  configContent.value = content;
-  initialGlobalRaw.value = formModel.value.global?.raw ?? '';
-  structuredAvailable.value = true;
-  viewMode.value = 'preview';
 }
 
 function buildCaddyfile(model: CaddyFormModel, options?: { includeDisabled?: boolean; includeGlobal?: boolean }): string {
@@ -1318,18 +1339,6 @@ function buildLineDiff(leftRaw: string, rightRaw: string): DiffRow[] {
   });
 }
 
-function formatGlobalPreview(raw: string) {
-  const trimmed = raw.trim();
-  if (!trimmed) return '';
-  const lines = trimmed.split('\n');
-  const indents = lines
-    .filter(line => line.trim().length > 0)
-    .map(line => (line.match(/^[\t ]*/)?.[0]?.length ?? 0));
-  const minIndent = indents.length ? Math.min(...indents) : 0;
-  if (minIndent === 0) return trimmed;
-  return lines.map(line => line.slice(minIndent)).join('\n');
-}
-
 function formatCaddyfile(content: string) {
   if (!content.trim()) return content;
   const lines = content.split('\n');
@@ -1389,60 +1398,11 @@ function formatCaddyfile(content: string) {
   return out.join('\n').trim();
 }
 
-
-function addSite() {
-  const id = genId();
-  const site: Site = {
-    id,
-    name: '新站点',
-    enabled: true,
-    domains: [],
-    imports: [],
-    geoip2Vars: [],
-    encode: [],
-    tls: { mode: 'auto' },
-    routes: [
-      {
-        id: genId(),
-        name: '默认路由',
-        enabled: true,
-        match: { host: [], path: [], method: [], header: [], query: [], expression: '' },
-        logAppend: [],
-        handles: [
-          {
-            id: genId(),
-            type: 'reverse_proxy',
-            enabled: true,
-            upstream: '',
-            lbPolicy: 'round_robin',
-            tlsInsecureSkipVerify: false
-          }
-        ]
-      }
-    ]
-  };
-  formModel.value.sites.push(site);
-  activeSiteId.value = id;
-}
-
-function openPreviewModal() {
-  if (!activeSiteId.value) {
-    message.warning('请先选择一个站点');
-    return;
-  }
-  showSiteModal.value = true;
-}
-
 function applyPreset() {
   confirmOverwriteStructured('应用默认模板', () => {
-    const upstreamName = 'default-upstream';
     structuredAvailable.value = true;
-    editMode.value = 'structured';
-    viewMode.value = 'edit';
     formModel.value.schemaVersion = 1;
-    formModel.value.upstreams = [
-      { name: upstreamName, targets: ['localhost:8080'], lbPolicy: 'round_robin' }
-    ];
+    formModel.value.upstreams = [];
     const siteId = genId();
     formModel.value.sites = [
       {
@@ -1466,7 +1426,7 @@ function applyPreset() {
                 id: genId(),
                 type: 'reverse_proxy',
                 enabled: true,
-                upstream: upstreamName,
+                upstream: 'localhost:8080',
                 lbPolicy: 'round_robin',
                 tlsInsecureSkipVerify: false
               }
@@ -1475,7 +1435,11 @@ function applyPreset() {
         ]
       }
     ];
-    activeSiteId.value = siteId;
+    initialGlobalRaw.value = formModel.value.global?.raw ?? '';
+    syncQuickStateFromForm(formModel.value);
+    activeQuickSiteId.value = siteId;
+    lastEditMode.value = 'quick';
+    pageMode.value = 'quick';
   });
 }
 
@@ -1537,60 +1501,48 @@ function normalizeModules(raw: any): CaddyFormModel {
   return normalized;
 }
 
-function extractSiteBlock(content: string, domains: string[]): string {
-  if (!content || domains.length === 0) return '';
-  const lines = content.split('\n');
-  let depth = 0;
-  let capturing = false;
-  const result: string[] = [];
-  const domainSet = new Set(domains.filter(Boolean));
-  for (const raw of lines) {
-    const line = raw;
-    const trimmed = raw.replace(/#.*/, '').trim();
-    const openCount = (trimmed.match(/{/g) || []).length;
-    const closeCount = (trimmed.match(/}/g) || []).length;
-    if (!capturing && depth === 0 && trimmed.includes('{') && !trimmed.startsWith('{')) {
-      const before = trimmed.split('{')[0].trim();
-      if (before) {
-        const tokens = before.replace(/,/g, ' ').split(/\s+/).filter(Boolean);
-        if (tokens.some(t => domainSet.has(t))) {
-          capturing = true;
-        }
-      }
-    }
-    if (capturing) result.push(line);
-    depth += openCount - closeCount;
-    if (capturing && depth === 0 && closeCount > 0) break;
-  }
-  return result.join('\n').trim();
+function addQuickSite() {
+  const draft = createQuickSiteDraft({
+    id: genId(),
+    name: `新站点-${quickSiteDrafts.value.length + 1}`,
+    domains: [],
+    mode: 'reverse_proxy',
+    upstream: 'localhost:8080'
+  });
+  quickSiteDrafts.value.push(draft);
+  activeQuickSiteId.value = draft.id;
+  lastEditMode.value = 'quick';
+  pageMode.value = 'quick';
 }
 
-function duplicateSite(id: string) {
-  const target = formModel.value.sites.find(s => s.id === id);
+function duplicateQuickSite(id: string) {
+  const target = quickSiteDrafts.value.find(item => item.id === id);
   if (!target) return;
-  const clone = JSON.parse(JSON.stringify(target)) as Site;
-  clone.id = genId();
-  clone.name = `${clone.name}-copy`;
-  formModel.value.sites.push(clone);
-  activeSiteId.value = clone.id;
+  const clone = createQuickSiteDraft({
+    ...target,
+    domains: [...target.domains],
+    id: genId(),
+    name: `${target.name || '站点'}-copy`
+  });
+  quickSiteDrafts.value.push(clone);
+  activeQuickSiteId.value = clone.id;
 }
 
-function removeSite(id: string) {
-  const idx = formModel.value.sites.findIndex(s => s.id === id);
-  if (idx >= 0) formModel.value.sites.splice(idx, 1);
-  if (activeSiteId.value === id) {
-    activeSiteId.value = formModel.value.sites[0]?.id || null;
+function removeQuickSite(id: string) {
+  const idx = quickSiteDrafts.value.findIndex(item => item.id === id);
+  if (idx < 0) return;
+  quickSiteDrafts.value.splice(idx, 1);
+  if (activeQuickSiteId.value === id) {
+    activeQuickSiteId.value = quickSiteDrafts.value[0]?.id || null;
   }
 }
 
-function moveSite(id: string, direction: 'up' | 'down') {
-  const idx = formModel.value.sites.findIndex(s => s.id === id);
-  if (idx < 0) return;
-  const next = direction === 'up' ? idx - 1 : idx + 1;
-  if (next < 0 || next >= formModel.value.sites.length) return;
-  const temp = formModel.value.sites[idx];
-  formModel.value.sites[idx] = formModel.value.sites[next];
-  formModel.value.sites[next] = temp;
+function switchToRawFromQuick() {
+  handleModeChange('raw');
+}
+
+function openGlobalCompare() {
+  showGlobalCompareModal.value = true;
 }
 
 // Server Management Methods
@@ -1610,7 +1562,7 @@ function openEditServerModal() {
 
 async function handleDeleteServer() {
   if (!currentServerId.value) return;
-  
+
   dialog.warning({
     title: '确认删除',
     content: '确定要删除此服务器吗？',
@@ -1647,18 +1599,6 @@ async function handleSaveServer() {
   await getServers();
 }
 
-function openGlobalCompare() {
-  showGlobalCompareModal.value = true;
-}
-
-function openGlobalModal() {
-  showGlobalModal.value = true;
-}
-
-function toggleGlobalPreview() {
-  globalPreviewExpanded.value = !globalPreviewExpanded.value;
-}
-
 function restoreGlobalRaw() {
   dialog.warning({
     title: '恢复确认',
@@ -1682,25 +1622,6 @@ function syncDiffScroll(side: 'left' | 'right') {
   requestAnimationFrame(() => {
     diffSyncing = false;
   });
-}
-
-
-async function focusValidationError(item: ValidationError) {
-  if (item.siteId) {
-    activeSiteId.value = item.siteId;
-  }
-  if (item.tab) {
-    activeSiteTab.value = item.tab;
-  }
-  if (item.routeId) {
-    focusRouteId.value = null;
-    await nextTick();
-    focusRouteId.value = item.routeId;
-  }
-}
-
-function formatHistoryAction(action: string) {
-  return action === 'rollback' ? '回滚' : '更新';
 }
 
 const historyColumns: DataTableColumns<CaddyConfigHistoryItem> = [
@@ -1767,6 +1688,10 @@ const historyColumns: DataTableColumns<CaddyConfigHistoryItem> = [
     }
   }
 ];
+
+function formatHistoryAction(action: string) {
+  return action === 'rollback' ? '回滚' : '更新';
+}
 
 async function openHistoryModal() {
   if (!currentServerId.value) return;
@@ -1853,192 +1778,194 @@ watch(currentServerId, () => {
     getConfig();
     wafIntegrationUnavailable.value = false;
     fetchWafIntegrationState();
+    return;
   }
+  configContent.value = '';
+  formModel.value = createEmptyFormModel();
+  syncQuickStateFromForm(formModel.value);
 });
 
 onMounted(() => {
   getServers();
 });
-
-watch([viewMode, editMode], ([nextView, nextEdit]) => {
-  if (nextView === 'edit' && nextEdit === 'structured') {
-    ensureStructuredForEdit();
-  }
-});
-
-onBeforeUnmount(() => {
-  window.removeEventListener('mousemove', handleResize);
-  window.removeEventListener('mouseup', stopResize);
-});
 </script>
 
 <template>
   <div class="h-full overflow-hidden flex flex-col">
-    <NCard 
-      class="h-full card-wrapper" 
+    <NCard
+      class="h-full card-wrapper"
       :content-style="{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }"
     >
       <template #header>
-        <div class="caddy-header">
-          <div class="caddy-header-title">
-            <div class="caddy-title-text">Caddy配置</div>
-            <div class="caddy-title-sub">服务器与配置管理</div>
+        <div class="caddy-toolbar">
+          <div class="min-w-0 flex-1">
+            <NSelect
+              v-model:value="currentServerId"
+              :options="serverOptions"
+              placeholder="选择服务器"
+              class="w-full max-w-72"
+              size="small"
+            />
           </div>
-          <div class="caddy-header-panels">
-            <div class="caddy-header-panel">
-              <div class="caddy-panel-label">服务器</div>
-              <div class="caddy-panel-controls">
-                <NSelect
-                  v-model:value="currentServerId"
-                  :options="serverOptions"
-                  placeholder="选择服务器"
-                  class="w-48"
-                  size="small"
-                />
-                <NButton size="small" @click="openAddServerModal">
-                  <div class="flex items-center gap-1">
-                    <SvgIcon icon="carbon:add" class="caddy-icon" />
-                    <span>新增</span>
-                  </div>
-                </NButton>
-                <NButton size="small" :disabled="!currentServerId" @click="openEditServerModal">
-                  <div class="flex items-center gap-1">
-                    <SvgIcon icon="carbon:edit" class="caddy-icon" />
-                    <span>编辑</span>
-                  </div>
-                </NButton>
-                <NButton size="small" :disabled="!currentServerId" @click="handleDeleteServer" type="error" ghost>
-                  <div class="flex items-center gap-1">
-                    <SvgIcon icon="carbon:trash-can" class="caddy-icon" />
-                    <span>删除</span>
-                  </div>
-                </NButton>
-                <NButton size="small" :disabled="!currentServerId" @click="openHistoryModal">
-                  <div class="flex items-center gap-1">
-                    <SvgIcon icon="carbon:time" class="caddy-icon" />
-                    <span>历史版本</span>
-                  </div>
-                </NButton>
-              </div>
-            </div>
-            <div class="caddy-header-panel caddy-header-panel--flat">
-              <div class="caddy-panel-label">模式</div>
-              <div class="caddy-panel-controls">
-                <NRadioGroup v-model:value="viewMode" size="small">
-                  <NRadioButton value="preview">预览模式</NRadioButton>
-                  <NRadioButton value="edit">编辑模式</NRadioButton>
-                </NRadioGroup>
-                <NRadioGroup v-if="viewMode === 'edit'" v-model:value="editMode" size="small">
-                  <NRadioButton value="raw">原始编辑</NRadioButton>
-                  <NRadioButton value="structured">结构化编辑</NRadioButton>
-                </NRadioGroup>
-              </div>
-            </div>
-          </div>
-          <div class="caddy-header-save">
-            <NTooltip v-if="viewMode === 'edit' && editMode === 'structured'">
-              <template #trigger>
-                <NButton
-                  size="small"
-                  secondary
-                  circle
-                  :disabled="!currentServerId"
-                  @click="applyStructuredToRaw"
-                >
-                  <SvgIcon icon="carbon:direction-straight-right" class="caddy-icon" />
-                </NButton>
-              </template>
-              生成到原始配置
-            </NTooltip>
-            <NTooltip v-if="viewMode === 'edit' && editMode === 'raw'">
-              <template #trigger>
-                <NButton 
-                  type="primary" 
-                  size="small" 
-                  circle
-                  :loading="saving"
-                  :disabled="!currentServerId"
-                  @click="saveRawConfig"
-                >
-                  <SvgIcon icon="carbon:save" class="caddy-icon" />
-                </NButton>
-              </template>
+          <div class="caddy-toolbar-actions">
+            <NButton
+              v-if="pageMode === 'quick'"
+              type="primary"
+              size="small"
+              :loading="saving"
+              :disabled="!currentServerId"
+              @click="saveQuickConfig"
+            >
+              保存快速配置
+            </NButton>
+            <NButton
+              v-else-if="pageMode === 'raw'"
+              type="primary"
+              size="small"
+              :loading="saving"
+              :disabled="!currentServerId"
+              @click="saveRawConfig"
+            >
               保存原始配置
-            </NTooltip>
-            <NTooltip v-if="viewMode === 'edit' && editMode === 'structured'">
-              <template #trigger>
-                <NButton
-                  size="small"
-                  type="primary"
-                  circle
-                  :loading="saving"
-                  :disabled="!currentServerId"
-                  @click="saveStructuredConfig"
-                >
-                  <SvgIcon icon="carbon:save-series" class="caddy-icon" />
-                </NButton>
-              </template>
-              保存结构化配置
-            </NTooltip>
+            </NButton>
+            <NTag v-else size="small" type="info" :bordered="false">预览模式</NTag>
+
+            <NDropdown :options="moreOptions" @select="handleMoreAction">
+              <NButton size="small" secondary>
+                <div class="flex items-center gap-1">
+                  <span>更多</span>
+                  <SvgIcon icon="carbon:chevron-down" class="caddy-icon" />
+                </div>
+              </NButton>
+            </NDropdown>
           </div>
         </div>
       </template>
-      
+
       <div class="flex-1 min-h-0 flex flex-col gap-4 overflow-hidden">
-        <WafIntegrationCard
-          v-if="servers.length > 0 && viewMode === 'edit' && editMode === 'structured'"
-          :loading="wafIntegrationLoading"
-          :submitting="wafIntegrationSubmitting"
-          :previewing="wafIntegrationPreviewing"
-          :unavailable="wafIntegrationUnavailable"
-          :status="wafIntegrationStatus"
-          :selected-sites="selectedWafIntegrationSites"
-          :preview-actions="wafIntegrationPreviewActions"
-          :on-refresh="handleRefreshWafIntegrationState"
-          :on-preview="handlePreviewWafIntegration"
-          :on-enable="handleEnableWafIntegration"
-          :on-disable="handleDisableWafIntegration"
-          :on-site-change="handleWafIntegrationSiteChange"
-        />
-        <div v-if="servers.length === 0" class="flex flex-col items-center justify-center p-8 text-gray-400 h-full">
-           <div class="text-lg">未找到 Caddy 服务器</div>
-           <div class="text-sm mt-2">请点击上方“+”按钮添加服务器</div>
+        <div class="caddy-mode-strip">
+          <NRadioGroup :value="pageMode" size="small" @update:value="handleModeChange">
+            <NRadioButton
+              v-for="option in pageModeOptions"
+              :key="option.value"
+              :value="option.value"
+            >
+              {{ option.label }}
+            </NRadioButton>
+          </NRadioGroup>
+          <div class="text-xs text-gray-500">
+            {{ pageModeSummary }}
+          </div>
         </div>
-        
+
+        <div v-if="servers.length === 0" class="flex flex-col items-center justify-center p-8 text-gray-400 h-full">
+          <div class="text-lg">未找到 Caddy 服务器</div>
+          <div class="text-sm mt-2">先添加一个服务器，再开始管理配置。</div>
+          <NButton class="mt-4" type="primary" @click="openAddServerModal">添加服务器</NButton>
+        </div>
+
         <NSpin :show="loading" class="flex-1 min-h-0" content-class="h-full min-h-0" v-else>
-          <ConfigPreviewPanel
-            v-if="viewMode === 'preview'"
-            :config-content="formattedConfigContent"
+          <n-alert
+            v-if="pageMode === 'quick' && quickValidationErrors.length"
+            type="error"
+            :show-icon="true"
+            class="mb-3"
+          >
+            {{ quickValidationErrors[0] }}
+          </n-alert>
+
+          <QuickConfigPanel
+            v-if="pageMode === 'quick'"
+            v-model:active-site-id="activeQuickSiteId"
+            :sites="quickSiteDrafts"
+            :complex-sites="complexSiteSummaries"
+            @add="addQuickSite"
+            @duplicate="duplicateQuickSite"
+            @remove="removeQuickSite"
+            @switch-raw="switchToRawFromQuick"
           />
-          <RawEditorPanel v-else-if="editMode === 'raw'" v-model="configContent" />
-          <StructuredEditorPanel
+          <RawEditorPanel
+            v-else-if="pageMode === 'raw'"
+            v-model="configContent"
+          />
+          <ConfigPreviewPanel
             v-else
-            v-model:active-site-id="activeSiteId"
-            v-model:active-site="activeSiteModel"
-            v-model:active-tab="activeSiteTab"
-            :form-model="formModel"
-            :focus-route-id="focusRouteId"
-            :sidebar-width="sidebarWidth"
-            :structured-available="structuredReady"
-            :validation-errors="validationErrors"
-            :global-raw-changed="globalRawChanged"
-            :global-preview-expanded="globalPreviewExpanded"
-            :global-preview-text="globalPreviewText"
-            :on-apply-preset="applyPreset"
-            :on-import-raw-to-structured="importRawToStructured"
-            :on-open-preview-modal="openPreviewModal"
-            :on-toggle-global-preview="toggleGlobalPreview"
-            :on-open-global-modal="openGlobalModal"
-            :on-focus-validation-error="focusValidationError"
-            :on-start-resize="startResize"
-            :on-add-site="addSite"
-            :on-duplicate-site="duplicateSite"
-            :on-remove-site="removeSite"
-            :on-move-site="moveSite"
+            :config-content="formattedConfigContent"
           />
         </NSpin>
       </div>
     </NCard>
+
+    <NDrawer v-model:show="showSettingsDrawer" :width="560" placement="right">
+      <NDrawerContent title="更多设置" closable>
+        <n-space vertical size="large">
+          <n-card size="small" :bordered="false">
+            <template #header>配置工具</template>
+            <div class="flex flex-wrap gap-2">
+              <n-button size="small" @click="applyPreset">应用默认模板</n-button>
+              <n-button size="small" @click="importRawToStructured">从原始配置解析</n-button>
+              <n-button size="small" @click="openHistoryModal" :disabled="!currentServerId">查看历史版本</n-button>
+            </div>
+          </n-card>
+
+          <n-card size="small" :bordered="false">
+            <template #header>
+              <div class="flex items-center justify-between gap-3">
+                <span>全局配置</span>
+                <div class="flex items-center gap-2">
+                  <n-tag v-if="globalRawChanged" type="warning" size="small" :bordered="false">未保存</n-tag>
+                  <n-button size="tiny" secondary @click="restoreGlobalRaw" :disabled="!initialGlobalRaw">
+                    恢复已保存
+                  </n-button>
+                  <n-button size="tiny" @click="openGlobalCompare" :disabled="!formModel.global.raw && !initialGlobalRaw">
+                    对比
+                  </n-button>
+                </div>
+              </div>
+            </template>
+
+            <n-alert v-if="pageMode !== 'quick'" type="info" :show-icon="true" class="mb-3">
+              全局配置仅在“快速配置”模式下可编辑；原始配置模式请直接维护完整 Caddyfile。
+            </n-alert>
+
+            <div class="relative h-[240px]">
+              <VueMonacoEditor
+                v-model:value="formModel.global.raw"
+                language="shell"
+                theme="vs"
+                :options="{
+                  automaticLayout: true,
+                  fixedOverflowWidgets: true,
+                  readOnly: pageMode !== 'quick',
+                  minimap: { enabled: false },
+                  scrollBeyondLastLine: false,
+                  wordWrap: 'on'
+                }"
+                class="absolute inset-0"
+              />
+            </div>
+          </n-card>
+
+          <n-card size="small" :bordered="false">
+            <template #header>高级集成</template>
+            <WafIntegrationCard
+              :loading="wafIntegrationLoading"
+              :submitting="wafIntegrationSubmitting"
+              :previewing="wafIntegrationPreviewing"
+              :unavailable="wafIntegrationUnavailable"
+              :status="wafIntegrationStatus"
+              :selected-sites="selectedWafIntegrationSites"
+              :preview-actions="wafIntegrationPreviewActions"
+              :on-refresh="handleRefreshWafIntegrationState"
+              :on-preview="handlePreviewWafIntegration"
+              :on-enable="handleEnableWafIntegration"
+              :on-disable="handleDisableWafIntegration"
+              :on-site-change="handleWafIntegrationSiteChange"
+            />
+          </n-card>
+        </n-space>
+      </NDrawerContent>
+    </NDrawer>
 
     <NModal v-model:show="showHistoryModal" preset="card" title="配置历史" class="w-[90vw] max-w-3xl">
       <n-data-table
@@ -2114,36 +2041,6 @@ onBeforeUnmount(() => {
       </div>
     </NModal>
 
-    <NModal v-model:show="showGlobalModal" preset="card" title="全局配置" class="w-[90vw] max-w-4xl">
-      <div class="flex items-center justify-between mb-3">
-        <div class="text-sm text-gray-500">原样保留最外层 options 块</div>
-        <n-space>
-          <n-button size="tiny" secondary @click="restoreGlobalRaw" :disabled="!initialGlobalRaw">
-            恢复已保存
-          </n-button>
-          <n-button size="tiny" @click="openGlobalCompare" :disabled="!formModel.global.raw && !initialGlobalRaw">
-            对比
-          </n-button>
-        </n-space>
-      </div>
-      <div class="relative h-[45vh]">
-        <VueMonacoEditor
-          v-model:value="formModel.global.raw"
-          language="shell"
-          theme="vs"
-          :options="{
-            automaticLayout: true,
-            fixedOverflowWidgets: true,
-            readOnly: isPreview,
-            minimap: { enabled: false },
-            scrollBeyondLastLine: false,
-            wordWrap: 'on'
-          }"
-          class="absolute inset-0"
-        />
-      </div>
-    </NModal>
-
     <NModal v-model:show="showGlobalCompareModal" preset="card" title="全局配置对比" class="w-[90vw] max-w-4xl">
       <div class="diff-head">
         <div>已保存</div>
@@ -2197,39 +2094,6 @@ onBeforeUnmount(() => {
         </div>
       </NForm>
     </NModal>
-
-    <NModal v-model:show="showSiteModal" preset="card" :title="activeSiteTitle" class="w-[90vw] max-w-5xl">
-      <div class="h-[75vh] flex flex-col">
-        <div class="flex gap-2 mb-2">
-          <n-button size="tiny" @click="copyText(formattedRawSiteContent)">复制</n-button>
-          <n-button
-            size="tiny"
-            @click="downloadText(`Caddyfile-${currentServer?.name || currentServer?.id || 'server'}`, formattedRawSiteContent)"
-          >
-            下载
-          </n-button>
-        </div>
-        <div class="relative flex-1 min-h-0">
-          <VueMonacoEditor
-            :value="formattedRawSiteContent"
-            language="shell"
-            theme="vs"
-            :options="{
-              automaticLayout: true,
-              fixedOverflowWidgets: true,
-              readOnly: true,
-              minimap: { enabled: false },
-              scrollBeyondLastLine: false,
-              wordWrap: 'on'
-            }"
-            class="absolute inset-0"
-          />
-        </div>
-        <div class="flex justify-end gap-2 mt-2">
-          <n-button @click="showSiteModal = false">关闭</n-button>
-        </div>
-      </div>
-    </NModal>
   </div>
 </template>
 
@@ -2248,64 +2112,30 @@ onBeforeUnmount(() => {
   z-index: 1000 !important;
 }
 
-.caddy-header {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 16px;
-  align-items: start;
-}
-
-.caddy-header-title {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding-top: 2px;
-}
-
-.caddy-title-text {
-  font-size: 20px;
-  font-weight: 600;
-  line-height: 1.2;
-}
-
-.caddy-title-sub {
-  font-size: 12px;
-  color: #64748b;
-}
-
-.caddy-header-panels {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.caddy-header-panel {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 4px 0;
-}
-
-.caddy-panel-label {
-  font-size: 12px;
-  color: #64748b;
-  min-width: 52px;
-}
-
-.caddy-panel-controls {
+.caddy-toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  min-width: 0;
+  justify-content: space-between;
+  gap: 12px;
 }
 
-.caddy-header-save {
+.caddy-toolbar-actions {
   display: flex;
-  align-items: flex-start;
-  justify-content: flex-end;
-  padding-top: 8px;
+  align-items: center;
   gap: 8px;
+}
+
+.caddy-mode-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
 }
 
 .caddy-icon {
@@ -2316,19 +2146,12 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 900px) {
-  .caddy-header {
-    grid-template-columns: 1fr;
+  .caddy-toolbar {
+    align-items: stretch;
   }
-  .caddy-header-panel {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  .caddy-panel-label {
-    min-width: auto;
-  }
-  .caddy-header-save {
+  .caddy-toolbar-actions {
     justify-content: flex-start;
-    padding-top: 0;
+    flex-wrap: wrap;
   }
 }
 
