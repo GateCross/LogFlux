@@ -158,6 +158,7 @@ type (
 	prefix: /api
 	group:  notification
 	jwt:    Auth
+	middleware: Permission
 )
 service logflux-api {
 	// Channel

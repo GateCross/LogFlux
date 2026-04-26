@@ -39,516 +39,546 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 	)
 
 	server.AddRoutes(
-		[]rest.Route{
-			{
-				Method:  http.MethodGet,
-				Path:    "/caddy/server",
-				Handler: caddy.GetCaddyServersHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/caddy/server",
-				Handler: caddy.AddCaddyServerHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPut,
-				Path:    "/caddy/server/:id",
-				Handler: caddy.UpdateCaddyServerHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodDelete,
-				Path:    "/caddy/server/:id",
-				Handler: caddy.DeleteCaddyServerHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodGet,
-				Path:    "/caddy/server/:serverId/config",
-				Handler: caddy.GetCaddyConfigHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/caddy/server/:serverId/config",
-				Handler: caddy.UpdateCaddyConfigHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodGet,
-				Path:    "/caddy/server/:serverId/config/history",
-				Handler: caddy.GetCaddyConfigHistoryHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodGet,
-				Path:    "/caddy/server/:serverId/config/history/:historyId",
-				Handler: caddy.GetCaddyConfigHistoryDetailHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/caddy/server/:serverId/config/rollback",
-				Handler: caddy.RollbackCaddyConfigHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/caddy/waf/engine/check",
-				Handler: caddy.CheckWafEngineHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodGet,
-				Path:    "/caddy/waf/engine/status",
-				Handler: caddy.GetWafEngineStatusHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/caddy/waf/integration/apply",
-				Handler: caddy.ApplyWafIntegrationHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodGet,
-				Path:    "/caddy/waf/integration/status",
-				Handler: caddy.GetWafIntegrationStatusHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodGet,
-				Path:    "/caddy/waf/job",
-				Handler: caddy.ListWafJobsHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/caddy/waf/job/clear",
-				Handler: caddy.ClearWafJobsHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodGet,
-				Path:    "/caddy/waf/policy",
-				Handler: caddy.ListWafPoliciesHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/caddy/waf/policy",
-				Handler: caddy.CreateWafPolicyHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPut,
-				Path:    "/caddy/waf/policy/:id",
-				Handler: caddy.UpdateWafPolicyHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodDelete,
-				Path:    "/caddy/waf/policy/:id",
-				Handler: caddy.DeleteWafPolicyHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/caddy/waf/policy/:id/preview",
-				Handler: caddy.PreviewWafPolicyHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/caddy/waf/policy/:id/publish",
-				Handler: caddy.PublishWafPolicyHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/caddy/waf/policy/:id/validate",
-				Handler: caddy.ValidateWafPolicyHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodGet,
-				Path:    "/caddy/waf/policy/binding",
-				Handler: caddy.ListWafPolicyBindingsHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/caddy/waf/policy/binding",
-				Handler: caddy.CreateWafPolicyBindingHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPut,
-				Path:    "/caddy/waf/policy/binding/:id",
-				Handler: caddy.UpdateWafPolicyBindingHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodDelete,
-				Path:    "/caddy/waf/policy/binding/:id",
-				Handler: caddy.DeleteWafPolicyBindingHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodGet,
-				Path:    "/caddy/waf/policy/exclusion",
-				Handler: caddy.ListWafRuleExclusionsHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/caddy/waf/policy/exclusion",
-				Handler: caddy.CreateWafRuleExclusionHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPut,
-				Path:    "/caddy/waf/policy/exclusion/:id",
-				Handler: caddy.UpdateWafRuleExclusionHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodDelete,
-				Path:    "/caddy/waf/policy/exclusion/:id",
-				Handler: caddy.DeleteWafRuleExclusionHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodGet,
-				Path:    "/caddy/waf/policy/false-positive-feedback",
-				Handler: caddy.ListWafPolicyFalsePositiveFeedbacksHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/caddy/waf/policy/false-positive-feedback",
-				Handler: caddy.CreateWafPolicyFalsePositiveFeedbackHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPut,
-				Path:    "/caddy/waf/policy/false-positive-feedback/:id/status",
-				Handler: caddy.UpdateWafPolicyFalsePositiveFeedbackStatusHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPut,
-				Path:    "/caddy/waf/policy/false-positive-feedback/batch-status",
-				Handler: caddy.BatchUpdateWafPolicyFalsePositiveFeedbackStatusHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodGet,
-				Path:    "/caddy/waf/policy/revision",
-				Handler: caddy.ListWafPolicyRevisionsHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/caddy/waf/policy/rollback",
-				Handler: caddy.RollbackWafPolicyHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodGet,
-				Path:    "/caddy/waf/policy/stats",
-				Handler: caddy.GetWafPolicyStatsHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodGet,
-				Path:    "/caddy/waf/release",
-				Handler: caddy.ListWafReleasesHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/caddy/waf/release/:id/activate",
-				Handler: caddy.ActivateWafReleaseHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/caddy/waf/release/clear",
-				Handler: caddy.ClearWafReleasesHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/caddy/waf/release/rollback",
-				Handler: caddy.RollbackWafReleaseHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodGet,
-				Path:    "/caddy/waf/source",
-				Handler: caddy.ListWafSourcesHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/caddy/waf/source",
-				Handler: caddy.AddWafSourceHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPut,
-				Path:    "/caddy/waf/source/:id",
-				Handler: caddy.UpdateWafSourceHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodDelete,
-				Path:    "/caddy/waf/source/:id",
-				Handler: caddy.DeleteWafSourceHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/caddy/waf/source/:id/check",
-				Handler: caddy.CheckWafSourceHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/caddy/waf/source/:id/sync",
-				Handler: caddy.SyncWafSourceHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/caddy/waf/upload",
-				Handler: caddy.UploadWafPackageHandler(serverCtx),
-			},
-		},
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.Permission},
+			[]rest.Route{
+				{
+					Method:  http.MethodGet,
+					Path:    "/caddy/server",
+					Handler: caddy.GetCaddyServersHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/caddy/server",
+					Handler: caddy.AddCaddyServerHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPut,
+					Path:    "/caddy/server/:id",
+					Handler: caddy.UpdateCaddyServerHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodDelete,
+					Path:    "/caddy/server/:id",
+					Handler: caddy.DeleteCaddyServerHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/caddy/server/:serverId/config",
+					Handler: caddy.GetCaddyConfigHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/caddy/server/:serverId/config",
+					Handler: caddy.UpdateCaddyConfigHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/caddy/server/:serverId/config/history",
+					Handler: caddy.GetCaddyConfigHistoryHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/caddy/server/:serverId/config/history/:historyId",
+					Handler: caddy.GetCaddyConfigHistoryDetailHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/caddy/server/:serverId/config/rollback",
+					Handler: caddy.RollbackCaddyConfigHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/caddy/waf/engine/check",
+					Handler: caddy.CheckWafEngineHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/caddy/waf/engine/status",
+					Handler: caddy.GetWafEngineStatusHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/caddy/waf/integration/apply",
+					Handler: caddy.ApplyWafIntegrationHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/caddy/waf/integration/status",
+					Handler: caddy.GetWafIntegrationStatusHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/caddy/waf/job",
+					Handler: caddy.ListWafJobsHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/caddy/waf/job/clear",
+					Handler: caddy.ClearWafJobsHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/caddy/waf/policy",
+					Handler: caddy.ListWafPoliciesHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/caddy/waf/policy",
+					Handler: caddy.CreateWafPolicyHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPut,
+					Path:    "/caddy/waf/policy/:id",
+					Handler: caddy.UpdateWafPolicyHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodDelete,
+					Path:    "/caddy/waf/policy/:id",
+					Handler: caddy.DeleteWafPolicyHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/caddy/waf/policy/:id/preview",
+					Handler: caddy.PreviewWafPolicyHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/caddy/waf/policy/:id/publish",
+					Handler: caddy.PublishWafPolicyHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/caddy/waf/policy/:id/validate",
+					Handler: caddy.ValidateWafPolicyHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/caddy/waf/policy/binding",
+					Handler: caddy.ListWafPolicyBindingsHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/caddy/waf/policy/binding",
+					Handler: caddy.CreateWafPolicyBindingHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPut,
+					Path:    "/caddy/waf/policy/binding/:id",
+					Handler: caddy.UpdateWafPolicyBindingHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodDelete,
+					Path:    "/caddy/waf/policy/binding/:id",
+					Handler: caddy.DeleteWafPolicyBindingHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/caddy/waf/policy/exclusion",
+					Handler: caddy.ListWafRuleExclusionsHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/caddy/waf/policy/exclusion",
+					Handler: caddy.CreateWafRuleExclusionHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPut,
+					Path:    "/caddy/waf/policy/exclusion/:id",
+					Handler: caddy.UpdateWafRuleExclusionHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodDelete,
+					Path:    "/caddy/waf/policy/exclusion/:id",
+					Handler: caddy.DeleteWafRuleExclusionHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/caddy/waf/policy/false-positive-feedback",
+					Handler: caddy.ListWafPolicyFalsePositiveFeedbacksHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/caddy/waf/policy/false-positive-feedback",
+					Handler: caddy.CreateWafPolicyFalsePositiveFeedbackHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPut,
+					Path:    "/caddy/waf/policy/false-positive-feedback/:id/status",
+					Handler: caddy.UpdateWafPolicyFalsePositiveFeedbackStatusHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPut,
+					Path:    "/caddy/waf/policy/false-positive-feedback/batch-status",
+					Handler: caddy.BatchUpdateWafPolicyFalsePositiveFeedbackStatusHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/caddy/waf/policy/revision",
+					Handler: caddy.ListWafPolicyRevisionsHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/caddy/waf/policy/rollback",
+					Handler: caddy.RollbackWafPolicyHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/caddy/waf/policy/stats",
+					Handler: caddy.GetWafPolicyStatsHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/caddy/waf/release",
+					Handler: caddy.ListWafReleasesHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/caddy/waf/release/:id/activate",
+					Handler: caddy.ActivateWafReleaseHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/caddy/waf/release/clear",
+					Handler: caddy.ClearWafReleasesHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/caddy/waf/release/rollback",
+					Handler: caddy.RollbackWafReleaseHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/caddy/waf/source",
+					Handler: caddy.ListWafSourcesHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/caddy/waf/source",
+					Handler: caddy.AddWafSourceHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPut,
+					Path:    "/caddy/waf/source/:id",
+					Handler: caddy.UpdateWafSourceHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodDelete,
+					Path:    "/caddy/waf/source/:id",
+					Handler: caddy.DeleteWafSourceHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/caddy/waf/source/:id/check",
+					Handler: caddy.CheckWafSourceHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/caddy/waf/source/:id/sync",
+					Handler: caddy.SyncWafSourceHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/caddy/waf/upload",
+					Handler: caddy.UploadWafPackageHandler(serverCtx),
+				},
+			}...,
+		),
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
 		rest.WithPrefix("/api"),
 	)
 
 	server.AddRoutes(
-		[]rest.Route{
-			{
-				Method:  http.MethodGet,
-				Path:    "/cron/log",
-				Handler: cron.GetCronLogListHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodGet,
-				Path:    "/cron/task",
-				Handler: cron.GetCronTaskListHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/cron/task",
-				Handler: cron.CreateCronTaskHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPut,
-				Path:    "/cron/task/:id",
-				Handler: cron.UpdateCronTaskHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodDelete,
-				Path:    "/cron/task/:id",
-				Handler: cron.DeleteCronTaskHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/cron/task/:id/trigger",
-				Handler: cron.TriggerCronTaskHandler(serverCtx),
-			},
-		},
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.Permission},
+			[]rest.Route{
+				{
+					Method:  http.MethodGet,
+					Path:    "/cron/log",
+					Handler: cron.GetCronLogListHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/cron/task",
+					Handler: cron.GetCronTaskListHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/cron/task",
+					Handler: cron.CreateCronTaskHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPut,
+					Path:    "/cron/task/:id",
+					Handler: cron.UpdateCronTaskHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodDelete,
+					Path:    "/cron/task/:id",
+					Handler: cron.DeleteCronTaskHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/cron/task/:id/trigger",
+					Handler: cron.TriggerCronTaskHandler(serverCtx),
+				},
+			}...,
+		),
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
 		rest.WithPrefix("/api"),
 	)
 
 	server.AddRoutes(
-		[]rest.Route{
-			{
-				Method:  http.MethodGet,
-				Path:    "/dashboard/summary",
-				Handler: dashboard.GetDashboardSummaryHandler(serverCtx),
-			},
-		},
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.Permission},
+			[]rest.Route{
+				{
+					Method:  http.MethodGet,
+					Path:    "/dashboard/summary",
+					Handler: dashboard.GetDashboardSummaryHandler(serverCtx),
+				},
+			}...,
+		),
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
 		rest.WithPrefix("/api"),
 	)
 
 	server.AddRoutes(
-		[]rest.Route{
-			{
-				Method:  http.MethodPost,
-				Path:    "/source",
-				Handler: log.AddLogSourceHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodGet,
-				Path:    "/source",
-				Handler: log.ListLogSourcesHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPut,
-				Path:    "/source/:id",
-				Handler: log.UpdateLogSourceHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodDelete,
-				Path:    "/source/:id",
-				Handler: log.DeleteLogSourceHandler(serverCtx),
-			},
-		},
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.Permission},
+			[]rest.Route{
+				{
+					Method:  http.MethodGet,
+					Path:    "/caddy/logs",
+					Handler: log.GetCaddyLogsHandler(serverCtx),
+				},
+			}...,
+		),
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
 		rest.WithPrefix("/api"),
 	)
 
 	server.AddRoutes(
-		[]rest.Route{
-			{
-				Method:  http.MethodGet,
-				Path:    "/caddy/logs",
-				Handler: log.GetCaddyLogsHandler(serverCtx),
-			},
-		},
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.Permission},
+			[]rest.Route{
+				{
+					Method:  http.MethodGet,
+					Path:    "/system/logs",
+					Handler: log.GetSystemLogsHandler(serverCtx),
+				},
+			}...,
+		),
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
 		rest.WithPrefix("/api"),
 	)
 
 	server.AddRoutes(
-		[]rest.Route{
-			{
-				Method:  http.MethodGet,
-				Path:    "/system/logs",
-				Handler: log.GetSystemLogsHandler(serverCtx),
-			},
-		},
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.Permission},
+			[]rest.Route{
+				{
+					Method:  http.MethodPost,
+					Path:    "/source",
+					Handler: log.AddLogSourceHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/source",
+					Handler: log.ListLogSourcesHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPut,
+					Path:    "/source/:id",
+					Handler: log.UpdateLogSourceHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodDelete,
+					Path:    "/source/:id",
+					Handler: log.DeleteLogSourceHandler(serverCtx),
+				},
+			}...,
+		),
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
 		rest.WithPrefix("/api"),
 	)
 
 	server.AddRoutes(
-		[]rest.Route{
-			{
-				Method:  http.MethodPost,
-				Path:    "/menu",
-				Handler: menu.CreateMenuHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPut,
-				Path:    "/menu/:id",
-				Handler: menu.UpdateMenuHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodDelete,
-				Path:    "/menu/:id",
-				Handler: menu.DeleteMenuHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodGet,
-				Path:    "/menu/list",
-				Handler: menu.GetMenuListHandler(serverCtx),
-			},
-		},
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.Permission},
+			[]rest.Route{
+				{
+					Method:  http.MethodPost,
+					Path:    "/menu",
+					Handler: menu.CreateMenuHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPut,
+					Path:    "/menu/:id",
+					Handler: menu.UpdateMenuHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodDelete,
+					Path:    "/menu/:id",
+					Handler: menu.DeleteMenuHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/menu/list",
+					Handler: menu.GetMenuListHandler(serverCtx),
+				},
+			}...,
+		),
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
 		rest.WithPrefix("/api"),
 	)
 
 	server.AddRoutes(
-		[]rest.Route{
-			{
-				Method:  http.MethodGet,
-				Path:    "/notification/channel",
-				Handler: notification.GetChannelListHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/notification/channel",
-				Handler: notification.CreateChannelHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPut,
-				Path:    "/notification/channel/:id",
-				Handler: notification.UpdateChannelHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodDelete,
-				Path:    "/notification/channel/:id",
-				Handler: notification.DeleteChannelHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/notification/channel/test",
-				Handler: notification.TestChannelHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodGet,
-				Path:    "/notification/log",
-				Handler: notification.GetNotificationLogsHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodDelete,
-				Path:    "/notification/log/:id",
-				Handler: notification.DeleteNotificationLogHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/notification/log/batch-delete",
-				Handler: notification.BatchDeleteNotificationLogsHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/notification/log/clear",
-				Handler: notification.ClearNotificationLogsHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/notification/read/:id",
-				Handler: notification.ReadNotificationHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/notification/read/all",
-				Handler: notification.ReadAllNotificationsHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodGet,
-				Path:    "/notification/rule",
-				Handler: notification.GetRuleListHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/notification/rule",
-				Handler: notification.CreateRuleHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPut,
-				Path:    "/notification/rule/:id",
-				Handler: notification.UpdateRuleHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodDelete,
-				Path:    "/notification/rule/:id",
-				Handler: notification.DeleteRuleHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodGet,
-				Path:    "/notification/template",
-				Handler: notification.GetTemplateListHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/notification/template",
-				Handler: notification.CreateTemplateHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPut,
-				Path:    "/notification/template/:id",
-				Handler: notification.UpdateTemplateHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodDelete,
-				Path:    "/notification/template/:id",
-				Handler: notification.DeleteTemplateHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/notification/template/preview",
-				Handler: notification.PreviewTemplateHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodGet,
-				Path:    "/notification/unread",
-				Handler: notification.GetUnreadNotificationsHandler(serverCtx),
-			},
-		},
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.Permission},
+			[]rest.Route{
+				{
+					Method:  http.MethodGet,
+					Path:    "/notification/channel",
+					Handler: notification.GetChannelListHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/notification/channel",
+					Handler: notification.CreateChannelHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPut,
+					Path:    "/notification/channel/:id",
+					Handler: notification.UpdateChannelHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodDelete,
+					Path:    "/notification/channel/:id",
+					Handler: notification.DeleteChannelHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/notification/channel/test",
+					Handler: notification.TestChannelHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/notification/log",
+					Handler: notification.GetNotificationLogsHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodDelete,
+					Path:    "/notification/log/:id",
+					Handler: notification.DeleteNotificationLogHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/notification/log/batch-delete",
+					Handler: notification.BatchDeleteNotificationLogsHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/notification/log/clear",
+					Handler: notification.ClearNotificationLogsHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/notification/read/:id",
+					Handler: notification.ReadNotificationHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/notification/read/all",
+					Handler: notification.ReadAllNotificationsHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/notification/rule",
+					Handler: notification.GetRuleListHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/notification/rule",
+					Handler: notification.CreateRuleHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPut,
+					Path:    "/notification/rule/:id",
+					Handler: notification.UpdateRuleHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodDelete,
+					Path:    "/notification/rule/:id",
+					Handler: notification.DeleteRuleHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/notification/template",
+					Handler: notification.GetTemplateListHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/notification/template",
+					Handler: notification.CreateTemplateHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPut,
+					Path:    "/notification/template/:id",
+					Handler: notification.UpdateTemplateHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodDelete,
+					Path:    "/notification/template/:id",
+					Handler: notification.DeleteTemplateHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/notification/template/preview",
+					Handler: notification.PreviewTemplateHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/notification/unread",
+					Handler: notification.GetUnreadNotificationsHandler(serverCtx),
+				},
+			}...,
+		),
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
 		rest.WithPrefix("/api"),
 	)
 
 	server.AddRoutes(
-		[]rest.Route{
-			{
-				Method:  http.MethodPut,
-				Path:    "/role/:id/permissions",
-				Handler: role.UpdateRolePermissionsHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodGet,
-				Path:    "/role/list",
-				Handler: role.GetRoleListHandler(serverCtx),
-			},
-		},
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.Permission},
+			[]rest.Route{
+				{
+					Method:  http.MethodPut,
+					Path:    "/role/:id/permissions",
+					Handler: role.UpdateRolePermissionsHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/role/list",
+					Handler: role.GetRoleListHandler(serverCtx),
+				},
+			}...,
+		),
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
 		rest.WithPrefix("/api"),
 	)
 
 	server.AddRoutes(
-		[]rest.Route{
-			{
-				Method:  http.MethodGet,
-				Path:    "/route/getUserRoutes",
-				Handler: route.GetUserRoutesHandler(serverCtx),
-			},
-		},
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.Permission},
+			[]rest.Route{
+				{
+					Method:  http.MethodGet,
+					Path:    "/route/getUserRoutes",
+					Handler: route.GetUserRoutesHandler(serverCtx),
+				},
+			}...,
+		),
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
 		rest.WithPrefix("/api"),
 	)
@@ -570,48 +600,51 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 	)
 
 	server.AddRoutes(
-		[]rest.Route{
-			{
-				Method:  http.MethodPost,
-				Path:    "/user",
-				Handler: user.AddUserHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPut,
-				Path:    "/user/:id",
-				Handler: user.UpdateUserHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodDelete,
-				Path:    "/user/:id",
-				Handler: user.DeleteUserHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPut,
-				Path:    "/user/:id/status",
-				Handler: user.ToggleUserStatusHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
-				Path:    "/user/change_password",
-				Handler: user.ChangePasswordHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodGet,
-				Path:    "/user/info",
-				Handler: user.GetUserInfoHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodGet,
-				Path:    "/user/list",
-				Handler: user.GetUserListHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPut,
-				Path:    "/user/preferences",
-				Handler: user.UpdateUserPreferencesHandler(serverCtx),
-			},
-		},
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.Permission},
+			[]rest.Route{
+				{
+					Method:  http.MethodPost,
+					Path:    "/user",
+					Handler: user.AddUserHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPut,
+					Path:    "/user/:id",
+					Handler: user.UpdateUserHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodDelete,
+					Path:    "/user/:id",
+					Handler: user.DeleteUserHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPut,
+					Path:    "/user/:id/status",
+					Handler: user.ToggleUserStatusHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/user/change_password",
+					Handler: user.ChangePasswordHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/user/info",
+					Handler: user.GetUserInfoHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/user/list",
+					Handler: user.GetUserListHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPut,
+					Path:    "/user/preferences",
+					Handler: user.UpdateUserPreferencesHandler(serverCtx),
+				},
+			}...,
+		),
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
 		rest.WithPrefix("/api"),
 	)

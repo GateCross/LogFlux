@@ -22,6 +22,7 @@ type FetchOptions struct {
 	AuthSecret     string
 	ProxyURL       string
 	TimeoutSec     int
+	MaxBytes       int64
 }
 
 type FetchResult struct {
@@ -102,11 +103,19 @@ func FetchPackage(downloadURL, targetPath string, options FetchOptions) (*FetchR
 		return nil, fmt.Errorf("create temp file failed: %w", err)
 	}
 
-	writtenBytes, copyErr := io.Copy(tempFile, response.Body)
+	source := io.Reader(response.Body)
+	if options.MaxBytes > 0 {
+		source = &io.LimitedReader{R: response.Body, N: options.MaxBytes + 1}
+	}
+	writtenBytes, copyErr := io.Copy(tempFile, source)
 	closeErr := tempFile.Close()
 	if copyErr != nil {
 		_ = os.Remove(tempFilePath)
 		return nil, fmt.Errorf("write temp file failed: %w", copyErr)
+	}
+	if options.MaxBytes > 0 && writtenBytes > options.MaxBytes {
+		_ = os.Remove(tempFilePath)
+		return nil, fmt.Errorf("package too large: %d > %d", writtenBytes, options.MaxBytes)
 	}
 	if closeErr != nil {
 		_ = os.Remove(tempFilePath)

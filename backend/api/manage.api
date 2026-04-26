@@ -696,6 +696,7 @@ type (
 	prefix: /api
 	group:  user
 	jwt:    Auth
+	middleware: Permission
 )
 service logflux-api {
 	@handler GetUserInfo
@@ -727,6 +728,7 @@ service logflux-api {
 	prefix: /api
 	group:  role
 	jwt:    Auth
+	middleware: Permission
 )
 service logflux-api {
 	@handler GetRoleList
@@ -740,6 +742,7 @@ service logflux-api {
 	prefix: /api
 	group:  log
 	jwt:    Auth
+	middleware: Permission
 )
 service logflux-api {
 	@handler AddLogSource
@@ -759,6 +762,7 @@ service logflux-api {
 	prefix: /api
 	group:  dashboard
 	jwt:    Auth
+	middleware: Permission
 )
 service logflux-api {
 	@handler GetDashboardSummary
@@ -769,6 +773,7 @@ service logflux-api {
 	prefix: /api
 	group:  caddy
 	jwt:    Auth
+	middleware: Permission
 )
 service logflux-api {
 	@handler GetCaddyServers
@@ -920,6 +925,7 @@ service logflux-api {
 	prefix: /api
 	group:  menu
 	jwt:    Auth
+	middleware: Permission
 )
 service logflux-api {
 	@handler GetMenuList
