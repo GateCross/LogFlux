@@ -1,6 +1,7 @@
 # IDEs
 .vscode
 .idea
+.claude
 .DS_Store
 
 # Frontend
