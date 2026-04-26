@@ -110,6 +110,7 @@ func (l *SyncWafSourceLogic) SyncWafSource(req *types.WafSourceSyncReq) (resp *t
 		AuthSecret:     source.AuthSecret,
 		ProxyURL:       source.ProxyURL,
 		TimeoutSec:     fetchTimeoutSec,
+		MaxBytes:       helper.svcCtx.Config.Waf.MaxPackageBytes,
 	})
 	if err != nil && strings.TrimSpace(source.ProxyURL) != "" {
 		l.Logger.Errorf("proxy fetch failed, fallback direct connect: source=%s proxy=%s err=%v", source.Name, source.ProxyURL, err)
@@ -119,6 +120,7 @@ func (l *SyncWafSourceLogic) SyncWafSource(req *types.WafSourceSyncReq) (resp *t
 			AuthSecret:     source.AuthSecret,
 			ProxyURL:       "",
 			TimeoutSec:     fetchTimeoutSec,
+			MaxBytes:       helper.svcCtx.Config.Waf.MaxPackageBytes,
 		})
 	}
 	if err != nil {

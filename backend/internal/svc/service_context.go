@@ -9,6 +9,7 @@ import (
 	redisClient "logflux/common/redis"
 	"logflux/internal/config"
 	"logflux/internal/ingest"
+	"logflux/internal/middleware"
 	"logflux/internal/notification"
 	"logflux/internal/notification/providers"
 	"logflux/internal/notification/template"
@@ -20,6 +21,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zeromicro/go-zero/rest"
 	gorm2 "gorm.io/gorm"
 )
 
@@ -32,6 +34,7 @@ type ServiceContext struct {
 	CronScheduler   *tasks.CronScheduler
 	WafScheduler    *tasks.WafScheduler
 	NotificationMgr notification.NotificationManager
+	Permission      rest.Middleware
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -168,6 +171,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		CronScheduler:   cronScheduler,
 		WafScheduler:    wafScheduler,
 		NotificationMgr: notificationMgr,
+		Permission:      middleware.NewPermissionMiddleware(db).Handle,
 	}
 }
 

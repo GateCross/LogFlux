@@ -37,7 +37,6 @@ func (l *LoginLogic) Login(req *types.LoginReq) (resp *types.LoginResp, err erro
 
 		return nil, errors.New("查询用户失败")
 	}
-
 	password, err := cryptx.Decrypt(req.Password, l.svcCtx.Config.Auth.AESKey)
 	if err != nil {
 		return nil, errors.New("用户名或密码错误")
@@ -46,6 +45,9 @@ func (l *LoginLogic) Login(req *types.LoginReq) (resp *types.LoginResp, err erro
 	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
 	if err != nil {
 		return nil, errors.New("用户名或密码错误")
+	}
+	if user.Status == 0 {
+		return nil, errors.New("用户已被禁用")
 	}
 
 	accessSecret := l.svcCtx.Config.Auth.AccessSecret

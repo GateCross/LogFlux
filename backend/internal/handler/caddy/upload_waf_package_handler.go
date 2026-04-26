@@ -26,6 +26,7 @@ func UploadWafPackageHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 		ctx := r.Context()
 		contentType := strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type")))
 		if strings.Contains(contentType, "multipart/form-data") {
+			r.Body = http.MaxBytesReader(w, r.Body, maxWafUploadRequestBytes(svcCtx))
 			parsedReq, uploadCtx, err := parseWafUploadMultipart(ctx, r, svcCtx)
 			if err != nil {
 				httpx.ErrorCtx(ctx, w, err)
@@ -73,10 +74,17 @@ func parseWafUploadMultipart(ctx context.Context, r *http.Request, svcCtx *svc.S
 	if err != nil {
 		return nil, ctx, fmt.Errorf("create temp upload file failed: %w", err)
 	}
-	if _, err := io.Copy(targetFile, file); err != nil {
+	limitedFile := &io.LimitedReader{R: file, N: maxBytes + 1}
+	writtenBytes, err := io.Copy(targetFile, limitedFile)
+	if err != nil {
 		_ = targetFile.Close()
 		_ = os.Remove(tempPath)
 		return nil, ctx, fmt.Errorf("save upload file failed: %w", err)
+	}
+	if writtenBytes > maxBytes {
+		_ = targetFile.Close()
+		_ = os.Remove(tempPath)
+		return nil, ctx, fmt.Errorf("upload package too large: %d > %d", writtenBytes, maxBytes)
 	}
 	if err := targetFile.Close(); err != nil {
 		_ = os.Remove(tempPath)
@@ -106,6 +114,15 @@ func parseWafUploadMultipart(ctx context.Context, r *http.Request, svcCtx *svc.S
 	uploadCtx := context.WithValue(ctx, "waf_upload_temp_path", tempPath)
 	uploadCtx = context.WithValue(uploadCtx, "waf_upload_file_name", fileHeader.Filename)
 	return req, uploadCtx, nil
+}
+
+func maxWafUploadRequestBytes(svcCtx *svc.ServiceContext) int64 {
+	maxBytes := svcCtx.Config.Waf.MaxPackageBytes
+	if maxBytes <= 0 {
+		maxBytes = waf.DefaultMaxPackageBytes
+	}
+	// multipart 字段和边界会带来少量额外开销，给表单元数据预留 1MiB。
+	return maxBytes + 1024*1024
 }
 
 func filepathSafeBase(name string) string {

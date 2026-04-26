@@ -26,6 +26,9 @@ func (r *notifyRecorder) Stop() error                                           
 func (r *notifyRecorder) ReloadChannels() error                                    { return nil }
 func (r *notifyRecorder) ReloadRules() error                                       { return nil }
 func (r *notifyRecorder) ReloadTemplates() error                                   { return nil }
+func (r *notifyRecorder) SendToChannel(context.Context, uint, *notification.Event) error {
+	return nil
+}
 
 func TestWafPolicyNotifyAuditHelperNotifyFailure(t *testing.T) {
 	recorder := &notifyRecorder{events: make(chan *notification.Event, 1)}
