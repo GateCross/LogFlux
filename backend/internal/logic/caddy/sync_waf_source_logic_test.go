@@ -31,7 +31,7 @@ func TestSyncWafSourceGuardFailures(t *testing.T) {
 			sourceMode: "remote",
 			enabled:    false,
 			url:        "https://example.com/crs.tar.gz",
-			wantErr:    "source is disabled",
+			wantErr:    "源已禁用",
 		},
 		{
 			name:       "coraza engine source",

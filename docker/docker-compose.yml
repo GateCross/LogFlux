@@ -6,7 +6,6 @@ services:
     restart: unless-stopped
     ports:
       - "${LOGFLUX_HTTP_PORT:-80}:80"
-      - "${LOGFLUX_HTTPS_PORT:-443}:443"
     volumes:
       # Caddy 数据持久化
       - caddy_data:/data/caddy
@@ -16,11 +15,6 @@ services:
       
       # 后端配置文件（只读）
       - ../backend/etc/config.yaml:/app/etc/config.yaml:ro
-      
-      # GeoIP2 数据库文件（请下载并放置到指定路径）
-      # 下载地址: https://dev.maxmind.com/geoip/geolite2-free-geolocation-data
-      # 如不需要 GeoIP2 功能，可注释掉 Caddyfile 中的 geoip 配置
-      - ./GeoLite2-City.mmdb:/usr/share/GeoIP/GeoLite2-City.mmdb:ro
       
     environment:
       - TZ=${TZ:-Asia/Shanghai}

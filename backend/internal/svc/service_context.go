@@ -316,7 +316,7 @@ func initWafDefaultPolicies(db *gorm2.DB) {
 		Description:                 "默认全局策略",
 		Enabled:                     true,
 		IsDefault:                   true,
-		EngineMode:                  "on",
+		EngineMode:                  "detectiononly",
 		AuditEngine:                 "relevantonly",
 		AuditLogFormat:              "json",
 		AuditRelevantStatus:         "^(?:5|4(?!04))",
@@ -337,7 +337,7 @@ func initWafDefaultPolicies(db *gorm2.DB) {
 		return
 	}
 
-	directives := "SecRuleEngine On\nSecAuditEngine RelevantOnly\nSecAuditLogFormat JSON\nSecAuditLogRelevantStatus ^(?:5|4(?!04))\nSecRequestBodyAccess On\nSecRequestBodyLimit 10485760\nSecRequestBodyNoFilesLimit 1048576\nSecAction \"id:900000,phase:1,pass,nolog,t:none,setvar:tx.paranoia_level=1\"\nSecAction \"id:900110,phase:1,pass,nolog,t:none,setvar:tx.inbound_anomaly_score_threshold=10\"\nSecAction \"id:900100,phase:1,pass,nolog,t:none,setvar:tx.outbound_anomaly_score_threshold=8\""
+	directives := "SecRuleEngine DetectionOnly\nSecAuditEngine RelevantOnly\nSecAuditLogFormat JSON\nSecAuditLogRelevantStatus ^(?:5|4(?!04))\nSecRequestBodyAccess On\nSecRequestBodyLimit 10485760\nSecRequestBodyNoFilesLimit 1048576\nSecAction \"id:900000,phase:1,pass,nolog,t:none,setvar:tx.paranoia_level=1\"\nSecAction \"id:900110,phase:1,pass,nolog,t:none,setvar:tx.inbound_anomaly_score_threshold=10\"\nSecAction \"id:900100,phase:1,pass,nolog,t:none,setvar:tx.outbound_anomaly_score_threshold=8\""
 	revision := model.WafPolicyRevision{
 		PolicyID:           defaultPolicy.ID,
 		Version:            1,

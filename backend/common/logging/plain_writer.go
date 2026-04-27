@@ -102,10 +102,10 @@ func (w *PlainConsoleWriter) write(level string, v any, fields ...logx.LogField)
 	lines := []string{line1}
 	line2Parts := make([]string, 0, 2+len(extras))
 	if traceID != "" {
-		line2Parts = append(line2Parts, fmt.Sprintf("追踪ID: %s", traceID))
+		line2Parts = append(line2Parts, fmt.Sprintf("Trace ID: %s", traceID))
 	}
 	if spanID != "" {
-		line2Parts = append(line2Parts, fmt.Sprintf("跨度ID: %s", spanID))
+		line2Parts = append(line2Parts, fmt.Sprintf("Span ID: %s", spanID))
 	}
 	if len(extras) > 0 {
 		line2Parts = append(line2Parts, extras...)

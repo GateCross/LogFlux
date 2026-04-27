@@ -61,6 +61,53 @@ func TestBuildWafPolicyDirectivesDeterministic(t *testing.T) {
 	}
 }
 
+func TestRenderManagedCaddyfile(t *testing.T) {
+	config, err := renderManagedCaddyfile(managedCaddyfileOptions{
+		WafEnabled: true,
+		Directives: strings.Join([]string{
+			"SecRuleEngine DetectionOnly",
+			"SecAuditEngine RelevantOnly",
+			"SecAuditLogFormat JSON",
+			"SecAuditLogRelevantStatus ^(?:5|4(?!04))",
+			"SecRequestBodyAccess On",
+			"SecRequestBodyLimit 10485760",
+			"SecRequestBodyNoFilesLimit 1048576",
+		}, "\n"),
+	})
+	if err != nil {
+		t.Fatalf("renderManagedCaddyfile() error = %v", err)
+	}
+
+	expectedFragments := []string{
+		logfluxManagedCaddyfileMarker,
+		"order coraza_waf first",
+		"import waf_protect",
+		"Include @coraza.conf-recommended",
+		"Include @owasp_crs/*.conf",
+		"SecAuditLog /var/log/caddy/waf_audit.log",
+		"reverse_proxy localhost:8888",
+		"root * /app/frontend",
+	}
+	for _, fragment := range expectedFragments {
+		if !strings.Contains(config, fragment) {
+			t.Fatalf("managed config missing fragment %q, output=%s", fragment, config)
+		}
+	}
+}
+
+func TestRenderManagedCaddyfileDisabledWaf(t *testing.T) {
+	config, err := renderManagedCaddyfile(managedCaddyfileOptions{WafEnabled: false})
+	if err != nil {
+		t.Fatalf("renderManagedCaddyfile() disabled WAF error = %v", err)
+	}
+	if strings.Contains(config, "coraza_waf") || strings.Contains(config, "import waf_protect") {
+		t.Fatalf("expected disabled WAF config without Coraza, output=%s", config)
+	}
+	if !strings.Contains(config, "reverse_proxy localhost:8888") {
+		t.Fatalf("expected API proxy in disabled WAF config")
+	}
+}
+
 func TestBuildWafPolicyDirectivesInvalidEnum(t *testing.T) {
 	policy := &model.WafPolicy{
 		EngineMode:                  "invalid_mode",
