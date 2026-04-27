@@ -35,7 +35,7 @@ func (l *CreateWafPolicyFalsePositiveFeedbackLogic) CreateWafPolicyFalsePositive
 		return nil, fmt.Errorf("invalid policy false positive feedback payload")
 	}
 	if req.PolicyId > 0 {
-		if err := validatePolicyIDExists(l.svcCtx.DB, req.PolicyId); err != nil {
+		if err := validatePolicyIDExists(l.svcCtx.DB.WithContext(l.ctx), req.PolicyId); err != nil {
 			return nil, err
 		}
 	}
@@ -81,7 +81,7 @@ func (l *CreateWafPolicyFalsePositiveFeedbackLogic) CreateWafPolicyFalsePositive
 		ProcessedBy:    "",
 		ProcessedAt:    nil,
 	}
-	if err := l.svcCtx.DB.Create(feedback).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).Create(feedback).Error; err != nil {
 		return nil, fmt.Errorf("create policy false positive feedback failed: %w", err)
 	}
 

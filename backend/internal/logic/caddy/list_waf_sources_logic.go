@@ -39,7 +39,7 @@ func (l *ListWafSourcesLogic) ListWafSources(req *types.WafSourceListReq) (resp 
 		pageSize = 20
 	}
 
-	db := helper.svcCtx.DB.Model(&model.WafSource{})
+	db := helper.svcCtx.DB.WithContext(helper.ctx).Model(&model.WafSource{})
 	rawKind := strings.TrimSpace(req.Kind)
 	hasKindFilter := false
 	if rawKind != "" {

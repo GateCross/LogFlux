@@ -66,8 +66,8 @@ func TestManager_Notify_EnqueuesJobsAndReturns(t *testing.T) {
 			sqlmock.AnyArg(),
 			sqlmock.AnyArg(),
 		).WillReturnRows(
-			sqlmock.NewRows([]string{"id"}).AddRow(1),
-		)
+		sqlmock.NewRows([]string{"id"}).AddRow(1),
+	)
 
 	// Expect: create notification_jobs row
 	mock.ExpectQuery("INSERT INTO \\\"notification_jobs\\\"").
@@ -89,9 +89,8 @@ func TestManager_Notify_EnqueuesJobsAndReturns(t *testing.T) {
 			sqlmock.AnyArg(),
 			sqlmock.AnyArg(),
 		).WillReturnRows(
-			sqlmock.NewRows([]string{"id"}).AddRow(10),
-		)
-
+		sqlmock.NewRows([]string{"id"}).AddRow(10),
+	)
 
 	prov := &recordingProvider{err: errors.New("should not be called")}
 

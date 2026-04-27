@@ -26,7 +26,7 @@ func NewGetCaddyServersLogic(ctx context.Context, svcCtx *svc.ServiceContext) *G
 
 func (l *GetCaddyServersLogic) GetCaddyServers() (resp *types.CaddyServerListResp, err error) {
 	var servers []model.CaddyServer
-	if err := l.svcCtx.DB.Find(&servers).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).Find(&servers).Error; err != nil {
 		return nil, err
 	}
 

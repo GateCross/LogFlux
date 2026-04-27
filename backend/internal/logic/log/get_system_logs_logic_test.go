@@ -114,8 +114,8 @@ func TestGetSystemLogs_InvalidTimeRange(t *testing.T) {
 		t.Fatalf("expected invalid time parse error")
 	}
 
-	if !strings.Contains(err.Error(), "invalid startTime") {
-		t.Fatalf("expected invalid startTime error, got %v", err)
+	if !strings.Contains(err.Error(), "开始时间格式无效") {
+		t.Fatalf("expected invalid start time error, got %v", err)
 	}
 }
 

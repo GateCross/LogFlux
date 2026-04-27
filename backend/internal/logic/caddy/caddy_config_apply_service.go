@@ -1,11 +1,13 @@
 package caddy
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
 
 	"logflux/internal/svc"
+	"logflux/internal/utils/safego"
 	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -84,7 +86,9 @@ func (s *caddyConfigApplyService) apply(server *model.CaddyServer, config, modul
 		return err
 	}
 
-	go syncCaddyLogSources(s.svcCtx, server, s.logger)
+	safego.New(context.Background(), "应用 Caddy 配置后同步日志源").Go(func() {
+		syncCaddyLogSources(s.svcCtx, server, s.logger)
+	})
 	return nil
 }
 

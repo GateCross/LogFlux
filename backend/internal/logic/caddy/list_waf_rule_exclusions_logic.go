@@ -43,7 +43,7 @@ func (l *ListWafRuleExclusionsLogic) ListWafRuleExclusions(req *types.WafRuleExc
 		pageSize = 20
 	}
 
-	db := l.svcCtx.DB.Model(&model.WafRuleExclusion{})
+	db := l.svcCtx.DB.WithContext(l.ctx).Model(&model.WafRuleExclusion{})
 	if req.PolicyId > 0 {
 		db = db.Where("policy_id = ?", req.PolicyId)
 	}

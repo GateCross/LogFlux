@@ -25,7 +25,7 @@ func NewDeleteTemplateLogic(ctx context.Context, svcCtx *svc.ServiceContext) *De
 }
 
 func (l *DeleteTemplateLogic) DeleteTemplate(req *types.IDReq) (resp *types.BaseResp, err error) {
-	if err := l.svcCtx.DB.Delete(&model.NotificationTemplate{}, req.ID).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).Delete(&model.NotificationTemplate{}, req.ID).Error; err != nil {
 		return nil, err
 	}
 

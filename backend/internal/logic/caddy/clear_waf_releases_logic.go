@@ -40,7 +40,7 @@ func (l *ClearWafReleasesLogic) ClearWafReleases(req *types.WafReleaseClearReq) 
 	}
 
 	var candidates []model.WafRelease
-	if err := l.svcCtx.DB.
+	if err := l.svcCtx.DB.WithContext(l.ctx).
 		Where("kind = ? AND status <> ?", kind, wafReleaseStatusActive).
 		Order("id asc").
 		Find(&candidates).Error; err != nil {
@@ -53,7 +53,7 @@ func (l *ClearWafReleasesLogic) ClearWafReleases(req *types.WafReleaseClearReq) 
 
 	activePathSet := make(map[string]struct{})
 	var activePaths []string
-	if err := l.svcCtx.DB.Model(&model.WafRelease{}).
+	if err := l.svcCtx.DB.WithContext(l.ctx).Model(&model.WafRelease{}).
 		Where("kind = ? AND status = ?", kind, wafReleaseStatusActive).
 		Pluck("storage_path", &activePaths).Error; err != nil {
 		return nil, fmt.Errorf("query active release paths failed: %w", err)
@@ -87,7 +87,7 @@ func (l *ClearWafReleasesLogic) ClearWafReleases(req *types.WafReleaseClearReq) 
 		pathsToRemove = append(pathsToRemove, cleanPath)
 	}
 
-	if err := l.svcCtx.DB.Transaction(func(tx *gorm.DB) error {
+	if err := l.svcCtx.DB.WithContext(l.ctx).Transaction(func(tx *gorm.DB) error {
 		if len(releaseIDs) > 0 {
 			if err := tx.Where("release_id IN ?", releaseIDs).Delete(&model.WafUpdateJob{}).Error; err != nil {
 				return fmt.Errorf("delete related waf jobs failed: %w", err)

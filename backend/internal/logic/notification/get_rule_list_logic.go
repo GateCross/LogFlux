@@ -27,7 +27,7 @@ func NewGetRuleListLogic(ctx context.Context, svcCtx *svc.ServiceContext) *GetRu
 
 func (l *GetRuleListLogic) GetRuleList() (resp *types.RuleListResp, err error) {
 	var rules []model.NotificationRule
-	if err := l.svcCtx.DB.Find(&rules).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).Find(&rules).Error; err != nil {
 		return nil, err
 	}
 

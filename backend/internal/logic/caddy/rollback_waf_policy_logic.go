@@ -7,6 +7,7 @@ import (
 	"logflux/internal/notification"
 	"logflux/internal/svc"
 	"logflux/internal/types"
+	"logflux/internal/utils/safego"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -71,7 +72,9 @@ func (l *RollbackWafPolicyLogic) RollbackWafPolicy(req *types.WafPolicyRollbackR
 		operator,
 	)
 
-	go syncCaddyLogSources(l.svcCtx, candidate.Server, l.Logger)
+	safego.New(context.Background(), "回滚 WAF 策略后同步日志源").Go(func() {
+		syncCaddyLogSources(l.svcCtx, candidate.Server, l.Logger)
+	})
 
 	return &types.BaseResp{Code: 200, Msg: "success"}, nil
 }

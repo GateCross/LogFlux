@@ -1,11 +1,13 @@
 package logging
 
 import (
+	"context"
 	"encoding/json"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"logflux/internal/utils/safego"
 	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -119,7 +121,7 @@ func (w *DBWriter) enqueue(level string, v any, fields ...logx.LogField) {
 
 func (w *DBWriter) start() {
 	w.wg.Add(1)
-	go func() {
+	safego.New(context.Background(), "数据库日志写入").Go(func() {
 		defer w.wg.Done()
 		ticker := time.NewTicker(w.flushTimeout)
 		defer ticker.Stop()
@@ -148,14 +150,14 @@ func (w *DBWriter) start() {
 				flush()
 			}
 		}
-	}()
+	})
 }
 
 func buildSystemLog(level string, v any, fields ...logx.LogField) *model.SystemLog {
 	entry := &model.SystemLog{
-		LogTime:  time.Now(),
-		Level:    level,
-		Message:  formatValue(v),
+		LogTime:   time.Now(),
+		Level:     level,
+		Message:   formatValue(v),
 		ExtraData: "{}",
 	}
 

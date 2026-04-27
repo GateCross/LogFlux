@@ -45,7 +45,7 @@ func (l *GetWafPolicyStatsLogic) GetWafPolicyStats(req *types.WafPolicyStatsReq)
 		return nil, err
 	}
 
-	policyQuery := l.svcCtx.DB.Model(&model.WafPolicy{}).Where("enabled = ?", true)
+	policyQuery := l.svcCtx.DB.WithContext(l.ctx).Model(&model.WafPolicy{}).Where("enabled = ?", true)
 	if req != nil && req.PolicyId > 0 {
 		policyQuery = policyQuery.Where("id = ?", req.PolicyId)
 	}
@@ -81,7 +81,7 @@ func (l *GetWafPolicyStatsLogic) GetWafPolicyStats(req *types.WafPolicyStatsReq)
 	}
 
 	var bindings []model.WafPolicyBinding
-	if err := l.svcCtx.DB.
+	if err := l.svcCtx.DB.WithContext(l.ctx).
 		Where("enabled = ? AND policy_id IN ?", true, policyIDs).
 		Order("priority asc, id asc").
 		Find(&bindings).Error; err != nil {
@@ -307,7 +307,7 @@ func (l *GetWafPolicyStatsLogic) queryPolicyStatsItem(
 		item.PolicyName = fmt.Sprintf("#%d", policy.ID)
 	}
 
-	base := l.svcCtx.DB.Model(&model.CaddyLog{}).Where("log_time BETWEEN ? AND ?", startTime, endTime)
+	base := l.svcCtx.DB.WithContext(l.ctx).Model(&model.CaddyLog{}).Where("log_time BETWEEN ? AND ?", startTime, endTime)
 	base = applyWafPolicyStatsDrillFilter(base, drillFilter)
 	scoped := applyWafPolicyBindingScopeQuery(base, bindings)
 
@@ -343,7 +343,7 @@ func (l *GetWafPolicyStatsLogic) queryRangeSummary(startTime, endTime time.Time,
 		PolicyName: "全部策略",
 	}
 
-	base := l.svcCtx.DB.Model(&model.CaddyLog{}).Where("log_time BETWEEN ? AND ?", startTime, endTime)
+	base := l.svcCtx.DB.WithContext(l.ctx).Model(&model.CaddyLog{}).Where("log_time BETWEEN ? AND ?", startTime, endTime)
 	base = applyWafPolicyStatsDrillFilter(base, drillFilter)
 
 	var hitCount int64
@@ -389,7 +389,7 @@ func (l *GetWafPolicyStatsLogic) queryWafPolicyTrend(
 		BlockedCount int64 `gorm:"column:blocked_count"`
 	}
 
-	db := l.svcCtx.DB.Model(&model.CaddyLog{}).Where("log_time BETWEEN ? AND ?", startTime, endTime)
+	db := l.svcCtx.DB.WithContext(l.ctx).Model(&model.CaddyLog{}).Where("log_time BETWEEN ? AND ?", startTime, endTime)
 	db = applyWafPolicyStatsDrillFilter(db, drillFilter)
 	if !allLogs {
 		db = applyWafPolicyBindingScopeQuery(db, bindings)
@@ -441,7 +441,7 @@ func (l *GetWafPolicyStatsLogic) queryWafPolicyDimensions(
 		return []types.WafPolicyStatsDimensionItem{}, []types.WafPolicyStatsDimensionItem{}, []types.WafPolicyStatsDimensionItem{}, nil
 	}
 
-	base := l.svcCtx.DB.Model(&model.CaddyLog{}).Where("log_time BETWEEN ? AND ?", startTime, endTime)
+	base := l.svcCtx.DB.WithContext(l.ctx).Model(&model.CaddyLog{}).Where("log_time BETWEEN ? AND ?", startTime, endTime)
 	base = applyWafPolicyStatsDrillFilter(base, drillFilter)
 	if !allLogs {
 		base = applyWafPolicyBindingScopeQuery(base, bindings)

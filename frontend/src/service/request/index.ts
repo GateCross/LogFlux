@@ -10,6 +10,10 @@ import type { RequestInstanceState } from './type';
 const isHttpProxy = import.meta.env.DEV && import.meta.env.VITE_HTTP_PROXY === 'Y';
 const { baseURL, otherBaseURL } = getServiceBaseURL(import.meta.env, isHttpProxy);
 
+function getBackendMessage(data: Partial<App.Service.Response<any>> | undefined, fallback = '') {
+  return data?.message || data?.msg || fallback;
+}
+
 export const request = createFlatRequest(
   {
     baseURL,
@@ -40,10 +44,9 @@ export const request = createFlatRequest(
       //   console.log('Response data keys:', Object.keys(response.data));
       // }
 
-      const successCode = import.meta.env.VITE_SERVICE_SUCCESS_CODE;
-      // Allow both string and number comparison
+      const successCodes = new Set([String(import.meta.env.VITE_SERVICE_SUCCESS_CODE), '0', '200']);
       if (response.data && response.data.code !== undefined) {
-        return String(response.data.code) === successCode;
+        return successCodes.has(String(response.data.code));
       }
       // If code is missing but status is 200, maybe consider success? Or is strict?
       // For now let's stick to strict but if 'code' is missing, it will fail.
@@ -62,7 +65,7 @@ export const request = createFlatRequest(
         handleLogout();
         window.removeEventListener('beforeunload', handleLogout);
 
-        request.state.errMsgStack = request.state.errMsgStack.filter(msg => msg !== response.data.msg);
+        request.state.errMsgStack = request.state.errMsgStack.filter(msg => msg !== getBackendMessage(response.data));
       }
 
       // when the backend response code is in `logoutCodes`, it means the user will be logged out and redirected to login page
@@ -87,15 +90,16 @@ export const request = createFlatRequest(
 
       // when the backend response code is in `modalLogoutCodes`, it means the user will be logged out by displaying a modal
       const modalLogoutCodes = import.meta.env.VITE_SERVICE_MODAL_LOGOUT_CODES?.split(',') || [];
-      if (modalLogoutCodes.includes(responseCode) && !request.state.errMsgStack?.includes(response.data.msg)) {
-        request.state.errMsgStack = [...(request.state.errMsgStack || []), response.data.msg];
+      const backendMessage = getBackendMessage(response.data);
+      if (modalLogoutCodes.includes(responseCode) && !request.state.errMsgStack?.includes(backendMessage)) {
+        request.state.errMsgStack = [...(request.state.errMsgStack || []), backendMessage];
 
         // prevent the user from refreshing the page
         window.addEventListener('beforeunload', handleLogout);
 
         window.$dialog?.error({
           title: $t('common.error'),
-          content: response.data.msg,
+          content: backendMessage,
           positiveText: $t('common.confirm'),
           maskClosable: false,
           closeOnEsc: false,
@@ -134,7 +138,7 @@ export const request = createFlatRequest(
 
       // get backend error message and code
       if (error.code === BACKEND_ERROR_CODE) {
-        message = error.response?.data?.msg || (error.response?.data as any)?.error || message;
+        message = getBackendMessage(error.response?.data, (error.response?.data as any)?.error || message);
         backendErrorCode = String(error.response?.data?.code || '');
 
         if (backendErrorCode === '401') {

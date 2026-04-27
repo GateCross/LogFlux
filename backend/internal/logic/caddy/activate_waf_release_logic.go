@@ -29,7 +29,7 @@ func (l *ActivateWafReleaseLogic) ActivateWafRelease(req *types.WafReleaseActiva
 	helper := newWafLogicHelper(l.ctx, l.svcCtx, l.Logger)
 
 	var release model.WafRelease
-	if err := helper.svcCtx.DB.First(&release, req.ID).Error; err != nil {
+	if err := helper.svcCtx.DB.WithContext(helper.ctx).First(&release, req.ID).Error; err != nil {
 		return nil, fmt.Errorf("release not found")
 	}
 	if normalizeWafKind(release.Kind) == wafKindCorazaEngine {

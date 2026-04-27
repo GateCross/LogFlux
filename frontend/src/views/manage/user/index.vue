@@ -301,11 +301,6 @@ async function handleDelete(id: number) {
     return;
   }
 
-  if (data?.code !== 200) {
-    message.error(data?.msg || '删除失败');
-    return;
-  }
-
   message.success(data?.msg || '删除成功');
   fetchData();
 }

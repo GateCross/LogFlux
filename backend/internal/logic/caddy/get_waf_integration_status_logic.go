@@ -25,7 +25,7 @@ func NewGetWafIntegrationStatusLogic(ctx context.Context, svcCtx *svc.ServiceCon
 }
 
 func (l *GetWafIntegrationStatusLogic) GetWafIntegrationStatus() (resp *types.WafIntegrationStatusResp, err error) {
-	server, err := findPreferredCaddyServer(l.svcCtx.DB, 0)
+	server, err := findPreferredCaddyServer(l.svcCtx.DB.WithContext(l.ctx), 0)
 	if err != nil {
 		return nil, fmt.Errorf("query caddy server failed: %w", err)
 	}

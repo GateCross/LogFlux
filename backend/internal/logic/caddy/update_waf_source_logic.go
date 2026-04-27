@@ -30,7 +30,7 @@ func (l *UpdateWafSourceLogic) UpdateWafSource(req *types.WafSourceUpdateReq) (r
 	helper := newWafLogicHelper(l.ctx, l.svcCtx, l.Logger)
 
 	var source model.WafSource
-	if err := helper.svcCtx.DB.First(&source, req.ID).Error; err != nil {
+	if err := helper.svcCtx.DB.WithContext(helper.ctx).First(&source, req.ID).Error; err != nil {
 		return nil, fmt.Errorf("source not found")
 	}
 
@@ -110,7 +110,7 @@ func (l *UpdateWafSourceLogic) UpdateWafSource(req *types.WafSourceUpdateReq) (r
 		return nil, fmt.Errorf("url is required for remote source")
 	}
 
-	if err := helper.svcCtx.DB.Save(&source).Error; err != nil {
+	if err := helper.svcCtx.DB.WithContext(helper.ctx).Save(&source).Error; err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "duplicate key") {
 			return nil, fmt.Errorf("source name already exists: %s", source.Name)
 		}

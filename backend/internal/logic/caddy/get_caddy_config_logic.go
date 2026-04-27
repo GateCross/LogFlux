@@ -29,7 +29,7 @@ func NewGetCaddyConfigLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Ge
 
 func (l *GetCaddyConfigLogic) GetCaddyConfig(req *types.CaddyConfigReq) (resp *types.CaddyConfigResp, err error) {
 	var server model.CaddyServer
-	if err := l.svcCtx.DB.First(&server, req.ServerId).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).First(&server, req.ServerId).Error; err != nil {
 		return nil, fmt.Errorf("server not found")
 	}
 

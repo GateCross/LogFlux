@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"logflux/internal/notification/template"
+	"logflux/internal/utils/safego"
 	"logflux/model"
 	"strings"
 	"sync"
@@ -129,9 +130,14 @@ func (m *Manager) Start(ctx context.Context) error {
 
 	// 启动 worker pool（单实例固定 4 个 worker）
 	for i := 0; i < 4; i++ {
-		go m.workerLoop(ctx)
+		workerID := i + 1
+		safego.New(ctx, fmt.Sprintf("通知发送 worker-%d", workerID)).Go(func() {
+			m.workerLoop(ctx)
+		})
 	}
-	go m.scanLoop(ctx)
+	safego.New(ctx, "通知重试扫描任务").Go(func() {
+		m.scanLoop(ctx)
+	})
 
 	m.logger.Info("Notification manager started")
 	return nil

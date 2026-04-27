@@ -34,7 +34,7 @@ func (l *CreateWafRuleExclusionLogic) CreateWafRuleExclusion(req *types.WafRuleE
 	if req == nil {
 		return nil, fmt.Errorf("invalid policy exclusion payload")
 	}
-	if err := validatePolicyIDExists(l.svcCtx.DB, req.PolicyId); err != nil {
+	if err := validatePolicyIDExists(l.svcCtx.DB.WithContext(l.ctx), req.PolicyId); err != nil {
 		return nil, err
 	}
 
@@ -67,7 +67,7 @@ func (l *CreateWafRuleExclusionLogic) CreateWafRuleExclusion(req *types.WafRuleE
 		exclusion.Enabled = true
 	}
 
-	if err := l.svcCtx.DB.Create(exclusion).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).Create(exclusion).Error; err != nil {
 		return nil, fmt.Errorf("create policy exclusion failed: %w", err)
 	}
 

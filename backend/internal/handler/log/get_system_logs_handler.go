@@ -1,6 +1,7 @@
 package log
 
 import (
+	"logflux/common/result"
 	"net/http"
 
 	"github.com/zeromicro/go-zero/rest/httpx"
@@ -19,10 +20,6 @@ func GetSystemLogsHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 
 		l := log.NewGetSystemLogsLogic(r.Context(), svcCtx)
 		resp, err := l.GetSystemLogs(&req)
-		if err != nil {
-			httpx.ErrorCtx(r.Context(), w, err)
-		} else {
-			httpx.OkJsonCtx(r.Context(), w, resp)
-		}
+		result.HttpResult(r, w, resp, err)
 	}
 }

@@ -8,10 +8,11 @@ import (
 	"sync"
 	text_template "text/template"
 
+	"logflux/internal/utils/safego"
+	"logflux/model"
+
 	"github.com/zeromicro/go-zero/core/logx"
 	"gorm.io/gorm"
-
-	"logflux/model"
 )
 
 // TemplateManager 管理通知模板的加载和渲染
@@ -166,12 +167,14 @@ func (tm *TemplateManager) ensureDefaults() {
 
 			// 尝试写入数据库（如果表存在）
 			// 我们在一个单独的协程中做这个，以免阻塞启动，且忽略错误（例如重复键或表不存在）
-			go func(t model.NotificationTemplate) {
+			tmpl := modelTmpl
+			safego.New(context.Background(), "持久化默认通知模板").Go(func() {
+				t := tmpl
 				if err := tm.db.FirstOrCreate(&t, model.NotificationTemplate{Name: t.Name}).Error; err != nil {
 					// 仅记录 debug 日志，因为如果是因为已存在（虽然我们检查了缓存但并发情况下可能）或其他原因，我们不希望太吵
 					// tm.logger.Debugf("failed to persist default template %s: %v", t.Name, err)
 				}
-			}(modelTmpl)
+			})
 		}
 	}
 }

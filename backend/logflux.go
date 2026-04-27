@@ -7,13 +7,14 @@ import (
 	"net/http"
 
 	"logflux/common/logging"
-	"logflux/common/result"
 	"logflux/internal/config"
 	"logflux/internal/handler"
 	caddylogic "logflux/internal/logic/caddy"
 	"logflux/internal/middleware"
+	"logflux/internal/response"
 	"logflux/internal/svc"
 	"logflux/internal/types"
+	"logflux/internal/xerr"
 	"strings"
 
 	"github.com/zeromicro/go-zero/core/conf"
@@ -31,11 +32,7 @@ func main() {
 	conf.MustLoad(*configFile, &c)
 
 	server := rest.MustNewServer(c.RestConf, rest.WithUnauthorizedCallback(func(w http.ResponseWriter, r *http.Request, err error) {
-		httpx.OkJson(w, result.ResponseBean{
-			Code: 401,
-			Msg:  "Unauthorized",
-			Data: nil,
-		})
+		httpx.OkJsonCtx(r.Context(), w, response.Error(xerr.Unauthorized, xerr.MapErrMsg(xerr.Unauthorized)))
 	}))
 	defer server.Stop()
 
@@ -61,19 +58,7 @@ func main() {
 	// Global Error Handler (still needed for business errors)
 
 	httpx.SetErrorHandler(func(err error) (int, any) {
-		errCode := 500
-		errMsg := err.Error()
-
-		if ce, ok := err.(*result.CodeError); ok {
-			errCode = ce.Code
-			errMsg = ce.Msg
-		}
-
-		return 200, result.ResponseBean{ // Always return 200 status for business logic errors if that's what frontend expects, or use errCode if strictly HTTP status
-			Code: errCode,
-			Msg:  errMsg,
-			Data: nil,
-		}
+		return http.StatusOK, response.ErrorFromErr(err)
 	})
 
 	logx.Infof("Starting server at %s:%d...", c.Host, c.Port)

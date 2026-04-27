@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"logflux/internal/notification"
+	"logflux/internal/utils/safego"
 	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -106,7 +107,7 @@ func (helper *wafLogicHelper) queryWafSourceName(sourceID uint) string {
 	}
 
 	var source model.WafSource
-	if err := helper.svcCtx.DB.Select("name").First(&source, sourceID).Error; err != nil {
+	if err := helper.svcCtx.DB.WithContext(helper.ctx).Select("name").First(&source, sourceID).Error; err != nil {
 		return ""
 	}
 	return strings.TrimSpace(source.Name)
@@ -118,7 +119,7 @@ func (helper *wafLogicHelper) queryWafReleaseVersion(releaseID uint) string {
 	}
 
 	var release model.WafRelease
-	if err := helper.svcCtx.DB.Select("version").First(&release, releaseID).Error; err != nil {
+	if err := helper.svcCtx.DB.WithContext(helper.ctx).Select("version").First(&release, releaseID).Error; err != nil {
 		return ""
 	}
 	return strings.TrimSpace(release.Version)
@@ -142,9 +143,9 @@ func notifyWafEventAsync(
 		event.WithDataMap(data)
 	}
 
-	go func() {
+	safego.New(context.Background(), "WAF 更新通知").Go(func() {
 		if err := manager.Notify(context.Background(), event); err != nil {
-			logger.Errorf("notify waf event failed, type=%s err=%v", eventType, err)
+			logger.Errorf("发送 WAF 更新通知失败: type=%s err=%v", eventType, err)
 		}
-	}()
+	})
 }

@@ -1,6 +1,7 @@
 package notification
 
 import (
+	"logflux/common/result"
 	"net/http"
 
 	"github.com/zeromicro/go-zero/rest/httpx"
@@ -19,10 +20,6 @@ func DeleteChannelHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 
 		l := notification.NewDeleteChannelLogic(r.Context(), svcCtx)
 		resp, err := l.DeleteChannel(&req)
-		if err != nil {
-			httpx.ErrorCtx(r.Context(), w, err)
-		} else {
-			httpx.OkJsonCtx(r.Context(), w, resp)
-		}
+		result.HttpResult(r, w, resp, err)
 	}
 }

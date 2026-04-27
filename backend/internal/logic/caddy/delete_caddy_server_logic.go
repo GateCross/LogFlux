@@ -25,7 +25,7 @@ func NewDeleteCaddyServerLogic(ctx context.Context, svcCtx *svc.ServiceContext) 
 }
 
 func (l *DeleteCaddyServerLogic) DeleteCaddyServer(req *types.IDReq) (resp *types.BaseResp, err error) {
-	if err := l.svcCtx.DB.Delete(&model.CaddyServer{}, req.ID).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).Delete(&model.CaddyServer{}, req.ID).Error; err != nil {
 		return nil, err
 	}
 

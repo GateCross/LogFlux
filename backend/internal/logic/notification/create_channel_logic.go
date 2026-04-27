@@ -50,7 +50,7 @@ func (l *CreateChannelLogic) CreateChannel(req *types.ChannelReq) (resp *types.B
 		Events:      model.StringArray(events),
 	}
 
-	if err := l.svcCtx.DB.Create(channel).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).Create(channel).Error; err != nil {
 		return nil, err
 	}
 

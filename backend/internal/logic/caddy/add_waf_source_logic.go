@@ -65,7 +65,7 @@ func (l *AddWafSourceLogic) AddWafSource(req *types.WafSourceReq) (resp *types.B
 	}
 
 	var existing model.WafSource
-	if err := helper.svcCtx.DB.Where("name = ?", name).First(&existing).Error; err == nil {
+	if err := helper.svcCtx.DB.WithContext(helper.ctx).Where("name = ?", name).First(&existing).Error; err == nil {
 		return nil, fmt.Errorf("source name already exists: %s", name)
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, fmt.Errorf("check source name failed: %w", err)
@@ -107,7 +107,7 @@ func (l *AddWafSourceLogic) AddWafSource(req *types.WafSourceReq) (resp *types.B
 		source.AutoActivate = false
 	}
 
-	if err := helper.svcCtx.DB.Create(source).Error; err != nil {
+	if err := helper.svcCtx.DB.WithContext(helper.ctx).Create(source).Error; err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "duplicate key") {
 			return nil, fmt.Errorf("source name already exists: %s", name)
 		}

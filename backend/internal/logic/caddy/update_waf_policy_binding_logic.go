@@ -34,12 +34,12 @@ func (l *UpdateWafPolicyBindingLogic) UpdateWafPolicyBinding(req *types.WafPolic
 	if req == nil || req.ID == 0 {
 		return nil, fmt.Errorf("policy binding id is required")
 	}
-	if err := validatePolicyIDExists(l.svcCtx.DB, req.PolicyId); err != nil {
+	if err := validatePolicyIDExists(l.svcCtx.DB.WithContext(l.ctx), req.PolicyId); err != nil {
 		return nil, err
 	}
 
 	var binding model.WafPolicyBinding
-	if err := l.svcCtx.DB.First(&binding, req.ID).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).First(&binding, req.ID).Error; err != nil {
 		return nil, fmt.Errorf("policy binding not found")
 	}
 
@@ -63,10 +63,10 @@ func (l *UpdateWafPolicyBindingLogic) UpdateWafPolicyBinding(req *types.WafPolic
 	binding.Method = method
 	binding.Priority = priority
 
-	if err := validatePolicyBindingConflict(l.svcCtx.DB, &binding); err != nil {
+	if err := validatePolicyBindingConflict(l.svcCtx.DB.WithContext(l.ctx), &binding); err != nil {
 		return nil, err
 	}
-	if err := l.svcCtx.DB.Save(&binding).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).Save(&binding).Error; err != nil {
 		return nil, fmt.Errorf("update policy binding failed: %w", err)
 	}
 

@@ -53,7 +53,7 @@ func (l *BatchUpdateWafPolicyFalsePositiveFeedbackStatusLogic) BatchUpdateWafPol
 	}
 
 	var existingCount int64
-	if err := l.svcCtx.DB.Model(&model.WafPolicyFalsePositiveFeedback{}).Where("id IN ?", feedbackIDs).Count(&existingCount).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).Model(&model.WafPolicyFalsePositiveFeedback{}).Where("id IN ?", feedbackIDs).Count(&existingCount).Error; err != nil {
 		return nil, fmt.Errorf("count policy false positive feedbacks failed: %w", err)
 	}
 	if existingCount == 0 {
@@ -79,7 +79,7 @@ func (l *BatchUpdateWafPolicyFalsePositiveFeedbackStatusLogic) BatchUpdateWafPol
 		updates["processed_at"] = &now
 	}
 
-	tx := l.svcCtx.DB.Model(&model.WafPolicyFalsePositiveFeedback{}).Where("id IN ?", feedbackIDs).Updates(updates)
+	tx := l.svcCtx.DB.WithContext(l.ctx).Model(&model.WafPolicyFalsePositiveFeedback{}).Where("id IN ?", feedbackIDs).Updates(updates)
 	if tx.Error != nil {
 		return nil, fmt.Errorf("batch update policy false positive feedback status failed: %w", tx.Error)
 	}

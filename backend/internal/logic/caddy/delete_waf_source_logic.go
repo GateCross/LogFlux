@@ -29,14 +29,14 @@ func NewDeleteWafSourceLogic(ctx context.Context, svcCtx *svc.ServiceContext) *D
 
 func (l *DeleteWafSourceLogic) DeleteWafSource(req *types.IDReq) (resp *types.BaseResp, err error) {
 	var source model.WafSource
-	if err := l.svcCtx.DB.First(&source, req.ID).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).First(&source, req.ID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("source not found")
 		}
 		return nil, fmt.Errorf("query source failed: %w", err)
 	}
 
-	err = l.svcCtx.DB.Transaction(func(tx *gorm.DB) error {
+	err = l.svcCtx.DB.WithContext(l.ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("source_id = ?", req.ID).Delete(&model.WafUpdateJob{}).Error; err != nil {
 			return fmt.Errorf("delete source jobs failed: %w", err)
 		}

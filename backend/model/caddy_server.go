@@ -14,7 +14,7 @@ type CaddyServer struct {
 	Type      string `gorm:"default:'local'"` // local or remote
 	Username  string
 	Password  string
-	Config    string `gorm:"type:text"` // Store Caddyfile content
+	Config    string `gorm:"type:text"`  // Store Caddyfile content
 	Modules   string `gorm:"type:jsonb"` // Store structured modules JSON
 }
 

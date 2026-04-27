@@ -32,7 +32,7 @@ func (l *CreateTemplateLogic) CreateTemplate(req *types.TemplateReq) (resp *type
 		Type:    req.Type,
 	}
 
-	if err := l.svcCtx.DB.Create(template).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).Create(template).Error; err != nil {
 		return nil, err
 	}
 

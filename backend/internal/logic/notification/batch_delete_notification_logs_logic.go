@@ -29,10 +29,10 @@ func (l *BatchDeleteNotificationLogsLogic) BatchDeleteNotificationLogs(req *type
 		return &types.BaseResp{Code: 200, Msg: "success"}, nil
 	}
 
-	if err := l.svcCtx.DB.Where("log_id IN ?", req.IDs).Delete(&model.NotificationJob{}).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).Where("log_id IN ?", req.IDs).Delete(&model.NotificationJob{}).Error; err != nil {
 		return nil, err
 	}
-	if err := l.svcCtx.DB.Where("id IN ?", req.IDs).Delete(&model.NotificationLog{}).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).Where("id IN ?", req.IDs).Delete(&model.NotificationLog{}).Error; err != nil {
 		return nil, err
 	}
 

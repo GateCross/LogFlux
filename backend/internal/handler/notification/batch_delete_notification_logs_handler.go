@@ -1,6 +1,7 @@
 package notification
 
 import (
+	"logflux/common/result"
 	"net/http"
 
 	"github.com/zeromicro/go-zero/rest/httpx"
@@ -19,10 +20,6 @@ func BatchDeleteNotificationLogsHandler(svcCtx *svc.ServiceContext) http.Handler
 
 		l := notification.NewBatchDeleteNotificationLogsLogic(r.Context(), svcCtx)
 		resp, err := l.BatchDeleteNotificationLogs(&req)
-		if err != nil {
-			httpx.ErrorCtx(r.Context(), w, err)
-		} else {
-			httpx.OkJsonCtx(r.Context(), w, resp)
-		}
+		result.HttpResult(r, w, resp, err)
 	}
 }

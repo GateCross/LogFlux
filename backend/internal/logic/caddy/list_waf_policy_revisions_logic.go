@@ -41,7 +41,7 @@ func (l *ListWafPolicyRevisionsLogic) ListWafPolicyRevisions(req *types.WafPolic
 		pageSize = 20
 	}
 
-	db := l.svcCtx.DB.Model(&model.WafPolicyRevision{})
+	db := l.svcCtx.DB.WithContext(l.ctx).Model(&model.WafPolicyRevision{})
 	if req.PolicyId > 0 {
 		db = db.Where("policy_id = ?", req.PolicyId)
 	}
@@ -73,7 +73,7 @@ func (l *ListWafPolicyRevisionsLogic) ListWafPolicyRevisions(req *types.WafPolic
 		}
 		if len(policyIDs) > 0 {
 			var policies []model.WafPolicy
-			if err := l.svcCtx.DB.Model(&model.WafPolicy{}).Where("id IN ?", policyIDs).Find(&policies).Error; err != nil {
+			if err := l.svcCtx.DB.WithContext(l.ctx).Model(&model.WafPolicy{}).Where("id IN ?", policyIDs).Find(&policies).Error; err != nil {
 				return nil, fmt.Errorf("query policy names failed: %w", err)
 			}
 			for _, policy := range policies {
@@ -87,7 +87,7 @@ func (l *ListWafPolicyRevisionsLogic) ListWafPolicyRevisions(req *types.WafPolic
 		var previousRevision *model.WafPolicyRevision
 		if revision.Version > 1 {
 			var prev model.WafPolicyRevision
-			prevErr := l.svcCtx.DB.
+			prevErr := l.svcCtx.DB.WithContext(l.ctx).
 				Where("policy_id = ? AND version < ?", revision.PolicyID, revision.Version).
 				Order("version desc").
 				First(&prev).Error

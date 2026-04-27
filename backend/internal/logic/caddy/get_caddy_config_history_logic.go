@@ -28,7 +28,7 @@ func (l *GetCaddyConfigHistoryLogic) GetCaddyConfigHistory(req *types.CaddyConfi
 	var history []model.CaddyConfigHistory
 	var total int64
 
-	db := l.svcCtx.DB.Model(&model.CaddyConfigHistory{}).Where("server_id = ?", req.ServerId)
+	db := l.svcCtx.DB.WithContext(l.ctx).Model(&model.CaddyConfigHistory{}).Where("server_id = ?", req.ServerId)
 
 	if err := db.Count(&total).Error; err != nil {
 		return nil, err

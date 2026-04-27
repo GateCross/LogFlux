@@ -26,7 +26,7 @@ func NewReadNotificationLogic(ctx context.Context, svcCtx *svc.ServiceContext) *
 }
 
 func (l *ReadNotificationLogic) ReadNotification(req *types.IDReq) (resp *types.BaseResp, err error) {
-	err = l.svcCtx.DB.Model(&model.NotificationLog{}).
+	err = l.svcCtx.DB.WithContext(l.ctx).Model(&model.NotificationLog{}).
 		Where("id = ?", req.ID).
 		Updates(map[string]interface{}{
 			"is_read": true,

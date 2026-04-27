@@ -34,7 +34,7 @@ func (l *DeleteWafRuleExclusionLogic) DeleteWafRuleExclusion(req *types.IDReq) (
 		return nil, fmt.Errorf("policy exclusion id is required")
 	}
 
-	result := l.svcCtx.DB.Where("id = ?", req.ID).Delete(&model.WafRuleExclusion{})
+	result := l.svcCtx.DB.WithContext(l.ctx).Where("id = ?", req.ID).Delete(&model.WafRuleExclusion{})
 	if result.Error != nil {
 		return nil, fmt.Errorf("delete policy exclusion failed: %w", result.Error)
 	}

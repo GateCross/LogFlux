@@ -31,7 +31,7 @@ func (l *CheckWafSourceLogic) CheckWafSource(req *types.WafSourceActionReq) (res
 	helper := newWafLogicHelper(l.ctx, l.svcCtx, l.Logger)
 
 	var source model.WafSource
-	if err := helper.svcCtx.DB.First(&source, req.ID).Error; err != nil {
+	if err := helper.svcCtx.DB.WithContext(helper.ctx).First(&source, req.ID).Error; err != nil {
 		return nil, fmt.Errorf("source not found")
 	}
 

@@ -38,7 +38,7 @@ func (l *UpdateWafPolicyLogic) UpdateWafPolicy(req *types.WafPolicyUpdateReq) (r
 	}
 
 	var policy model.WafPolicy
-	if err := helper.svcCtx.DB.First(&policy, req.ID).Error; err != nil {
+	if err := helper.svcCtx.DB.WithContext(helper.ctx).First(&policy, req.ID).Error; err != nil {
 		return nil, fmt.Errorf("policy not found")
 	}
 
@@ -51,7 +51,7 @@ func (l *UpdateWafPolicyLogic) UpdateWafPolicy(req *types.WafPolicyUpdateReq) (r
 		return nil, fmt.Errorf("policy name is required")
 	} else if name != originalName {
 		var count int64
-		if err := helper.svcCtx.DB.Model(&model.WafPolicy{}).
+		if err := helper.svcCtx.DB.WithContext(helper.ctx).Model(&model.WafPolicy{}).
 			Where("name = ? AND id <> ?", name, policy.ID).
 			Count(&count).Error; err != nil {
 			return nil, fmt.Errorf("check policy name failed: %w", err)
@@ -61,13 +61,13 @@ func (l *UpdateWafPolicyLogic) UpdateWafPolicy(req *types.WafPolicyUpdateReq) (r
 		}
 	}
 
-	directives, err := buildPolicyDirectivesWithExclusions(helper.svcCtx.DB, &policy)
+	directives, err := buildPolicyDirectivesWithExclusions(helper.svcCtx.DB.WithContext(helper.ctx), &policy)
 	if err != nil {
 		return nil, err
 	}
 
 	operator := helper.currentOperator()
-	if err := helper.svcCtx.DB.Transaction(func(tx *gorm.DB) error {
+	if err := helper.svcCtx.DB.WithContext(helper.ctx).Transaction(func(tx *gorm.DB) error {
 		if err := ensureSingleDefaultPolicy(tx, &policy); err != nil {
 			return err
 		}

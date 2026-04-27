@@ -2,6 +2,7 @@ package tasks
 
 import (
 	"context"
+	"logflux/internal/utils/safego"
 	"logflux/model"
 	"os/exec"
 	"sync"
@@ -80,7 +81,9 @@ func (s *CronScheduler) RemoveTask(taskID uint) {
 }
 
 func (s *CronScheduler) TriggerTask(taskID uint) {
-	go s.executeTask(taskID)
+	safego.New(context.Background(), "手动触发定时任务").Go(func() {
+		s.executeTask(taskID)
+	})
 }
 
 func (s *CronScheduler) executeTask(taskID uint) {

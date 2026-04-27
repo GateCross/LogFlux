@@ -26,7 +26,7 @@ func NewUpdateTemplateLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Up
 
 func (l *UpdateTemplateLogic) UpdateTemplate(req *types.TemplateUpdateReq) (resp *types.BaseResp, err error) {
 	var template model.NotificationTemplate
-	if err := l.svcCtx.DB.First(&template, req.ID).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).First(&template, req.ID).Error; err != nil {
 		return nil, err
 	}
 
@@ -43,7 +43,7 @@ func (l *UpdateTemplateLogic) UpdateTemplate(req *types.TemplateUpdateReq) (resp
 		template.Type = req.Type
 	}
 
-	if err := l.svcCtx.DB.Save(&template).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).Save(&template).Error; err != nil {
 		return nil, err
 	}
 

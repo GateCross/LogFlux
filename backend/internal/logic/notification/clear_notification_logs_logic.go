@@ -25,10 +25,10 @@ func NewClearNotificationLogsLogic(ctx context.Context, svcCtx *svc.ServiceConte
 
 func (l *ClearNotificationLogsLogic) ClearNotificationLogs() (resp *types.BaseResp, err error) {
 	// clear jobs first
-	if err := l.svcCtx.DB.Exec("TRUNCATE TABLE notification_jobs RESTART IDENTITY").Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).Exec("TRUNCATE TABLE notification_jobs RESTART IDENTITY").Error; err != nil {
 		return nil, err
 	}
-	if err := l.svcCtx.DB.Exec("TRUNCATE TABLE notification_logs RESTART IDENTITY").Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).Exec("TRUNCATE TABLE notification_logs RESTART IDENTITY").Error; err != nil {
 		return nil, err
 	}
 

@@ -38,7 +38,7 @@ func (l *ListWafReleasesLogic) ListWafReleases(req *types.WafReleaseListReq) (re
 		pageSize = 20
 	}
 
-	db := helper.svcCtx.DB.Model(&model.WafRelease{})
+	db := helper.svcCtx.DB.WithContext(helper.ctx).Model(&model.WafRelease{})
 	kind := strings.TrimSpace(req.Kind)
 	if kind == "" {
 		kind = wafKindCRS
