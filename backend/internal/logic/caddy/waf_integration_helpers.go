@@ -371,25 +371,14 @@ func replaceLineRange(lines []string, start, end int, replacement []string) []st
 }
 
 func renderWafProtectSnippet(newline string) string {
-	return strings.Join([]string{
-		"(waf_protect) {",
-		"  coraza_waf {",
-		"    load_owasp_crs",
-		"    directives `",
-		"      Include @coraza.conf-recommended",
-		"      Include @crs-setup.conf.example",
-		"      Include @owasp_crs/*.conf",
-		"",
-		"      SecRuleEngine Off",
-		"      SecAuditEngine RelevantOnly",
-		"      SecAuditLogFormat JSON",
-		"      SecAuditLog /var/log/caddy/waf_audit.log",
-		"",
-		"      SecRequestBodyAccess On",
-		"      SecRequestBodyLimit 10485760",
-		"      SecRequestBodyNoFilesLimit 1048576",
-		"    `",
-		"  }",
-		"}",
-	}, newline) + newline
+	defaultDirectives := strings.Join([]string{
+		"SecRuleEngine DetectionOnly",
+		"SecAuditEngine RelevantOnly",
+		"SecAuditLogFormat JSON",
+		"SecAuditLogRelevantStatus ^(?:5|4(?!04))",
+		"SecRequestBodyAccess On",
+		"SecRequestBodyLimit 10485760",
+		"SecRequestBodyNoFilesLimit 1048576",
+	}, "\n")
+	return strings.ReplaceAll(renderManagedWafSnippet(defaultDirectives, managedCaddyDefaultWafAuditLog), "\n", newline)
 }

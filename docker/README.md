@@ -55,7 +55,6 @@ curl -f http://localhost/api/health
 默认端口：
 
 - `80` -> HTTP
-- `443` -> HTTPS
 
 ## 4. 镜像来源与本地构建
 
@@ -236,8 +235,9 @@ Waf:
 ## 8. Caddy 配置生效机制
 
 - 启动优先 `caddy run --resume`（读取 `/config/caddy/autosave.json`）
-- 无 autosave 时回退 `/etc/caddy/Caddyfile`
+- 无 autosave 时回退 `/etc/caddy/Caddyfile`，默认是 LogFlux 受管简化模板
 - 后台保存配置会调用 Caddy Admin API `/adapt` + `/load`，属于热重载，无需重启容器
+- WAF 策略发布时会优先生成完整受管 Caddyfile；未识别为 LogFlux 默认模板的自定义配置继续只替换 Coraza directives 块
 
 ## 9. 常用运维命令
 
@@ -257,10 +257,7 @@ docker compose -f docker/docker-compose.yml down
 
 ## 10. GeoIP2（可选）
 
-如果不使用 GeoIP2：
-
-- 注释 `docker/docker-compose.yml` 中 `GeoLite2-City.mmdb` 挂载
-- 注释 `docker/Caddyfile` 中相关 `geoip` 引用
+默认 Caddyfile 已移除 GeoIP2 依赖，容器启动不再要求挂载 `GeoLite2-City.mmdb`。如需恢复地理位置字段，建议单独维护自定义 Caddyfile。
 
 ## 11. 常见问题
 

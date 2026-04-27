@@ -3,6 +3,7 @@ package caddy
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"logflux/internal/svc"
 	"logflux/model"
@@ -55,7 +56,7 @@ func (s *PolicyPublishService) BuildPublishCandidate(policyID uint) (*PolicyPubl
 		return nil, err
 	}
 
-	candidateConfig, err := applyWafPolicyToCaddyConfig(server.Config, directives)
+	candidateConfig, err := buildPolicyCandidateCaddyConfig(server.Config, directives, policy.Enabled)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +106,7 @@ func (s *PolicyPublishService) BuildRollbackCandidate(revisionID uint) (*PolicyP
 		return nil, nil, err
 	}
 
-	candidateConfig, err := applyWafPolicyToCaddyConfig(server.Config, directives)
+	candidateConfig, err := buildPolicyCandidateCaddyConfig(server.Config, directives, policy.Enabled)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -125,7 +126,7 @@ func (s *PolicyPublishService) ValidateCandidate(candidate *PolicyPublishCandida
 		return fmt.Errorf("Caddy 服务器不存在")
 	}
 	if err := adaptCaddyfile(candidate.Server, candidate.CandidateConfig); err != nil {
-		return fmt.Errorf("策略 %s 校验失败: %w", action, err)
+		return fmt.Errorf("策略%s校验失败: %w", wafPolicyActionName(action), err)
 	}
 	return nil
 }
@@ -136,9 +137,9 @@ func (s *PolicyPublishService) LoadCandidate(candidate *PolicyPublishCandidate, 
 	}
 	if err := loadCaddyfile(candidate.Server, candidate.CandidateConfig); err != nil {
 		if rollbackErr := rollbackPolicyConfigToLastGood(candidate.Server, candidate.LastGoodConfig); rollbackErr != nil {
-			return fmt.Errorf("策略 %s 加载失败: %v，回滚到 last_good 失败: %v", action, err, rollbackErr)
+			return fmt.Errorf("策略%s失败: %v，回滚到 last_good 失败: %v", wafPolicyActionName(action), err, rollbackErr)
 		}
-		return fmt.Errorf("策略 %s 加载失败: %w", action, err)
+		return fmt.Errorf("策略%s失败: %w", wafPolicyActionName(action), err)
 	}
 	return nil
 }
@@ -222,4 +223,19 @@ func (s *PolicyPublishService) PersistRolledBackCandidate(candidate *PolicyPubli
 	}
 
 	return nil
+}
+
+func wafPolicyActionName(action string) string {
+	switch action {
+	case "publish":
+		return "发布"
+	case "rollback":
+		return "回滚"
+	default:
+		trimmed := strings.TrimSpace(action)
+		if trimmed == "" {
+			return "操作"
+		}
+		return trimmed
+	}
 }

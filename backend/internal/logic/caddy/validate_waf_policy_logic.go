@@ -49,7 +49,7 @@ func (l *ValidateWafPolicyLogic) ValidateWafPolicy(req *types.WafPolicyActionReq
 		return nil, err
 	}
 
-	candidateConfig, err := applyWafPolicyToCaddyConfig(server.Config, directives)
+	candidateConfig, err := buildPolicyCandidateCaddyConfig(server.Config, directives, policy.Enabled)
 	if err != nil {
 		return nil, err
 	}

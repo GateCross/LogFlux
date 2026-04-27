@@ -47,7 +47,6 @@ curl -f http://localhost/api/health
 默认访问：
 
 - HTTP: `http://localhost`
-- HTTPS: `https://localhost`
 
 > 使用预构建镜像时，可在 `docker/.env` 设置：
 >
@@ -68,7 +67,7 @@ curl -f http://localhost/api/health
 ## 架构概览
 
 ```text
-Client -> Caddy(80/443) -> Frontend + Backend(8888)
+Client -> Caddy(80) -> Frontend + Backend(8888)
                           -> PostgreSQL / Redis(可选)
 ```
 
