@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.5
 
 ARG CADDY_IMAGE=ghcr.io/gatecross/logflux-caddy:latest
-ARG CORAZA_CURRENT_VERSION=
+ARG CORAZA_CURRENT_VERSION=v2.5.0
 ARG TARGETPLATFORM=linux/amd64
 ARG TARGETARCH=amd64
 
