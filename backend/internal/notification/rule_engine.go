@@ -25,14 +25,14 @@ type RuleEngine interface {
 
 // ruleEngine 规则引擎实现
 type ruleEngine struct {
-	redis    *redis.Client
+	redis      *redis.Client
 	evaluators map[string]RuleEvaluator
 }
 
 // NewRuleEngine 创建规则引擎
 func NewRuleEngine(redis *redis.Client) RuleEngine {
 	engine := &ruleEngine{
-		redis:    redis,
+		redis:      redis,
 		evaluators: make(map[string]RuleEvaluator),
 	}
 

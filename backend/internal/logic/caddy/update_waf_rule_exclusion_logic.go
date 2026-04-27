@@ -34,12 +34,12 @@ func (l *UpdateWafRuleExclusionLogic) UpdateWafRuleExclusion(req *types.WafRuleE
 	if req == nil || req.ID == 0 {
 		return nil, fmt.Errorf("policy exclusion id is required")
 	}
-	if err := validatePolicyIDExists(l.svcCtx.DB, req.PolicyId); err != nil {
+	if err := validatePolicyIDExists(l.svcCtx.DB.WithContext(l.ctx), req.PolicyId); err != nil {
 		return nil, err
 	}
 
 	var exclusion model.WafRuleExclusion
-	if err := l.svcCtx.DB.First(&exclusion, req.ID).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).First(&exclusion, req.ID).Error; err != nil {
 		return nil, fmt.Errorf("policy exclusion not found")
 	}
 
@@ -67,7 +67,7 @@ func (l *UpdateWafRuleExclusionLogic) UpdateWafRuleExclusion(req *types.WafRuleE
 	exclusion.RemoveType = removeType
 	exclusion.RemoveValue = removeValue
 
-	if err := l.svcCtx.DB.Save(&exclusion).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).Save(&exclusion).Error; err != nil {
 		return nil, fmt.Errorf("update policy exclusion failed: %w", err)
 	}
 

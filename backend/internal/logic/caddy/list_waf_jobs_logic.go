@@ -39,7 +39,7 @@ func (l *ListWafJobsLogic) ListWafJobs(req *types.WafJobListReq) (resp *types.Wa
 		pageSize = 20
 	}
 
-	db := helper.svcCtx.DB.Model(&model.WafUpdateJob{})
+	db := helper.svcCtx.DB.WithContext(helper.ctx).Model(&model.WafUpdateJob{})
 	if status := strings.TrimSpace(req.Status); status != "" {
 		db = db.Where("status = ?", strings.ToLower(status))
 	}
@@ -103,7 +103,7 @@ func (l *ListWafJobsLogic) buildJobOperatorNameMap(jobs []model.WafUpdateJob) ma
 	}
 
 	var users []model.User
-	if err := l.svcCtx.DB.Model(&model.User{}).Select("id", "username").Where("id IN ?", userIDs).Find(&users).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).Model(&model.User{}).Select("id", "username").Where("id IN ?", userIDs).Find(&users).Error; err != nil {
 		l.Logger.Errorf("query operator usernames failed: userIDs=%v err=%v", userIDs, err)
 		return operatorNameMap
 	}

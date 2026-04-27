@@ -34,7 +34,7 @@ func (l *CheckWafEngineLogic) CheckWafEngine() (resp *types.BaseResp, err error)
 	}
 
 	if job != nil {
-		if err := helper.svcCtx.DB.Model(job).Updates(map[string]interface{}{
+		if err := helper.svcCtx.DB.WithContext(helper.ctx).Model(job).Updates(map[string]interface{}{
 			"meta":    map[string]interface{}{"latestVersion": latestVersion},
 			"message": fmt.Sprintf("engine source check success: latest=%s", latestVersion),
 		}).Error; err != nil {

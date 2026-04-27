@@ -28,7 +28,7 @@ func NewGetChannelListLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Ge
 
 func (l *GetChannelListLogic) GetChannelList() (resp *types.ChannelListResp, err error) {
 	var channels []model.NotificationChannel
-	if err := l.svcCtx.DB.Find(&channels).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).Find(&channels).Error; err != nil {
 		return nil, err
 	}
 

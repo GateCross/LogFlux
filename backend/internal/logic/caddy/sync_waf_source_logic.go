@@ -38,7 +38,7 @@ func (l *SyncWafSourceLogic) SyncWafSource(req *types.WafSourceSyncReq) (resp *t
 	}
 
 	var source model.WafSource
-	if err := helper.svcCtx.DB.First(&source, req.ID).Error; err != nil {
+	if err := helper.svcCtx.DB.WithContext(helper.ctx).First(&source, req.ID).Error; err != nil {
 		return nil, fmt.Errorf("source not found")
 	}
 	if !source.Enabled {
@@ -72,7 +72,7 @@ func (l *SyncWafSourceLogic) SyncWafSource(req *types.WafSourceSyncReq) (resp *t
 	}
 
 	job := helper.startJob(source.ID, 0, "download", "manual")
-	existingRelease, err := findLatestReleaseByKindAndVersion(helper.svcCtx.DB, source.Kind, version)
+	existingRelease, err := findLatestReleaseByKindAndVersion(helper.svcCtx.DB.WithContext(helper.ctx), source.Kind, version)
 	if err != nil {
 		helper.updateSourceLastCheck(source.ID, version, err.Error())
 		helper.finishJob(job, wafJobStatusFailed, err.Error(), 0)
@@ -178,7 +178,7 @@ func (l *SyncWafSourceLogic) SyncWafSource(req *types.WafSourceSyncReq) (resp *t
 		Status:       wafReleaseStatusVerified,
 	}
 
-	if err := helper.svcCtx.DB.Create(release).Error; err != nil {
+	if err := helper.svcCtx.DB.WithContext(helper.ctx).Create(release).Error; err != nil {
 		helper.updateSourceLastCheck(source.ID, "", err.Error())
 		helper.finishJob(job, wafJobStatusFailed, fmt.Sprintf("create release failed: %v", err), 0)
 		return nil, fmt.Errorf("create release failed: %w", err)

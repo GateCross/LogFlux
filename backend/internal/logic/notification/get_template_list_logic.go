@@ -26,7 +26,7 @@ func NewGetTemplateListLogic(ctx context.Context, svcCtx *svc.ServiceContext) *G
 
 func (l *GetTemplateListLogic) GetTemplateList() (resp *types.TemplateListResp, err error) {
 	var templates []model.NotificationTemplate
-	if err := l.svcCtx.DB.Find(&templates).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).Find(&templates).Error; err != nil {
 		return nil, err
 	}
 

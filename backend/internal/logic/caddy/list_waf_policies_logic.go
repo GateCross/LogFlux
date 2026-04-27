@@ -41,7 +41,7 @@ func (l *ListWafPoliciesLogic) ListWafPolicies(req *types.WafPolicyListReq) (res
 		pageSize = 20
 	}
 
-	db := l.svcCtx.DB.Model(&model.WafPolicy{})
+	db := l.svcCtx.DB.WithContext(l.ctx).Model(&model.WafPolicy{})
 	if keyword := strings.TrimSpace(req.Name); keyword != "" {
 		db = db.Where("name ILIKE ?", "%"+keyword+"%")
 	}

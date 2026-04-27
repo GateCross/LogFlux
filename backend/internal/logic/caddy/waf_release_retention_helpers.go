@@ -41,7 +41,7 @@ func (helper *wafLogicHelper) pruneOldReleases(kind string, keepCount int) error
 
 	normalizedKind := normalizeWafKind(kind)
 	var releases []model.WafRelease
-	if err := helper.svcCtx.DB.
+	if err := helper.svcCtx.DB.WithContext(helper.ctx).
 		Where("kind = ?", normalizedKind).
 		Order("created_at desc, id desc").
 		Find(&releases).Error; err != nil {
@@ -96,7 +96,7 @@ func (helper *wafLogicHelper) pruneOldReleases(kind string, keepCount int) error
 		return nil
 	}
 
-	if err := helper.svcCtx.DB.Transaction(func(tx *gorm.DB) error {
+	if err := helper.svcCtx.DB.WithContext(helper.ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("release_id IN ?", deleteIDs).Delete(&model.WafUpdateJob{}).Error; err != nil {
 			return fmt.Errorf("delete retained release jobs failed: %w", err)
 		}

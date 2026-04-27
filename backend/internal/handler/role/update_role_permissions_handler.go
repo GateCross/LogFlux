@@ -1,6 +1,7 @@
 package role
 
 import (
+	"logflux/common/result"
 	"net/http"
 
 	"logflux/internal/logic/role"
@@ -20,10 +21,6 @@ func UpdateRolePermissionsHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 
 		l := role.NewUpdateRolePermissionsLogic(r.Context(), svcCtx)
 		resp, err := l.UpdateRolePermissions(&req)
-		if err != nil {
-			httpx.ErrorCtx(r.Context(), w, err)
-		} else {
-			httpx.OkJsonCtx(r.Context(), w, resp)
-		}
+		result.HttpResult(r, w, resp, err)
 	}
 }

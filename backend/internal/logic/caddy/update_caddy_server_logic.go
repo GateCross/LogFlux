@@ -8,6 +8,7 @@ import (
 	"logflux/internal/notification"
 	"logflux/internal/svc"
 	"logflux/internal/types"
+	"logflux/internal/utils/safego"
 	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -29,7 +30,7 @@ func NewUpdateCaddyServerLogic(ctx context.Context, svcCtx *svc.ServiceContext) 
 
 func (l *UpdateCaddyServerLogic) UpdateCaddyServer(req *types.UpdateCaddyServerReq) (resp *types.BaseResp, err error) {
 	var server model.CaddyServer
-	if err := l.svcCtx.DB.First(&server, req.ID).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).First(&server, req.ID).Error; err != nil {
 		return nil, err
 	}
 
@@ -41,18 +42,23 @@ func (l *UpdateCaddyServerLogic) UpdateCaddyServer(req *types.UpdateCaddyServerR
 	server.Password = req.Password
 	server.UpdatedAt = time.Now()
 
-	if err := l.svcCtx.DB.Save(&server).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).Save(&server).Error; err != nil {
 		return nil, err
 	}
 
 	// 发送配置更新通知
 	if l.svcCtx.NotificationMgr != nil {
-		go l.svcCtx.NotificationMgr.Notify(context.Background(), notification.NewEvent(
+		event := notification.NewEvent(
 			"caddy.server.updated",
 			notification.LevelInfo,
-			"Caddy Server Updated",
-			fmt.Sprintf("Server '%s' (%s) configuration was updated.", server.Name, server.Url),
-		))
+			"更新 Caddy 服务器",
+			fmt.Sprintf("Caddy 服务器 %s（%s）配置已更新。", server.Name, server.Url),
+		)
+		safego.New(context.Background(), "更新 Caddy 服务器通知").Go(func() {
+			if err := l.svcCtx.NotificationMgr.Notify(context.Background(), event); err != nil {
+				l.Errorf("发送 Caddy 服务器更新通知失败: serverID=%d err=%v", server.ID, err)
+			}
+		})
 	}
 
 	return &types.BaseResp{

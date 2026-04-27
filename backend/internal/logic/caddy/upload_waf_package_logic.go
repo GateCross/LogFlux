@@ -72,7 +72,7 @@ func (l *UploadWafPackageLogic) UploadWafPackage(req *types.WafUploadReq) (resp 
 	}()
 
 	job := helper.startJob(0, 0, "verify", "upload")
-	existingRelease, err := findLatestReleaseByKindAndVersion(helper.svcCtx.DB, kind, version)
+	existingRelease, err := findLatestReleaseByKindAndVersion(helper.svcCtx.DB.WithContext(helper.ctx), kind, version)
 	if err != nil {
 		helper.finishJob(job, wafJobStatusFailed, err.Error(), 0)
 		return nil, err
@@ -133,7 +133,7 @@ func (l *UploadWafPackageLogic) UploadWafPackage(req *types.WafUploadReq) (resp 
 		Meta:         model.JSONMap{"originFileName": basenameSafe(fileName)},
 	}
 
-	if err := helper.svcCtx.DB.Create(release).Error; err != nil {
+	if err := helper.svcCtx.DB.WithContext(helper.ctx).Create(release).Error; err != nil {
 		helper.finishJob(job, wafJobStatusFailed, fmt.Sprintf("create release failed: %v", err), 0)
 		return nil, fmt.Errorf("create release failed: %w", err)
 	}

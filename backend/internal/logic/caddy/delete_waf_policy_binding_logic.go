@@ -34,7 +34,7 @@ func (l *DeleteWafPolicyBindingLogic) DeleteWafPolicyBinding(req *types.IDReq) (
 		return nil, fmt.Errorf("policy binding id is required")
 	}
 
-	result := l.svcCtx.DB.Where("id = ?", req.ID).Delete(&model.WafPolicyBinding{})
+	result := l.svcCtx.DB.WithContext(l.ctx).Where("id = ?", req.ID).Delete(&model.WafPolicyBinding{})
 	if result.Error != nil {
 		return nil, fmt.Errorf("delete policy binding failed: %w", result.Error)
 	}

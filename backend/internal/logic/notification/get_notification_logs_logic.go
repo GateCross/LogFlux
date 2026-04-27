@@ -35,7 +35,7 @@ func (l *GetNotificationLogsLogic) GetNotificationLogs(req *types.LogListReq) (r
 	}
 
 	var logs []logWithJob
-	db := l.svcCtx.DB.Model(&model.NotificationLog{}).
+	db := l.svcCtx.DB.WithContext(l.ctx).Model(&model.NotificationLog{}).
 		Select("notification_logs.*, notification_jobs.status as job_status, notification_jobs.retry_count as job_retry_count, notification_jobs.next_run_at as job_next_run_at, notification_jobs.last_error as job_last_error").
 		Joins("LEFT JOIN notification_jobs ON notification_jobs.log_id = notification_logs.id")
 
@@ -90,17 +90,17 @@ func (l *GetNotificationLogsLogic) GetNotificationLogs(req *types.LogListReq) (r
 		}
 
 		item := types.LogItem{
-			ID:         log.ID,
-			EventID:    "", // Model doesn't have EventID
-			EventType:  log.EventType,
-			Title:      "",
-			Message:    "",
-			Level:      "",
-			ChannelID:  0,
-			Status:     statusInt,
-			Error:      log.ErrorMessage,
-			RetryCount: 0,
-			CreatedAt:  log.CreatedAt.Format("2006-01-02 15:04:05"),
+			ID:            log.ID,
+			EventID:       "", // Model doesn't have EventID
+			EventType:     log.EventType,
+			Title:         "",
+			Message:       "",
+			Level:         "",
+			ChannelID:     0,
+			Status:        statusInt,
+			Error:         log.ErrorMessage,
+			RetryCount:    0,
+			CreatedAt:     log.CreatedAt.Format("2006-01-02 15:04:05"),
 			JobStatus:     log.JobStatus,
 			JobRetryCount: log.JobRetryCount,
 			LastError:     log.JobLastError,

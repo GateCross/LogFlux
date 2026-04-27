@@ -31,7 +31,7 @@ func (l *GetWafEngineStatusLogic) GetWafEngineStatus() (resp *types.WafEngineSta
 
 	latestVersion := ""
 	var latestCheckJob model.WafUpdateJob
-	if queryErr := helper.svcCtx.DB.
+	if queryErr := helper.svcCtx.DB.WithContext(helper.ctx).
 		Where("action = ? AND status = ?", "engine_check", wafJobStatusSuccess).
 		Order("finished_at desc, id desc").
 		First(&latestCheckJob).Error; queryErr == nil {

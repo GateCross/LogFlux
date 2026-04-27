@@ -34,7 +34,7 @@ func (l *CreateWafPolicyBindingLogic) CreateWafPolicyBinding(req *types.WafPolic
 	if req == nil {
 		return nil, fmt.Errorf("invalid policy binding payload")
 	}
-	if err := validatePolicyIDExists(l.svcCtx.DB, req.PolicyId); err != nil {
+	if err := validatePolicyIDExists(l.svcCtx.DB.WithContext(l.ctx), req.PolicyId); err != nil {
 		return nil, err
 	}
 
@@ -63,10 +63,10 @@ func (l *CreateWafPolicyBindingLogic) CreateWafPolicyBinding(req *types.WafPolic
 		binding.Enabled = true
 	}
 
-	if err := validatePolicyBindingConflict(l.svcCtx.DB, binding); err != nil {
+	if err := validatePolicyBindingConflict(l.svcCtx.DB.WithContext(l.ctx), binding); err != nil {
 		return nil, err
 	}
-	if err := l.svcCtx.DB.Create(binding).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).Create(binding).Error; err != nil {
 		return nil, fmt.Errorf("create policy binding failed: %w", err)
 	}
 

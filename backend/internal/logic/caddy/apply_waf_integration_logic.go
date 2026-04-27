@@ -30,7 +30,7 @@ func (l *ApplyWafIntegrationLogic) ApplyWafIntegration(req *types.WafIntegration
 		return nil, fmt.Errorf("invalid waf integration payload")
 	}
 
-	server, err := findPreferredCaddyServer(l.svcCtx.DB, req.ServerId)
+	server, err := findPreferredCaddyServer(l.svcCtx.DB.WithContext(l.ctx), req.ServerId)
 	if err != nil {
 		return nil, err
 	}

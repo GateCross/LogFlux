@@ -30,7 +30,7 @@ func NewUpdateCaddyConfigLogic(ctx context.Context, svcCtx *svc.ServiceContext) 
 
 func (l *UpdateCaddyConfigLogic) UpdateCaddyConfig(req *types.CaddyConfigUpdateReq) (resp *types.BaseResp, err error) {
 	var server model.CaddyServer
-	if err := l.svcCtx.DB.First(&server, req.ServerId).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).First(&server, req.ServerId).Error; err != nil {
 		return nil, fmt.Errorf("server not found")
 	}
 	applyService := newCaddyConfigApplyService(l.svcCtx, l.Logger)

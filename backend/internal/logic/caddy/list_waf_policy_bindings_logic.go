@@ -43,7 +43,7 @@ func (l *ListWafPolicyBindingsLogic) ListWafPolicyBindings(req *types.WafPolicyB
 		pageSize = 20
 	}
 
-	db := l.svcCtx.DB.Model(&model.WafPolicyBinding{})
+	db := l.svcCtx.DB.WithContext(l.ctx).Model(&model.WafPolicyBinding{})
 	if req.PolicyId > 0 {
 		db = db.Where("policy_id = ?", req.PolicyId)
 	}

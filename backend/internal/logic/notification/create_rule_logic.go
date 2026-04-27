@@ -45,7 +45,7 @@ func (l *CreateRuleLogic) CreateRule(req *types.RuleReq) (resp *types.BaseResp, 
 		Description:     req.Description,
 	}
 
-	if err := l.svcCtx.DB.Create(rule).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).Create(rule).Error; err != nil {
 		return nil, err
 	}
 

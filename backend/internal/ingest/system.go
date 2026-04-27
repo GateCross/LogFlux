@@ -1,6 +1,7 @@
 package ingest
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -11,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"logflux/internal/utils/safego"
 	"logflux/model"
 
 	"github.com/nxadm/tail"
@@ -104,7 +106,9 @@ func (i *SystemIngestor) startFile(filePath string, sourceType string) bool {
 
 	logx.Infof("Started monitoring: %s", filePath)
 
-	go func(path string) {
+	watchPath := filePath
+	safego.New(context.Background(), "系统日志文件监听").Go(func() {
+		path := watchPath
 		for line := range t.Lines {
 			if line == nil {
 				continue
@@ -124,7 +128,7 @@ func (i *SystemIngestor) startFile(filePath string, sourceType string) bool {
 				logx.Errorf("Save ingest cursor failed: %v", err)
 			}
 		}
-	}(filePath)
+	})
 
 	return true
 }
@@ -201,7 +205,7 @@ func (i *SystemIngestor) startDir(dirPath string, scanIntervalSec int, sourceTyp
 
 	i.scanDir(dirPath)
 
-	go func() {
+	safego.New(context.Background(), "系统日志目录扫描").Go(func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
@@ -212,7 +216,7 @@ func (i *SystemIngestor) startDir(dirPath string, scanIntervalSec int, sourceTyp
 				return
 			}
 		}
-	}()
+	})
 }
 
 func (i *SystemIngestor) scanDir(dirPath string) {
@@ -402,7 +406,7 @@ func (i *SystemIngestor) flushPending(filePath string) {
 }
 
 func (i *SystemIngestor) startPendingFlush() {
-	go func() {
+	safego.New(context.Background(), "系统日志缓冲刷新").Go(func() {
 		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
 		for range ticker.C {
@@ -428,7 +432,7 @@ func (i *SystemIngestor) startPendingFlush() {
 				}
 			}
 		}
-	}()
+	})
 }
 
 func parseCaddyRuntimeJSON(line string) (*model.SystemLog, error) {

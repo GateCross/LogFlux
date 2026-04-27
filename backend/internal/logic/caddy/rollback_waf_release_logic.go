@@ -83,7 +83,7 @@ func (l *RollbackWafReleaseLogic) resolveRollbackTarget(helper *wafLogicHelper, 
 
 func (l *RollbackWafReleaseLogic) findReleaseByVersion(helper *wafLogicHelper, version string) (*model.WafRelease, error) {
 	var release model.WafRelease
-	err := helper.svcCtx.DB.Where("version = ?", strings.TrimSpace(version)).Order("id desc").First(&release).Error
+	err := helper.svcCtx.DB.WithContext(helper.ctx).Where("version = ?", strings.TrimSpace(version)).Order("id desc").First(&release).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, fmt.Errorf("target release not found")

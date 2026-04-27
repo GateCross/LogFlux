@@ -27,7 +27,7 @@ func NewReadAllNotificationsLogic(ctx context.Context, svcCtx *svc.ServiceContex
 
 func (l *ReadAllNotificationsLogic) ReadAllNotifications() (resp *types.BaseResp, err error) {
 	// Update all unread notifications to read
-	err = l.svcCtx.DB.Model(&model.NotificationLog{}).
+	err = l.svcCtx.DB.WithContext(l.ctx).Model(&model.NotificationLog{}).
 		Where("is_read = ?", false).
 		Updates(map[string]interface{}{
 			"is_read": true,

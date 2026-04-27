@@ -10,19 +10,19 @@ type NotificationJob struct {
 
 	LogID uint `gorm:"index;not null" json:"log_id"`
 
-	ChannelID     uint   `gorm:"index;not null" json:"channel_id"`
-	ProviderType  string `gorm:"size:50;index;not null" json:"provider_type"`
-	EventType     string `gorm:"size:100;index;not null" json:"event_type"`
-	EventLevel    string `gorm:"size:20;index" json:"event_level"`
-	EventTitle    string `gorm:"type:text" json:"event_title"`
-	EventMessage  string `gorm:"type:text" json:"event_message"`
-	EventData     JSONMap `gorm:"type:jsonb" json:"event_data,omitempty"`
-	TemplateName  string `gorm:"type:text" json:"template_name,omitempty"`
+	ChannelID    uint    `gorm:"index;not null" json:"channel_id"`
+	ProviderType string  `gorm:"size:50;index;not null" json:"provider_type"`
+	EventType    string  `gorm:"size:100;index;not null" json:"event_type"`
+	EventLevel   string  `gorm:"size:20;index" json:"event_level"`
+	EventTitle   string  `gorm:"type:text" json:"event_title"`
+	EventMessage string  `gorm:"type:text" json:"event_message"`
+	EventData    JSONMap `gorm:"type:jsonb" json:"event_data,omitempty"`
+	TemplateName string  `gorm:"type:text" json:"template_name,omitempty"`
 
-	Status      string     `gorm:"size:50;index;not null" json:"status"` // queued, processing, succeeded, failed
-	RetryCount  int        `gorm:"default:0" json:"retry_count"`
-	NextRunAt   time.Time  `gorm:"index" json:"next_run_at"`
-	LastError   string     `gorm:"type:text" json:"last_error,omitempty"`
+	Status        string     `gorm:"size:50;index;not null" json:"status"` // queued, processing, succeeded, failed
+	RetryCount    int        `gorm:"default:0" json:"retry_count"`
+	NextRunAt     time.Time  `gorm:"index" json:"next_run_at"`
+	LastError     string     `gorm:"type:text" json:"last_error,omitempty"`
 	LastAttemptAt *time.Time `json:"last_attempt_at,omitempty"`
 }
 
@@ -31,8 +31,8 @@ func (NotificationJob) TableName() string {
 }
 
 const (
-	NotificationJobStatusQueued      = "queued"
-	NotificationJobStatusProcessing  = "processing"
-	NotificationJobStatusSucceeded   = "succeeded"
-	NotificationJobStatusFailed      = "failed"
+	NotificationJobStatusQueued     = "queued"
+	NotificationJobStatusProcessing = "processing"
+	NotificationJobStatusSucceeded  = "succeeded"
+	NotificationJobStatusFailed     = "failed"
 )

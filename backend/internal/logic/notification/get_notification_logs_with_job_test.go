@@ -107,7 +107,7 @@ func TestGetNotificationLogs_FilterByJobStatus(t *testing.T) {
 		sqlmock.NewRows([]string{"count"}).AddRow(0),
 	)
 	mock.ExpectQuery("SELECT (.+) FROM \\\"notification_logs\\\" LEFT JOIN notification_jobs").WillReturnRows(
-		sqlmock.NewRows([]string{"id","created_at","channel_id","rule_id","event_type","event_data","status","error_message","sent_at","is_read","read_at","job_status","job_retry_count","job_next_run_at","job_last_error"}),
+		sqlmock.NewRows([]string{"id", "created_at", "channel_id", "rule_id", "event_type", "event_data", "status", "error_message", "sent_at", "is_read", "read_at", "job_status", "job_retry_count", "job_next_run_at", "job_last_error"}),
 	)
 
 	logic := NewGetNotificationLogsLogic(context.Background(), &svc.ServiceContext{DB: gdb})

@@ -5,6 +5,7 @@ import (
 	"logflux/internal/notification"
 	"logflux/internal/svc"
 	"logflux/internal/types"
+	"logflux/internal/xerr"
 	"strings"
 	"time"
 
@@ -46,7 +47,7 @@ func (l *TestChannelLogic) TestChannel(req *types.TestChannelReq) (resp *types.B
 
 	mgr := l.svcCtx.NotificationMgr
 	if mgr == nil {
-		return &types.BaseResp{Code: 500, Msg: "Notification manager not initialized"}, nil
+		return nil, xerr.NewSystemErrorWith("通知管理器未初始化")
 	}
 
 	sendCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

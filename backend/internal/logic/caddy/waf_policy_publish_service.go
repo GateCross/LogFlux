@@ -37,20 +37,20 @@ func (s *PolicyPublishService) BuildPublishCandidate(policyID uint) (*PolicyPubl
 	}
 
 	var policy model.WafPolicy
-	if err := s.svcCtx.DB.First(&policy, policyID).Error; err != nil {
+	if err := s.svcCtx.DB.WithContext(s.ctx).First(&policy, policyID).Error; err != nil {
 		return nil, fmt.Errorf("policy not found")
 	}
 
-	if err := ensureNoPolicyBindingConflicts(s.svcCtx.DB); err != nil {
+	if err := ensureNoPolicyBindingConflicts(s.svcCtx.DB.WithContext(s.ctx)); err != nil {
 		return nil, err
 	}
 
-	directives, err := buildPolicyDirectivesWithExclusions(s.svcCtx.DB, &policy)
+	directives, err := buildPolicyDirectivesWithExclusions(s.svcCtx.DB.WithContext(s.ctx), &policy)
 	if err != nil {
 		return nil, err
 	}
 
-	server, err := findPrimaryCaddyServer(s.svcCtx.DB)
+	server, err := findPrimaryCaddyServer(s.svcCtx.DB.WithContext(s.ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +79,7 @@ func (s *PolicyPublishService) BuildRollbackCandidate(revisionID uint) (*PolicyP
 	}
 
 	var revision model.WafPolicyRevision
-	if err := s.svcCtx.DB.First(&revision, revisionID).Error; err != nil {
+	if err := s.svcCtx.DB.WithContext(s.ctx).First(&revision, revisionID).Error; err != nil {
 		return nil, nil, fmt.Errorf("policy revision not found")
 	}
 	if revision.PolicyID == 0 {
@@ -87,20 +87,20 @@ func (s *PolicyPublishService) BuildRollbackCandidate(revisionID uint) (*PolicyP
 	}
 
 	var policy model.WafPolicy
-	if err := s.svcCtx.DB.First(&policy, revision.PolicyID).Error; err != nil {
+	if err := s.svcCtx.DB.WithContext(s.ctx).First(&policy, revision.PolicyID).Error; err != nil {
 		return nil, nil, fmt.Errorf("policy not found")
 	}
 
 	directives := revision.DirectivesSnapshot
 	if directives == "" {
-		builtDirectives, err := buildPolicyDirectivesWithExclusions(s.svcCtx.DB, &policy)
+		builtDirectives, err := buildPolicyDirectivesWithExclusions(s.svcCtx.DB.WithContext(s.ctx), &policy)
 		if err != nil {
 			return nil, nil, err
 		}
 		directives = builtDirectives
 	}
 
-	server, err := findPrimaryCaddyServer(s.svcCtx.DB)
+	server, err := findPrimaryCaddyServer(s.svcCtx.DB.WithContext(s.ctx))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -149,7 +149,7 @@ func (s *PolicyPublishService) PersistPublishedCandidate(candidate *PolicyPublis
 	}
 	modules := normalizeCaddyModulesJSON(candidate.Server.Modules)
 
-	if err := s.svcCtx.DB.Transaction(func(tx *gorm.DB) error {
+	if err := s.svcCtx.DB.WithContext(s.ctx).Transaction(func(tx *gorm.DB) error {
 		if err := createCaddyPolicyHistory(tx, candidate.Server.ID, "policy_last_good", candidate.LastGoodConfig, candidate.LastGoodModules); err != nil {
 			return err
 		}
@@ -185,7 +185,7 @@ func (s *PolicyPublishService) PersistRolledBackCandidate(candidate *PolicyPubli
 	}
 	modules := normalizeCaddyModulesJSON(candidate.Server.Modules)
 
-	if err := s.svcCtx.DB.Transaction(func(tx *gorm.DB) error {
+	if err := s.svcCtx.DB.WithContext(s.ctx).Transaction(func(tx *gorm.DB) error {
 		if err := createCaddyPolicyHistory(tx, candidate.Server.ID, "policy_last_good", candidate.LastGoodConfig, candidate.LastGoodModules); err != nil {
 			return err
 		}

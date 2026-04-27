@@ -6,7 +6,8 @@ import (
 	"net/http"
 	"sync"
 
-	"logflux/common/result"
+	"logflux/internal/response"
+	"logflux/internal/xerr"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -56,10 +57,11 @@ func ResponseMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		// 检查是否已包装（包含 code 和 msg 字段）
+		// 检查是否已包装（包含 code，并包含 message 或兼容字段 msg）
 		_, hasCode := dataMap["code"]
 		_, hasMsg := dataMap["msg"]
-		if hasCode && hasMsg {
+		_, hasMessage := dataMap["message"]
+		if hasCode && (hasMsg || hasMessage) {
 			// 已包装，直接写入
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			w.WriteHeader(http.StatusOK)
@@ -68,10 +70,11 @@ func ResponseMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		// 未包装，进行包装
-		resp := result.ResponseBean{
-			Code: 200,
-			Msg:  "success",
-			Data: dataMap,
+		resp := response.Result{
+			Code:    xerr.OK,
+			Message: xerr.MapErrMsg(xerr.OK),
+			Msg:     xerr.MapErrMsg(xerr.OK),
+			Data:    dataMap,
 		}
 
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")

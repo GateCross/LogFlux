@@ -37,11 +37,11 @@ func (l *DeleteWafPolicyLogic) DeleteWafPolicy(req *types.IDReq) (resp *types.Ba
 	}
 
 	var policy model.WafPolicy
-	if err := helper.svcCtx.DB.First(&policy, req.ID).Error; err != nil {
+	if err := helper.svcCtx.DB.WithContext(helper.ctx).First(&policy, req.ID).Error; err != nil {
 		return nil, fmt.Errorf("policy not found")
 	}
 
-	if err := helper.svcCtx.DB.Transaction(func(tx *gorm.DB) error {
+	if err := helper.svcCtx.DB.WithContext(helper.ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("policy_id = ?", policy.ID).Delete(&model.WafPolicyRevision{}).Error; err != nil {
 			return fmt.Errorf("delete policy revisions failed: %w", err)
 		}

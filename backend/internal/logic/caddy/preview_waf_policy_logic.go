@@ -35,11 +35,11 @@ func (l *PreviewWafPolicyLogic) PreviewWafPolicy(req *types.WafPolicyActionReq) 
 	}
 
 	var policy model.WafPolicy
-	if err := l.svcCtx.DB.First(&policy, req.ID).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).First(&policy, req.ID).Error; err != nil {
 		return nil, fmt.Errorf("policy not found")
 	}
 
-	directives, err := buildPolicyDirectivesWithExclusions(l.svcCtx.DB, &policy)
+	directives, err := buildPolicyDirectivesWithExclusions(l.svcCtx.DB.WithContext(l.ctx), &policy)
 	if err != nil {
 		return nil, err
 	}

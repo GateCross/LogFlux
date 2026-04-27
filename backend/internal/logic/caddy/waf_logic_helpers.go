@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"logflux/internal/svc"
+	"logflux/internal/utils/safego"
 	"logflux/internal/waf"
 	"logflux/model"
 
@@ -180,7 +181,7 @@ func (helper *wafLogicHelper) startJob(sourceID, releaseID uint, action, trigger
 		FinishedAt:  nil,
 		Message:     "",
 	}
-	if err := helper.svcCtx.DB.Create(job).Error; err != nil {
+	if err := helper.svcCtx.DB.WithContext(helper.ctx).Create(job).Error; err != nil {
 		helper.logger.Errorf("create waf job failed: %v", err)
 		return nil
 	}
@@ -202,7 +203,7 @@ func (helper *wafLogicHelper) finishJob(job *model.WafUpdateJob, status, message
 	if releaseID > 0 {
 		updates["release_id"] = releaseID
 	}
-	if err := helper.svcCtx.DB.Model(job).Updates(updates).Error; err != nil {
+	if err := helper.svcCtx.DB.WithContext(helper.ctx).Model(job).Updates(updates).Error; err != nil {
 		helper.logger.Errorf("finish waf job failed: %v", err)
 	}
 
@@ -356,9 +357,9 @@ func (helper *wafLogicHelper) resolveJobTriggerMode(defaultMode string) string {
 
 func (helper *wafLogicHelper) primaryCaddyServer() (*model.CaddyServer, error) {
 	var server model.CaddyServer
-	err := helper.svcCtx.DB.Where("type = ?", "local").Order("id asc").First(&server).Error
+	err := helper.svcCtx.DB.WithContext(helper.ctx).Where("type = ?", "local").Order("id asc").First(&server).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		err = helper.svcCtx.DB.Order("id asc").First(&server).Error
+		err = helper.svcCtx.DB.WithContext(helper.ctx).Order("id asc").First(&server).Error
 	}
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -437,9 +438,13 @@ func (helper *wafLogicHelper) activateReleaseOnce(activator *waf.Activator, rele
 	}
 
 	resultCh := make(chan error, 1)
-	go func() {
+	activateCtx := context.Background()
+	if helper != nil && helper.ctx != nil {
+		activateCtx = helper.ctx
+	}
+	safego.New(activateCtx, "激活 WAF 版本").Go(func() {
 		resultCh <- activator.ActivateVersion(releaseVersion, caddyConfig)
-	}()
+	})
 
 	select {
 	case activateErr := <-resultCh:
@@ -476,7 +481,7 @@ func (helper *wafLogicHelper) markReleaseActive(release *model.WafRelease) error
 		return fmt.Errorf("release is nil")
 	}
 
-	return helper.svcCtx.DB.Transaction(func(tx *gorm.DB) error {
+	return helper.svcCtx.DB.WithContext(helper.ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&model.WafRelease{}).
 			Where("kind = ? AND status = ? AND id <> ?", release.Kind, wafReleaseStatusActive, release.ID).
 			Update("status", wafReleaseStatusRolledBack).Error; err != nil {
@@ -516,14 +521,14 @@ func (helper *wafLogicHelper) markReleaseFailed(release *model.WafRelease, messa
 		errorMessage = "activate failed"
 	}
 
-	if err := helper.svcCtx.DB.Model(&model.WafRelease{}).
+	if err := helper.svcCtx.DB.WithContext(helper.ctx).Model(&model.WafRelease{}).
 		Where("id = ?", release.ID).
 		Updates(map[string]interface{}{"status": wafReleaseStatusFailed}).Error; err != nil {
 		helper.logger.Errorf("mark release failed status error: %v", err)
 	}
 
 	if release.SourceID > 0 {
-		if err := helper.svcCtx.DB.Model(&model.WafSource{}).
+		if err := helper.svcCtx.DB.WithContext(helper.ctx).Model(&model.WafSource{}).
 			Where("id = ?", release.SourceID).
 			Updates(map[string]interface{}{"last_error": errorMessage}).Error; err != nil {
 			helper.logger.Errorf("update source last_error failed: %v", err)
@@ -535,7 +540,7 @@ func (helper *wafLogicHelper) clearSourceError(sourceID uint) {
 	if sourceID == 0 {
 		return
 	}
-	if err := helper.svcCtx.DB.Model(&model.WafSource{}).
+	if err := helper.svcCtx.DB.WithContext(helper.ctx).Model(&model.WafSource{}).
 		Where("id = ?", sourceID).
 		Update("last_error", "").Error; err != nil {
 		helper.logger.Errorf("clear source last_error failed: %v", err)
@@ -554,7 +559,7 @@ func (helper *wafLogicHelper) updateSourceLastCheck(sourceID uint, releaseVersio
 	if strings.TrimSpace(releaseVersion) != "" {
 		updates["last_release"] = strings.TrimSpace(releaseVersion)
 	}
-	if err := helper.svcCtx.DB.Model(&model.WafSource{}).Where("id = ?", sourceID).Updates(updates).Error; err != nil {
+	if err := helper.svcCtx.DB.WithContext(helper.ctx).Model(&model.WafSource{}).Where("id = ?", sourceID).Updates(updates).Error; err != nil {
 		helper.logger.Errorf("update source last check failed: %v", err)
 	}
 }

@@ -20,7 +20,7 @@ type stubProvider struct {
 	err    error
 }
 
-func (p *stubProvider) Type() string { return model.ChannelTypeWebhook }
+func (p *stubProvider) Type() string                            { return model.ChannelTypeWebhook }
 func (p *stubProvider) Validate(_ map[string]interface{}) error { return nil }
 func (p *stubProvider) Send(_ context.Context, _ map[string]interface{}, _ *Event) error {
 	p.mu.Lock()

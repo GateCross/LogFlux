@@ -27,7 +27,7 @@ func NewClearWafJobsLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Clea
 }
 
 func (l *ClearWafJobsLogic) ClearWafJobs() (resp *types.BaseResp, err error) {
-	if err := l.svcCtx.DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&model.WafUpdateJob{}).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&model.WafUpdateJob{}).Error; err != nil {
 		return nil, fmt.Errorf("clear waf jobs failed: %w", err)
 	}
 

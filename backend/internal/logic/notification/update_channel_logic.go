@@ -27,7 +27,7 @@ func NewUpdateChannelLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Upd
 
 func (l *UpdateChannelLogic) UpdateChannel(req *types.ChannelUpdateReq) (resp *types.BaseResp, err error) {
 	var channel model.NotificationChannel
-	if err := l.svcCtx.DB.First(&channel, req.ID).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).First(&channel, req.ID).Error; err != nil {
 		return nil, err
 	}
 
@@ -65,7 +65,7 @@ func (l *UpdateChannelLogic) UpdateChannel(req *types.ChannelUpdateReq) (resp *t
 		channel.Events = model.StringArray(events)
 	}
 
-	if err := l.svcCtx.DB.Save(&channel).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).Save(&channel).Error; err != nil {
 		return nil, err
 	}
 

@@ -14,6 +14,7 @@ import (
 	"logflux/internal/notification/providers"
 	"logflux/internal/notification/template"
 	"logflux/internal/tasks"
+	"logflux/internal/utils/safego"
 	"logflux/model"
 	"os"
 	"path/filepath"
@@ -35,6 +36,13 @@ type ServiceContext struct {
 	WafScheduler    *tasks.WafScheduler
 	NotificationMgr notification.NotificationManager
 	Permission      rest.Middleware
+	UserModel       model.UserModel
+	RoleModel       model.RoleModel
+	MenuModel       model.MenuModel
+	CronTaskModel   model.CronTaskModel
+	LogSourceModel  model.LogSourceModel
+	CaddyLogModel   model.CaddyLogModel
+	SystemLogModel  model.SystemLogModel
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -152,7 +160,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	// 初始化归档任务
 	archiveTask := tasks.NewArchiveTask(db, c.Archive.RetentionDay, c.Archive.Enabled, notificationMgr)
 	if c.Archive.Enabled {
-		go archiveTask.Start(context.Background())
+		safego.New(context.Background(), "日志归档任务").Go(func() {
+			archiveTask.Start(context.Background())
+		})
 	}
 
 	// 初始化定时任务调度器
@@ -172,6 +182,13 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		WafScheduler:    wafScheduler,
 		NotificationMgr: notificationMgr,
 		Permission:      middleware.NewPermissionMiddleware(db).Handle,
+		UserModel:       model.NewUserModel(db),
+		RoleModel:       model.NewRoleModel(db),
+		MenuModel:       model.NewMenuModel(db),
+		CronTaskModel:   model.NewCronTaskModel(db),
+		LogSourceModel:  model.NewLogSourceModel(db),
+		CaddyLogModel:   model.NewCaddyLogModel(db),
+		SystemLogModel:  model.NewSystemLogModel(db),
 	}
 }
 
@@ -676,7 +693,11 @@ func initNotificationManager(db *gorm2.DB, rdb *redis.Client) notification.Notif
 		"系统启动",
 		"LogFlux 系统已成功启动",
 	)
-	go mgr.Notify(context.Background(), event)
+	safego.New(context.Background(), "系统启动通知").Go(func() {
+		if err := mgr.Notify(context.Background(), event); err != nil {
+			logx.Errorf("发送系统启动通知失败: %v", err)
+		}
+	})
 
 	return mgr
 }

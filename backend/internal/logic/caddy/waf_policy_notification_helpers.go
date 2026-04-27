@@ -6,6 +6,7 @@ import (
 
 	"logflux/internal/notification"
 	"logflux/internal/svc"
+	"logflux/internal/utils/safego"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -28,11 +29,11 @@ func notifyWafPolicyEventAsync(
 		event.WithDataMap(data)
 	}
 
-	go func() {
+	safego.New(context.Background(), "WAF 策略通知").Go(func() {
 		if err := svcCtx.NotificationMgr.Notify(context.Background(), event); err != nil {
-			logger.Errorf("notify waf policy event failed, type=%s err=%v", eventType, err)
+			logger.Errorf("发送 WAF 策略通知失败: type=%s err=%v", eventType, err)
 		}
-	}()
+	})
 }
 
 func buildWafPolicyNotifyData(policyID uint, policyName, operator string) map[string]interface{} {

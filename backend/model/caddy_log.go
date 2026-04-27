@@ -18,9 +18,9 @@ type CaddyLog struct {
 	City     string `gorm:"size:100"`
 
 	// Request fields
-	Host   string `gorm:"size:255;index:idx_host_log_time,priority:2"`                    // Host 和 LogTime 复合索引
+	Host   string `gorm:"size:255;index:idx_host_log_time,priority:2"` // Host 和 LogTime 复合索引
 	Method string `gorm:"size:10"`
-	Uri    string `gorm:"type:text"`                                                       // URLs can be long
+	Uri    string `gorm:"type:text"` // URLs can be long
 	Proto  string `gorm:"size:20"`
 	Status int    `gorm:"index:idx_log_time_status,priority:2;index:idx_status_log_time,priority:1"` // 多个复合索引
 	Size   int64

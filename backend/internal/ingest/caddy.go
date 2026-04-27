@@ -1,6 +1,7 @@
 package ingest
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"logflux/internal/utils/safego"
 	"logflux/model"
 
 	"github.com/nxadm/tail"
@@ -179,7 +181,9 @@ func (i *CaddyIngestor) startFile(filePath string) bool {
 
 	logx.Infof("Started monitoring: %s", filePath)
 
-	go func(path string) {
+	watchPath := filePath
+	safego.New(context.Background(), "Caddy 日志文件监听").Go(func() {
+		path := watchPath
 		for line := range t.Lines {
 			if line == nil {
 				continue
@@ -197,7 +201,7 @@ func (i *CaddyIngestor) startFile(filePath string) bool {
 				logx.Errorf("Save ingest cursor failed: %v", err)
 			}
 		}
-	}(filePath)
+	})
 
 	return true
 }
@@ -274,7 +278,7 @@ func (i *CaddyIngestor) startDir(dirPath string, scanIntervalSec int) {
 
 	i.scanDir(dirPath)
 
-	go func() {
+	safego.New(context.Background(), "Caddy 日志目录扫描").Go(func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
@@ -285,7 +289,7 @@ func (i *CaddyIngestor) startDir(dirPath string, scanIntervalSec int) {
 				return
 			}
 		}
-	}()
+	})
 }
 
 func (i *CaddyIngestor) scanDir(dirPath string) {

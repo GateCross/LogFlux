@@ -49,7 +49,7 @@ func (l *CreateWafPolicyLogic) CreateWafPolicy(req *types.WafPolicyReq) (resp *t
 	}
 
 	var existing model.WafPolicy
-	if err := helper.svcCtx.DB.Where("name = ?", name).First(&existing).Error; err == nil {
+	if err := helper.svcCtx.DB.WithContext(helper.ctx).Where("name = ?", name).First(&existing).Error; err == nil {
 		return nil, fmt.Errorf("policy name already exists: %s", name)
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, fmt.Errorf("check policy name failed: %w", err)
@@ -61,7 +61,7 @@ func (l *CreateWafPolicyLogic) CreateWafPolicy(req *types.WafPolicyReq) (resp *t
 	}
 
 	operator := helper.currentOperator()
-	if err := helper.svcCtx.DB.Transaction(func(tx *gorm.DB) error {
+	if err := helper.svcCtx.DB.WithContext(helper.ctx).Transaction(func(tx *gorm.DB) error {
 		if err := ensureSingleDefaultPolicy(tx, policy); err != nil {
 			return err
 		}

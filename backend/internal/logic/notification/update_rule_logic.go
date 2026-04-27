@@ -27,7 +27,7 @@ func NewUpdateRuleLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Update
 
 func (l *UpdateRuleLogic) UpdateRule(req *types.RuleUpdateReq) (resp *types.BaseResp, err error) {
 	var rule model.NotificationRule
-	if err := l.svcCtx.DB.First(&rule, req.ID).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).First(&rule, req.ID).Error; err != nil {
 		return nil, err
 	}
 
@@ -59,7 +59,7 @@ func (l *UpdateRuleLogic) UpdateRule(req *types.RuleUpdateReq) (resp *types.Base
 		rule.Description = req.Description
 	}
 
-	if err := l.svcCtx.DB.Save(&rule).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).Save(&rule).Error; err != nil {
 		return nil, err
 	}
 

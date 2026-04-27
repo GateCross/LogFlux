@@ -8,6 +8,7 @@ import (
 	"logflux/internal/notification"
 	"logflux/internal/svc"
 	"logflux/internal/types"
+	"logflux/internal/utils/safego"
 	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -40,18 +41,23 @@ func (l *AddCaddyServerLogic) AddCaddyServer(req *types.CaddyServerReq) (resp *t
 		UpdatedAt: time.Now(),
 	}
 
-	if err := l.svcCtx.DB.Create(server).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).Create(server).Error; err != nil {
 		return nil, err
 	}
 
 	// 发送服务器添加通知
 	if l.svcCtx.NotificationMgr != nil {
-		go l.svcCtx.NotificationMgr.Notify(context.Background(), notification.NewEvent(
+		event := notification.NewEvent(
 			"caddy.server.added",
 			notification.LevelInfo,
-			"New Caddy Server Added",
-			fmt.Sprintf("Server '%s' (%s) was added to the system.", server.Name, server.Url),
-		))
+			"新增 Caddy 服务器",
+			fmt.Sprintf("Caddy 服务器 %s（%s）已添加。", server.Name, server.Url),
+		)
+		safego.New(context.Background(), "新增 Caddy 服务器通知").Go(func() {
+			if err := l.svcCtx.NotificationMgr.Notify(context.Background(), event); err != nil {
+				l.Errorf("发送 Caddy 服务器新增通知失败: serverID=%d err=%v", server.ID, err)
+			}
+		})
 	}
 
 	return &types.BaseResp{

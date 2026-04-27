@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"logflux/common/result"
+	"logflux/internal/response"
 	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -235,9 +235,5 @@ func hasAny(values []string, targets ...string) bool {
 }
 
 func writePermissionError(w http.ResponseWriter, statusCode, code int, msg string) {
-	httpx.WriteJson(w, statusCode, result.ResponseBean{
-		Code: code,
-		Msg:  msg,
-		Data: nil,
-	})
+	httpx.WriteJson(w, statusCode, response.Error(code, msg))
 }

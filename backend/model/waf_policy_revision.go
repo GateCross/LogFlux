@@ -24,4 +24,3 @@ type WafPolicyRevision struct {
 func (WafPolicyRevision) TableName() string {
 	return "waf_policy_revisions"
 }
-

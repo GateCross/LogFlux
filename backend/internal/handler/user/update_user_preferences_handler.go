@@ -1,6 +1,7 @@
 package user
 
 import (
+	"logflux/common/result"
 	"net/http"
 
 	"logflux/internal/logic/user"
@@ -20,10 +21,6 @@ func UpdateUserPreferencesHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 
 		l := user.NewUpdateUserPreferencesLogic(r.Context(), svcCtx)
 		resp, err := l.UpdateUserPreferences(&req)
-		if err != nil {
-			httpx.ErrorCtx(r.Context(), w, err)
-		} else {
-			httpx.OkJsonCtx(r.Context(), w, resp)
-		}
+		result.HttpResult(r, w, resp, err)
 	}
 }

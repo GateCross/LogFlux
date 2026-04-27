@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"logflux/internal/utils/safego"
 	"logflux/model"
 
 	"github.com/robfig/cron/v3"
@@ -175,7 +176,9 @@ func (scheduler *WafScheduler) TriggerSourceNow(sourceID uint) error {
 	if !source.Enabled {
 		return fmt.Errorf("waf source is disabled")
 	}
-	go scheduler.executeSource(sourceID)
+	safego.New(context.Background(), "WAF 源调度任务").Go(func() {
+		scheduler.executeSource(sourceID)
+	})
 	return nil
 }
 

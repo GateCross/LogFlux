@@ -48,7 +48,7 @@ func (l *ListWafPolicyFalsePositiveFeedbacksLogic) ListWafPolicyFalsePositiveFee
 		pageSize = 100
 	}
 
-	db := l.svcCtx.DB.Model(&model.WafPolicyFalsePositiveFeedback{})
+	db := l.svcCtx.DB.WithContext(l.ctx).Model(&model.WafPolicyFalsePositiveFeedback{})
 	if req.PolicyId > 0 {
 		db = db.Where("policy_id = ?", req.PolicyId)
 	}
@@ -119,7 +119,7 @@ func (l *ListWafPolicyFalsePositiveFeedbacksLogic) ListWafPolicyFalsePositiveFee
 		}
 		if len(policyIDs) > 0 {
 			var policies []model.WafPolicy
-			if err := l.svcCtx.DB.Model(&model.WafPolicy{}).Where("id IN ?", policyIDs).Find(&policies).Error; err != nil {
+			if err := l.svcCtx.DB.WithContext(l.ctx).Model(&model.WafPolicy{}).Where("id IN ?", policyIDs).Find(&policies).Error; err != nil {
 				return nil, fmt.Errorf("query policy names failed: %w", err)
 			}
 			for _, policy := range policies {

@@ -52,7 +52,7 @@ func (l *GetUnreadNotificationsLogic) GetUnreadNotifications() (resp *types.LogL
 
 	if uid > 0 {
 		var user model.User
-		if err := l.svcCtx.DB.First(&user, uid).Error; err == nil && user.Preferences != nil {
+		if err := l.svcCtx.DB.WithContext(l.ctx).First(&user, uid).Error; err == nil && user.Preferences != nil {
 			// 解析 JSONMap
 			if levelObj, ok := user.Preferences["minLevel"]; ok {
 				if levelStr, ok := levelObj.(string); ok {
@@ -67,7 +67,7 @@ func (l *GetUnreadNotificationsLogic) GetUnreadNotifications() (resp *types.LogL
 	// 3. 查询未读通知
 	var logs []model.NotificationLog
 	// 查找类型为 in_app 且 status=success 且 is_read=false 的日志
-	err = l.svcCtx.DB.Table("notification_logs").
+	err = l.svcCtx.DB.WithContext(l.ctx).Table("notification_logs").
 		Select("notification_logs.*").
 		Joins("left join notification_channels on notification_channels.id = notification_logs.channel_id").
 		Where("notification_channels.type = ?", "in_app").

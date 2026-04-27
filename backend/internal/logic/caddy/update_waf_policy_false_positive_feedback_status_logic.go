@@ -50,7 +50,7 @@ func (l *UpdateWafPolicyFalsePositiveFeedbackStatusLogic) UpdateWafPolicyFalsePo
 	}
 
 	var feedback model.WafPolicyFalsePositiveFeedback
-	if err := l.svcCtx.DB.First(&feedback, req.ID).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).First(&feedback, req.ID).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, fmt.Errorf("policy false positive feedback not found")
 		}
@@ -72,7 +72,7 @@ func (l *UpdateWafPolicyFalsePositiveFeedbackStatusLogic) UpdateWafPolicyFalsePo
 		updates["processed_at"] = &now
 	}
 
-	if err := l.svcCtx.DB.Model(&model.WafPolicyFalsePositiveFeedback{}).Where("id = ?", req.ID).Updates(updates).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).Model(&model.WafPolicyFalsePositiveFeedback{}).Where("id = ?", req.ID).Updates(updates).Error; err != nil {
 		return nil, fmt.Errorf("update policy false positive feedback status failed: %w", err)
 	}
 

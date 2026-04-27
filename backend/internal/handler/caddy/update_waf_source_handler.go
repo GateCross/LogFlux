@@ -36,7 +36,7 @@ func UpdateWafSourceHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 			return
 		}
 
-			req := types.WafSourceUpdateReq{
+		req := types.WafSourceUpdateReq{
 			ID:          payload.ID,
 			Name:        payload.Name,
 			Kind:        payload.Kind,
