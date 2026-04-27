@@ -40,8 +40,8 @@ func TestExtractPackage_ZipSlipBlocked(t *testing.T) {
 	}
 
 	_, err := ExtractPackage(zipPath, filepath.Join(tempDir, "out"), ExtractOptions{})
-	if err == nil || !strings.Contains(err.Error(), "path traversal") {
-		t.Fatalf("expected path traversal error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "路径穿越") {
+		t.Fatalf("expected 路径穿越 error, got %v", err)
 	}
 }
 

@@ -27,7 +27,7 @@ func NewApplyWafIntegrationLogic(ctx context.Context, svcCtx *svc.ServiceContext
 
 func (l *ApplyWafIntegrationLogic) ApplyWafIntegration(req *types.WafIntegrationApplyReq) (resp *types.WafIntegrationApplyResp, err error) {
 	if req == nil {
-		return nil, fmt.Errorf("invalid waf integration payload")
+		return nil, fmt.Errorf("WAF 集成参数不合法")
 	}
 
 	server, err := findPreferredCaddyServer(l.svcCtx.DB.WithContext(l.ctx), req.ServerId)
@@ -48,7 +48,7 @@ func (l *ApplyWafIntegrationLogic) ApplyWafIntegration(req *types.WafIntegration
 
 	targetSites := buildWafIntegrationTargetSites(snapshot.AvailableSites, req.ApplyAll, req.SiteAddresses)
 	if req.Enabled && len(targetSites) == 0 {
-		return nil, fmt.Errorf("site addresses is empty")
+		return nil, fmt.Errorf("站点地址为空")
 	}
 
 	nextConfig := config

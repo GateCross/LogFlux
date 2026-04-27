@@ -31,16 +31,16 @@ func (l *DeleteWafPolicyBindingLogic) DeleteWafPolicyBinding(req *types.IDReq) (
 	}()
 
 	if req == nil || req.ID == 0 {
-		return nil, fmt.Errorf("policy binding id is required")
+		return nil, fmt.Errorf("策略绑定 ID 不能为空")
 	}
 
 	result := l.svcCtx.DB.WithContext(l.ctx).Where("id = ?", req.ID).Delete(&model.WafPolicyBinding{})
 	if result.Error != nil {
-		return nil, fmt.Errorf("delete policy binding failed: %w", result.Error)
+		return nil, fmt.Errorf("删除策略绑定失败: %w", result.Error)
 	}
 	if result.RowsAffected == 0 {
-		return nil, fmt.Errorf("policy binding not found")
+		return nil, fmt.Errorf("策略绑定不存在")
 	}
 
-	return &types.BaseResp{Code: 200, Msg: "success"}, nil
+	return &types.BaseResp{Code: 200, Msg: "成功"}, nil
 }

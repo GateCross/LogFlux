@@ -44,7 +44,7 @@ func (tm *TemplateManager) LoadTemplates() error {
 	var dbTemplates []model.NotificationTemplate
 	// 尝试从数据库加载，如果表不存在（migration未完成），则忽略错误
 	if err := tm.db.Find(&dbTemplates).Error; err != nil {
-		tm.logger.Errorf("failed to load templates from db: %v", err)
+		tm.logger.Errorf("从数据库加载模板失败: %v", err)
 		// Don't return error, just load defaults
 	}
 
@@ -57,7 +57,7 @@ func (tm *TemplateManager) LoadTemplates() error {
 	// 加载数据库模板
 	for _, t := range dbTemplates {
 		if err := tm.parseAndCache(t); err != nil {
-			tm.logger.Errorf("failed to parse template %s: %v", t.Name, err)
+			tm.logger.Errorf("解析模板失败: name=%s err=%v", t.Name, err)
 			continue
 		}
 	}
@@ -65,7 +65,7 @@ func (tm *TemplateManager) LoadTemplates() error {
 	// 加载默认模板（如果数据库中没有）
 	tm.ensureDefaults()
 
-	tm.logger.Infof("Loaded %d notification templates", len(tm.templates))
+	tm.logger.Infof("已加载 %d 个通知模板", len(tm.templates))
 	return nil
 }
 
@@ -98,7 +98,7 @@ func (tm *TemplateManager) Render(name string, data interface{}) (string, error)
 	tm.lock.RUnlock()
 
 	if !ok {
-		return "", fmt.Errorf("template not found: %s", name)
+		return "", fmt.Errorf("模板不存在: %s", name)
 	}
 
 	var buf bytes.Buffer
@@ -109,7 +109,7 @@ func (tm *TemplateManager) Render(name string, data interface{}) (string, error)
 	} else if tmpl.Text != nil {
 		err = tmpl.Text.Execute(&buf, data)
 	} else {
-		return "", fmt.Errorf("template %s has no valid parsed content", name)
+		return "", fmt.Errorf("模板 %s 没有可用的解析内容", name)
 	}
 
 	if err != nil {
@@ -161,7 +161,7 @@ func (tm *TemplateManager) ensureDefaults() {
 
 			// 尝试解析并缓存
 			if err := tm.parseAndCache(modelTmpl); err != nil {
-				tm.logger.Errorf("failed to load default template %s: %v", def.Name, err)
+				tm.logger.Errorf("加载默认模板失败: name=%s err=%v", def.Name, err)
 				continue
 			}
 
@@ -172,7 +172,7 @@ func (tm *TemplateManager) ensureDefaults() {
 				t := tmpl
 				if err := tm.db.FirstOrCreate(&t, model.NotificationTemplate{Name: t.Name}).Error; err != nil {
 					// 仅记录 debug 日志，因为如果是因为已存在（虽然我们检查了缓存但并发情况下可能）或其他原因，我们不希望太吵
-					// tm.logger.Debugf("failed to persist default template %s: %v", t.Name, err)
+					// tm.logger.Debugf("持久化默认模板失败: name=%s err=%v", t.Name, err)
 				}
 			})
 		}

@@ -78,10 +78,10 @@ func TestBuildWafPolicyDirectivesInvalidEnum(t *testing.T) {
 
 	_, err := buildWafPolicyDirectives(policy)
 	if err == nil {
-		t.Fatalf("expected invalid engine mode error")
+		t.Fatalf("expected 执行模式无效 error")
 	}
-	if !strings.Contains(err.Error(), "invalid engine mode") {
-		t.Fatalf("expected invalid engine mode error, got %v", err)
+	if !strings.Contains(err.Error(), "执行模式无效") {
+		t.Fatalf("expected 执行模式无效 error, got %v", err)
 	}
 }
 
@@ -104,7 +104,7 @@ func TestBuildWafPolicyDirectivesOutOfRange(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected requestBodyLimit out-of-range error")
 	}
-	if !strings.Contains(err.Error(), "requestBodyLimit is too large") {
+	if !strings.Contains(err.Error(), "requestBodyLimit 过大") {
 		t.Fatalf("expected requestBodyLimit too large error, got %v", err)
 	}
 }
@@ -131,7 +131,7 @@ func TestApplyPolicyReqToModelOutOfRange(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected applyPolicyReqToModel out-of-range error")
 	}
-	if !strings.Contains(err.Error(), "requestBodyLimit is too large") {
+	if !strings.Contains(err.Error(), "requestBodyLimit 过大") {
 		t.Fatalf("expected requestBodyLimit too large error, got %v", err)
 	}
 }
@@ -158,7 +158,7 @@ func TestApplyPolicyReqToModelCRSParanoiaOutOfRange(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected applyPolicyReqToModel crsParanoiaLevel out-of-range error")
 	}
-	if !strings.Contains(err.Error(), "crsParanoiaLevel must be between 1 and 4") {
+	if !strings.Contains(err.Error(), "CRS 偏执级别必须在 1 到 4 之间") {
 		t.Fatalf("expected crsParanoiaLevel range error, got %v", err)
 	}
 }

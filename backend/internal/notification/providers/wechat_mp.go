@@ -40,7 +40,7 @@ func NewWeChatMPProvider() *WeChatMPProvider {
 func (w *WeChatMPProvider) Send(ctx context.Context, config map[string]interface{}, event *notification.Event) error {
 	wechatConfig := &model.WechatMPConfig{}
 	if err := mapToStruct(config, wechatConfig); err != nil {
-		return fmt.Errorf("invalid wechat_mp config: %w", err)
+		return fmt.Errorf("企业微信应用配置无效: %w", err)
 	}
 
 	if err := validateWeChatMPConfig(wechatConfig); err != nil {
@@ -92,25 +92,25 @@ func (w *WeChatMPProvider) Send(ctx context.Context, config map[string]interface
 
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("failed to marshal wechat_mp payload: %w", err)
+		return fmt.Errorf("序列化企业微信应用消息失败: %w", err)
 	}
 
 	sendURL := fmt.Sprintf("https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token=%s", url.QueryEscape(accessToken))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, sendURL, bytes.NewBuffer(jsonData))
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+		return fmt.Errorf("创建请求失败: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := w.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to send request to wecom app: %w", err)
+		return fmt.Errorf("发送企业微信应用请求失败: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("wecom app returned status: %d, body: %s", resp.StatusCode, string(body))
+		return fmt.Errorf("企业微信应用返回状态: %d，响应: %s", resp.StatusCode, string(body))
 	}
 
 	var result struct {
@@ -118,10 +118,10 @@ func (w *WeChatMPProvider) Send(ctx context.Context, config map[string]interface
 		ErrMsg  string `json:"errmsg"`
 	}
 	if err := json.Unmarshal(body, &result); err != nil {
-		return fmt.Errorf("failed to parse wecom app response: %w", err)
+		return fmt.Errorf("解析企业微信应用响应失败: %w", err)
 	}
 	if result.ErrCode != 0 {
-		return fmt.Errorf("wecom app api error: errcode=%d errmsg=%s", result.ErrCode, result.ErrMsg)
+		return fmt.Errorf("企业微信应用 API 错误: errcode=%d errmsg=%s", result.ErrCode, result.ErrMsg)
 	}
 
 	return nil
@@ -131,7 +131,7 @@ func (w *WeChatMPProvider) Send(ctx context.Context, config map[string]interface
 func (w *WeChatMPProvider) Validate(config map[string]interface{}) error {
 	wechatConfig := &model.WechatMPConfig{}
 	if err := mapToStruct(config, wechatConfig); err != nil {
-		return fmt.Errorf("invalid wechat_mp config: %w", err)
+		return fmt.Errorf("企业微信应用配置无效: %w", err)
 	}
 
 	return validateWeChatMPConfig(wechatConfig)
@@ -144,18 +144,18 @@ func (w *WeChatMPProvider) Type() string {
 
 func validateWeChatMPConfig(config *model.WechatMPConfig) error {
 	if strings.TrimSpace(config.CorpID) == "" {
-		return fmt.Errorf("corp_id is required")
+		return fmt.Errorf("企业 ID 不能为空")
 	}
 	if strings.TrimSpace(config.CorpSecret) == "" {
-		return fmt.Errorf("corp_secret is required")
+		return fmt.Errorf("企业密钥不能为空")
 	}
 	if config.AgentID <= 0 {
-		return fmt.Errorf("agent_id must be greater than 0")
+		return fmt.Errorf("应用 AgentID 必须大于 0")
 	}
 
 	msgType := strings.ToLower(strings.TrimSpace(config.MsgType))
 	if msgType != "" && msgType != "text" && msgType != "markdown" {
-		return fmt.Errorf("msg_type must be text or markdown")
+		return fmt.Errorf("消息类型必须是 text 或 markdown")
 	}
 
 	return nil
@@ -180,18 +180,18 @@ func (w *WeChatMPProvider) getAccessToken(ctx context.Context, config *model.Wec
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, tokenURL, nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to create token request: %w", err)
+		return "", fmt.Errorf("创建令牌请求失败: %w", err)
 	}
 
 	resp, err := w.client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("failed to get wecom app access token: %w", err)
+		return "", fmt.Errorf("获取企业微信应用 access_token 失败: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("wecom app token api status: %d, body: %s", resp.StatusCode, string(body))
+		return "", fmt.Errorf("企业微信应用令牌接口返回状态: %d，响应: %s", resp.StatusCode, string(body))
 	}
 
 	var tokenResp struct {
@@ -201,14 +201,14 @@ func (w *WeChatMPProvider) getAccessToken(ctx context.Context, config *model.Wec
 		ErrMsg      string `json:"errmsg"`
 	}
 	if err := json.Unmarshal(body, &tokenResp); err != nil {
-		return "", fmt.Errorf("failed to parse token response: %w", err)
+		return "", fmt.Errorf("解析令牌响应失败: %w", err)
 	}
 
 	if tokenResp.ErrCode != 0 {
-		return "", fmt.Errorf("wecom app token api error: errcode=%d errmsg=%s", tokenResp.ErrCode, tokenResp.ErrMsg)
+		return "", fmt.Errorf("企业微信应用令牌接口错误: errcode=%d errmsg=%s", tokenResp.ErrCode, tokenResp.ErrMsg)
 	}
 	if tokenResp.AccessToken == "" {
-		return "", fmt.Errorf("wecom app access token is empty")
+		return "", fmt.Errorf("企业微信应用 access_token 为空")
 	}
 
 	expiresIn := tokenResp.ExpiresIn

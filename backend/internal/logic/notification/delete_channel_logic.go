@@ -36,6 +36,6 @@ func (l *DeleteChannelLogic) DeleteChannel(req *types.IDReq) (resp *types.BaseRe
 
 	return &types.BaseResp{
 		Code: 200,
-		Msg:  "success",
+		Msg:  "成功",
 	}, nil
 }

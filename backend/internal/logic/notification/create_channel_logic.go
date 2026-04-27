@@ -57,12 +57,12 @@ func (l *CreateChannelLogic) CreateChannel(req *types.ChannelReq) (resp *types.B
 	// Reload channels in NotificationManager
 	if l.svcCtx.NotificationMgr != nil {
 		if err := l.svcCtx.NotificationMgr.ReloadChannels(); err != nil {
-			l.Logger.Errorf("Failed to reload channels: %v", err)
+			l.Logger.Errorf("重载通知渠道失败: %v", err)
 		}
 	}
 
 	return &types.BaseResp{
 		Code: 200,
-		Msg:  "success",
+		Msg:  "成功",
 	}, nil
 }

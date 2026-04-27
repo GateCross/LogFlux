@@ -30,19 +30,19 @@ func NewRollbackCaddyConfigLogic(ctx context.Context, svcCtx *svc.ServiceContext
 func (l *RollbackCaddyConfigLogic) RollbackCaddyConfig(req *types.CaddyConfigRollbackReq) (resp *types.BaseResp, err error) {
 	var server model.CaddyServer
 	if err := l.svcCtx.DB.WithContext(l.ctx).First(&server, req.ServerId).Error; err != nil {
-		return nil, fmt.Errorf("server not found")
+		return nil, fmt.Errorf("服务器不存在")
 	}
 
 	var history model.CaddyConfigHistory
 	if err := l.svcCtx.DB.WithContext(l.ctx).Where("id = ? AND server_id = ?", req.HistoryId, req.ServerId).First(&history).Error; err != nil {
-		return nil, fmt.Errorf("history not found")
+		return nil, fmt.Errorf("历史记录不存在")
 	}
 
 	if err := adaptCaddyfile(&server, history.Config); err != nil {
-		return nil, fmt.Errorf("caddy adapt failed: %v", err)
+		return nil, fmt.Errorf("Caddy 配置适配失败: %v", err)
 	}
 	if err := loadCaddyfile(&server, history.Config); err != nil {
-		return nil, fmt.Errorf("caddy api error: %v", err)
+		return nil, fmt.Errorf("Caddy API 错误: %v", err)
 	}
 
 	if err := l.svcCtx.DB.WithContext(l.ctx).Transaction(func(tx *gorm.DB) error {
@@ -60,7 +60,7 @@ func (l *RollbackCaddyConfigLogic) RollbackCaddyConfig(req *types.CaddyConfigRol
 		}
 		return tx.Create(record).Error
 	}); err != nil {
-		return nil, fmt.Errorf("failed to save config to database")
+		return nil, fmt.Errorf("保存配置到数据库失败")
 	}
 
 	safego.New(context.Background(), "回滚 Caddy 配置后同步日志源").Go(func() {
@@ -69,6 +69,6 @@ func (l *RollbackCaddyConfigLogic) RollbackCaddyConfig(req *types.CaddyConfigRol
 
 	return &types.BaseResp{
 		Code: 200,
-		Msg:  "success",
+		Msg:  "成功",
 	}, nil
 }

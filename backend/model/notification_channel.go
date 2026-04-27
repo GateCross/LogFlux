@@ -53,7 +53,7 @@ func (j *JSONMap) Scan(value interface{}) error {
 
 	bytes, ok := value.([]byte)
 	if !ok {
-		return errors.New("failed to unmarshal JSONB value")
+		return errors.New("解析 JSONB 值失败")
 	}
 
 	return json.Unmarshal(bytes, j)
@@ -85,7 +85,7 @@ func (s *StringArray) Scan(value interface{}) error {
 	case string:
 		bytes = []byte(v)
 	default:
-		return errors.New("failed to scan StringArray value")
+		return errors.New("扫描 StringArray 值失败")
 	}
 
 	// Parse PostgreSQL array format

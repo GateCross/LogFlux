@@ -58,7 +58,7 @@ func buildToken(userId int64, role string, secret string, expireSeconds int64, t
 func parseTokenClaims(tokenString string, secret string) (jwt.MapClaims, error) {
 	parsedToken, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+			return nil, fmt.Errorf("不支持的令牌签名算法: %v", token.Header["alg"])
 		}
 
 		return []byte(secret), nil
@@ -69,7 +69,7 @@ func parseTokenClaims(tokenString string, secret string) (jwt.MapClaims, error) 
 
 	claims, ok := parsedToken.Claims.(jwt.MapClaims)
 	if !ok || !parsedToken.Valid {
-		return nil, errors.New("invalid token")
+		return nil, errors.New("令牌无效")
 	}
 
 	return claims, nil
@@ -86,7 +86,7 @@ func getTokenType(claims jwt.MapClaims) string {
 func getUserIdFromClaims(claims jwt.MapClaims) (int64, error) {
 	rawUserId, ok := claims["userId"]
 	if !ok {
-		return 0, errors.New("missing userId")
+		return 0, errors.New("缺少用户 ID")
 	}
 
 	switch userId := rawUserId.(type) {
@@ -99,11 +99,11 @@ func getUserIdFromClaims(claims jwt.MapClaims) (int64, error) {
 	case string:
 		parsed, err := strconv.ParseInt(userId, 10, 64)
 		if err != nil {
-			return 0, errors.New("invalid userId")
+			return 0, errors.New("用户 ID 无效")
 		}
 
 		return parsed, nil
 	default:
-		return 0, errors.New("invalid userId")
+		return 0, errors.New("用户 ID 无效")
 	}
 }

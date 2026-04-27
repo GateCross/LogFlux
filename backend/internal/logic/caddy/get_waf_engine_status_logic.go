@@ -84,7 +84,7 @@ func shouldHideEngineStatusMessage(message string) bool {
 	}
 
 	lowerText := strings.ToLower(trimmed)
-	if strings.Contains(lowerText, "engine source check success") {
+	if strings.Contains(lowerText, "引擎源检查成功") {
 		return true
 	}
 	if strings.Contains(trimmed, "引擎源检查成功") {

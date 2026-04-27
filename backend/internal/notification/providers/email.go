@@ -26,7 +26,7 @@ func (e *EmailProvider) Send(ctx context.Context, config map[string]interface{},
 	// 解析配置
 	emailConfig := &model.EmailConfig{}
 	if err := mapToStruct(config, emailConfig); err != nil {
-		return fmt.Errorf("invalid email config: %w", err)
+		return fmt.Errorf("邮件配置无效: %w", err)
 	}
 
 	m := gomail.NewMessage()
@@ -63,7 +63,7 @@ func (e *EmailProvider) Send(ctx context.Context, config map[string]interface{},
 
 	// 发送邮件
 	if err := d.DialAndSend(m); err != nil {
-		return fmt.Errorf("failed to send email: %w", err)
+		return fmt.Errorf("发送邮件失败: %w", err)
 	}
 
 	return nil
@@ -73,7 +73,7 @@ func (e *EmailProvider) Send(ctx context.Context, config map[string]interface{},
 func (e *EmailProvider) Validate(config map[string]interface{}) error {
 	emailConfig := &model.EmailConfig{}
 	if err := mapToStruct(config, emailConfig); err != nil {
-		return fmt.Errorf("invalid email config: %w", err)
+		return fmt.Errorf("邮件配置无效: %w", err)
 	}
 
 	return validateEmailConfig(emailConfig)
@@ -87,22 +87,22 @@ func (e *EmailProvider) Type() string {
 // validateEmailConfig 验证邮件配置
 func validateEmailConfig(config *model.EmailConfig) error {
 	if config.SmtpHost == "" {
-		return fmt.Errorf("smtp_host is required")
+		return fmt.Errorf("SMTP 主机不能为空")
 	}
 	if config.SmtpPort <= 0 {
-		return fmt.Errorf("invalid smtp_port: %d", config.SmtpPort)
+		return fmt.Errorf("SMTP 端口无效: %d", config.SmtpPort)
 	}
 	if config.Username == "" {
-		return fmt.Errorf("username is required")
+		return fmt.Errorf("用户名不能为空")
 	}
 	if config.Password == "" {
-		return fmt.Errorf("password is required")
+		return fmt.Errorf("密码不能为空")
 	}
 	if config.From == "" {
-		return fmt.Errorf("from address is required")
+		return fmt.Errorf("发件地址不能为空")
 	}
 	if len(config.To) == 0 {
-		return fmt.Errorf("at least one recipient (to) is required")
+		return fmt.Errorf("至少需要一个收件人（to）")
 	}
 	return nil
 }

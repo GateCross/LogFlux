@@ -94,13 +94,13 @@ func (l *ListWafPolicyFalsePositiveFeedbacksLogic) ListWafPolicyFalsePositiveFee
 
 	var total int64
 	if err := db.Count(&total).Error; err != nil {
-		return nil, fmt.Errorf("count policy false positive feedbacks failed: %w", err)
+		return nil, fmt.Errorf("统计误报反馈失败: %w", err)
 	}
 
 	var feedbacks []model.WafPolicyFalsePositiveFeedback
 	offset := (page - 1) * pageSize
 	if err := db.Order("created_at desc, id desc").Limit(pageSize).Offset(offset).Find(&feedbacks).Error; err != nil {
-		return nil, fmt.Errorf("query policy false positive feedbacks failed: %w", err)
+		return nil, fmt.Errorf("查询误报反馈列表失败: %w", err)
 	}
 
 	policyNameMap := map[uint]string{}
@@ -120,7 +120,7 @@ func (l *ListWafPolicyFalsePositiveFeedbacksLogic) ListWafPolicyFalsePositiveFee
 		if len(policyIDs) > 0 {
 			var policies []model.WafPolicy
 			if err := l.svcCtx.DB.WithContext(l.ctx).Model(&model.WafPolicy{}).Where("id IN ?", policyIDs).Find(&policies).Error; err != nil {
-				return nil, fmt.Errorf("query policy names failed: %w", err)
+				return nil, fmt.Errorf("查询策略名称失败: %w", err)
 			}
 			for _, policy := range policies {
 				name := strings.TrimSpace(policy.Name)

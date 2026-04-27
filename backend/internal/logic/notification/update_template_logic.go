@@ -49,6 +49,6 @@ func (l *UpdateTemplateLogic) UpdateTemplate(req *types.TemplateUpdateReq) (resp
 
 	return &types.BaseResp{
 		Code: 200,
-		Msg:  "success",
+		Msg:  "成功",
 	}, nil
 }

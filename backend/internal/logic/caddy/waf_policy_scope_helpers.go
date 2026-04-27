@@ -35,7 +35,7 @@ func validatePolicyScopeType(scopeType string) error {
 	case wafPolicyScopeTypeGlobal, wafPolicyScopeTypeSite, wafPolicyScopeTypeRoute:
 		return nil
 	default:
-		return fmt.Errorf("invalid policy scope type: %s", scopeType)
+		return fmt.Errorf("策略作用域类型无效: %s", scopeType)
 	}
 }
 
@@ -52,7 +52,7 @@ func validatePolicyRemoveType(removeType string) error {
 	case wafPolicyRemoveTypeID, wafPolicyRemoveTypeTag:
 		return nil
 	default:
-		return fmt.Errorf("invalid policy remove type: %s", removeType)
+		return fmt.Errorf("策略移除类型无效: %s", removeType)
 	}
 }
 
@@ -65,7 +65,7 @@ func validatePolicyHTTPMethod(method string) error {
 	case "", "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS":
 		return nil
 	default:
-		return fmt.Errorf("invalid policy method: %s", method)
+		return fmt.Errorf("策略方法无效: %s", method)
 	}
 }
 
@@ -93,7 +93,7 @@ func normalizePolicyBindingPriority(priority int64) int64 {
 
 func validatePolicyBindingPriority(priority int64) error {
 	if priority < wafPolicyBindingMinPriority || priority > wafPolicyBindingMaxPriority {
-		return fmt.Errorf("binding priority must be between %d and %d", wafPolicyBindingMinPriority, wafPolicyBindingMaxPriority)
+		return fmt.Errorf("绑定优先级必须在 %d 到 %d 之间", wafPolicyBindingMinPriority, wafPolicyBindingMaxPriority)
 	}
 	return nil
 }
@@ -119,13 +119,13 @@ func normalizeAndValidateExclusionScopeFields(scopeType, host, path, method stri
 		normalizedMethod = ""
 	case wafPolicyScopeTypeSite:
 		if normalizedHost == "" {
-			return "", "", "", "", fmt.Errorf("site scope requires host")
+			return "", "", "", "", fmt.Errorf("站点作用域必须填写 host")
 		}
 		normalizedPath = ""
 		normalizedMethod = ""
 	case wafPolicyScopeTypeRoute:
 		if normalizedPath == "" {
-			return "", "", "", "", fmt.Errorf("route scope requires path")
+			return "", "", "", "", fmt.Errorf("路由作用域必须填写 path")
 		}
 	}
 
@@ -153,13 +153,13 @@ func normalizeAndValidateBindingScopeFields(scopeType, host, path, method string
 		normalizedMethod = ""
 	case wafPolicyScopeTypeSite:
 		if normalizedHost == "" {
-			return "", "", "", "", fmt.Errorf("site scope requires host")
+			return "", "", "", "", fmt.Errorf("站点作用域必须填写 host")
 		}
 		normalizedPath = ""
 		normalizedMethod = ""
 	case wafPolicyScopeTypeRoute:
 		if normalizedPath == "" {
-			return "", "", "", "", fmt.Errorf("route scope requires path")
+			return "", "", "", "", fmt.Errorf("路由作用域必须填写 path")
 		}
 	}
 
@@ -168,17 +168,17 @@ func normalizeAndValidateBindingScopeFields(scopeType, host, path, method string
 
 func validatePolicyIDExists(db *gorm.DB, policyID uint) error {
 	if db == nil {
-		return fmt.Errorf("db is nil")
+		return fmt.Errorf("数据库为空")
 	}
 	if policyID == 0 {
-		return fmt.Errorf("policy id is required")
+		return fmt.Errorf("策略 ID 不能为空")
 	}
 	var count int64
 	if err := db.Model(&model.WafPolicy{}).Where("id = ?", policyID).Count(&count).Error; err != nil {
-		return fmt.Errorf("query policy failed: %w", err)
+		return fmt.Errorf("查询策略失败: %w", err)
 	}
 	if count == 0 {
-		return fmt.Errorf("policy not found")
+		return fmt.Errorf("策略不存在")
 	}
 	return nil
 }
@@ -202,7 +202,7 @@ func buildWafRuleExclusionDirectives(exclusions []model.WafRuleExclusion) (strin
 		}
 		removeValue := strings.TrimSpace(exclusion.RemoveValue)
 		if removeValue == "" {
-			return "", fmt.Errorf("remove value is required")
+			return "", fmt.Errorf("移除值不能为空")
 		}
 
 		scopeType, host, path, method, err := normalizeAndValidateExclusionScopeFields(
@@ -230,7 +230,7 @@ func buildWafRuleExclusionDirectives(exclusions []model.WafRuleExclusion) (strin
 			ruleID += 10
 			lines = append(lines, scopedLines...)
 		default:
-			return "", fmt.Errorf("invalid policy scope type: %s", scopeType)
+			return "", fmt.Errorf("策略作用域类型无效: %s", scopeType)
 		}
 	}
 
@@ -259,7 +259,7 @@ func buildScopedWafRuleExclusionDirectives(
 	}
 
 	if len(matchers) == 0 {
-		return nil, fmt.Errorf("scoped exclusion matchers is empty")
+		return nil, fmt.Errorf("作用域排除匹配条件为空")
 	}
 
 	controlAction := "ctl:ruleRemoveById=" + removeValue
@@ -301,7 +301,7 @@ func buildPolicyDirectivesWithExclusions(db *gorm.DB, policy *model.WafPolicy) (
 
 	var exclusions []model.WafRuleExclusion
 	if err := db.Where("policy_id = ? AND enabled = ?", policy.ID, true).Order("id asc").Find(&exclusions).Error; err != nil {
-		return "", fmt.Errorf("query policy exclusions failed: %w", err)
+		return "", fmt.Errorf("查询策略排除规则失败: %w", err)
 	}
 
 	exclusionDirectives, err := buildWafRuleExclusionDirectives(exclusions)
@@ -320,7 +320,7 @@ func normalizeBindingScopeKey(scopeType, host, path, method string, priority int
 
 func validatePolicyBindingConflict(tx *gorm.DB, candidate *model.WafPolicyBinding) error {
 	if tx == nil || candidate == nil {
-		return fmt.Errorf("invalid policy binding context")
+		return fmt.Errorf("策略绑定上下文无效")
 	}
 
 	var count int64
@@ -331,10 +331,10 @@ func validatePolicyBindingConflict(tx *gorm.DB, candidate *model.WafPolicyBindin
 		query = query.Where("id <> ?", candidate.ID)
 	}
 	if err := query.Count(&count).Error; err != nil {
-		return fmt.Errorf("query policy binding conflict failed: %w", err)
+		return fmt.Errorf("查询策略绑定冲突失败: %w", err)
 	}
 	if count > 0 {
-		return fmt.Errorf("policy binding conflict detected for scope=%s host=%s path=%s method=%s priority=%d",
+		return fmt.Errorf("检测到策略绑定冲突: scope=%s host=%s path=%s method=%s priority=%d",
 			candidate.ScopeType, candidate.Host, candidate.Path, candidate.Method, candidate.Priority)
 	}
 	return nil
@@ -342,7 +342,7 @@ func validatePolicyBindingConflict(tx *gorm.DB, candidate *model.WafPolicyBindin
 
 func ensureNoPolicyBindingConflicts(db *gorm.DB) error {
 	if db == nil {
-		return fmt.Errorf("db is nil")
+		return fmt.Errorf("数据库为空")
 	}
 
 	type bindingGroup struct {
@@ -363,7 +363,7 @@ func ensureNoPolicyBindingConflicts(db *gorm.DB) error {
 		Order("count desc, priority asc").
 		Limit(1).
 		Scan(&conflicts).Error; err != nil {
-		return fmt.Errorf("query policy binding conflicts failed: %w", err)
+		return fmt.Errorf("查询策略绑定冲突列表失败: %w", err)
 	}
 	if len(conflicts) == 0 {
 		return nil
@@ -371,7 +371,7 @@ func ensureNoPolicyBindingConflicts(db *gorm.DB) error {
 
 	conflict := conflicts[0]
 	return fmt.Errorf(
-		"policy binding conflicts found: scope=%s host=%s path=%s method=%s priority=%d count=%d",
+		"发现策略绑定冲突: scope=%s host=%s path=%s method=%s priority=%d count=%d",
 		conflict.ScopeType,
 		conflict.Host,
 		conflict.Path,

@@ -33,14 +33,14 @@ func (w *WebhookProvider) Send(ctx context.Context, config map[string]interface{
 	// 解析配置
 	webhookConfig := &model.WebhookConfig{}
 	if err := mapToStruct(config, webhookConfig); err != nil {
-		return fmt.Errorf("invalid webhook config: %w", err)
+		return fmt.Errorf("回调配置无效: %w", err)
 	}
 
 	payload := buildWebhookPayload(webhookConfig, event)
 
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("failed to marshal payload: %w", err)
+		return fmt.Errorf("序列化请求内容失败: %w", err)
 	}
 
 	// 确定 HTTP 方法
@@ -52,7 +52,7 @@ func (w *WebhookProvider) Send(ctx context.Context, config map[string]interface{
 	// 创建请求
 	req, err := http.NewRequestWithContext(ctx, method, webhookConfig.URL, bytes.NewBuffer(jsonData))
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+		return fmt.Errorf("创建请求失败: %w", err)
 	}
 
 	// 设置默认 Content-Type
@@ -75,9 +75,9 @@ func (w *WebhookProvider) Send(ctx context.Context, config map[string]interface{
 	resp, err := w.client.Do(req)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
-			return fmt.Errorf("webhook request timed out: %w", err)
+			return fmt.Errorf("回调请求超时: %w", err)
 		}
-		return fmt.Errorf("failed to send request: %w", err)
+		return fmt.Errorf("发送请求失败: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -86,7 +86,7 @@ func (w *WebhookProvider) Send(ctx context.Context, config map[string]interface{
 
 	// 检查响应状态码
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("webhook returned non-success status: %d, body: %s", resp.StatusCode, string(body))
+		return fmt.Errorf("回调返回非成功状态: %d，响应: %s", resp.StatusCode, string(body))
 	}
 
 	return nil
@@ -96,7 +96,7 @@ func (w *WebhookProvider) Send(ctx context.Context, config map[string]interface{
 func (w *WebhookProvider) Validate(config map[string]interface{}) error {
 	webhookConfig := &model.WebhookConfig{}
 	if err := mapToStruct(config, webhookConfig); err != nil {
-		return fmt.Errorf("invalid webhook config: %w", err)
+		return fmt.Errorf("回调配置无效: %w", err)
 	}
 
 	return validateWebhookConfig(webhookConfig)
@@ -110,32 +110,32 @@ func (w *WebhookProvider) Type() string {
 // validateWebhookConfig 验证 Webhook 配置
 func validateWebhookConfig(config *model.WebhookConfig) error {
 	if config.URL == "" {
-		return fmt.Errorf("webhook url is required")
+		return fmt.Errorf("回调 URL 不能为空")
 	}
 
 	// 验证 URL 格式
 	if !isValidURL(config.URL) {
-		return fmt.Errorf("invalid webhook url: %s", config.URL)
+		return fmt.Errorf("回调 URL 无效: %s", config.URL)
 	}
 
 	// 验证 HTTP 方法
 	if config.Method != "" {
 		validMethods := map[string]bool{"GET": true, "POST": true, "PUT": true, "PATCH": true}
 		if !validMethods[config.Method] {
-			return fmt.Errorf("invalid http method: %s", config.Method)
+			return fmt.Errorf("HTTP 方法无效: %s", config.Method)
 		}
 	}
 
 	if config.PayloadMode != "" {
 		validModes := map[string]bool{"default": true, "message_api": true}
 		if !validModes[config.PayloadMode] {
-			return fmt.Errorf("invalid payload mode: %s", config.PayloadMode)
+			return fmt.Errorf("载荷模式无效: %s", config.PayloadMode)
 		}
 	}
 
 	for key := range config.BodyFields {
 		if strings.TrimSpace(key) == "" {
-			return fmt.Errorf("body field key cannot be empty")
+			return fmt.Errorf("请求体字段名不能为空")
 		}
 	}
 

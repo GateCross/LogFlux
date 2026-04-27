@@ -51,7 +51,7 @@ func (l *ListWafSourcesLogic) ListWafSources(req *types.WafSourceListReq) (resp 
 			db = db.Where("kind = ?", kind)
 			hasKindFilter = true
 		} else {
-			l.Logger.Infof("ignore invalid waf source kind filter: %s", rawKind)
+			l.Logger.Infof("忽略无效的 WAF 源类型筛选: %s", rawKind)
 		}
 	}
 	hasNameFilter := false
@@ -63,20 +63,20 @@ func (l *ListWafSourcesLogic) ListWafSources(req *types.WafSourceListReq) (resp 
 
 	var total int64
 	if err := db.Count(&total).Error; err != nil {
-		return nil, fmt.Errorf("count sources failed: %w", err)
+		return nil, fmt.Errorf("统计源失败: %w", err)
 	}
 
 	if total == 0 && !hasKindFilter && !hasNameFilter {
 		l.svcCtx.EnsureWafDefaultSources()
 		if err := db.Count(&total).Error; err != nil {
-			return nil, fmt.Errorf("count sources after ensure defaults failed: %w", err)
+			return nil, fmt.Errorf("确保默认源后统计源失败: %w", err)
 		}
 	}
 
 	var sources []model.WafSource
 	offset := (page - 1) * pageSize
 	if err := db.Order("updated_at desc, id desc").Limit(pageSize).Offset(offset).Find(&sources).Error; err != nil {
-		return nil, fmt.Errorf("query sources failed: %w", err)
+		return nil, fmt.Errorf("查询源列表失败: %w", err)
 	}
 
 	items := make([]types.WafSourceItem, 0, len(sources))

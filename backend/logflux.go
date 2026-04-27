@@ -61,7 +61,7 @@ func main() {
 		return http.StatusOK, response.ErrorFromErr(err)
 	})
 
-	logx.Infof("Starting server at %s:%d...", c.Host, c.Port)
+	logx.Infof("服务启动中: %s:%d...", c.Host, c.Port)
 	server.Start()
 }
 
@@ -71,7 +71,7 @@ type wafScheduleExecutor struct {
 
 func (executor *wafScheduleExecutor) CheckSource(ctx context.Context, sourceID uint) error {
 	if executor == nil || executor.svcCtx == nil {
-		return fmt.Errorf("waf scheduler svc context is nil")
+		return fmt.Errorf("WAF 调度器服务上下文为空")
 	}
 	ctx = caddylogic.WithWafJobTriggerMode(ctx, "schedule")
 	logic := caddylogic.NewCheckWafSourceLogic(ctx, executor.svcCtx)
@@ -81,7 +81,7 @@ func (executor *wafScheduleExecutor) CheckSource(ctx context.Context, sourceID u
 
 func (executor *wafScheduleExecutor) SyncSource(ctx context.Context, sourceID uint, activateNow bool) error {
 	if executor == nil || executor.svcCtx == nil {
-		return fmt.Errorf("waf scheduler svc context is nil")
+		return fmt.Errorf("WAF 调度器服务上下文为空")
 	}
 	ctx = caddylogic.WithWafJobTriggerMode(ctx, "schedule")
 	logic := caddylogic.NewSyncWafSourceLogic(ctx, executor.svcCtx)

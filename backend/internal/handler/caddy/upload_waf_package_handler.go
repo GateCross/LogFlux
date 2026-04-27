@@ -54,41 +54,41 @@ func parseWafUploadMultipart(ctx context.Context, r *http.Request, svcCtx *svc.S
 	}
 
 	if err := r.ParseMultipartForm(maxBytes); err != nil {
-		return nil, ctx, fmt.Errorf("parse multipart form failed: %w", err)
+		return nil, ctx, fmt.Errorf("解析 multipart 表单失败: %w", err)
 	}
 
 	file, fileHeader, err := r.FormFile("file")
 	if err != nil {
-		return nil, ctx, fmt.Errorf("upload file is required")
+		return nil, ctx, fmt.Errorf("上传文件不能为空")
 	}
 	defer file.Close()
 
 	store := waf.NewStore(svcCtx.Config.Waf.WorkDir)
 	if err := store.EnsureDirs(); err != nil {
-		return nil, ctx, fmt.Errorf("prepare upload workspace failed: %w", err)
+		return nil, ctx, fmt.Errorf("准备上传工作区失败: %w", err)
 	}
 
 	tempName := fmt.Sprintf("upload_%d_%s", time.Now().UnixNano(), filepathSafeBase(fileHeader.Filename))
 	tempPath := store.StagePath(tempName)
 	targetFile, err := os.OpenFile(tempPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
 	if err != nil {
-		return nil, ctx, fmt.Errorf("create temp upload file failed: %w", err)
+		return nil, ctx, fmt.Errorf("创建临时上传文件失败: %w", err)
 	}
 	limitedFile := &io.LimitedReader{R: file, N: maxBytes + 1}
 	writtenBytes, err := io.Copy(targetFile, limitedFile)
 	if err != nil {
 		_ = targetFile.Close()
 		_ = os.Remove(tempPath)
-		return nil, ctx, fmt.Errorf("save upload file failed: %w", err)
+		return nil, ctx, fmt.Errorf("保存上传文件失败: %w", err)
 	}
 	if writtenBytes > maxBytes {
 		_ = targetFile.Close()
 		_ = os.Remove(tempPath)
-		return nil, ctx, fmt.Errorf("upload package too large: %d > %d", writtenBytes, maxBytes)
+		return nil, ctx, fmt.Errorf("上传包过大: %d > %d", writtenBytes, maxBytes)
 	}
 	if err := targetFile.Close(); err != nil {
 		_ = os.Remove(tempPath)
-		return nil, ctx, fmt.Errorf("close upload file failed: %w", err)
+		return nil, ctx, fmt.Errorf("关闭上传文件失败: %w", err)
 	}
 
 	activateNow := false
@@ -96,7 +96,7 @@ func parseWafUploadMultipart(ctx context.Context, r *http.Request, svcCtx *svc.S
 		parsed, parseErr := strconv.ParseBool(rawValue)
 		if parseErr != nil {
 			_ = os.Remove(tempPath)
-			return nil, ctx, fmt.Errorf("invalid activateNow value")
+			return nil, ctx, fmt.Errorf("立即激活参数无效")
 		}
 		activateNow = parsed
 	}

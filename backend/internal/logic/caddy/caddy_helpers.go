@@ -28,7 +28,7 @@ const (
 func adaptCaddyfile(server *model.CaddyServer, config string) error {
 	_, _, err := postCaddyText(server, "/adapt", "text/caddyfile", config)
 	if err != nil {
-		return fmt.Errorf("adapt failed: %w", err)
+		return fmt.Errorf("适配失败: %w", err)
 	}
 	return nil
 }
@@ -36,7 +36,7 @@ func adaptCaddyfile(server *model.CaddyServer, config string) error {
 func loadCaddyfile(server *model.CaddyServer, config string) error {
 	_, _, err := postCaddyText(server, "/load", "text/caddyfile", config)
 	if err != nil {
-		return fmt.Errorf("load failed: %w", err)
+		return fmt.Errorf("加载失败: %w", err)
 	}
 	return nil
 }
@@ -65,7 +65,7 @@ func postCaddyText(server *model.CaddyServer, endpoint, contentType, body string
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 			return resp.StatusCode, respBody, nil
 		}
-		return resp.StatusCode, respBody, fmt.Errorf("caddy api error: %s", strings.TrimSpace(string(respBody)))
+		return resp.StatusCode, respBody, fmt.Errorf("Caddy API 错误: %s", strings.TrimSpace(string(respBody)))
 	}
 	return 0, nil, lastErr
 }
@@ -86,7 +86,7 @@ func getCaddyConfigJSON(server *model.CaddyServer) ([]byte, error) {
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("caddy config fetch failed: %s", strings.TrimSpace(string(body)))
+		return nil, fmt.Errorf("获取 Caddy 配置失败: %s", strings.TrimSpace(string(body)))
 	}
 	return io.ReadAll(resp.Body)
 }
@@ -126,7 +126,7 @@ func syncCaddyLogSources(svcCtx *svc.ServiceContext, server *model.CaddyServer, 
 		err := svcCtx.DB.Where("path = ?", path).First(&source).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			newSource := model.LogSource{
-				Name:         fmt.Sprintf("Caddy Auto: %s", path),
+				Name:         fmt.Sprintf("Caddy 自动: %s", path),
 				Path:         path,
 				Type:         "caddy",
 				Enabled:      true,

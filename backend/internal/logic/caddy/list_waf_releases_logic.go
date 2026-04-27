@@ -56,13 +56,13 @@ func (l *ListWafReleasesLogic) ListWafReleases(req *types.WafReleaseListReq) (re
 
 	var total int64
 	if err := db.Count(&total).Error; err != nil {
-		return nil, fmt.Errorf("count releases failed: %w", err)
+		return nil, fmt.Errorf("统计版本失败: %w", err)
 	}
 
 	var releases []model.WafRelease
 	offset := (page - 1) * pageSize
 	if err := db.Order("created_at desc, id desc").Limit(pageSize).Offset(offset).Find(&releases).Error; err != nil {
-		return nil, fmt.Errorf("query releases failed: %w", err)
+		return nil, fmt.Errorf("查询版本失败: %w", err)
 	}
 
 	items := make([]types.WafReleaseItem, 0, len(releases))

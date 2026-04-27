@@ -60,13 +60,13 @@ func (l *ListWafRuleExclusionsLogic) ListWafRuleExclusions(req *types.WafRuleExc
 
 	var total int64
 	if err := db.Count(&total).Error; err != nil {
-		return nil, fmt.Errorf("count policy exclusions failed: %w", err)
+		return nil, fmt.Errorf("统计策略排除规则失败: %w", err)
 	}
 
 	var exclusions []model.WafRuleExclusion
 	offset := (page - 1) * pageSize
 	if err := db.Order("updated_at desc, id desc").Limit(pageSize).Offset(offset).Find(&exclusions).Error; err != nil {
-		return nil, fmt.Errorf("query policy exclusions failed: %w", err)
+		return nil, fmt.Errorf("查询策略排除规则失败: %w", err)
 	}
 
 	items := make([]types.WafRuleExclusionItem, 0, len(exclusions))

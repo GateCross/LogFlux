@@ -34,12 +34,12 @@ func (l *ReadNotificationLogic) ReadNotification(req *types.IDReq) (resp *types.
 		}).Error
 
 	if err != nil {
-		l.Logger.Errorf("Failed to read notification: %v", err)
+		l.Logger.Errorf("读取通知失败: %v", err)
 		return nil, err
 	}
 
 	return &types.BaseResp{
 		Code: 0,
-		Msg:  "success",
+		Msg:  "成功",
 	}, nil
 }

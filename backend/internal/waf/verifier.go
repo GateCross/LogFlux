@@ -29,7 +29,7 @@ type VerifyResult struct {
 
 func VerifyPackage(packagePath string, options VerifyOptions) (*VerifyResult, error) {
 	if strings.TrimSpace(packagePath) == "" {
-		return nil, fmt.Errorf("package path is required")
+		return nil, fmt.Errorf("包路径不能为空")
 	}
 
 	allowedExt := normalizeAllowedExt(options.AllowedExt)
@@ -39,12 +39,12 @@ func VerifyPackage(packagePath string, options VerifyOptions) (*VerifyResult, er
 
 	packageExt := detectPackageExt(packagePath)
 	if packageExt == "" || !slices.Contains(allowedExt, packageExt) {
-		return nil, fmt.Errorf("unsupported package extension: %s", filepath.Base(packagePath))
+		return nil, fmt.Errorf("不支持的包扩展名: %s", filepath.Base(packagePath))
 	}
 
 	fileInfo, err := os.Stat(packagePath)
 	if err != nil {
-		return nil, fmt.Errorf("stat package failed: %w", err)
+		return nil, fmt.Errorf("获取包文件信息失败: %w", err)
 	}
 
 	maxPackageBytes := options.MaxPackageBytes
@@ -52,7 +52,7 @@ func VerifyPackage(packagePath string, options VerifyOptions) (*VerifyResult, er
 		maxPackageBytes = DefaultMaxPackageBytes
 	}
 	if fileInfo.Size() > maxPackageBytes {
-		return nil, fmt.Errorf("package too large: %d > %d", fileInfo.Size(), maxPackageBytes)
+		return nil, fmt.Errorf("包文件过大: %d > %d", fileInfo.Size(), maxPackageBytes)
 	}
 
 	hash, err := calculateFileSHA256(packagePath)
@@ -62,7 +62,7 @@ func VerifyPackage(packagePath string, options VerifyOptions) (*VerifyResult, er
 
 	expectedHash := normalizeHash(options.ExpectedSHA256)
 	if expectedHash != "" && hash != expectedHash {
-		return nil, fmt.Errorf("sha256 mismatch: expected %s, got %s", expectedHash, hash)
+		return nil, fmt.Errorf("SHA256 不匹配: 期望 %s，实际 %s", expectedHash, hash)
 	}
 
 	return &VerifyResult{
@@ -75,13 +75,13 @@ func VerifyPackage(packagePath string, options VerifyOptions) (*VerifyResult, er
 func calculateFileSHA256(filePath string) (string, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
-		return "", fmt.Errorf("open package failed: %w", err)
+		return "", fmt.Errorf("打开包文件失败: %w", err)
 	}
 	defer file.Close()
 
 	hasher := sha256.New()
 	if _, err := io.Copy(hasher, file); err != nil {
-		return "", fmt.Errorf("hash package failed: %w", err)
+		return "", fmt.Errorf("计算包哈希失败: %w", err)
 	}
 
 	return hex.EncodeToString(hasher.Sum(nil)), nil

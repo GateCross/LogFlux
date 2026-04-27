@@ -44,14 +44,14 @@ func (l *UploadWafPackageLogic) UploadWafPackage(req *types.WafUploadReq) (resp 
 
 	version := strings.TrimSpace(req.Version)
 	if version == "" {
-		return nil, fmt.Errorf("version is required")
+		return nil, fmt.Errorf("版本不能为空")
 	}
 	version = sanitizeToken(version)
 
 	tempPath, _ := l.ctx.Value(wafUploadTempPathCtxKey).(string)
 	tempPath = strings.TrimSpace(tempPath)
 	if tempPath == "" {
-		return nil, fmt.Errorf("upload file is required")
+		return nil, fmt.Errorf("上传文件不能为空")
 	}
 
 	safePath, safeErr := helper.ensurePathInWorkDir(tempPath)
@@ -85,7 +85,7 @@ func (l *UploadWafPackageLogic) UploadWafPackage(req *types.WafUploadReq) (resp 
 				return nil, activateErr
 			}
 		}
-		return &types.BaseResp{Code: 200, Msg: "success"}, nil
+		return &types.BaseResp{Code: 200, Msg: "成功"}, nil
 	}
 
 	verifyResult, err := waf.VerifyPackage(tempPath, waf.VerifyOptions{
@@ -101,15 +101,15 @@ func (l *UploadWafPackageLogic) UploadWafPackage(req *types.WafUploadReq) (resp 
 	packageName := fmt.Sprintf("upload_%s_%d%s", sanitizeToken(version), time.Now().UnixNano(), verifyResult.Ext)
 	packagePath := helper.store.PackagePath(packageName)
 	if err := os.Rename(tempPath, packagePath); err != nil {
-		helper.finishJob(job, wafJobStatusFailed, fmt.Sprintf("move package failed: %v", err), 0)
-		return nil, fmt.Errorf("move package failed: %w", err)
+		helper.finishJob(job, wafJobStatusFailed, fmt.Sprintf("移动包文件失败: %v", err), 0)
+		return nil, fmt.Errorf("移动包文件失败: %w", err)
 	}
 	tempPath = ""
 
 	releaseDir := helper.store.ReleaseDir(version)
 	if err := os.MkdirAll(releaseDir, 0o755); err != nil {
-		helper.finishJob(job, wafJobStatusFailed, fmt.Sprintf("create release dir failed: %v", err), 0)
-		return nil, fmt.Errorf("create release dir failed: %w", err)
+		helper.finishJob(job, wafJobStatusFailed, fmt.Sprintf("创建版本目录失败: %v", err), 0)
+		return nil, fmt.Errorf("创建版本目录失败: %w", err)
 	}
 
 	if _, err := waf.ExtractPackage(packagePath, releaseDir, waf.ExtractOptions{
@@ -134,12 +134,12 @@ func (l *UploadWafPackageLogic) UploadWafPackage(req *types.WafUploadReq) (resp 
 	}
 
 	if err := helper.svcCtx.DB.WithContext(helper.ctx).Create(release).Error; err != nil {
-		helper.finishJob(job, wafJobStatusFailed, fmt.Sprintf("create release failed: %v", err), 0)
-		return nil, fmt.Errorf("create release failed: %w", err)
+		helper.finishJob(job, wafJobStatusFailed, fmt.Sprintf("创建版本失败: %v", err), 0)
+		return nil, fmt.Errorf("创建版本失败: %w", err)
 	}
 	helper.applyReleaseRetention(release.Kind)
 
-	helper.finishJob(job, wafJobStatusSuccess, "upload success", release.ID)
+	helper.finishJob(job, wafJobStatusSuccess, "上传成功", release.ID)
 
 	if kind != wafKindCorazaEngine && req.ActivateNow {
 		activateLogic := NewActivateWafReleaseLogic(l.ctx, l.svcCtx)
@@ -148,5 +148,5 @@ func (l *UploadWafPackageLogic) UploadWafPackage(req *types.WafUploadReq) (resp 
 		}
 	}
 
-	return &types.BaseResp{Code: 200, Msg: "success"}, nil
+	return &types.BaseResp{Code: 200, Msg: "成功"}, nil
 }

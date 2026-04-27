@@ -27,7 +27,7 @@ func (helper *wafLogicHelper) resolveCRSSyncTarget(source *model.WafSource) (str
 	if isOfficialCRSSource(source) && (version == "" || isBranchLikeVersion(version)) {
 		latestTag, err := helper.fetchCRSLatestReleaseTag(strings.TrimSpace(source.ProxyURL))
 		if err != nil {
-			helper.logger.Errorf("resolve CRS latest release failed, fallback source url: source=%s url=%s err=%v", strings.TrimSpace(source.Name), downloadURL, err)
+			helper.logger.Errorf("解析 CRS 最新版本失败，回退使用源地址: source=%s url=%s err=%v", strings.TrimSpace(source.Name), downloadURL, err)
 		} else if latestTag != "" {
 			return buildCRSReleaseTagDownloadURL(latestTag), latestTag
 		}
@@ -48,7 +48,7 @@ func (helper *wafLogicHelper) fetchCRSLatestReleaseTag(proxyURL string) (string,
 
 	tag, err := fetchGithubLatestReleaseTag(defaultCRSReleaseAPI, timeoutSec, proxyURL)
 	if err != nil && proxyURL != "" {
-		helper.logger.Errorf("CRS release check by proxy failed, fallback direct: proxy=%s err=%v", proxyURL, err)
+		helper.logger.Errorf("通过代理检查 CRS 版本失败，回退直连: proxy=%s err=%v", proxyURL, err)
 		tag, err = fetchGithubLatestReleaseTag(defaultCRSReleaseAPI, timeoutSec, "")
 	}
 	if err != nil {

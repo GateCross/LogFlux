@@ -45,7 +45,7 @@ func (helper *wafLogicHelper) corazaCurrentVersion() string {
 
 	detectedVersion, detectErr := helper.detectCorazaCurrentVersion()
 	if detectErr != nil {
-		helper.logger.Errorf("detect coraza current version failed: %v", detectErr)
+		helper.logger.Errorf("检测 Coraza 当前版本失败: %v", detectErr)
 	}
 	return strings.TrimSpace(detectedVersion)
 }
@@ -95,9 +95,9 @@ func detectCorazaVersionByCommand(parentCtx context.Context, name string, args .
 	outputText := strings.TrimSpace(string(outputBytes))
 	if err != nil {
 		if outputText != "" {
-			return "", fmt.Errorf("exec %s %s failed: %w, output=%s", name, strings.Join(args, " "), err, outputText)
+			return "", fmt.Errorf("执行命令失败: %s %s err=%w output=%s", name, strings.Join(args, " "), err, outputText)
 		}
-		return "", fmt.Errorf("exec %s %s failed: %w", name, strings.Join(args, " "), err)
+		return "", fmt.Errorf("执行命令失败: %s %s err=%w", name, strings.Join(args, " "), err)
 	}
 
 	return extractCorazaVersionFromText(outputText), nil
@@ -169,7 +169,7 @@ func (helper *wafLogicHelper) fetchCorazaLatestReleaseVersion() (string, error) 
 
 	version, err := fetchGithubLatestReleaseTag(releaseAPI, timeoutSec, proxyURL)
 	if err != nil && proxyURL != "" {
-		helper.logger.Errorf("coraza release check by proxy failed, fallback direct: proxy=%s err=%v", proxyURL, err)
+		helper.logger.Errorf("通过代理检查 Coraza 版本失败，回退直连: proxy=%s err=%v", proxyURL, err)
 		version, err = fetchGithubLatestReleaseTag(releaseAPI, timeoutSec, "")
 	}
 	if err != nil {
@@ -181,10 +181,10 @@ func (helper *wafLogicHelper) fetchCorazaLatestReleaseVersion() (string, error) 
 func fetchGithubLatestReleaseTag(releaseAPI string, timeoutSec int, proxyURL string) (string, error) {
 	parsedURL, err := url.Parse(strings.TrimSpace(releaseAPI))
 	if err != nil {
-		return "", fmt.Errorf("invalid coraza release api url: %w", err)
+		return "", fmt.Errorf("Coraza 版本 API URL 无效: %w", err)
 	}
 	if parsedURL.Scheme != "https" {
-		return "", fmt.Errorf("coraza release api only supports https")
+		return "", fmt.Errorf("Coraza 版本 API 仅支持 HTTPS")
 	}
 
 	timeout := time.Duration(timeoutSec) * time.Second
@@ -196,10 +196,10 @@ func fetchGithubLatestReleaseTag(releaseAPI string, timeoutSec int, proxyURL str
 	if strings.TrimSpace(proxyURL) != "" {
 		parsedProxyURL, proxyErr := url.Parse(strings.TrimSpace(proxyURL))
 		if proxyErr != nil {
-			return "", fmt.Errorf("invalid coraza check proxy url: %w", proxyErr)
+			return "", fmt.Errorf("Coraza 检查代理 URL 无效: %w", proxyErr)
 		}
 		if parsedProxyURL.Scheme != "http" && parsedProxyURL.Scheme != "https" {
-			return "", fmt.Errorf("coraza check proxy scheme must be http or https")
+			return "", fmt.Errorf("Coraza 检查代理协议必须是 HTTP 或 HTTPS")
 		}
 		transport.Proxy = http.ProxyURL(parsedProxyURL)
 	}
@@ -211,14 +211,14 @@ func fetchGithubLatestReleaseTag(releaseAPI string, timeoutSec int, proxyURL str
 
 	request, err := http.NewRequest(http.MethodGet, parsedURL.String(), nil)
 	if err != nil {
-		return "", fmt.Errorf("create coraza release request failed: %w", err)
+		return "", fmt.Errorf("创建 Coraza 版本请求失败: %w", err)
 	}
 	request.Header.Set("Accept", "application/vnd.github+json")
 	request.Header.Set("User-Agent", "logflux-coraza-version-checker")
 
 	response, err := httpClient.Do(request)
 	if err != nil {
-		return "", fmt.Errorf("request coraza release failed: %w", err)
+		return "", fmt.Errorf("请求 Coraza 版本失败: %w", err)
 	}
 	defer response.Body.Close()
 
@@ -226,19 +226,19 @@ func fetchGithubLatestReleaseTag(releaseAPI string, timeoutSec int, proxyURL str
 		bodyBytes, _ := io.ReadAll(io.LimitReader(response.Body, 1024))
 		bodyText := strings.TrimSpace(string(bodyBytes))
 		if bodyText != "" {
-			return "", fmt.Errorf("request coraza release failed: status=%d body=%s", response.StatusCode, bodyText)
+			return "", fmt.Errorf("请求 Coraza 版本失败: status=%d body=%s", response.StatusCode, bodyText)
 		}
-		return "", fmt.Errorf("request coraza release failed: status=%d", response.StatusCode)
+		return "", fmt.Errorf("请求 Coraza 版本失败: status=%d", response.StatusCode)
 	}
 
 	var payload githubLatestReleaseResp
 	if err := json.NewDecoder(io.LimitReader(response.Body, 1024*1024)).Decode(&payload); err != nil {
-		return "", fmt.Errorf("decode coraza release failed: %w", err)
+		return "", fmt.Errorf("解析 Coraza 版本响应失败: %w", err)
 	}
 
 	tag := strings.TrimSpace(payload.TagName)
 	if tag == "" {
-		return "", fmt.Errorf("coraza release tag is empty")
+		return "", fmt.Errorf("Coraza 版本标签为空")
 	}
 
 	return tag, nil

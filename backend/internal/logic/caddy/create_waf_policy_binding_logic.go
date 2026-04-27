@@ -32,7 +32,7 @@ func (l *CreateWafPolicyBindingLogic) CreateWafPolicyBinding(req *types.WafPolic
 	}()
 
 	if req == nil {
-		return nil, fmt.Errorf("invalid policy binding payload")
+		return nil, fmt.Errorf("策略绑定参数不合法")
 	}
 	if err := validatePolicyIDExists(l.svcCtx.DB.WithContext(l.ctx), req.PolicyId); err != nil {
 		return nil, err
@@ -67,8 +67,8 @@ func (l *CreateWafPolicyBindingLogic) CreateWafPolicyBinding(req *types.WafPolic
 		return nil, err
 	}
 	if err := l.svcCtx.DB.WithContext(l.ctx).Create(binding).Error; err != nil {
-		return nil, fmt.Errorf("create policy binding failed: %w", err)
+		return nil, fmt.Errorf("创建策略绑定失败: %w", err)
 	}
 
-	return &types.BaseResp{Code: 200, Msg: "success"}, nil
+	return &types.BaseResp{Code: 200, Msg: "成功"}, nil
 }

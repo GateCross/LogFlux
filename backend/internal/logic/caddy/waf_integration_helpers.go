@@ -203,7 +203,7 @@ func findSiteBlock(config, siteAddress string) (*caddyTopLevelBlock, []string, e
 			return &copied, lines, nil
 		}
 	}
-	return nil, nil, fmt.Errorf("site not found: %s", target)
+	return nil, nil, fmt.Errorf("站点不存在: %s", target)
 }
 
 func parseTopLevelCaddyBlocks(config string) ([]caddyTopLevelBlock, []string, error) {
@@ -233,7 +233,7 @@ func parseTopLevelCaddyBlocks(config string) ([]caddyTopLevelBlock, []string, er
 	}
 
 	if current != nil || depth != 0 || inBacktick {
-		return nil, nil, fmt.Errorf("invalid caddy config structure")
+		return nil, nil, fmt.Errorf("Caddy 配置结构无效")
 	}
 	return blocks, lines, nil
 }

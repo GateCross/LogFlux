@@ -47,7 +47,7 @@ func TestSyncWafSourceGuardFailures(t *testing.T) {
 			sourceMode: "manual",
 			enabled:    true,
 			url:        "https://example.com/crs.tar.gz",
-			wantErr:    "source mode is not remote",
+			wantErr:    "源模式不是远程模式",
 		},
 		{
 			name:       "empty source url",
@@ -55,7 +55,7 @@ func TestSyncWafSourceGuardFailures(t *testing.T) {
 			sourceMode: "remote",
 			enabled:    true,
 			url:        "   ",
-			wantErr:    "source url is empty",
+			wantErr:    "源 URL 为空",
 		},
 	}
 
@@ -135,9 +135,9 @@ func TestNormalizeWafSyncFetchError(t *testing.T) {
 		},
 		{
 			name:     "passthrough unknown error",
-			err:      fmt.Errorf("unexpected status code: 503"),
+			err:      fmt.Errorf("响应状态码异常: 503"),
 			hasProxy: false,
-			want:     "unexpected status code: 503",
+			want:     "响应状态码异常: 503",
 		},
 	}
 

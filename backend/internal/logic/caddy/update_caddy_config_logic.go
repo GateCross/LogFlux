@@ -31,7 +31,7 @@ func NewUpdateCaddyConfigLogic(ctx context.Context, svcCtx *svc.ServiceContext) 
 func (l *UpdateCaddyConfigLogic) UpdateCaddyConfig(req *types.CaddyConfigUpdateReq) (resp *types.BaseResp, err error) {
 	var server model.CaddyServer
 	if err := l.svcCtx.DB.WithContext(l.ctx).First(&server, req.ServerId).Error; err != nil {
-		return nil, fmt.Errorf("server not found")
+		return nil, fmt.Errorf("服务器不存在")
 	}
 	applyService := newCaddyConfigApplyService(l.svcCtx, l.Logger)
 
@@ -46,10 +46,10 @@ func (l *UpdateCaddyConfigLogic) UpdateCaddyConfig(req *types.CaddyConfigUpdateR
 		}
 	}
 
-	l.Logger.Info("Caddy config updated successfully")
+	l.Logger.Info("Caddy 配置更新成功")
 	return &types.BaseResp{
 		Code: 200,
-		Msg:  "success",
+		Msg:  "成功",
 	}, nil
 }
 

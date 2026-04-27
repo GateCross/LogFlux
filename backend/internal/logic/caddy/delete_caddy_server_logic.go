@@ -31,6 +31,6 @@ func (l *DeleteCaddyServerLogic) DeleteCaddyServer(req *types.IDReq) (resp *type
 
 	return &types.BaseResp{
 		Code: 200,
-		Msg:  "success",
+		Msg:  "成功",
 	}, nil
 }

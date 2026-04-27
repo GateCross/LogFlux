@@ -89,7 +89,7 @@ func (i *SystemIngestor) startFile(filePath string, sourceType string) bool {
 		Location: &tail.SeekInfo{Offset: startOffset, Whence: io.SeekStart},
 	})
 	if err != nil {
-		logx.Errorf("Error tailing file: %v", err)
+		logx.Errorf("监听文件失败: %v", err)
 		return false
 	}
 
@@ -104,7 +104,7 @@ func (i *SystemIngestor) startFile(filePath string, sourceType string) bool {
 	i.fileSource[filePath] = normalizeSourceType(sourceType)
 	i.mu.Unlock()
 
-	logx.Infof("Started monitoring: %s", filePath)
+	logx.Infof("开始监听文件: %s", filePath)
 
 	watchPath := filePath
 	safego.New(context.Background(), "系统日志文件监听").Go(func() {
@@ -114,18 +114,18 @@ func (i *SystemIngestor) startFile(filePath string, sourceType string) bool {
 				continue
 			}
 			if line.Err != nil {
-				logx.Errorf("Tail read failed: %v", line.Err)
+				logx.Errorf("读取监听内容失败: %v", line.Err)
 				continue
 			}
 			i.mu.Lock()
 			source := i.fileSource[path]
 			i.mu.Unlock()
 			if err := i.IngestLine(path, source, line.Text); err != nil {
-				logx.Errorf("Log ingest failed: %v", err)
+				logx.Errorf("日志入库失败: %v", err)
 				continue
 			}
 			if err := i.saveOffset(path, line.SeekInfo.Offset); err != nil {
-				logx.Errorf("Save ingest cursor failed: %v", err)
+				logx.Errorf("保存日志采集游标失败: %v", err)
 			}
 		}
 	})
@@ -137,7 +137,7 @@ func (i *SystemIngestor) resolveStartOffset(filePath string) int64 {
 	var cursor model.LogIngestCursor
 	if err := i.db.Where("file_path = ?", filePath).Take(&cursor).Error; err != nil {
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
-			logx.Errorf("Load ingest cursor failed: %v", err)
+			logx.Errorf("加载日志采集游标失败: %v", err)
 		}
 		return 0
 	}
@@ -222,7 +222,7 @@ func (i *SystemIngestor) startDir(dirPath string, scanIntervalSec int, sourceTyp
 func (i *SystemIngestor) scanDir(dirPath string) {
 	entries, err := os.ReadDir(dirPath)
 	if err != nil {
-		logx.Errorf("Error reading dir: %v", err)
+		logx.Errorf("读取目录失败: %v", err)
 		return
 	}
 
@@ -305,7 +305,7 @@ func (i *SystemIngestor) stopFile(filePath string) {
 	if exists {
 		t.Stop()
 		t.Cleanup()
-		logx.Infof("Stopped monitoring: %s", filePath)
+		logx.Infof("停止监听文件: %s", filePath)
 	}
 }
 
@@ -401,7 +401,7 @@ func (i *SystemIngestor) flushPending(filePath string) {
 	}
 	pending.entry.RawLog = strings.Join(pending.rawLines, "\n")
 	if err := i.save(pending.entry); err != nil {
-		logx.Errorf("Flush pending log failed: %v", err)
+		logx.Errorf("刷新待处理日志失败: %v", err)
 	}
 }
 
@@ -428,7 +428,7 @@ func (i *SystemIngestor) startPendingFlush() {
 			for _, pending := range stale {
 				pending.entry.RawLog = strings.Join(pending.rawLines, "\n")
 				if err := i.save(pending.entry); err != nil {
-					logx.Errorf("Flush pending log failed: %v", err)
+					logx.Errorf("刷新待处理日志失败: %v", err)
 				}
 			}
 		}

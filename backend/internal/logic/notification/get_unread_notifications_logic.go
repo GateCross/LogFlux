@@ -78,7 +78,7 @@ func (l *GetUnreadNotificationsLogic) GetUnreadNotifications() (resp *types.LogL
 		Find(&logs).Error
 
 	if err != nil {
-		l.Logger.Errorf("Failed to get unread notifications: %v", err)
+		l.Logger.Errorf("获取未读通知失败: %v", err)
 		return nil, err
 	}
 

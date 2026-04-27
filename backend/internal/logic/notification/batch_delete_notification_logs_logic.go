@@ -26,7 +26,7 @@ func NewBatchDeleteNotificationLogsLogic(ctx context.Context, svcCtx *svc.Servic
 
 func (l *BatchDeleteNotificationLogsLogic) BatchDeleteNotificationLogs(req *types.BatchDeleteNotificationLogsReq) (resp *types.BaseResp, err error) {
 	if len(req.IDs) == 0 {
-		return &types.BaseResp{Code: 200, Msg: "success"}, nil
+		return &types.BaseResp{Code: 200, Msg: "成功"}, nil
 	}
 
 	if err := l.svcCtx.DB.WithContext(l.ctx).Where("log_id IN ?", req.IDs).Delete(&model.NotificationJob{}).Error; err != nil {
@@ -36,5 +36,5 @@ func (l *BatchDeleteNotificationLogsLogic) BatchDeleteNotificationLogs(req *type
 		return nil, err
 	}
 
-	return &types.BaseResp{Code: 200, Msg: "success"}, nil
+	return &types.BaseResp{Code: 200, Msg: "成功"}, nil
 }
