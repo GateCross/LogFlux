@@ -171,7 +171,7 @@ func isAuthOnlyRoute(method, path string) bool {
 
 func userIDFromContext(r *http.Request) (uint, error) {
 	if r == nil {
-		return 0, errors.New("nil request")
+		return 0, errors.New("请求为空")
 	}
 
 	value := r.Context().Value("userId")
@@ -179,38 +179,38 @@ func userIDFromContext(r *http.Request) (uint, error) {
 	case json.Number:
 		parsed, err := v.Int64()
 		if err != nil || parsed <= 0 {
-			return 0, errors.New("invalid userId")
+			return 0, errors.New("用户 ID 无效")
 		}
 		return uint(parsed), nil
 	case float64:
 		if v <= 0 {
-			return 0, errors.New("invalid userId")
+			return 0, errors.New("用户 ID 无效")
 		}
 		return uint(v), nil
 	case int:
 		if v <= 0 {
-			return 0, errors.New("invalid userId")
+			return 0, errors.New("用户 ID 无效")
 		}
 		return uint(v), nil
 	case int64:
 		if v <= 0 {
-			return 0, errors.New("invalid userId")
+			return 0, errors.New("用户 ID 无效")
 		}
 		return uint(v), nil
 	case uint:
 		if v == 0 {
-			return 0, errors.New("invalid userId")
+			return 0, errors.New("用户 ID 无效")
 		}
 		return v, nil
 	case string:
 		var number json.Number = json.Number(strings.TrimSpace(v))
 		parsed, err := number.Int64()
 		if err != nil || parsed <= 0 {
-			return 0, errors.New("invalid userId")
+			return 0, errors.New("用户 ID 无效")
 		}
 		return uint(parsed), nil
 	default:
-		return 0, errors.New("missing userId")
+		return 0, errors.New("缺少用户 ID")
 	}
 }
 

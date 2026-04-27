@@ -32,7 +32,7 @@ func validatePolicyFeedbackStatus(status string) error {
 	case wafFeedbackStatusPending, wafFeedbackStatusConfirmed, wafFeedbackStatusResolved:
 		return nil
 	default:
-		return fmt.Errorf("invalid policy false positive feedback status: %s", status)
+		return fmt.Errorf("误报反馈状态无效: %s", status)
 	}
 }
 
@@ -49,7 +49,7 @@ func validatePolicyFeedbackSLAStatus(status string) error {
 	case wafFeedbackSLAStatusAll, wafFeedbackSLAStatusNormal, wafFeedbackSLAStatusOverdue, wafFeedbackSLAStatusResolved:
 		return nil
 	default:
-		return fmt.Errorf("invalid policy false positive feedback sla status: %s", status)
+		return fmt.Errorf("误报反馈 SLA 状态无效: %s", status)
 	}
 }
 
@@ -60,7 +60,7 @@ func parsePolicyFeedbackDueAt(raw string) (*time.Time, error) {
 	}
 	value, err := utils.ParseOptionalTime(trimmed)
 	if err != nil {
-		return nil, fmt.Errorf("invalid dueAt: %w", err)
+		return nil, fmt.Errorf("截止时间格式不合法: %w", err)
 	}
 	return value, nil
 }

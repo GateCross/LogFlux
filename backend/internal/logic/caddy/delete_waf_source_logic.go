@@ -31,22 +31,22 @@ func (l *DeleteWafSourceLogic) DeleteWafSource(req *types.IDReq) (resp *types.Ba
 	var source model.WafSource
 	if err := l.svcCtx.DB.WithContext(l.ctx).First(&source, req.ID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, fmt.Errorf("source not found")
+			return nil, fmt.Errorf("源不存在")
 		}
-		return nil, fmt.Errorf("query source failed: %w", err)
+		return nil, fmt.Errorf("查询源失败: %w", err)
 	}
 
 	err = l.svcCtx.DB.WithContext(l.ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("source_id = ?", req.ID).Delete(&model.WafUpdateJob{}).Error; err != nil {
-			return fmt.Errorf("delete source jobs failed: %w", err)
+			return fmt.Errorf("删除源关联任务失败: %w", err)
 		}
 
 		if err := tx.Where("source_id = ?", req.ID).Delete(&model.WafRelease{}).Error; err != nil {
-			return fmt.Errorf("delete source releases failed: %w", err)
+			return fmt.Errorf("删除源关联版本失败: %w", err)
 		}
 
 		if err := tx.Delete(&model.WafSource{}, req.ID).Error; err != nil {
-			return fmt.Errorf("delete source failed: %w", err)
+			return fmt.Errorf("删除源失败: %w", err)
 		}
 
 		return nil
@@ -58,5 +58,5 @@ func (l *DeleteWafSourceLogic) DeleteWafSource(req *types.IDReq) (resp *types.Ba
 		l.svcCtx.WafScheduler.RemoveSource(req.ID)
 	}
 
-	return &types.BaseResp{Code: 200, Msg: "success"}, nil
+	return &types.BaseResp{Code: 200, Msg: "成功"}, nil
 }

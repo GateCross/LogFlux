@@ -44,11 +44,11 @@ func (l *ClearWafReleasesLogic) ClearWafReleases(req *types.WafReleaseClearReq) 
 		Where("kind = ? AND status <> ?", kind, wafReleaseStatusActive).
 		Order("id asc").
 		Find(&candidates).Error; err != nil {
-		return nil, fmt.Errorf("query clear candidates failed: %w", err)
+		return nil, fmt.Errorf("查询清理候选版本失败: %w", err)
 	}
 
 	if len(candidates) == 0 {
-		return &types.BaseResp{Code: 200, Msg: "success"}, nil
+		return &types.BaseResp{Code: 200, Msg: "成功"}, nil
 	}
 
 	activePathSet := make(map[string]struct{})
@@ -56,7 +56,7 @@ func (l *ClearWafReleasesLogic) ClearWafReleases(req *types.WafReleaseClearReq) 
 	if err := l.svcCtx.DB.WithContext(l.ctx).Model(&model.WafRelease{}).
 		Where("kind = ? AND status = ?", kind, wafReleaseStatusActive).
 		Pluck("storage_path", &activePaths).Error; err != nil {
-		return nil, fmt.Errorf("query active release paths failed: %w", err)
+		return nil, fmt.Errorf("查询激活版本路径失败: %w", err)
 	}
 	for _, activePath := range activePaths {
 		safePath, pathErr := helper.ensurePathInWorkDir(activePath)
@@ -77,7 +77,7 @@ func (l *ClearWafReleasesLogic) ClearWafReleases(req *types.WafReleaseClearReq) 
 		}
 		safePath, pathErr := helper.ensurePathInWorkDir(storagePath)
 		if pathErr != nil {
-			l.Logger.Errorf("skip unsafe release path: id=%d path=%s err=%v", item.ID, storagePath, pathErr)
+			l.Logger.Errorf("跳过不安全的版本路径: id=%d path=%s err=%v", item.ID, storagePath, pathErr)
 			continue
 		}
 		cleanPath := filepath.Clean(safePath)
@@ -90,10 +90,10 @@ func (l *ClearWafReleasesLogic) ClearWafReleases(req *types.WafReleaseClearReq) 
 	if err := l.svcCtx.DB.WithContext(l.ctx).Transaction(func(tx *gorm.DB) error {
 		if len(releaseIDs) > 0 {
 			if err := tx.Where("release_id IN ?", releaseIDs).Delete(&model.WafUpdateJob{}).Error; err != nil {
-				return fmt.Errorf("delete related waf jobs failed: %w", err)
+				return fmt.Errorf("删除关联 WAF 任务失败: %w", err)
 			}
 			if err := tx.Where("id IN ?", releaseIDs).Delete(&model.WafRelease{}).Error; err != nil {
-				return fmt.Errorf("delete waf releases failed: %w", err)
+				return fmt.Errorf("删除 WAF 版本失败: %w", err)
 			}
 		}
 		return nil
@@ -103,9 +103,9 @@ func (l *ClearWafReleasesLogic) ClearWafReleases(req *types.WafReleaseClearReq) 
 
 	for _, pathValue := range dedupeNonEmptyStrings(pathsToRemove) {
 		if removeErr := os.RemoveAll(pathValue); removeErr != nil {
-			l.Logger.Errorf("remove release storage path failed: path=%s err=%v", pathValue, removeErr)
+			l.Logger.Errorf("删除版本存储路径失败: path=%s err=%v", pathValue, removeErr)
 		}
 	}
 
-	return &types.BaseResp{Code: 200, Msg: "success"}, nil
+	return &types.BaseResp{Code: 200, Msg: "成功"}, nil
 }

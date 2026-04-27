@@ -65,11 +65,11 @@ func (m *Manager) RegisterProvider(provider NotificationProvider) error {
 
 	providerType := provider.Type()
 	if _, exists := m.providers[providerType]; exists {
-		return fmt.Errorf("provider %s already registered", providerType)
+		return fmt.Errorf("通知提供者 %s 已注册", providerType)
 	}
 
 	m.providers[providerType] = provider
-	m.logger.Infof("Registered notification provider: %s", providerType)
+	m.logger.Infof("已注册通知提供者: %s", providerType)
 	return nil
 }
 
@@ -81,11 +81,11 @@ func (m *Manager) SendToChannel(ctx context.Context, channelID uint, event *Even
 	m.mu.RUnlock()
 
 	if !exists || channel == nil {
-		return fmt.Errorf("channel %d not found", channelID)
+		return fmt.Errorf("通知渠道 %d 不存在", channelID)
 	}
 
 	if provider == nil {
-		return fmt.Errorf("provider %s not found", channel.Type)
+		return fmt.Errorf("通知提供者 %s 不存在", channel.Type)
 	}
 
 	if m.templateMgr != nil {
@@ -96,13 +96,13 @@ func (m *Manager) SendToChannel(ctx context.Context, channelID uint, event *Even
 			}
 			event.Data["rendered_content"] = content
 		} else {
-			m.logger.Errorf("Failed to render template %s: %v", templateName, err)
+			m.logger.Errorf("渲染模板失败: name=%s err=%v", templateName, err)
 		}
 	}
 
 	err := provider.Send(ctx, map[string]interface{}(channel.Config), event)
 	if err != nil && errors.Is(err, context.DeadlineExceeded) {
-		m.logger.Errorf("SendToChannel deadline exceeded for channel %d: %v", channelID, err)
+		m.logger.Errorf("发送到通知渠道超时: channelID=%d err=%v", channelID, err)
 	}
 	return err
 }
@@ -113,17 +113,17 @@ func (m *Manager) Start(ctx context.Context) error {
 	defer m.mu.Unlock()
 
 	if m.started {
-		return fmt.Errorf("notification manager already started")
+		return fmt.Errorf("通知管理器已启动")
 	}
 
 	// 加载通知渠道
 	if err := m.loadChannelsLocked(); err != nil {
-		return fmt.Errorf("failed to load channels: %w", err)
+		return fmt.Errorf("加载通知渠道失败: %w", err)
 	}
 
 	// 加载告警规则
 	if err := m.loadRulesLocked(); err != nil {
-		return fmt.Errorf("failed to load rules: %w", err)
+		return fmt.Errorf("加载通知规则失败: %w", err)
 	}
 
 	m.started = true
@@ -139,7 +139,7 @@ func (m *Manager) Start(ctx context.Context) error {
 		m.scanLoop(ctx)
 	})
 
-	m.logger.Info("Notification manager started")
+	m.logger.Info("通知管理器已启动")
 	return nil
 }
 
@@ -153,7 +153,7 @@ func (m *Manager) Stop() error {
 	}
 
 	m.started = false
-	m.logger.Info("Notification manager stopped")
+	m.logger.Info("通知管理器已停止")
 	return nil
 }
 
@@ -194,7 +194,7 @@ func (m *Manager) loadChannelsLocked() error {
 		m.channels[channels[i].ID] = &channels[i]
 	}
 
-	m.logger.Infof("Loaded %d notification channels", len(m.channels))
+	m.logger.Infof("已加载 %d 个通知渠道", len(m.channels))
 	return nil
 }
 
@@ -211,7 +211,7 @@ func (m *Manager) loadRulesLocked() error {
 		m.rules[rules[i].ID] = &rules[i]
 	}
 
-	m.logger.Infof("Loaded %d notification rules", len(m.rules))
+	m.logger.Infof("已加载 %d 条通知规则", len(m.rules))
 	return nil
 }
 
@@ -220,7 +220,7 @@ func (m *Manager) Notify(ctx context.Context, event *Event) error {
 	m.mu.RLock()
 	if !m.started {
 		m.mu.RUnlock()
-		return fmt.Errorf("notification manager not started")
+		return fmt.Errorf("通知管理器未启动")
 	}
 
 	// 1. 评估告警规则
@@ -255,7 +255,7 @@ func (m *Manager) Notify(ctx context.Context, event *Event) error {
 	}
 
 	if len(channelsToNotify) == 0 {
-		m.logger.Infof("No matching channels for event: %s", event.Type)
+		m.logger.Infof("事件没有匹配的通知渠道: %s", event.Type)
 		return nil
 	}
 
@@ -297,13 +297,13 @@ func (m *Manager) evaluateRules(ctx context.Context, event *Event) []*model.Noti
 		// 使用规则引擎评估
 		match, err := m.ruleEngine.Evaluate(ctx, rule, event)
 		if err != nil {
-			m.logger.Errorf("Failed to evaluate rule %s: %v", rule.Name, err)
+			m.logger.Errorf("评估通知规则失败: name=%s err=%v", rule.Name, err)
 			continue
 		}
 
 		if match {
 			triggered = append(triggered, rule)
-			m.logger.Infof("Rule triggered: %s for event %s", rule.Name, event.Type)
+			m.logger.Infof("通知规则已触发: rule=%s event=%s", rule.Name, event.Type)
 		}
 	}
 
@@ -321,7 +321,7 @@ func (m *Manager) updateRuleTriggerStatus(ctx context.Context, rule *model.Notif
 	if err := m.db.WithContext(ctx).Model(&model.NotificationRule{}).
 		Where("id = ?", rule.ID).
 		Updates(updates).Error; err != nil {
-		m.logger.Errorf("Failed to update rule trigger status: %v", err)
+		m.logger.Errorf("更新规则触发状态失败: %v", err)
 	}
 
 	// 同步更新内存中的规则状态，保证 SilenceDuration 生效。
@@ -394,15 +394,15 @@ func (m *Manager) sendToChannel(ctx context.Context, channel *model.Notification
 
 	// 保存日志到数据库
 	if err := m.db.Create(log).Error; err != nil {
-		m.logger.Errorf("Failed to create notification log: %v", err)
+		m.logger.Errorf("创建通知日志失败: %v", err)
 		return
 	}
 
 	// 获取提供者
 	provider, exists := m.providers[channel.Type]
 	if !exists {
-		m.updateLogStatus(log.ID, model.NotificationStatusFailed, fmt.Sprintf("Provider %s not found", channel.Type))
-		m.logger.Errorf("Provider %s not found for channel %s", channel.Type, channel.Name)
+		m.updateLogStatus(log.ID, model.NotificationStatusFailed, fmt.Sprintf("通知提供者 %s 不存在", channel.Type))
+		m.logger.Errorf("通知提供者 %s 不存在，渠道=%s", channel.Type, channel.Name)
 		return
 	}
 
@@ -415,7 +415,7 @@ func (m *Manager) sendToChannel(ctx context.Context, channel *model.Notification
 		}
 		event.Data["rendered_content"] = content
 	} else {
-		m.logger.Errorf("Failed to render template %s: %v", templateName, errRender)
+		m.logger.Errorf("渲染模板失败: name=%s err=%v", templateName, errRender)
 		// Fallback: Provider will use event.Message
 	}
 
@@ -430,11 +430,11 @@ func (m *Manager) sendToChannel(ctx context.Context, channel *model.Notification
 	if err != nil {
 		log.Status = model.NotificationStatusFailed
 		log.ErrorMessage = err.Error()
-		m.logger.Errorf("Failed to send notification via %s: %v (took %v)", channel.Name, err, duration)
+		m.logger.Errorf("通过 %s 发送通知失败: %v（耗时 %v）", channel.Name, err, duration)
 	} else {
 		log.Status = model.NotificationStatusSuccess
 		log.SentAt = &now
-		m.logger.Infof("Successfully sent notification via %s (took %v)", channel.Name, duration)
+		m.logger.Infof("已通过 %s 发送通知（耗时 %v）", channel.Name, duration)
 	}
 
 	m.db.Model(log).Updates(map[string]interface{}{
@@ -488,7 +488,7 @@ func (m *Manager) enqueueJob(ctx context.Context, channel *model.NotificationCha
 		if rendered, err := m.templateMgr.Render(templateName, event); err == nil {
 			content = rendered
 		} else {
-			m.logger.Errorf("Failed to render template %s: %v", templateName, err)
+			m.logger.Errorf("渲染模板失败: name=%s err=%v", templateName, err)
 		}
 	}
 
@@ -521,7 +521,7 @@ func (m *Manager) enqueueJob(ctx context.Context, channel *model.NotificationCha
 		log.RuleID = &rule.ID
 	}
 	if err := m.db.WithContext(ctx).Create(log).Error; err != nil {
-		m.logger.Errorf("Failed to create notification log: %v", err)
+		m.logger.Errorf("创建通知日志失败: %v", err)
 		return 0
 	}
 
@@ -541,9 +541,9 @@ func (m *Manager) enqueueJob(ctx context.Context, channel *model.NotificationCha
 		NextRunAt:    time.Now(),
 	}
 	if err := m.db.WithContext(ctx).Create(job).Error; err != nil {
-		m.logger.Errorf("Failed to create notification job: %v", err)
+		m.logger.Errorf("创建通知任务失败: %v", err)
 		// 同步标记 log 失败（避免 UI 长期 pending）
-		m.updateLogStatus(log.ID, model.NotificationStatusFailed, fmt.Sprintf("enqueue failed: %v", err))
+		m.updateLogStatus(log.ID, model.NotificationStatusFailed, fmt.Sprintf("入队失败: %v", err))
 		return 0
 	}
 

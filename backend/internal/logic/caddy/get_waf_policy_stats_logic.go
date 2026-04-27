@@ -52,7 +52,7 @@ func (l *GetWafPolicyStatsLogic) GetWafPolicyStats(req *types.WafPolicyStatsReq)
 
 	var policies []model.WafPolicy
 	if err := policyQuery.Order("is_default desc, id asc").Find(&policies).Error; err != nil {
-		return nil, fmt.Errorf("query policy stats policies failed: %w", err)
+		return nil, fmt.Errorf("查询策略统计策略列表失败: %w", err)
 	}
 
 	if len(policies) == 0 {
@@ -85,7 +85,7 @@ func (l *GetWafPolicyStatsLogic) GetWafPolicyStats(req *types.WafPolicyStatsReq)
 		Where("enabled = ? AND policy_id IN ?", true, policyIDs).
 		Order("priority asc, id asc").
 		Find(&bindings).Error; err != nil {
-		return nil, fmt.Errorf("query policy stats bindings failed: %w", err)
+		return nil, fmt.Errorf("查询策略统计绑定列表失败: %w", err)
 	}
 
 	bindingMap := make(map[uint][]model.WafPolicyBinding, len(policies))
@@ -179,11 +179,11 @@ func normalizeWafPolicyStatsRange(req *types.WafPolicyStatsReq) (time.Time, time
 	if req != nil {
 		start, err = utils.ParseOptionalTime(req.StartTime)
 		if err != nil {
-			return time.Time{}, time.Time{}, 0, fmt.Errorf("invalid startTime: %w", err)
+			return time.Time{}, time.Time{}, 0, fmt.Errorf("开始时间无效: %w", err)
 		}
 		end, err = utils.ParseOptionalTime(req.EndTime)
 		if err != nil {
-			return time.Time{}, time.Time{}, 0, fmt.Errorf("invalid endTime: %w", err)
+			return time.Time{}, time.Time{}, 0, fmt.Errorf("结束时间无效: %w", err)
 		}
 	}
 
@@ -313,7 +313,7 @@ func (l *GetWafPolicyStatsLogic) queryPolicyStatsItem(
 
 	var hitCount int64
 	if err := scoped.Count(&hitCount).Error; err != nil {
-		return item, fmt.Errorf("count policy stats hits failed: %w", err)
+		return item, fmt.Errorf("统计策略命中数失败: %w", err)
 	}
 	item.HitCount = hitCount
 	if hitCount <= 0 {
@@ -322,7 +322,7 @@ func (l *GetWafPolicyStatsLogic) queryPolicyStatsItem(
 
 	var blockedCount int64
 	if err := scoped.Where("status IN ?", wafPolicyStatsBlockedStatuses).Count(&blockedCount).Error; err != nil {
-		return item, fmt.Errorf("count policy stats blocked hits failed: %w", err)
+		return item, fmt.Errorf("统计策略拦截命中数失败: %w", err)
 	}
 	item.BlockedCount = blockedCount
 	item.AllowedCount = hitCount - blockedCount
@@ -348,7 +348,7 @@ func (l *GetWafPolicyStatsLogic) queryRangeSummary(startTime, endTime time.Time,
 
 	var hitCount int64
 	if err := base.Count(&hitCount).Error; err != nil {
-		return summary, fmt.Errorf("count policy stats range hits failed: %w", err)
+		return summary, fmt.Errorf("统计策略区间命中数失败: %w", err)
 	}
 	summary.HitCount = hitCount
 	if hitCount <= 0 {
@@ -357,7 +357,7 @@ func (l *GetWafPolicyStatsLogic) queryRangeSummary(startTime, endTime time.Time,
 
 	var blockedCount int64
 	if err := base.Where("status IN ?", wafPolicyStatsBlockedStatuses).Count(&blockedCount).Error; err != nil {
-		return summary, fmt.Errorf("count policy stats range blocked hits failed: %w", err)
+		return summary, fmt.Errorf("统计策略区间拦截命中数失败: %w", err)
 	}
 	summary.BlockedCount = blockedCount
 	summary.AllowedCount = hitCount - blockedCount
@@ -406,7 +406,7 @@ func (l *GetWafPolicyStatsLogic) queryWafPolicyTrend(
 		Group("bucket").
 		Order("bucket").
 		Scan(&rows).Error; err != nil {
-		return nil, fmt.Errorf("query policy stats trend failed: %w", err)
+		return nil, fmt.Errorf("查询策略统计趋势失败: %w", err)
 	}
 
 	bucketMap := make(map[int64]trendRow, len(rows))
@@ -490,7 +490,7 @@ func queryWafPolicyStatsDimension(
 		Order("hit_count DESC, blocked_count DESC, key ASC").
 		Limit(topN).
 		Scan(&rows).Error; err != nil {
-		return nil, fmt.Errorf("query policy stats dimensions failed: %w", err)
+		return nil, fmt.Errorf("查询策略统计维度失败: %w", err)
 	}
 
 	items := make([]types.WafPolicyStatsDimensionItem, 0, len(rows))
@@ -637,7 +637,7 @@ func countWafPolicySuspectedFalsePositives(query *gorm.DB) (int64, error) {
 
 	var count int64
 	if err := heuristicQuery.Count(&count).Error; err != nil {
-		return 0, fmt.Errorf("count policy stats suspected false positives failed: %w", err)
+		return 0, fmt.Errorf("统计策略疑似误报数失败: %w", err)
 	}
 	return count, nil
 }

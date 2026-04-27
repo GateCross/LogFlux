@@ -35,6 +35,6 @@ func (l *DeleteRuleLogic) DeleteRule(req *types.IDReq) (resp *types.BaseResp, er
 
 	return &types.BaseResp{
 		Code: 200,
-		Msg:  "success",
+		Msg:  "成功",
 	}, nil
 }

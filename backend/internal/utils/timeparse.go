@@ -29,7 +29,7 @@ func ParseOptionalTime(value string) (*time.Time, error) {
 			return &t, nil
 		}
 	}
-	return nil, fmt.Errorf("unsupported time format")
+	return nil, fmt.Errorf("不支持的时间格式")
 }
 
 func parseUnixTimestamp(value string) (*time.Time, bool) {

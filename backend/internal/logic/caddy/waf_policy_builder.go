@@ -60,7 +60,7 @@ func validatePolicyEngineMode(mode string) error {
 	case "on", "off", "detectiononly":
 		return nil
 	default:
-		return fmt.Errorf("invalid engine mode: %s", mode)
+		return fmt.Errorf("执行模式无效: %s", mode)
 	}
 }
 
@@ -77,7 +77,7 @@ func validatePolicyAuditEngine(mode string) error {
 	case "off", "on", "relevantonly":
 		return nil
 	default:
-		return fmt.Errorf("invalid audit engine: %s", mode)
+		return fmt.Errorf("审计模式无效: %s", mode)
 	}
 }
 
@@ -94,7 +94,7 @@ func validatePolicyAuditLogFormat(format string) error {
 	case "json", "native":
 		return nil
 	default:
-		return fmt.Errorf("invalid audit log format: %s", format)
+		return fmt.Errorf("审计日志格式无效: %s", format)
 	}
 }
 
@@ -115,10 +115,10 @@ func normalizePolicyRequestBodyLimit(value int64, defaultValue int64) int64 {
 
 func validatePolicyRequestBodyLimit(value int64, field string) error {
 	if value <= 0 {
-		return fmt.Errorf("%s must be greater than 0", field)
+		return fmt.Errorf("%s 必须大于 0", field)
 	}
 	if value > 1024*1024*1024 {
-		return fmt.Errorf("%s is too large", field)
+		return fmt.Errorf("%s 过大", field)
 	}
 	return nil
 }
@@ -136,20 +136,20 @@ func validatePolicyCRSTemplate(template string) error {
 	case wafPolicyCRSTemplateLowFP, wafPolicyCRSTemplateBalanced, wafPolicyCRSTemplateHighBlocking, wafPolicyCRSTemplateCustom:
 		return nil
 	default:
-		return fmt.Errorf("invalid crs template: %s", template)
+		return fmt.Errorf("CRS 模板无效: %s", template)
 	}
 }
 
 func validatePolicyCRSParanoiaLevel(value int64) error {
 	if value < wafPolicyMinCRSParanoiaLevel || value > wafPolicyMaxCRSParanoiaLevel {
-		return fmt.Errorf("crsParanoiaLevel must be between %d and %d", wafPolicyMinCRSParanoiaLevel, wafPolicyMaxCRSParanoiaLevel)
+		return fmt.Errorf("CRS 偏执级别必须在 %d 到 %d 之间", wafPolicyMinCRSParanoiaLevel, wafPolicyMaxCRSParanoiaLevel)
 	}
 	return nil
 }
 
 func validatePolicyCRSAnomalyThreshold(value int64, field string) error {
 	if value < wafPolicyMinCRSAnomalyThreshold || value > wafPolicyMaxCRSAnomalyThreshold {
-		return fmt.Errorf("%s must be between %d and %d", field, wafPolicyMinCRSAnomalyThreshold, wafPolicyMaxCRSAnomalyThreshold)
+		return fmt.Errorf("%s 必须在 %d 到 %d 之间", field, wafPolicyMinCRSAnomalyThreshold, wafPolicyMaxCRSAnomalyThreshold)
 	}
 	return nil
 }
@@ -180,7 +180,7 @@ func derivePolicyCRSTemplateFromValues(paranoiaLevel, inboundThreshold, outbound
 
 func ensurePolicyCRSTuning(policy *model.WafPolicy) error {
 	if policy == nil {
-		return fmt.Errorf("policy is nil")
+		return fmt.Errorf("策略为空")
 	}
 
 	template := normalizePolicyCRSTemplate(policy.CrsTemplate)
@@ -224,7 +224,7 @@ func ensurePolicyCRSTuning(policy *model.WafPolicy) error {
 
 func buildWafPolicyDirectives(policy *model.WafPolicy) (string, error) {
 	if policy == nil {
-		return "", fmt.Errorf("policy is nil")
+		return "", fmt.Errorf("策略为空")
 	}
 
 	if err := validatePolicyEngineMode(policy.EngineMode); err != nil {
@@ -288,27 +288,27 @@ func buildWafPolicyDirectives(policy *model.WafPolicy) (string, error) {
 func applyWafPolicyToCaddyConfig(caddyConfig, directives string) (string, error) {
 	rawConfig := strings.TrimSpace(caddyConfig)
 	if rawConfig == "" {
-		return "", fmt.Errorf("caddy config is empty")
+		return "", fmt.Errorf("Caddy 配置为空")
 	}
 	rawDirectives := strings.TrimSpace(directives)
 	if rawDirectives == "" {
-		return "", fmt.Errorf("policy directives is empty")
+		return "", fmt.Errorf("策略指令为空")
 	}
 
 	directiveTagIndex := strings.Index(caddyConfig, "directives `")
 	if directiveTagIndex < 0 {
-		return "", fmt.Errorf("coraza directives block not found in caddy config")
+		return "", fmt.Errorf("Caddy 配置中未找到 Coraza 指令块")
 	}
 
 	firstTickOffset := strings.Index(caddyConfig[directiveTagIndex:], "`")
 	if firstTickOffset < 0 {
-		return "", fmt.Errorf("coraza directives start tick not found")
+		return "", fmt.Errorf("未找到 Coraza directives 起始反引号")
 	}
 	startTickIndex := directiveTagIndex + firstTickOffset
 
 	secondTickOffset := strings.Index(caddyConfig[startTickIndex+1:], "`")
 	if secondTickOffset < 0 {
-		return "", fmt.Errorf("coraza directives end tick not found")
+		return "", fmt.Errorf("未找到 Coraza directives 结束反引号")
 	}
 	endTickIndex := startTickIndex + 1 + secondTickOffset
 

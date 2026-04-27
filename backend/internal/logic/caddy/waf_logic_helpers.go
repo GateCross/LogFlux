@@ -85,7 +85,7 @@ func newWafLogicHelper(ctx context.Context, svcCtx *svc.ServiceContext, logger l
 
 func (helper *wafLogicHelper) ensureStoreDirs() error {
 	if err := helper.store.EnsureDirs(); err != nil {
-		return fmt.Errorf("prepare waf store failed: %w", err)
+		return fmt.Errorf("准备 WAF 存储失败: %w", err)
 	}
 	return nil
 }
@@ -103,7 +103,7 @@ func validateWafKind(kind string) error {
 	case wafKindCRS, wafKindCorazaEngine:
 		return nil
 	default:
-		return fmt.Errorf("invalid kind: %s", kind)
+		return fmt.Errorf("类型无效: %s", kind)
 	}
 }
 
@@ -120,7 +120,7 @@ func validateWafMode(mode string) error {
 	case wafModeRemote, wafModeManual:
 		return nil
 	default:
-		return fmt.Errorf("invalid mode: %s", mode)
+		return fmt.Errorf("模式无效: %s", mode)
 	}
 }
 
@@ -137,7 +137,7 @@ func validateWafAuthType(authType string) error {
 	case wafAuthNone, wafAuthToken, wafAuthBasic:
 		return nil
 	default:
-		return fmt.Errorf("invalid auth type: %s", authType)
+		return fmt.Errorf("认证类型无效: %s", authType)
 	}
 }
 
@@ -149,7 +149,7 @@ func parseMetaJSON(raw string) (model.JSONMap, error) {
 
 	decoded := make(map[string]interface{})
 	if err := json.Unmarshal([]byte(trimmed), &decoded); err != nil {
-		return nil, fmt.Errorf("invalid meta json: %w", err)
+		return nil, fmt.Errorf("元数据 JSON 无效: %w", err)
 	}
 	return model.JSONMap(decoded), nil
 }
@@ -182,7 +182,7 @@ func (helper *wafLogicHelper) startJob(sourceID, releaseID uint, action, trigger
 		Message:     "",
 	}
 	if err := helper.svcCtx.DB.WithContext(helper.ctx).Create(job).Error; err != nil {
-		helper.logger.Errorf("create waf job failed: %v", err)
+		helper.logger.Errorf("创建 WAF 任务失败: %v", err)
 		return nil
 	}
 	return job
@@ -204,7 +204,7 @@ func (helper *wafLogicHelper) finishJob(job *model.WafUpdateJob, status, message
 		updates["release_id"] = releaseID
 	}
 	if err := helper.svcCtx.DB.WithContext(helper.ctx).Model(job).Updates(updates).Error; err != nil {
-		helper.logger.Errorf("finish waf job failed: %v", err)
+		helper.logger.Errorf("结束 WAF 任务失败: %v", err)
 	}
 
 	helper.notifyWafUpdateJobEvent(job, updates["status"].(string), localizedMessage, releaseID)
@@ -217,12 +217,12 @@ func localizeWafJobMessage(rawMessage string) string {
 	}
 
 	exactMap := map[string]string{
-		"check success":               "检查成功",
-		"sync success":                "同步成功",
-		"upload success":              "上传成功",
-		"activate success":            "激活成功",
-		"rollback success":            "回滚成功",
-		"engine source check success": "引擎源检查成功",
+		"检查成功":    "检查成功",
+		"同步成功":    "同步成功",
+		"上传成功":    "上传成功",
+		"激活成功":    "激活成功",
+		"回滚成功":    "回滚成功",
+		"引擎源检查成功": "引擎源检查成功",
 	}
 	if localized, ok := exactMap[messageText]; ok {
 		return localized
@@ -363,12 +363,12 @@ func (helper *wafLogicHelper) primaryCaddyServer() (*model.CaddyServer, error) {
 	}
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, fmt.Errorf("caddy server not found")
+			return nil, fmt.Errorf("Caddy 服务器不存在")
 		}
-		return nil, fmt.Errorf("query caddy server failed: %w", err)
+		return nil, fmt.Errorf("查询 Caddy 服务器失败: %w", err)
 	}
 	if strings.TrimSpace(server.Config) == "" {
-		return nil, fmt.Errorf("caddy config is empty, please save caddy config first")
+		return nil, fmt.Errorf("Caddy 配置为空，请先保存 Caddy 配置")
 	}
 	return &server, nil
 }
@@ -387,7 +387,7 @@ func (loader *wafCaddyLoader) Load(config string) error {
 
 func (helper *wafLogicHelper) activateRelease(release *model.WafRelease) error {
 	if release == nil {
-		return fmt.Errorf("release is nil")
+		return fmt.Errorf("版本为空")
 	}
 	if err := helper.ensureStoreDirs(); err != nil {
 		return err
@@ -415,7 +415,7 @@ func (helper *wafLogicHelper) activateRelease(release *model.WafRelease) error {
 		if err := helper.activateReleaseOnce(activator, release.Version, server.Config, timeoutSec); err != nil {
 			lastErr = err
 			if attempt < maxAttempts {
-				helper.logger.Errorf("activate release retrying: version=%s attempt=%d/%d err=%v", release.Version, attempt, maxAttempts, err)
+				helper.logger.Errorf("激活版本重试中: version=%s attempt=%d/%d err=%v", release.Version, attempt, maxAttempts, err)
 				time.Sleep(time.Duration(attempt) * time.Second)
 				continue
 			}
@@ -424,12 +424,12 @@ func (helper *wafLogicHelper) activateRelease(release *model.WafRelease) error {
 		return nil
 	}
 
-	return fmt.Errorf("activate failed after %d attempts: %w", maxAttempts, lastErr)
+	return fmt.Errorf("激活重试 %d 次后失败: %w", maxAttempts, lastErr)
 }
 
 func (helper *wafLogicHelper) activateReleaseOnce(activator *waf.Activator, releaseVersion, caddyConfig string, timeoutSec int) error {
 	if activator == nil {
-		return fmt.Errorf("activator is nil")
+		return fmt.Errorf("激活器为空")
 	}
 
 	timeout := time.Duration(timeoutSec) * time.Second
@@ -449,11 +449,11 @@ func (helper *wafLogicHelper) activateReleaseOnce(activator *waf.Activator, rele
 	select {
 	case activateErr := <-resultCh:
 		if activateErr != nil {
-			return fmt.Errorf("activate version failed: %w", activateErr)
+			return fmt.Errorf("激活版本失败: %w", activateErr)
 		}
 		return nil
 	case <-time.After(timeout):
-		return fmt.Errorf("activate timeout after %d seconds", int(timeout.Seconds()))
+		return fmt.Errorf("激活超时，已等待 %d 秒", int(timeout.Seconds()))
 	}
 }
 
@@ -478,7 +478,7 @@ func (helper *wafLogicHelper) activateRetryCount() int {
 
 func (helper *wafLogicHelper) markReleaseActive(release *model.WafRelease) error {
 	if release == nil {
-		return fmt.Errorf("release is nil")
+		return fmt.Errorf("版本为空")
 	}
 
 	return helper.svcCtx.DB.WithContext(helper.ctx).Transaction(func(tx *gorm.DB) error {
@@ -518,20 +518,20 @@ func (helper *wafLogicHelper) markReleaseFailed(release *model.WafRelease, messa
 
 	errorMessage := strings.TrimSpace(message)
 	if errorMessage == "" {
-		errorMessage = "activate failed"
+		errorMessage = "激活失败"
 	}
 
 	if err := helper.svcCtx.DB.WithContext(helper.ctx).Model(&model.WafRelease{}).
 		Where("id = ?", release.ID).
 		Updates(map[string]interface{}{"status": wafReleaseStatusFailed}).Error; err != nil {
-		helper.logger.Errorf("mark release failed status error: %v", err)
+		helper.logger.Errorf("标记版本失败状态出错: %v", err)
 	}
 
 	if release.SourceID > 0 {
 		if err := helper.svcCtx.DB.WithContext(helper.ctx).Model(&model.WafSource{}).
 			Where("id = ?", release.SourceID).
 			Updates(map[string]interface{}{"last_error": errorMessage}).Error; err != nil {
-			helper.logger.Errorf("update source last_error failed: %v", err)
+			helper.logger.Errorf("更新源最近错误失败: %v", err)
 		}
 	}
 }
@@ -543,7 +543,7 @@ func (helper *wafLogicHelper) clearSourceError(sourceID uint) {
 	if err := helper.svcCtx.DB.WithContext(helper.ctx).Model(&model.WafSource{}).
 		Where("id = ?", sourceID).
 		Update("last_error", "").Error; err != nil {
-		helper.logger.Errorf("clear source last_error failed: %v", err)
+		helper.logger.Errorf("清理源最近错误失败: %v", err)
 	}
 }
 
@@ -560,7 +560,7 @@ func (helper *wafLogicHelper) updateSourceLastCheck(sourceID uint, releaseVersio
 		updates["last_release"] = strings.TrimSpace(releaseVersion)
 	}
 	if err := helper.svcCtx.DB.WithContext(helper.ctx).Model(&model.WafSource{}).Where("id = ?", sourceID).Updates(updates).Error; err != nil {
-		helper.logger.Errorf("update source last check failed: %v", err)
+		helper.logger.Errorf("更新源最近检查时间失败: %v", err)
 	}
 }
 
@@ -621,7 +621,7 @@ func findLatestReleaseByKindAndVersion(db *gorm.DB, kind, version string) (*mode
 	candidateKind := normalizeWafKind(kind)
 	candidateVersion := strings.TrimSpace(version)
 	if candidateVersion == "" {
-		return nil, fmt.Errorf("version is required")
+		return nil, fmt.Errorf("版本不能为空")
 	}
 
 	var release model.WafRelease
@@ -634,14 +634,14 @@ func findLatestReleaseByKindAndVersion(db *gorm.DB, kind, version string) (*mode
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
 	}
-	return nil, fmt.Errorf("query release version failed: %w", err)
+	return nil, fmt.Errorf("查询版本号失败: %w", err)
 }
 
 func (helper *wafLogicHelper) ensurePathInWorkDir(pathValue string) (string, error) {
 	baseDir := filepath.Clean(strings.TrimSpace(helper.store.BaseDir))
 	cleanPath := filepath.Clean(strings.TrimSpace(pathValue))
 	if cleanPath == "" {
-		return "", fmt.Errorf("path is empty")
+		return "", fmt.Errorf("路径为空")
 	}
 
 	if cleanPath == baseDir {

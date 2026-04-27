@@ -32,18 +32,18 @@ func NewCronScheduler(db *gorm.DB) *CronScheduler {
 func (s *CronScheduler) Start() {
 	s.loadTasks()
 	s.cron.Start()
-	logx.Info("CronScheduler started")
+	logx.Info("Cron 调度器已启动")
 }
 
 func (s *CronScheduler) Stop() {
 	s.cron.Stop()
-	logx.Info("CronScheduler stopped")
+	logx.Info("Cron 调度器已停止")
 }
 
 func (s *CronScheduler) loadTasks() {
 	var tasks []model.CronTask
 	if err := s.db.Where("status = ?", 1).Find(&tasks).Error; err != nil {
-		logx.Errorf("Failed to load cron tasks: %v", err)
+		logx.Errorf("加载 Cron 任务失败: %v", err)
 		return
 	}
 
@@ -63,12 +63,12 @@ func (s *CronScheduler) AddTask(task *model.CronTask) error {
 		s.executeTask(task.ID)
 	})
 	if err != nil {
-		logx.Errorf("Failed to add cron task %s: %v", task.Name, err)
+		logx.Errorf("添加 Cron 任务失败: name=%s err=%v", task.Name, err)
 		return err
 	}
 
 	s.entryMap.Store(task.ID, entryID)
-	logx.Infof("Added cron task: %s (ID: %d, Schedule: %s)", task.Name, task.ID, task.Schedule)
+	logx.Infof("已添加 Cron 任务: %s (ID: %d, 调度: %s)", task.Name, task.ID, task.Schedule)
 	return nil
 }
 
@@ -76,7 +76,7 @@ func (s *CronScheduler) RemoveTask(taskID uint) {
 	if val, ok := s.entryMap.Load(taskID); ok {
 		s.cron.Remove(val.(cron.EntryID))
 		s.entryMap.Delete(taskID)
-		logx.Infof("Removed cron task ID: %d", taskID)
+		logx.Infof("已移除 Cron 任务: ID=%d", taskID)
 	}
 }
 
@@ -89,7 +89,7 @@ func (s *CronScheduler) TriggerTask(taskID uint) {
 func (s *CronScheduler) executeTask(taskID uint) {
 	var task model.CronTask
 	if err := s.db.First(&task, taskID).Error; err != nil {
-		logx.Errorf("Task execution failed, task not found: %d", taskID)
+		logx.Errorf("任务执行失败，未找到任务: %d", taskID)
 		return
 	}
 
@@ -139,5 +139,5 @@ func (s *CronScheduler) executeTask(taskID uint) {
 	}
 
 	s.db.Save(&logEntry)
-	logx.Infof("Task %s executed. Status: %d, Duration: %dms", task.Name, logEntry.Status, logEntry.Duration)
+	logx.Infof("任务 %s 执行完成，状态: %d，耗时: %dms", task.Name, logEntry.Status, logEntry.Duration)
 }

@@ -52,12 +52,12 @@ func (l *CreateRuleLogic) CreateRule(req *types.RuleReq) (resp *types.BaseResp, 
 	// Reload rules
 	if l.svcCtx.NotificationMgr != nil {
 		if err := l.svcCtx.NotificationMgr.ReloadRules(); err != nil {
-			l.Logger.Errorf("Failed to reload rules: %v", err)
+			l.Logger.Errorf("重载通知规则失败: %v", err)
 		}
 	}
 
 	return &types.BaseResp{
 		Code: 200,
-		Msg:  "success",
+		Msg:  "成功",
 	}, nil
 }

@@ -31,6 +31,6 @@ func (l *DeleteTemplateLogic) DeleteTemplate(req *types.IDReq) (resp *types.Base
 
 	return &types.BaseResp{
 		Code: 200,
-		Msg:  "success",
+		Msg:  "成功",
 	}, nil
 }

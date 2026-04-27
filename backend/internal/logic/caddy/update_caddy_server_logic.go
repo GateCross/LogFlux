@@ -63,6 +63,6 @@ func (l *UpdateCaddyServerLogic) UpdateCaddyServer(req *types.UpdateCaddyServerR
 
 	return &types.BaseResp{
 		Code: 200,
-		Msg:  "success",
+		Msg:  "成功",
 	}, nil
 }

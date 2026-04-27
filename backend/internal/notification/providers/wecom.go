@@ -29,7 +29,7 @@ func NewWeComProvider() *WeComProvider {
 func (w *WeComProvider) Send(ctx context.Context, config map[string]interface{}, event *notification.Event) error {
 	wecomConfig := &model.WeComConfig{}
 	if err := mapToStruct(config, wecomConfig); err != nil {
-		return fmt.Errorf("invalid wecom config: %w", err)
+		return fmt.Errorf("企业微信配置无效: %w", err)
 	}
 
 	payload := map[string]interface{}{
@@ -41,24 +41,24 @@ func (w *WeComProvider) Send(ctx context.Context, config map[string]interface{},
 
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("failed to marshal wecom payload: %w", err)
+		return fmt.Errorf("序列化企业微信消息失败: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, wecomConfig.WebhookURL, bytes.NewBuffer(jsonData))
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+		return fmt.Errorf("创建请求失败: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := w.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to send request to wecom: %w", err)
+		return fmt.Errorf("发送企业微信请求失败: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("wecom webhook returned status: %d, body: %s", resp.StatusCode, string(body))
+		return fmt.Errorf("企业微信 Webhook 返回状态: %d，响应: %s", resp.StatusCode, string(body))
 	}
 
 	var result struct {
@@ -67,7 +67,7 @@ func (w *WeComProvider) Send(ctx context.Context, config map[string]interface{},
 	}
 	if len(body) > 0 {
 		if err := json.Unmarshal(body, &result); err == nil && result.ErrCode != 0 {
-			return fmt.Errorf("wecom api error: errcode=%d errmsg=%s", result.ErrCode, result.ErrMsg)
+			return fmt.Errorf("企业微信 API 错误: errcode=%d errmsg=%s", result.ErrCode, result.ErrMsg)
 		}
 	}
 
@@ -78,15 +78,15 @@ func (w *WeComProvider) Send(ctx context.Context, config map[string]interface{},
 func (w *WeComProvider) Validate(config map[string]interface{}) error {
 	wecomConfig := &model.WeComConfig{}
 	if err := mapToStruct(config, wecomConfig); err != nil {
-		return fmt.Errorf("invalid wecom config: %w", err)
+		return fmt.Errorf("企业微信配置无效: %w", err)
 	}
 
 	if strings.TrimSpace(wecomConfig.WebhookURL) == "" {
-		return fmt.Errorf("webhook url is required")
+		return fmt.Errorf("回调 URL 不能为空")
 	}
 
 	if !isValidURL(wecomConfig.WebhookURL) {
-		return fmt.Errorf("invalid webhook url: %s", wecomConfig.WebhookURL)
+		return fmt.Errorf("回调 URL 无效: %s", wecomConfig.WebhookURL)
 	}
 
 	return nil

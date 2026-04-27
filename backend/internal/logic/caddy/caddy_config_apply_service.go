@@ -25,7 +25,7 @@ func newCaddyConfigApplyService(svcCtx *svc.ServiceContext, logger logx.Logger) 
 
 func (s *caddyConfigApplyService) loadCurrent(server *model.CaddyServer) (string, string, error) {
 	if server == nil {
-		return "", emptyModulesJSON, fmt.Errorf("caddy server not found")
+		return "", emptyModulesJSON, fmt.Errorf("Caddy 服务器不存在")
 	}
 
 	if trimmed := strings.TrimSpace(server.Config); trimmed != "" {
@@ -42,24 +42,24 @@ func (s *caddyConfigApplyService) loadCurrent(server *model.CaddyServer) (string
 		}
 	}
 
-	return "", normalizeCaddyModulesJSON(server.Modules), fmt.Errorf("caddy config is empty, please save caddy config first")
+	return "", normalizeCaddyModulesJSON(server.Modules), fmt.Errorf("Caddy 配置为空，请先保存 Caddy 配置")
 }
 
 func (s *caddyConfigApplyService) apply(server *model.CaddyServer, config, modules, action string) error {
 	if server == nil {
-		return fmt.Errorf("caddy server not found")
+		return fmt.Errorf("Caddy 服务器不存在")
 	}
 
 	normalizedModules := normalizeCaddyModulesJSON(modules)
 	if err := adaptCaddyfile(server, config); err != nil {
 		if s != nil && s.logger != nil {
-			s.logger.Errorf("Caddy adapt failed: %v", err)
+			s.logger.Errorf("Caddy 配置适配失败: %v", err)
 		}
 		return err
 	}
 	if err := loadCaddyfile(server, config); err != nil {
 		if s != nil && s.logger != nil {
-			s.logger.Errorf("Caddy load failed: %v", err)
+			s.logger.Errorf("Caddy 配置加载失败: %v", err)
 		}
 		return err
 	}
@@ -68,7 +68,7 @@ func (s *caddyConfigApplyService) apply(server *model.CaddyServer, config, modul
 		server.Config = config
 		server.Modules = normalizedModules
 		if err := tx.Save(server).Error; err != nil {
-			return fmt.Errorf("save caddy server config failed: %w", err)
+			return fmt.Errorf("保存 Caddy 服务器配置失败: %w", err)
 		}
 
 		history := &model.CaddyConfigHistory{
@@ -79,7 +79,7 @@ func (s *caddyConfigApplyService) apply(server *model.CaddyServer, config, modul
 			Modules:  normalizedModules,
 		}
 		if err := tx.Create(history).Error; err != nil {
-			return fmt.Errorf("create caddy config history failed: %w", err)
+			return fmt.Errorf("创建 Caddy 配置历史失败: %w", err)
 		}
 		return nil
 	}); err != nil {
@@ -94,16 +94,16 @@ func (s *caddyConfigApplyService) apply(server *model.CaddyServer, config, modul
 
 func findPreferredCaddyServer(db *gorm.DB, serverID uint) (*model.CaddyServer, error) {
 	if db == nil {
-		return nil, fmt.Errorf("db is nil")
+		return nil, fmt.Errorf("数据库为空")
 	}
 
 	var server model.CaddyServer
 	if serverID > 0 {
 		if err := db.First(&server, serverID).Error; err != nil {
 			if err == gorm.ErrRecordNotFound {
-				return nil, fmt.Errorf("caddy server not found")
+				return nil, fmt.Errorf("Caddy 服务器不存在")
 			}
-			return nil, fmt.Errorf("query caddy server failed: %w", err)
+			return nil, fmt.Errorf("查询 Caddy 服务器失败: %w", err)
 		}
 		return &server, nil
 	}
@@ -114,9 +114,9 @@ func findPreferredCaddyServer(db *gorm.DB, serverID uint) (*model.CaddyServer, e
 	}
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, fmt.Errorf("caddy server not found")
+			return nil, fmt.Errorf("Caddy 服务器不存在")
 		}
-		return nil, fmt.Errorf("query caddy server failed: %w", err)
+		return nil, fmt.Errorf("查询 Caddy 服务器失败: %w", err)
 	}
 	return &server, nil
 }

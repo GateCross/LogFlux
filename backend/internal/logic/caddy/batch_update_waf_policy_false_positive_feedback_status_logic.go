@@ -33,14 +33,14 @@ func (l *BatchUpdateWafPolicyFalsePositiveFeedbackStatusLogic) BatchUpdateWafPol
 	}()
 
 	if req == nil {
-		return nil, fmt.Errorf("invalid policy false positive feedback batch update payload")
+		return nil, fmt.Errorf("误报反馈批量状态更新参数不合法")
 	}
 	feedbackIDs := normalizePolicyFeedbackIDs(req.IDs)
 	if len(feedbackIDs) == 0 {
-		return nil, fmt.Errorf("policy false positive feedback ids are required")
+		return nil, fmt.Errorf("误报反馈 ID 列表不能为空")
 	}
 	if len(feedbackIDs) > 200 {
-		return nil, fmt.Errorf("policy false positive feedback ids exceeds limit: 200")
+		return nil, fmt.Errorf("误报反馈 ID 数量超出限制: 200")
 	}
 
 	feedbackStatus := normalizePolicyFeedbackStatus(req.FeedbackStatus)
@@ -54,10 +54,10 @@ func (l *BatchUpdateWafPolicyFalsePositiveFeedbackStatusLogic) BatchUpdateWafPol
 
 	var existingCount int64
 	if err := l.svcCtx.DB.WithContext(l.ctx).Model(&model.WafPolicyFalsePositiveFeedback{}).Where("id IN ?", feedbackIDs).Count(&existingCount).Error; err != nil {
-		return nil, fmt.Errorf("count policy false positive feedbacks failed: %w", err)
+		return nil, fmt.Errorf("统计误报反馈失败: %w", err)
 	}
 	if existingCount == 0 {
-		return nil, fmt.Errorf("policy false positive feedback not found")
+		return nil, fmt.Errorf("未找到误报反馈记录")
 	}
 
 	updates := map[string]interface{}{
@@ -81,7 +81,7 @@ func (l *BatchUpdateWafPolicyFalsePositiveFeedbackStatusLogic) BatchUpdateWafPol
 
 	tx := l.svcCtx.DB.WithContext(l.ctx).Model(&model.WafPolicyFalsePositiveFeedback{}).Where("id IN ?", feedbackIDs).Updates(updates)
 	if tx.Error != nil {
-		return nil, fmt.Errorf("batch update policy false positive feedback status failed: %w", tx.Error)
+		return nil, fmt.Errorf("批量更新误报反馈状态失败: %w", tx.Error)
 	}
 
 	return &types.WafPolicyFalsePositiveFeedbackBatchStatusUpdateResp{

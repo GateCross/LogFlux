@@ -26,7 +26,7 @@ func parsePolicyConfigJSON(raw string) (model.JSONMap, error) {
 
 	decoded := make(map[string]interface{})
 	if err := json.Unmarshal([]byte(trimmed), &decoded); err != nil {
-		return nil, fmt.Errorf("invalid policy config json: %w", err)
+		return nil, fmt.Errorf("策略配置 JSON 无效: %w", err)
 	}
 	return model.JSONMap(decoded), nil
 }
@@ -48,12 +48,12 @@ func normalizePolicyName(name string) string {
 
 func applyPolicyReqToModel(helper *wafLogicHelper, req *types.WafPolicyReq, policy *model.WafPolicy) error {
 	if req == nil || policy == nil {
-		return fmt.Errorf("invalid policy payload")
+		return fmt.Errorf("策略参数不合法")
 	}
 
 	name := normalizePolicyName(req.Name)
 	if name == "" {
-		return fmt.Errorf("policy name is required")
+		return fmt.Errorf("策略名称不能为空")
 	}
 
 	if err := validatePolicyEngineMode(req.EngineMode); err != nil {
@@ -146,7 +146,7 @@ func applyPolicyReqToModel(helper *wafLogicHelper, req *types.WafPolicyReq, poli
 
 func applyPolicyUpdateReqToModel(helper *wafLogicHelper, req *types.WafPolicyUpdateReq, policy *model.WafPolicy) error {
 	if req == nil || policy == nil {
-		return fmt.Errorf("invalid policy payload")
+		return fmt.Errorf("策略参数不合法")
 	}
 
 	if name := normalizePolicyName(req.Name); name != "" {
@@ -234,7 +234,7 @@ func applyPolicyUpdateReqToModel(helper *wafLogicHelper, req *types.WafPolicyUpd
 	}
 
 	if strings.TrimSpace(policy.Name) == "" {
-		return fmt.Errorf("policy name is required")
+		return fmt.Errorf("策略名称不能为空")
 	}
 	if strings.TrimSpace(policy.EngineMode) == "" {
 		policy.EngineMode = "on"
@@ -271,7 +271,7 @@ func applyPolicyUpdateReqToModel(helper *wafLogicHelper, req *types.WafPolicyUpd
 
 func ensureSingleDefaultPolicy(tx *gorm.DB, policy *model.WafPolicy) error {
 	if tx == nil || policy == nil {
-		return fmt.Errorf("invalid policy transaction")
+		return fmt.Errorf("策略事务无效")
 	}
 	if !policy.IsDefault {
 		return nil
@@ -282,14 +282,14 @@ func ensureSingleDefaultPolicy(tx *gorm.DB, policy *model.WafPolicy) error {
 		query = query.Where("id <> ?", policy.ID)
 	}
 	if err := query.Update("is_default", false).Error; err != nil {
-		return fmt.Errorf("reset default policy failed: %w", err)
+		return fmt.Errorf("重置默认策略失败: %w", err)
 	}
 	return nil
 }
 
 func createPolicyRevision(tx *gorm.DB, policy *model.WafPolicy, status, directives, message, operator string) (*model.WafPolicyRevision, error) {
 	if tx == nil || policy == nil {
-		return nil, fmt.Errorf("invalid policy revision context")
+		return nil, fmt.Errorf("策略版本上下文无效")
 	}
 
 	var lastRevision model.WafPolicyRevision
@@ -297,7 +297,7 @@ func createPolicyRevision(tx *gorm.DB, policy *model.WafPolicy, status, directiv
 	if err := tx.Where("policy_id = ?", policy.ID).Order("version desc").First(&lastRevision).Error; err == nil {
 		nextVersion = lastRevision.Version + 1
 	} else if err != nil && err != gorm.ErrRecordNotFound {
-		return nil, fmt.Errorf("query latest policy revision failed: %w", err)
+		return nil, fmt.Errorf("查询最新策略版本失败: %w", err)
 	}
 
 	revision := &model.WafPolicyRevision{
@@ -314,7 +314,7 @@ func createPolicyRevision(tx *gorm.DB, policy *model.WafPolicy, status, directiv
 	}
 
 	if err := tx.Create(revision).Error; err != nil {
-		return nil, fmt.Errorf("create policy revision failed: %w", err)
+		return nil, fmt.Errorf("创建策略版本失败: %w", err)
 	}
 
 	return revision, nil
@@ -330,14 +330,14 @@ func markPolicyRevisionsRolledBack(tx *gorm.DB, policyID uint, excludeRevisionID
 		query = query.Where("id <> ?", excludeRevisionID)
 	}
 	if err := query.Update("status", wafPolicyStatusRolledBack).Error; err != nil {
-		return fmt.Errorf("mark policy revisions rolled_back failed: %w", err)
+		return fmt.Errorf("标记策略版本已回滚失败: %w", err)
 	}
 	return nil
 }
 
 func findPrimaryCaddyServer(db *gorm.DB) (*model.CaddyServer, error) {
 	if db == nil {
-		return nil, fmt.Errorf("db is nil")
+		return nil, fmt.Errorf("数据库为空")
 	}
 
 	var server model.CaddyServer
@@ -347,12 +347,12 @@ func findPrimaryCaddyServer(db *gorm.DB) (*model.CaddyServer, error) {
 	}
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, fmt.Errorf("caddy server not found")
+			return nil, fmt.Errorf("Caddy 服务器不存在")
 		}
-		return nil, fmt.Errorf("query caddy server failed: %w", err)
+		return nil, fmt.Errorf("查询 Caddy 服务器失败: %w", err)
 	}
 	if strings.TrimSpace(server.Config) == "" {
-		return nil, fmt.Errorf("caddy config is empty, please save caddy config first")
+		return nil, fmt.Errorf("Caddy 配置为空，请先保存 Caddy 配置")
 	}
 	return &server, nil
 }
@@ -382,7 +382,7 @@ func normalizeCaddyModulesJSON(modules string) string {
 
 func createCaddyPolicyHistory(tx *gorm.DB, serverID uint, action, config, modules string) error {
 	if tx == nil {
-		return fmt.Errorf("db is nil")
+		return fmt.Errorf("数据库为空")
 	}
 
 	history := &model.CaddyConfigHistory{
@@ -393,25 +393,25 @@ func createCaddyPolicyHistory(tx *gorm.DB, serverID uint, action, config, module
 		Modules:  normalizeCaddyModulesJSON(modules),
 	}
 	if err := tx.Create(history).Error; err != nil {
-		return fmt.Errorf("create caddy config history failed: %w", err)
+		return fmt.Errorf("创建 Caddy 配置历史失败: %w", err)
 	}
 	return nil
 }
 
 func rollbackPolicyConfigToLastGood(server *model.CaddyServer, lastGoodConfig string) error {
 	if server == nil {
-		return fmt.Errorf("caddy server not found")
+		return fmt.Errorf("Caddy 服务器不存在")
 	}
 	rollbackConfig := strings.TrimSpace(lastGoodConfig)
 	if rollbackConfig == "" {
-		return fmt.Errorf("last good caddy config is empty")
+		return fmt.Errorf("last_good 配置为空")
 	}
 
 	if err := adaptCaddyfile(server, rollbackConfig); err != nil {
-		return fmt.Errorf("rollback last_good adapt failed: %w", err)
+		return fmt.Errorf("回滚 last_good 适配失败: %w", err)
 	}
 	if err := loadCaddyfile(server, rollbackConfig); err != nil {
-		return fmt.Errorf("rollback last_good load failed: %w", err)
+		return fmt.Errorf("回滚 last_good 加载失败: %w", err)
 	}
 	return nil
 }

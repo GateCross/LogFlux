@@ -32,5 +32,5 @@ func (l *ClearNotificationLogsLogic) ClearNotificationLogs() (resp *types.BaseRe
 		return nil, err
 	}
 
-	return &types.BaseResp{Code: 200, Msg: "success"}, nil
+	return &types.BaseResp{Code: 200, Msg: "成功"}, nil
 }

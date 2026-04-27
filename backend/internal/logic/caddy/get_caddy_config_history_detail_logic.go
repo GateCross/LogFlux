@@ -28,7 +28,7 @@ func NewGetCaddyConfigHistoryDetailLogic(ctx context.Context, svcCtx *svc.Servic
 func (l *GetCaddyConfigHistoryDetailLogic) GetCaddyConfigHistoryDetail(req *types.CaddyConfigHistoryDetailReq) (resp *types.CaddyConfigHistoryDetailResp, err error) {
 	var history model.CaddyConfigHistory
 	if err := l.svcCtx.DB.WithContext(l.ctx).First(&history, "id = ? AND server_id = ?", req.HistoryId, req.ServerId).Error; err != nil {
-		return nil, fmt.Errorf("history not found")
+		return nil, fmt.Errorf("历史记录不存在")
 	}
 
 	return &types.CaddyConfigHistoryDetailResp{

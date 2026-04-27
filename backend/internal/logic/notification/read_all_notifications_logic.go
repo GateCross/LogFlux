@@ -35,12 +35,12 @@ func (l *ReadAllNotificationsLogic) ReadAllNotifications() (resp *types.BaseResp
 		}).Error
 
 	if err != nil {
-		l.Logger.Errorf("Failed to mark all notifications as read: %v", err)
+		l.Logger.Errorf("标记全部通知为已读失败: %v", err)
 		return nil, err
 	}
 
 	return &types.BaseResp{
 		Code: 0,
-		Msg:  "success",
+		Msg:  "成功",
 	}, nil
 }

@@ -46,7 +46,7 @@ func (m *Manager) dispatchDueJobs(ctx context.Context) {
 		Limit(100).
 		Find(&jobs).Error
 	if err != nil {
-		m.logger.Errorf("Failed to scan notification jobs: %v", err)
+		m.logger.Errorf("扫描通知任务失败: %v", err)
 		return
 	}
 
@@ -69,7 +69,7 @@ func (m *Manager) processJob(ctx context.Context, jobID uint) {
 			"last_attempt_at": time.Now(),
 		})
 	if res.Error != nil {
-		m.logger.Errorf("Failed to claim job %d: %v", jobID, res.Error)
+		m.logger.Errorf("领取通知任务失败: jobID=%d err=%v", jobID, res.Error)
 		return
 	}
 	if res.RowsAffected == 0 {
@@ -79,7 +79,7 @@ func (m *Manager) processJob(ctx context.Context, jobID uint) {
 	// 2) Load job
 	var job model.NotificationJob
 	if err := m.db.WithContext(ctx).First(&job, jobID).Error; err != nil {
-		m.logger.Errorf("Failed to load job %d: %v", jobID, err)
+		m.logger.Errorf("加载通知任务失败: jobID=%d err=%v", jobID, err)
 		return
 	}
 
@@ -91,20 +91,20 @@ func (m *Manager) processJob(ctx context.Context, jobID uint) {
 			Where("id = ?", job.LogID).
 			Updates(map[string]interface{}{
 				"status":        model.NotificationStatusFailed,
-				"error_message": fmt.Sprintf("channel not found: %v", err),
+				"error_message": fmt.Sprintf("通知渠道不存在: %v", err),
 			})
 		m.db.WithContext(ctx).Model(&model.NotificationJob{}).
 			Where("id = ?", job.ID).
 			Updates(map[string]interface{}{
 				"status":     model.NotificationJobStatusFailed,
-				"last_error": fmt.Sprintf("channel not found: %v", err),
+				"last_error": fmt.Sprintf("通知渠道不存在: %v", err),
 			})
 		return
 	}
 
 	provider, ok := m.providers[channel.Type]
 	if !ok {
-		m.failJob(ctx, &job, &channel, fmt.Sprintf("provider not found: %s", channel.Type))
+		m.failJob(ctx, &job, &channel, fmt.Sprintf("通知提供者不存在: %s", channel.Type))
 		return
 	}
 
@@ -140,7 +140,7 @@ func (m *Manager) processJob(ctx context.Context, jobID uint) {
 			if content, err := m.templateMgr.Render(job.TemplateName, event); err == nil {
 				event.Data["rendered_content"] = content
 			} else {
-				m.logger.Errorf("Failed to render template %s: %v", job.TemplateName, err)
+				m.logger.Errorf("渲染模板失败: name=%s err=%v", job.TemplateName, err)
 			}
 		}
 	}

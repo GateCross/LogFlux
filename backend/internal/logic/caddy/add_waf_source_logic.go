@@ -33,7 +33,7 @@ func (l *AddWafSourceLogic) AddWafSource(req *types.WafSourceReq) (resp *types.B
 
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
-		return nil, fmt.Errorf("source name is required")
+		return nil, fmt.Errorf("源名称不能为空")
 	}
 
 	kind := normalizeWafKind(req.Kind)
@@ -56,7 +56,7 @@ func (l *AddWafSourceLogic) AddWafSource(req *types.WafSourceReq) (resp *types.B
 
 	sourceURL := strings.TrimSpace(req.Url)
 	if mode == wafModeRemote && sourceURL == "" {
-		return nil, fmt.Errorf("url is required for remote source")
+		return nil, fmt.Errorf("远程源 URL 不能为空")
 	}
 
 	meta, err := parseMetaJSON(req.Meta)
@@ -66,9 +66,9 @@ func (l *AddWafSourceLogic) AddWafSource(req *types.WafSourceReq) (resp *types.B
 
 	var existing model.WafSource
 	if err := helper.svcCtx.DB.WithContext(helper.ctx).Where("name = ?", name).First(&existing).Error; err == nil {
-		return nil, fmt.Errorf("source name already exists: %s", name)
+		return nil, fmt.Errorf("源名称已存在: %s", name)
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, fmt.Errorf("check source name failed: %w", err)
+		return nil, fmt.Errorf("检查源名称失败: %w", err)
 	}
 
 	source := &model.WafSource{
@@ -109,15 +109,15 @@ func (l *AddWafSourceLogic) AddWafSource(req *types.WafSourceReq) (resp *types.B
 
 	if err := helper.svcCtx.DB.WithContext(helper.ctx).Create(source).Error; err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "duplicate key") {
-			return nil, fmt.Errorf("source name already exists: %s", name)
+			return nil, fmt.Errorf("源名称已存在: %s", name)
 		}
-		return nil, fmt.Errorf("create source failed: %w", err)
+		return nil, fmt.Errorf("创建源失败: %w", err)
 	}
 	if helper.svcCtx.WafScheduler != nil {
 		if reloadErr := helper.svcCtx.WafScheduler.ReloadSource(source.ID); reloadErr != nil {
-			l.Logger.Errorf("reload waf scheduler source failed: sourceID=%d err=%v", source.ID, reloadErr)
+			l.Logger.Errorf("重载 WAF 调度源失败: sourceID=%d err=%v", source.ID, reloadErr)
 		}
 	}
 
-	return &types.BaseResp{Code: 200, Msg: "success"}, nil
+	return &types.BaseResp{Code: 200, Msg: "成功"}, nil
 }

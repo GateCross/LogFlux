@@ -62,6 +62,6 @@ func (l *AddCaddyServerLogic) AddCaddyServer(req *types.CaddyServerReq) (resp *t
 
 	return &types.BaseResp{
 		Code: 200,
-		Msg:  "success",
+		Msg:  "成功",
 	}, nil
 }

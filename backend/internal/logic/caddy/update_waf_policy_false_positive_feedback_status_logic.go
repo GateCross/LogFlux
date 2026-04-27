@@ -34,10 +34,10 @@ func (l *UpdateWafPolicyFalsePositiveFeedbackStatusLogic) UpdateWafPolicyFalsePo
 	}()
 
 	if req == nil {
-		return nil, fmt.Errorf("invalid policy false positive feedback update payload")
+		return nil, fmt.Errorf("误报反馈状态更新参数不合法")
 	}
 	if req.ID == 0 {
-		return nil, fmt.Errorf("policy false positive feedback id is required")
+		return nil, fmt.Errorf("误报反馈 ID 不能为空")
 	}
 
 	feedbackStatus := normalizePolicyFeedbackStatus(req.FeedbackStatus)
@@ -52,9 +52,9 @@ func (l *UpdateWafPolicyFalsePositiveFeedbackStatusLogic) UpdateWafPolicyFalsePo
 	var feedback model.WafPolicyFalsePositiveFeedback
 	if err := l.svcCtx.DB.WithContext(l.ctx).First(&feedback, req.ID).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, fmt.Errorf("policy false positive feedback not found")
+			return nil, fmt.Errorf("未找到误报反馈记录")
 		}
-		return nil, fmt.Errorf("query policy false positive feedback failed: %w", err)
+		return nil, fmt.Errorf("查询误报反馈失败: %w", err)
 	}
 
 	updates := map[string]interface{}{
@@ -73,11 +73,11 @@ func (l *UpdateWafPolicyFalsePositiveFeedbackStatusLogic) UpdateWafPolicyFalsePo
 	}
 
 	if err := l.svcCtx.DB.WithContext(l.ctx).Model(&model.WafPolicyFalsePositiveFeedback{}).Where("id = ?", req.ID).Updates(updates).Error; err != nil {
-		return nil, fmt.Errorf("update policy false positive feedback status failed: %w", err)
+		return nil, fmt.Errorf("更新误报反馈状态失败: %w", err)
 	}
 
 	return &types.BaseResp{
 		Code: 200,
-		Msg:  "success",
+		Msg:  "成功",
 	}, nil
 }

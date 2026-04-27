@@ -32,7 +32,7 @@ func (l *UpdateWafRuleExclusionLogic) UpdateWafRuleExclusion(req *types.WafRuleE
 	}()
 
 	if req == nil || req.ID == 0 {
-		return nil, fmt.Errorf("policy exclusion id is required")
+		return nil, fmt.Errorf("策略排除规则 ID 不能为空")
 	}
 	if err := validatePolicyIDExists(l.svcCtx.DB.WithContext(l.ctx), req.PolicyId); err != nil {
 		return nil, err
@@ -40,7 +40,7 @@ func (l *UpdateWafRuleExclusionLogic) UpdateWafRuleExclusion(req *types.WafRuleE
 
 	var exclusion model.WafRuleExclusion
 	if err := l.svcCtx.DB.WithContext(l.ctx).First(&exclusion, req.ID).Error; err != nil {
-		return nil, fmt.Errorf("policy exclusion not found")
+		return nil, fmt.Errorf("策略排除规则不存在")
 	}
 
 	scopeType, host, path, method, err := normalizeAndValidateExclusionScopeFields(req.ScopeType, req.Host, req.Path, req.Method)
@@ -53,7 +53,7 @@ func (l *UpdateWafRuleExclusionLogic) UpdateWafRuleExclusion(req *types.WafRuleE
 	}
 	removeValue := strings.TrimSpace(req.RemoveValue)
 	if removeValue == "" {
-		return nil, fmt.Errorf("remove value is required")
+		return nil, fmt.Errorf("移除值不能为空")
 	}
 
 	exclusion.PolicyID = req.PolicyId
@@ -68,8 +68,8 @@ func (l *UpdateWafRuleExclusionLogic) UpdateWafRuleExclusion(req *types.WafRuleE
 	exclusion.RemoveValue = removeValue
 
 	if err := l.svcCtx.DB.WithContext(l.ctx).Save(&exclusion).Error; err != nil {
-		return nil, fmt.Errorf("update policy exclusion failed: %w", err)
+		return nil, fmt.Errorf("更新策略排除规则失败: %w", err)
 	}
 
-	return &types.BaseResp{Code: 200, Msg: "success"}, nil
+	return &types.BaseResp{Code: 200, Msg: "成功"}, nil
 }

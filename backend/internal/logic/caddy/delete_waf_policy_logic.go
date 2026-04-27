@@ -33,21 +33,21 @@ func (l *DeleteWafPolicyLogic) DeleteWafPolicy(req *types.IDReq) (resp *types.Ba
 
 	helper := newWafLogicHelper(l.ctx, l.svcCtx, l.Logger)
 	if req == nil || req.ID == 0 {
-		return nil, fmt.Errorf("policy id is required")
+		return nil, fmt.Errorf("策略 ID 不能为空")
 	}
 
 	var policy model.WafPolicy
 	if err := helper.svcCtx.DB.WithContext(helper.ctx).First(&policy, req.ID).Error; err != nil {
-		return nil, fmt.Errorf("policy not found")
+		return nil, fmt.Errorf("策略不存在")
 	}
 
 	if err := helper.svcCtx.DB.WithContext(helper.ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("policy_id = ?", policy.ID).Delete(&model.WafPolicyRevision{}).Error; err != nil {
-			return fmt.Errorf("delete policy revisions failed: %w", err)
+			return fmt.Errorf("删除策略版本失败: %w", err)
 		}
 
 		if err := tx.Delete(&policy).Error; err != nil {
-			return fmt.Errorf("delete policy failed: %w", err)
+			return fmt.Errorf("删除策略失败: %w", err)
 		}
 
 		return nil
@@ -55,5 +55,5 @@ func (l *DeleteWafPolicyLogic) DeleteWafPolicy(req *types.IDReq) (resp *types.Ba
 		return nil, err
 	}
 
-	return &types.BaseResp{Code: 200, Msg: "success"}, nil
+	return &types.BaseResp{Code: 200, Msg: "成功"}, nil
 }

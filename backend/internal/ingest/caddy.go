@@ -57,7 +57,7 @@ func NewCaddyIngestor(db *gorm.DB) *CaddyIngestor {
 func (i *CaddyIngestor) ParseLine(line string) (*model.CaddyLog, error) {
 	line = strings.TrimSpace(line)
 	if line == "" {
-		return nil, fmt.Errorf("empty line")
+		return nil, fmt.Errorf("日志行为空")
 	}
 
 	if strings.HasPrefix(line, "{") {
@@ -68,12 +68,12 @@ func (i *CaddyIngestor) ParseLine(line string) (*model.CaddyLog, error) {
 
 	matches := logRegex.FindStringSubmatch(line)
 	if len(matches) != 14 {
-		return nil, fmt.Errorf("invalid log format: %s", line)
+		return nil, fmt.Errorf("日志格式无效: %s", line)
 	}
 
 	logTime, err := i.parseTime(matches[1])
 	if err != nil {
-		logx.Errorf("Time parse error: %v for %s", err, matches[1])
+		logx.Errorf("解析时间失败: %v，原始值=%s", err, matches[1])
 	}
 
 	status, _ := strconv.Atoi(matches[9])
@@ -114,7 +114,7 @@ func (i *CaddyIngestor) parseTime(ts string) (time.Time, error) {
 			return t, nil
 		}
 	}
-	return time.Now(), fmt.Errorf("unknown time format")
+	return time.Now(), fmt.Errorf("未知时间格式")
 }
 
 func (i *CaddyIngestor) Ingest(line string) error {
@@ -123,7 +123,7 @@ func (i *CaddyIngestor) Ingest(line string) error {
 		return err
 	}
 	if err := i.db.Create(logEntry).Error; err != nil {
-		logx.Errorf("DB insert failed: %v", err)
+		logx.Errorf("写入数据库失败: %v", err)
 		return err
 	}
 	return nil
@@ -165,7 +165,7 @@ func (i *CaddyIngestor) startFile(filePath string) bool {
 		Location: &tail.SeekInfo{Offset: startOffset, Whence: io.SeekStart},
 	})
 	if err != nil {
-		logx.Errorf("Error tailing file: %v", err)
+		logx.Errorf("监听文件失败: %v", err)
 		return false
 	}
 
@@ -179,7 +179,7 @@ func (i *CaddyIngestor) startFile(filePath string) bool {
 	i.tails[filePath] = t
 	i.mu.Unlock()
 
-	logx.Infof("Started monitoring: %s", filePath)
+	logx.Infof("开始监听文件: %s", filePath)
 
 	watchPath := filePath
 	safego.New(context.Background(), "Caddy 日志文件监听").Go(func() {
@@ -189,16 +189,16 @@ func (i *CaddyIngestor) startFile(filePath string) bool {
 				continue
 			}
 			if line.Err != nil {
-				logx.Errorf("Tail read failed: %v", line.Err)
+				logx.Errorf("读取监听内容失败: %v", line.Err)
 				continue
 			}
 			if err := i.Ingest(line.Text); err != nil {
 				// keep noisy errors in stdout for now
-				logx.Errorf("Log ingest failed: %v", err)
+				logx.Errorf("日志入库失败: %v", err)
 				continue
 			}
 			if err := i.saveOffset(path, line.SeekInfo.Offset); err != nil {
-				logx.Errorf("Save ingest cursor failed: %v", err)
+				logx.Errorf("保存日志采集游标失败: %v", err)
 			}
 		}
 	})
@@ -210,7 +210,7 @@ func (i *CaddyIngestor) resolveStartOffset(filePath string) int64 {
 	var cursor model.LogIngestCursor
 	if err := i.db.Where("file_path = ?", filePath).Take(&cursor).Error; err != nil {
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
-			logx.Errorf("Load ingest cursor failed: %v", err)
+			logx.Errorf("加载日志采集游标失败: %v", err)
 		}
 		return 0
 	}
@@ -295,7 +295,7 @@ func (i *CaddyIngestor) startDir(dirPath string, scanIntervalSec int) {
 func (i *CaddyIngestor) scanDir(dirPath string) {
 	entries, err := os.ReadDir(dirPath)
 	if err != nil {
-		logx.Errorf("Error reading dir: %v", err)
+		logx.Errorf("读取目录失败: %v", err)
 		return
 	}
 
@@ -369,7 +369,7 @@ func (i *CaddyIngestor) stopFile(filePath string) {
 	if exists {
 		t.Stop()
 		t.Cleanup()
-		logx.Infof("Stopped monitoring: %s", filePath)
+		logx.Infof("停止监听文件: %s", filePath)
 	}
 }
 

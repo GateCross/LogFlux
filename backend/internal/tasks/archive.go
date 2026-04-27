@@ -32,11 +32,11 @@ func NewArchiveTask(db *gorm.DB, retentionDay int, enabled bool, nm notification
 // Start 启动归档任务（每天凌晨 2 点执行）
 func (t *ArchiveTask) Start(ctx context.Context) {
 	if !t.enabled {
-		logx.Info("Archive task is disabled")
+		logx.Info("归档任务已禁用")
 		return
 	}
 
-	logx.Infof("Archive task started, retention days: %d", t.retentionDay)
+	logx.Infof("归档任务已启动，保留天数: %d", t.retentionDay)
 
 	// 立即执行一次归档（可选）
 	// t.runArchive()
@@ -56,7 +56,7 @@ func (t *ArchiveTask) Start(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			logx.Info("Archive task stopped")
+			logx.Info("归档任务已停止")
 			return
 		case <-timer.C:
 			t.runArchive()
@@ -70,7 +70,7 @@ func (t *ArchiveTask) Start(ctx context.Context) {
 
 // runArchive 执行归档逻辑
 func (t *ArchiveTask) runArchive() {
-	logx.Info("Starting log archiving...")
+	logx.Info("开始日志归档...")
 	startTime := time.Now()
 
 	archiveDate := time.Now().AddDate(0, 0, -t.retentionDay)
@@ -80,7 +80,7 @@ func (t *ArchiveTask) runArchive() {
 	err := t.db.Raw("SELECT archive_old_logs(?)", t.retentionDay).Scan(&archivedCount).Error
 
 	if err != nil {
-		logx.Errorf("Archive failed: %v", err)
+		logx.Errorf("归档失败: %v", err)
 		// 发送失败通知
 		if t.notificationMgr != nil {
 			t.notificationMgr.Notify(context.Background(), notification.NewEvent(
@@ -96,13 +96,13 @@ func (t *ArchiveTask) runArchive() {
 	// 清理过期的通知日志 (保留 30 天)
 	retentionDate := time.Now().AddDate(0, 0, -30)
 	if err := t.db.Where("created_at < ?", retentionDate).Delete(&model.NotificationLog{}).Error; err != nil {
-		logx.Errorf("Failed to clean up old notification logs: %v", err)
+		logx.Errorf("清理旧通知日志失败: %v", err)
 	} else {
-		logx.Infof("Cleaned up notification logs older than %s", retentionDate.Format("2006-01-02"))
+		logx.Infof("已清理早于 %s 的通知日志", retentionDate.Format("2006-01-02"))
 	}
 
 	duration := time.Since(startTime)
-	msg := fmt.Sprintf("Archive completed: %d records moved to archive table (before %s), took %v",
+	msg := fmt.Sprintf("归档完成: 已移动 %d 条记录到归档表（早于 %s），耗时 %v",
 		archivedCount, archiveDate.Format("2006-01-02"), duration)
 	logx.Info(msg)
 

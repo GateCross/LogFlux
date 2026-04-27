@@ -69,6 +69,6 @@ func (l *UpdateRuleLogic) UpdateRule(req *types.RuleUpdateReq) (resp *types.Base
 
 	return &types.BaseResp{
 		Code: 200,
-		Msg:  "success",
+		Msg:  "成功",
 	}, nil
 }

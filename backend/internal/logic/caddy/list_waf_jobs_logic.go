@@ -49,13 +49,13 @@ func (l *ListWafJobsLogic) ListWafJobs(req *types.WafJobListReq) (resp *types.Wa
 
 	var total int64
 	if err := db.Count(&total).Error; err != nil {
-		return nil, fmt.Errorf("count jobs failed: %w", err)
+		return nil, fmt.Errorf("统计任务失败: %w", err)
 	}
 
 	var jobs []model.WafUpdateJob
 	offset := (page - 1) * pageSize
 	if err := db.Order("created_at desc, id desc").Limit(pageSize).Offset(offset).Find(&jobs).Error; err != nil {
-		return nil, fmt.Errorf("query jobs failed: %w", err)
+		return nil, fmt.Errorf("查询任务失败: %w", err)
 	}
 
 	operatorNameMap := l.buildJobOperatorNameMap(jobs)
@@ -104,7 +104,7 @@ func (l *ListWafJobsLogic) buildJobOperatorNameMap(jobs []model.WafUpdateJob) ma
 
 	var users []model.User
 	if err := l.svcCtx.DB.WithContext(l.ctx).Model(&model.User{}).Select("id", "username").Where("id IN ?", userIDs).Find(&users).Error; err != nil {
-		l.Logger.Errorf("query operator usernames failed: userIDs=%v err=%v", userIDs, err)
+		l.Logger.Errorf("查询操作人用户名失败: userIDs=%v err=%v", userIDs, err)
 		return operatorNameMap
 	}
 

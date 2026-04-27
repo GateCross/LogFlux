@@ -83,7 +83,7 @@ func (i *Int64Array) Scan(value interface{}) error {
 	case string:
 		str = v
 	default:
-		return fmt.Errorf("failed to scan Int64Array value, type: %T", value)
+		return fmt.Errorf("扫描 Int64Array 值失败，类型: %T", value)
 	}
 
 	if str == "{}" || str == "" {

@@ -60,13 +60,13 @@ func (l *ListWafPolicyBindingsLogic) ListWafPolicyBindings(req *types.WafPolicyB
 
 	var total int64
 	if err := db.Count(&total).Error; err != nil {
-		return nil, fmt.Errorf("count policy bindings failed: %w", err)
+		return nil, fmt.Errorf("统计策略绑定失败: %w", err)
 	}
 
 	var bindings []model.WafPolicyBinding
 	offset := (page - 1) * pageSize
 	if err := db.Order("priority asc, updated_at desc, id desc").Limit(pageSize).Offset(offset).Find(&bindings).Error; err != nil {
-		return nil, fmt.Errorf("query policy bindings failed: %w", err)
+		return nil, fmt.Errorf("查询策略绑定失败: %w", err)
 	}
 
 	items := make([]types.WafPolicyBindingItem, 0, len(bindings))

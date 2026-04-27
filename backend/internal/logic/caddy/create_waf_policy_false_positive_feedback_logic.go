@@ -32,7 +32,7 @@ func (l *CreateWafPolicyFalsePositiveFeedbackLogic) CreateWafPolicyFalsePositive
 	}()
 
 	if req == nil {
-		return nil, fmt.Errorf("invalid policy false positive feedback payload")
+		return nil, fmt.Errorf("误报反馈参数不合法")
 	}
 	if req.PolicyId > 0 {
 		if err := validatePolicyIDExists(l.svcCtx.DB.WithContext(l.ctx), req.PolicyId); err != nil {
@@ -52,7 +52,7 @@ func (l *CreateWafPolicyFalsePositiveFeedbackLogic) CreateWafPolicyFalsePositive
 
 	reason := strings.TrimSpace(req.Reason)
 	if reason == "" {
-		return nil, fmt.Errorf("feedback reason is required")
+		return nil, fmt.Errorf("反馈原因不能为空")
 	}
 
 	status := req.Status
@@ -82,11 +82,11 @@ func (l *CreateWafPolicyFalsePositiveFeedbackLogic) CreateWafPolicyFalsePositive
 		ProcessedAt:    nil,
 	}
 	if err := l.svcCtx.DB.WithContext(l.ctx).Create(feedback).Error; err != nil {
-		return nil, fmt.Errorf("create policy false positive feedback failed: %w", err)
+		return nil, fmt.Errorf("创建误报反馈失败: %w", err)
 	}
 
 	return &types.BaseResp{
 		Code: 200,
-		Msg:  "success",
+		Msg:  "成功",
 	}, nil
 }

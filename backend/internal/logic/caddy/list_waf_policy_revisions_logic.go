@@ -48,13 +48,13 @@ func (l *ListWafPolicyRevisionsLogic) ListWafPolicyRevisions(req *types.WafPolic
 
 	var total int64
 	if err := db.Count(&total).Error; err != nil {
-		return nil, fmt.Errorf("count policy revisions failed: %w", err)
+		return nil, fmt.Errorf("统计策略版本失败: %w", err)
 	}
 
 	var revisions []model.WafPolicyRevision
 	offset := (page - 1) * pageSize
 	if err := db.Order("created_at desc, id desc").Limit(pageSize).Offset(offset).Find(&revisions).Error; err != nil {
-		return nil, fmt.Errorf("query policy revisions failed: %w", err)
+		return nil, fmt.Errorf("查询策略版本失败: %w", err)
 	}
 
 	policyNameMap := make(map[uint]string, len(revisions))
@@ -74,7 +74,7 @@ func (l *ListWafPolicyRevisionsLogic) ListWafPolicyRevisions(req *types.WafPolic
 		if len(policyIDs) > 0 {
 			var policies []model.WafPolicy
 			if err := l.svcCtx.DB.WithContext(l.ctx).Model(&model.WafPolicy{}).Where("id IN ?", policyIDs).Find(&policies).Error; err != nil {
-				return nil, fmt.Errorf("query policy names failed: %w", err)
+				return nil, fmt.Errorf("查询策略名称失败: %w", err)
 			}
 			for _, policy := range policies {
 				policyNameMap[policy.ID] = strings.TrimSpace(policy.Name)
@@ -94,7 +94,7 @@ func (l *ListWafPolicyRevisionsLogic) ListWafPolicyRevisions(req *types.WafPolic
 			if prevErr == nil {
 				previousRevision = &prev
 			} else if prevErr != gorm.ErrRecordNotFound {
-				return nil, fmt.Errorf("query previous policy revision failed: %w", prevErr)
+				return nil, fmt.Errorf("查询上一策略版本失败: %w", prevErr)
 			}
 		}
 

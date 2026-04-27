@@ -72,7 +72,7 @@ func (e *ruleEngine) Evaluate(ctx context.Context, rule *model.NotificationRule,
 	// 根据规则类型选择评估器
 	evaluator, exists := e.evaluators[rule.RuleType]
 	if !exists {
-		return false, fmt.Errorf("unsupported rule type: %s", rule.RuleType)
+		return false, fmt.Errorf("不支持的规则类型: %s", rule.RuleType)
 	}
 
 	// 评估规则
@@ -106,7 +106,7 @@ func (t *ThresholdEvaluator) Evaluate(ctx context.Context, condition model.JSONM
 	// 解析条件
 	var cond model.ThresholdCondition
 	if err := mapToCondition(condition, &cond); err != nil {
-		return false, fmt.Errorf("invalid threshold condition: %w", err)
+		return false, fmt.Errorf("阈值条件无效: %w", err)
 	}
 
 	// 构建表达式
@@ -122,13 +122,13 @@ func (t *ThresholdEvaluator) Evaluate(ctx context.Context, condition model.JSONM
 		}
 		output, err := expr.Run(program, env)
 		if err != nil {
-			return false, fmt.Errorf("failed to evaluate expression: %w", err)
+			return false, fmt.Errorf("执行表达式失败: %w", err)
 		}
 
 		// 转换结果为布尔值
 		result, ok := output.(bool)
 		if !ok {
-			return false, fmt.Errorf("expression result is not boolean: %T", output)
+			return false, fmt.Errorf("表达式结果不是布尔值: %T", output)
 		}
 
 		return result, nil
@@ -139,7 +139,7 @@ func (t *ThresholdEvaluator) Evaluate(ctx context.Context, condition model.JSONM
 		"value": cond.Value,
 	}))
 	if err != nil {
-		return false, fmt.Errorf("failed to compile expression: %w", err)
+		return false, fmt.Errorf("编译表达式失败: %w", err)
 	}
 	program := compiled
 	// 只在未存在时写入，避免并发覆盖
@@ -152,13 +152,13 @@ func (t *ThresholdEvaluator) Evaluate(ctx context.Context, condition model.JSONM
 	}
 	output, err := expr.Run(program, env)
 	if err != nil {
-		return false, fmt.Errorf("failed to evaluate expression: %w", err)
+		return false, fmt.Errorf("执行表达式失败: %w", err)
 	}
 
 	// 转换结果为布尔值
 	result, ok := output.(bool)
 	if !ok {
-		return false, fmt.Errorf("expression result is not boolean: %T", output)
+		return false, fmt.Errorf("表达式结果不是布尔值: %T", output)
 	}
 
 	return result, nil
@@ -181,13 +181,13 @@ func (f *FrequencyEvaluator) Evaluate(ctx context.Context, condition model.JSONM
 	// 解析条件
 	var cond model.FrequencyCondition
 	if err := mapToCondition(condition, &cond); err != nil {
-		return false, fmt.Errorf("invalid frequency condition: %w", err)
+		return false, fmt.Errorf("频率条件无效: %w", err)
 	}
 
 	// 解析时间窗口
 	window, err := time.ParseDuration(cond.Window)
 	if err != nil {
-		return false, fmt.Errorf("invalid window format: %w", err)
+		return false, fmt.Errorf("窗口格式无效: %w", err)
 	}
 
 	// 构建 Redis 键
@@ -205,13 +205,13 @@ func (f *FrequencyEvaluator) Evaluate(ctx context.Context, condition model.JSONM
 	}
 
 	if f.redis == nil {
-		return false, fmt.Errorf("redis is not configured")
+		return false, fmt.Errorf("Redis 未配置")
 	}
 
 	// 增加计数
 	count, err := f.redis.Incr(ctx, key).Result()
 	if err != nil {
-		return false, fmt.Errorf("failed to increment counter: %w", err)
+		return false, fmt.Errorf("递增计数器失败: %w", err)
 	}
 
 	// 设置过期时间 (仅第一次)
@@ -238,7 +238,7 @@ func (p *PatternEvaluator) Evaluate(ctx context.Context, condition model.JSONMap
 	// 解析条件
 	var cond model.PatternCondition
 	if err := mapToCondition(condition, &cond); err != nil {
-		return false, fmt.Errorf("invalid pattern condition: %w", err)
+		return false, fmt.Errorf("模式条件无效: %w", err)
 	}
 
 	// 获取字段值
@@ -258,7 +258,7 @@ func (p *PatternEvaluator) Evaluate(ctx context.Context, condition model.JSONMap
 
 	compiled, err := regexp.Compile(cond.Pattern)
 	if err != nil {
-		return false, fmt.Errorf("invalid regex pattern: %w", err)
+		return false, fmt.Errorf("正则表达式无效: %w", err)
 	}
 	regex := compiled
 	p.cache.LoadOrStore(cond.Pattern, regex)

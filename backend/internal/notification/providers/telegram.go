@@ -24,19 +24,19 @@ func (t *TelegramProvider) Send(ctx context.Context, config map[string]interface
 	// 解析配置
 	tgConfig := &model.TelegramConfig{}
 	if err := mapToStruct(config, tgConfig); err != nil {
-		return fmt.Errorf("invalid telegram config: %w", err)
+		return fmt.Errorf("Telegram 配置无效: %w", err)
 	}
 
 	// 创建 bot
 	bot, err := tgbotapi.NewBotAPI(tgConfig.BotToken)
 	if err != nil {
-		return fmt.Errorf("failed to create telegram bot: %w", err)
+		return fmt.Errorf("创建 Telegram Bot 失败: %w", err)
 	}
 
 	// 解析 chat_id
 	chatID, err := strconv.ParseInt(tgConfig.ChatID, 10, 64)
 	if err != nil {
-		return fmt.Errorf("invalid chat_id: %w", err)
+		return fmt.Errorf("Chat ID 无效: %w", err)
 	}
 
 	// 构建 Markdown 格式消息
@@ -58,7 +58,7 @@ func (t *TelegramProvider) Send(ctx context.Context, config map[string]interface
 	// 发送消息
 	_, err = bot.Send(msg)
 	if err != nil {
-		return fmt.Errorf("failed to send telegram message: %w", err)
+		return fmt.Errorf("发送 Telegram 消息失败: %w", err)
 	}
 
 	return nil
@@ -68,7 +68,7 @@ func (t *TelegramProvider) Send(ctx context.Context, config map[string]interface
 func (t *TelegramProvider) Validate(config map[string]interface{}) error {
 	tgConfig := &model.TelegramConfig{}
 	if err := mapToStruct(config, tgConfig); err != nil {
-		return fmt.Errorf("invalid telegram config: %w", err)
+		return fmt.Errorf("Telegram 配置无效: %w", err)
 	}
 
 	return validateTelegramConfig(tgConfig)
@@ -82,15 +82,15 @@ func (t *TelegramProvider) Type() string {
 // validateTelegramConfig 验证 Telegram 配置
 func validateTelegramConfig(config *model.TelegramConfig) error {
 	if config.BotToken == "" {
-		return fmt.Errorf("bot_token is required")
+		return fmt.Errorf("Bot Token 不能为空")
 	}
 	if config.ChatID == "" {
-		return fmt.Errorf("chat_id is required")
+		return fmt.Errorf("Chat ID 不能为空")
 	}
 
 	// 验证 chat_id 格式
 	if _, err := strconv.ParseInt(config.ChatID, 10, 64); err != nil {
-		return fmt.Errorf("invalid chat_id format: must be a number")
+		return fmt.Errorf("Chat ID 格式无效，必须是数字")
 	}
 
 	return nil

@@ -30,7 +30,7 @@ func (s *SlackProvider) Send(ctx context.Context, config map[string]interface{},
 	// 解析配置
 	slackConfig := &model.SlackConfig{}
 	if err := mapToStruct(config, slackConfig); err != nil {
-		return fmt.Errorf("invalid slack config: %w", err)
+		return fmt.Errorf("Slack 配置无效: %w", err)
 	}
 
 	// 构建消息
@@ -51,24 +51,24 @@ func (s *SlackProvider) Send(ctx context.Context, config map[string]interface{},
 
 	jsonData, err := json.Marshal(message)
 	if err != nil {
-		return fmt.Errorf("failed to marshal slack message: %w", err)
+		return fmt.Errorf("序列化 Slack 消息失败: %w", err)
 	}
 
 	// 发送请求
 	req, err := http.NewRequestWithContext(ctx, "POST", slackConfig.WebhookURL, bytes.NewBuffer(jsonData))
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+		return fmt.Errorf("创建请求失败: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := s.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to send request to slack: %w", err)
+		return fmt.Errorf("发送 Slack 请求失败: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("slack webhook returned status: %d", resp.StatusCode)
+		return fmt.Errorf("Slack 回调返回状态: %d", resp.StatusCode)
 	}
 
 	return nil
@@ -78,11 +78,11 @@ func (s *SlackProvider) Send(ctx context.Context, config map[string]interface{},
 func (s *SlackProvider) Validate(config map[string]interface{}) error {
 	slackConfig := &model.SlackConfig{}
 	if err := mapToStruct(config, slackConfig); err != nil {
-		return fmt.Errorf("invalid slack config: %w", err)
+		return fmt.Errorf("Slack 配置无效: %w", err)
 	}
 
 	if slackConfig.WebhookURL == "" {
-		return fmt.Errorf("webhook url is required")
+		return fmt.Errorf("回调 URL 不能为空")
 	}
 
 	return nil

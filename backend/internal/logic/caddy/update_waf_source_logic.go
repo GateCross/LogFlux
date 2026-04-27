@@ -31,7 +31,7 @@ func (l *UpdateWafSourceLogic) UpdateWafSource(req *types.WafSourceUpdateReq) (r
 
 	var source model.WafSource
 	if err := helper.svcCtx.DB.WithContext(helper.ctx).First(&source, req.ID).Error; err != nil {
-		return nil, fmt.Errorf("source not found")
+		return nil, fmt.Errorf("源不存在")
 	}
 
 	if name := strings.TrimSpace(req.Name); name != "" {
@@ -107,20 +107,20 @@ func (l *UpdateWafSourceLogic) UpdateWafSource(req *types.WafSourceUpdateReq) (r
 	}
 
 	if source.Mode == wafModeRemote && strings.TrimSpace(source.URL) == "" {
-		return nil, fmt.Errorf("url is required for remote source")
+		return nil, fmt.Errorf("远程源 URL 不能为空")
 	}
 
 	if err := helper.svcCtx.DB.WithContext(helper.ctx).Save(&source).Error; err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "duplicate key") {
-			return nil, fmt.Errorf("source name already exists: %s", source.Name)
+			return nil, fmt.Errorf("源名称已存在: %s", source.Name)
 		}
-		return nil, fmt.Errorf("update source failed: %w", err)
+		return nil, fmt.Errorf("更新源失败: %w", err)
 	}
 	if helper.svcCtx.WafScheduler != nil {
 		if reloadErr := helper.svcCtx.WafScheduler.ReloadSource(source.ID); reloadErr != nil {
-			l.Logger.Errorf("reload waf scheduler source failed: sourceID=%d err=%v", source.ID, reloadErr)
+			l.Logger.Errorf("重载 WAF 调度源失败: sourceID=%d err=%v", source.ID, reloadErr)
 		}
 	}
 
-	return &types.BaseResp{Code: 200, Msg: "success"}, nil
+	return &types.BaseResp{Code: 200, Msg: "成功"}, nil
 }

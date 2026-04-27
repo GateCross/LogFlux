@@ -39,7 +39,7 @@ func (l *PublishWafPolicyLogic) PublishWafPolicy(req *types.WafPolicyActionReq) 
 	}()
 
 	if req == nil || req.ID == 0 {
-		return nil, fmt.Errorf("policy id is required")
+		return nil, fmt.Errorf("策略 ID 不能为空")
 	}
 	policyID = req.ID
 
@@ -51,7 +51,7 @@ func (l *PublishWafPolicyLogic) PublishWafPolicy(req *types.WafPolicyActionReq) 
 	policyName = candidate.Policy.Name
 
 	if err := publishService.ValidateCandidate(candidate, "publish"); err != nil {
-		return nil, fmt.Errorf("policy publish validate failed: %w", err)
+		return nil, fmt.Errorf("策略发布前校验失败: %w", err)
 	}
 	if err := publishService.LoadCandidate(candidate, "publish"); err != nil {
 		helper.NotifyAutoRollback(fmt.Sprintf("WAF 策略发布失败，已自动回滚到 last_good：policy=%s", policyName), policyID, policyName, operator)
@@ -76,5 +76,5 @@ func (l *PublishWafPolicyLogic) PublishWafPolicy(req *types.WafPolicyActionReq) 
 		syncCaddyLogSources(l.svcCtx, candidate.Server, l.Logger)
 	})
 
-	return &types.BaseResp{Code: 200, Msg: "success"}, nil
+	return &types.BaseResp{Code: 200, Msg: "成功"}, nil
 }

@@ -79,7 +79,7 @@ func TestEnsureNoPolicyBindingConflictsHasConflict(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected conflict error")
 	}
-	if !strings.Contains(err.Error(), "policy binding conflicts found") {
+	if !strings.Contains(err.Error(), "发现策略绑定冲突") {
 		t.Fatalf("expected conflict error message, got: %v", err)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {

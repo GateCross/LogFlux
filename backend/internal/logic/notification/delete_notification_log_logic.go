@@ -34,5 +34,5 @@ func (l *DeleteNotificationLogLogic) DeleteNotificationLog(req *types.IDReq) (re
 		return nil, err
 	}
 
-	return &types.BaseResp{Code: 200, Msg: "success"}, nil
+	return &types.BaseResp{Code: 200, Msg: "成功"}, nil
 }

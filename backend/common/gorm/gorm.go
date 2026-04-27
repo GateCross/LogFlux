@@ -14,12 +14,12 @@ func InitGorm(dataSource string) *gorm.DB {
 		Logger: newLogger,
 	})
 	if err != nil {
-		panic("failed to connect database: " + err.Error())
+		panic("连接数据库失败: " + err.Error())
 	}
 
 	sqlDB, err := db.DB()
 	if err != nil {
-		panic("failed to get sqlDB: " + err.Error())
+		panic("获取 sqlDB 失败: " + err.Error())
 	}
 
 	sqlDB.SetMaxIdleConns(10)

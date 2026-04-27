@@ -30,15 +30,15 @@ func NewPolicyPublishService(ctx context.Context, svcCtx *svc.ServiceContext) *P
 
 func (s *PolicyPublishService) BuildPublishCandidate(policyID uint) (*PolicyPublishCandidate, error) {
 	if s == nil || s.svcCtx == nil || s.svcCtx.DB == nil {
-		return nil, fmt.Errorf("db is nil")
+		return nil, fmt.Errorf("数据库为空")
 	}
 	if policyID == 0 {
-		return nil, fmt.Errorf("policy id is required")
+		return nil, fmt.Errorf("策略 ID 不能为空")
 	}
 
 	var policy model.WafPolicy
 	if err := s.svcCtx.DB.WithContext(s.ctx).First(&policy, policyID).Error; err != nil {
-		return nil, fmt.Errorf("policy not found")
+		return nil, fmt.Errorf("策略不存在")
 	}
 
 	if err := ensureNoPolicyBindingConflicts(s.svcCtx.DB.WithContext(s.ctx)); err != nil {
@@ -72,23 +72,23 @@ func (s *PolicyPublishService) BuildPublishCandidate(policyID uint) (*PolicyPubl
 
 func (s *PolicyPublishService) BuildRollbackCandidate(revisionID uint) (*PolicyPublishCandidate, *model.WafPolicyRevision, error) {
 	if s == nil || s.svcCtx == nil || s.svcCtx.DB == nil {
-		return nil, nil, fmt.Errorf("db is nil")
+		return nil, nil, fmt.Errorf("数据库为空")
 	}
 	if revisionID == 0 {
-		return nil, nil, fmt.Errorf("revisionId is required")
+		return nil, nil, fmt.Errorf("策略版本 ID 不能为空")
 	}
 
 	var revision model.WafPolicyRevision
 	if err := s.svcCtx.DB.WithContext(s.ctx).First(&revision, revisionID).Error; err != nil {
-		return nil, nil, fmt.Errorf("policy revision not found")
+		return nil, nil, fmt.Errorf("策略版本不存在")
 	}
 	if revision.PolicyID == 0 {
-		return nil, nil, fmt.Errorf("invalid policy revision")
+		return nil, nil, fmt.Errorf("策略版本无效")
 	}
 
 	var policy model.WafPolicy
 	if err := s.svcCtx.DB.WithContext(s.ctx).First(&policy, revision.PolicyID).Error; err != nil {
-		return nil, nil, fmt.Errorf("policy not found")
+		return nil, nil, fmt.Errorf("策略不存在")
 	}
 
 	directives := revision.DirectivesSnapshot
@@ -122,30 +122,30 @@ func (s *PolicyPublishService) BuildRollbackCandidate(revisionID uint) (*PolicyP
 
 func (s *PolicyPublishService) ValidateCandidate(candidate *PolicyPublishCandidate, action string) error {
 	if candidate == nil || candidate.Server == nil {
-		return fmt.Errorf("caddy server not found")
+		return fmt.Errorf("Caddy 服务器不存在")
 	}
 	if err := adaptCaddyfile(candidate.Server, candidate.CandidateConfig); err != nil {
-		return fmt.Errorf("policy %s validate failed: %w", action, err)
+		return fmt.Errorf("策略 %s 校验失败: %w", action, err)
 	}
 	return nil
 }
 
 func (s *PolicyPublishService) LoadCandidate(candidate *PolicyPublishCandidate, action string) error {
 	if candidate == nil || candidate.Server == nil {
-		return fmt.Errorf("caddy server not found")
+		return fmt.Errorf("Caddy 服务器不存在")
 	}
 	if err := loadCaddyfile(candidate.Server, candidate.CandidateConfig); err != nil {
 		if rollbackErr := rollbackPolicyConfigToLastGood(candidate.Server, candidate.LastGoodConfig); rollbackErr != nil {
-			return fmt.Errorf("policy %s load failed: %v, rollback to last_good failed: %v", action, err, rollbackErr)
+			return fmt.Errorf("策略 %s 加载失败: %v，回滚到 last_good 失败: %v", action, err, rollbackErr)
 		}
-		return fmt.Errorf("policy %s load failed: %w", action, err)
+		return fmt.Errorf("策略 %s 加载失败: %w", action, err)
 	}
 	return nil
 }
 
 func (s *PolicyPublishService) PersistPublishedCandidate(candidate *PolicyPublishCandidate, operator string) error {
 	if candidate == nil || candidate.Policy == nil || candidate.Server == nil {
-		return fmt.Errorf("invalid publish candidate")
+		return fmt.Errorf("发布候选配置无效")
 	}
 	modules := normalizeCaddyModulesJSON(candidate.Server.Modules)
 
@@ -159,7 +159,7 @@ func (s *PolicyPublishService) PersistPublishedCandidate(candidate *PolicyPublis
 				"config":  candidate.CandidateConfig,
 				"modules": modules,
 			}).Error; err != nil {
-			return fmt.Errorf("save caddy server config failed: %w", err)
+			return fmt.Errorf("保存 Caddy 服务器配置失败: %w", err)
 		}
 		if err := createCaddyPolicyHistory(tx, candidate.Server.ID, "policy_publish", candidate.CandidateConfig, modules); err != nil {
 			return err
@@ -171,9 +171,9 @@ func (s *PolicyPublishService) PersistPublishedCandidate(candidate *PolicyPublis
 		return markPolicyRevisionsRolledBack(tx, candidate.Policy.ID, revision.ID)
 	}); err != nil {
 		if rollbackErr := rollbackPolicyConfigToLastGood(candidate.Server, candidate.LastGoodConfig); rollbackErr != nil {
-			return fmt.Errorf("policy publish persist failed: %v, rollback to last_good failed: %v", err, rollbackErr)
+			return fmt.Errorf("策略发布持久化失败: %v，回滚到 last_good 失败: %v", err, rollbackErr)
 		}
-		return fmt.Errorf("policy publish persist failed: %w", err)
+		return fmt.Errorf("策略发布持久化失败: %w", err)
 	}
 
 	return nil
@@ -181,7 +181,7 @@ func (s *PolicyPublishService) PersistPublishedCandidate(candidate *PolicyPublis
 
 func (s *PolicyPublishService) PersistRolledBackCandidate(candidate *PolicyPublishCandidate, revision *model.WafPolicyRevision, operator string) error {
 	if candidate == nil || candidate.Policy == nil || candidate.Server == nil || revision == nil {
-		return fmt.Errorf("invalid rollback candidate")
+		return fmt.Errorf("回滚候选配置无效")
 	}
 	modules := normalizeCaddyModulesJSON(candidate.Server.Modules)
 
@@ -195,7 +195,7 @@ func (s *PolicyPublishService) PersistRolledBackCandidate(candidate *PolicyPubli
 				"config":  candidate.CandidateConfig,
 				"modules": modules,
 			}).Error; err != nil {
-			return fmt.Errorf("save caddy server config failed: %w", err)
+			return fmt.Errorf("保存 Caddy 服务器配置失败: %w", err)
 		}
 		if err := createCaddyPolicyHistory(tx, candidate.Server.ID, "policy_rollback", candidate.CandidateConfig, modules); err != nil {
 			return err
@@ -210,15 +210,15 @@ func (s *PolicyPublishService) PersistRolledBackCandidate(candidate *PolicyPubli
 				"operator": operator,
 				"message":  "rollback policy",
 			}).Error; err != nil {
-			return fmt.Errorf("update revision status failed: %w", err)
+			return fmt.Errorf("更新版本状态失败: %w", err)
 		}
 		_, err := createPolicyRevision(tx, candidate.Policy, wafPolicyStatusRolledBack, candidate.Directives, "rollback policy", operator)
 		return err
 	}); err != nil {
 		if rollbackErr := rollbackPolicyConfigToLastGood(candidate.Server, candidate.LastGoodConfig); rollbackErr != nil {
-			return fmt.Errorf("policy rollback persist failed: %v, rollback to last_good failed: %v", err, rollbackErr)
+			return fmt.Errorf("策略回滚持久化失败: %v，回滚到 last_good 失败: %v", err, rollbackErr)
 		}
-		return fmt.Errorf("policy rollback persist failed: %w", err)
+		return fmt.Errorf("策略回滚持久化失败: %w", err)
 	}
 
 	return nil

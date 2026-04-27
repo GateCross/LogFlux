@@ -51,7 +51,7 @@ func (scheduler *WafScheduler) SetExecutor(executor WafSourceJobExecutor) {
 
 	if started {
 		if err := scheduler.Reload(); err != nil {
-			logx.Errorf("reload waf scheduler after setting executor failed: %v", err)
+			logx.Errorf("设置执行器后重载 WAF 调度器失败: %v", err)
 		}
 	}
 }
@@ -70,11 +70,11 @@ func (scheduler *WafScheduler) Start() {
 	scheduler.mu.Unlock()
 
 	if err := scheduler.Reload(); err != nil {
-		logx.Errorf("initial reload waf scheduler failed: %v", err)
+		logx.Errorf("初始化重载 WAF 调度器失败: %v", err)
 	}
 
 	scheduler.cron.Start()
-	logx.Info("WafScheduler started")
+	logx.Info("WAF 调度器已启动")
 }
 
 func (scheduler *WafScheduler) Stop() {
@@ -92,7 +92,7 @@ func (scheduler *WafScheduler) Stop() {
 
 	scheduler.cron.Stop()
 	scheduler.removeAllEntries()
-	logx.Info("WafScheduler stopped")
+	logx.Info("WAF 调度器已停止")
 }
 
 func (scheduler *WafScheduler) Reload() error {
@@ -100,7 +100,7 @@ func (scheduler *WafScheduler) Reload() error {
 		return nil
 	}
 	if scheduler.db == nil {
-		return fmt.Errorf("waf scheduler db is nil")
+		return fmt.Errorf("WAF 调度器数据库为空")
 	}
 
 	var sources []model.WafSource
@@ -108,7 +108,7 @@ func (scheduler *WafScheduler) Reload() error {
 		Where("enabled = ? AND COALESCE(schedule, '') <> ''", true).
 		Order("id asc").
 		Find(&sources).Error; err != nil {
-		return fmt.Errorf("query scheduled waf sources failed: %w", err)
+		return fmt.Errorf("查询待调度 WAF 源失败: %w", err)
 	}
 
 	scheduler.removeAllEntries()
@@ -118,7 +118,7 @@ func (scheduler *WafScheduler) Reload() error {
 			continue
 		}
 		if err := scheduler.addOrUpdateSourceEntry(&source); err != nil {
-			logx.Errorf("add scheduled waf source failed: id=%d name=%s err=%v", source.ID, source.Name, err)
+			logx.Errorf("添加定时 WAF 源失败: id=%d name=%s err=%v", source.ID, source.Name, err)
 		}
 	}
 	return nil
@@ -129,7 +129,7 @@ func (scheduler *WafScheduler) ReloadSource(sourceID uint) error {
 		return nil
 	}
 	if scheduler.db == nil {
-		return fmt.Errorf("waf scheduler db is nil")
+		return fmt.Errorf("WAF 调度器数据库为空")
 	}
 
 	var source model.WafSource
@@ -138,7 +138,7 @@ func (scheduler *WafScheduler) ReloadSource(sourceID uint) error {
 			scheduler.RemoveSource(sourceID)
 			return nil
 		}
-		return fmt.Errorf("query waf source failed: %w", err)
+		return fmt.Errorf("查询 WAF 源失败: %w", err)
 	}
 
 	if !shouldScheduleWafSource(&source) {
@@ -163,18 +163,18 @@ func (scheduler *WafScheduler) TriggerSourceNow(sourceID uint) error {
 		return nil
 	}
 	if scheduler.db == nil {
-		return fmt.Errorf("waf scheduler db is nil")
+		return fmt.Errorf("WAF 调度器数据库为空")
 	}
 
 	var source model.WafSource
 	if err := scheduler.db.First(&source, sourceID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return fmt.Errorf("waf source not found")
+			return fmt.Errorf("WAF 源不存在")
 		}
-		return fmt.Errorf("query waf source failed: %w", err)
+		return fmt.Errorf("查询 WAF 源失败: %w", err)
 	}
 	if !source.Enabled {
-		return fmt.Errorf("waf source is disabled")
+		return fmt.Errorf("WAF 源已禁用")
 	}
 	safego.New(context.Background(), "WAF 源调度任务").Go(func() {
 		scheduler.executeSource(sourceID)
@@ -207,7 +207,7 @@ func (scheduler *WafScheduler) executeSource(sourceID uint) {
 	executor := scheduler.executor
 	scheduler.mu.RUnlock()
 	if executor == nil {
-		logx.Errorf("skip scheduled waf source execution: executor is nil, sourceID=%d", sourceID)
+		logx.Errorf("跳过定时 WAF 源执行，执行器为空: sourceID=%d", sourceID)
 		return
 	}
 
@@ -216,7 +216,7 @@ func (scheduler *WafScheduler) executeSource(sourceID uint) {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			scheduler.RemoveSource(sourceID)
 		}
-		logx.Errorf("query scheduled waf source failed: sourceID=%d err=%v", sourceID, err)
+		logx.Errorf("查询定时 WAF 源失败: sourceID=%d err=%v", sourceID, err)
 		return
 	}
 	if !shouldScheduleWafSource(&source) {
@@ -227,14 +227,14 @@ func (scheduler *WafScheduler) executeSource(sourceID uint) {
 	execCtx := context.Background()
 	if source.AutoCheck {
 		if err := executor.CheckSource(execCtx, source.ID); err != nil {
-			logx.Errorf("scheduled waf source check failed: sourceID=%d err=%v", source.ID, err)
+			logx.Errorf("定时检查 WAF 源失败: sourceID=%d err=%v", source.ID, err)
 			return
 		}
 	}
 
 	if source.AutoDownload {
 		if err := executor.SyncSource(execCtx, source.ID, false); err != nil {
-			logx.Errorf("scheduled waf source sync failed: sourceID=%d err=%v", source.ID, err)
+			logx.Errorf("定时同步 WAF 源失败: sourceID=%d err=%v", source.ID, err)
 			return
 		}
 	}

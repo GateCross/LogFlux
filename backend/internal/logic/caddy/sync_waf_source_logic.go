@@ -39,19 +39,19 @@ func (l *SyncWafSourceLogic) SyncWafSource(req *types.WafSourceSyncReq) (resp *t
 
 	var source model.WafSource
 	if err := helper.svcCtx.DB.WithContext(helper.ctx).First(&source, req.ID).Error; err != nil {
-		return nil, fmt.Errorf("source not found")
+		return nil, fmt.Errorf("源不存在")
 	}
 	if !source.Enabled {
-		return nil, fmt.Errorf("source is disabled")
+		return nil, fmt.Errorf("源已禁用")
 	}
 	if normalizeWafKind(source.Kind) == wafKindCorazaEngine {
 		return nil, fmt.Errorf("Coraza 引擎更新源无需手工同步，请直接使用引擎版本检查")
 	}
 	if source.Mode != wafModeRemote {
-		return nil, fmt.Errorf("source mode is not remote")
+		return nil, fmt.Errorf("源模式不是远程模式")
 	}
 	if strings.TrimSpace(source.URL) == "" {
-		return nil, fmt.Errorf("source url is empty")
+		return nil, fmt.Errorf("源 URL 为空")
 	}
 
 	fetchTimeoutSec := helper.svcCtx.Config.Waf.FetchTimeoutSec
@@ -89,7 +89,7 @@ func (l *SyncWafSourceLogic) SyncWafSource(req *types.WafSourceSyncReq) (resp *t
 			}
 		}
 
-		return &types.BaseResp{Code: 200, Msg: "success"}, nil
+		return &types.BaseResp{Code: 200, Msg: "成功"}, nil
 	}
 
 	ext := detectPackageExt(downloadURL)
@@ -113,7 +113,7 @@ func (l *SyncWafSourceLogic) SyncWafSource(req *types.WafSourceSyncReq) (resp *t
 		MaxBytes:       helper.svcCtx.Config.Waf.MaxPackageBytes,
 	})
 	if err != nil && strings.TrimSpace(source.ProxyURL) != "" {
-		l.Logger.Errorf("proxy fetch failed, fallback direct connect: source=%s proxy=%s err=%v", source.Name, source.ProxyURL, err)
+		l.Logger.Errorf("代理下载失败，改用直连: source=%s proxy=%s err=%v", source.Name, source.ProxyURL, err)
 		fetchResult, err = waf.FetchPackage(downloadURL, tempPath, waf.FetchOptions{
 			AllowedDomains: helper.svcCtx.Config.Waf.AllowedDomains,
 			AuthType:       source.AuthType,
@@ -125,7 +125,7 @@ func (l *SyncWafSourceLogic) SyncWafSource(req *types.WafSourceSyncReq) (resp *t
 	}
 	if err != nil {
 		normalizedErr := normalizeWafSyncFetchError(err, strings.TrimSpace(source.ProxyURL) != "")
-		l.Logger.Errorf("sync source fetch failed: source=%s url=%s timeoutSec=%d err=%v", source.Name, downloadURL, fetchTimeoutSec, err)
+		l.Logger.Errorf("同步源下载失败: source=%s url=%s timeoutSec=%d err=%v", source.Name, downloadURL, fetchTimeoutSec, err)
 		helper.updateSourceLastCheck(source.ID, "", normalizedErr.Error())
 		helper.finishJob(job, wafJobStatusFailed, normalizedErr.Error(), 0)
 		return nil, normalizedErr
@@ -145,16 +145,16 @@ func (l *SyncWafSourceLogic) SyncWafSource(req *types.WafSourceSyncReq) (resp *t
 	packagePath := helper.store.PackagePath(packageName)
 	if err := os.Rename(fetchResult.SavedPath, packagePath); err != nil {
 		helper.updateSourceLastCheck(source.ID, "", err.Error())
-		helper.finishJob(job, wafJobStatusFailed, fmt.Sprintf("move package failed: %v", err), 0)
-		return nil, fmt.Errorf("move package failed: %w", err)
+		helper.finishJob(job, wafJobStatusFailed, fmt.Sprintf("移动包文件失败: %v", err), 0)
+		return nil, fmt.Errorf("移动包文件失败: %w", err)
 	}
 	tempPath = ""
 
 	releaseDir := helper.store.ReleaseDir(version)
 	if err := os.MkdirAll(releaseDir, 0o755); err != nil {
 		helper.updateSourceLastCheck(source.ID, "", err.Error())
-		helper.finishJob(job, wafJobStatusFailed, fmt.Sprintf("create release dir failed: %v", err), 0)
-		return nil, fmt.Errorf("create release dir failed: %w", err)
+		helper.finishJob(job, wafJobStatusFailed, fmt.Sprintf("创建版本目录失败: %v", err), 0)
+		return nil, fmt.Errorf("创建版本目录失败: %w", err)
 	}
 
 	if _, err := waf.ExtractPackage(packagePath, releaseDir, waf.ExtractOptions{
@@ -180,13 +180,13 @@ func (l *SyncWafSourceLogic) SyncWafSource(req *types.WafSourceSyncReq) (resp *t
 
 	if err := helper.svcCtx.DB.WithContext(helper.ctx).Create(release).Error; err != nil {
 		helper.updateSourceLastCheck(source.ID, "", err.Error())
-		helper.finishJob(job, wafJobStatusFailed, fmt.Sprintf("create release failed: %v", err), 0)
-		return nil, fmt.Errorf("create release failed: %w", err)
+		helper.finishJob(job, wafJobStatusFailed, fmt.Sprintf("创建版本失败: %v", err), 0)
+		return nil, fmt.Errorf("创建版本失败: %w", err)
 	}
 	helper.applyReleaseRetention(release.Kind)
 
 	helper.updateSourceLastCheck(source.ID, release.Version, "")
-	helper.finishJob(job, wafJobStatusSuccess, "sync success", release.ID)
+	helper.finishJob(job, wafJobStatusSuccess, "同步成功", release.ID)
 
 	if normalizeWafKind(source.Kind) != wafKindCorazaEngine && (req.ActivateNow || source.AutoActivate) {
 		activateLogic := NewActivateWafReleaseLogic(l.ctx, l.svcCtx)
@@ -195,7 +195,7 @@ func (l *SyncWafSourceLogic) SyncWafSource(req *types.WafSourceSyncReq) (resp *t
 		}
 	}
 
-	return &types.BaseResp{Code: 200, Msg: "success"}, nil
+	return &types.BaseResp{Code: 200, Msg: "成功"}, nil
 }
 
 func normalizeWafSyncFetchError(fetchErr error, hasProxy bool) error {

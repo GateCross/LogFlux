@@ -32,7 +32,7 @@ func (l *CheckWafSourceLogic) CheckWafSource(req *types.WafSourceActionReq) (res
 
 	var source model.WafSource
 	if err := helper.svcCtx.DB.WithContext(helper.ctx).First(&source, req.ID).Error; err != nil {
-		return nil, fmt.Errorf("source not found")
+		return nil, fmt.Errorf("源不存在")
 	}
 
 	job := helper.startJob(source.ID, 0, "check", "manual")
@@ -60,20 +60,20 @@ func (l *CheckWafSourceLogic) CheckWafSource(req *types.WafSourceActionReq) (res
 
 	if source.Mode == wafModeRemote {
 		if strings.TrimSpace(source.URL) == "" {
-			err = fmt.Errorf("url is required for remote source")
+			err = fmt.Errorf("远程源 URL 不能为空")
 			helper.updateSourceLastCheck(source.ID, "", err.Error())
 			helper.finishJob(job, wafJobStatusFailed, err.Error(), 0)
 			return nil, err
 		}
 		parsedURL, parseErr := url.Parse(strings.TrimSpace(source.URL))
 		if parseErr != nil {
-			err = fmt.Errorf("invalid url: %w", parseErr)
+			err = fmt.Errorf("URL 无效: %w", parseErr)
 			helper.updateSourceLastCheck(source.ID, "", err.Error())
 			helper.finishJob(job, wafJobStatusFailed, err.Error(), 0)
 			return nil, err
 		}
 		if parsedURL.Scheme != "https" {
-			err = fmt.Errorf("only https url is allowed")
+			err = fmt.Errorf("仅允许 HTTPS URL")
 			helper.updateSourceLastCheck(source.ID, "", err.Error())
 			helper.finishJob(job, wafJobStatusFailed, err.Error(), 0)
 			return nil, err
@@ -82,13 +82,13 @@ func (l *CheckWafSourceLogic) CheckWafSource(req *types.WafSourceActionReq) (res
 		if proxyValue := strings.TrimSpace(source.ProxyURL); proxyValue != "" {
 			proxyURL, proxyErr := url.Parse(proxyValue)
 			if proxyErr != nil {
-				err = fmt.Errorf("invalid proxy url: %w", proxyErr)
+				err = fmt.Errorf("代理 URL 无效: %w", proxyErr)
 				helper.updateSourceLastCheck(source.ID, "", err.Error())
 				helper.finishJob(job, wafJobStatusFailed, err.Error(), 0)
 				return nil, err
 			}
 			if proxyURL.Scheme != "http" && proxyURL.Scheme != "https" {
-				err = fmt.Errorf("proxy url scheme must be http or https")
+				err = fmt.Errorf("代理 URL 协议必须是 HTTP 或 HTTPS")
 				helper.updateSourceLastCheck(source.ID, "", err.Error())
 				helper.finishJob(job, wafJobStatusFailed, err.Error(), 0)
 				return nil, err
@@ -97,6 +97,6 @@ func (l *CheckWafSourceLogic) CheckWafSource(req *types.WafSourceActionReq) (res
 	}
 
 	helper.updateSourceLastCheck(source.ID, "", "")
-	helper.finishJob(job, wafJobStatusSuccess, "check success", 0)
-	return &types.BaseResp{Code: 200, Msg: "success"}, nil
+	helper.finishJob(job, wafJobStatusSuccess, "检查成功", 0)
+	return &types.BaseResp{Code: 200, Msg: "成功"}, nil
 }

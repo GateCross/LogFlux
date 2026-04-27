@@ -29,7 +29,7 @@ func TestTelegramProvider_Validate(t *testing.T) {
 				"chat_id": "123456789",
 			},
 			wantErr: true,
-			errMsg:  "bot_token is required",
+			errMsg:  "Bot Token 不能为空",
 		},
 		{
 			name: "missing chat_id",
@@ -37,16 +37,16 @@ func TestTelegramProvider_Validate(t *testing.T) {
 				"bot_token": "123456789:ABCdefGHIjklMNOpqrsTUVwxyz",
 			},
 			wantErr: true,
-			errMsg:  "chat_id is required",
+			errMsg:  "Chat ID 不能为空",
 		},
 		{
-			name: "invalid chat_id format",
+			name: "Chat ID 格式无效",
 			config: map[string]interface{}{
 				"bot_token": "123456789:ABCdefGHIjklMNOpqrsTUVwxyz",
 				"chat_id":   "not-a-number",
 			},
 			wantErr: true,
-			errMsg:  "invalid chat_id format",
+			errMsg:  "Chat ID 格式无效",
 		},
 	}
 

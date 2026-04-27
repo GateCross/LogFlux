@@ -48,13 +48,13 @@ func (l *ListWafPoliciesLogic) ListWafPolicies(req *types.WafPolicyListReq) (res
 
 	var total int64
 	if err := db.Count(&total).Error; err != nil {
-		return nil, fmt.Errorf("count policies failed: %w", err)
+		return nil, fmt.Errorf("统计策略失败: %w", err)
 	}
 
 	var policies []model.WafPolicy
 	offset := (page - 1) * pageSize
 	if err := db.Order("updated_at desc, id desc").Limit(pageSize).Offset(offset).Find(&policies).Error; err != nil {
-		return nil, fmt.Errorf("query policies failed: %w", err)
+		return nil, fmt.Errorf("查询策略失败: %w", err)
 	}
 
 	items := make([]types.WafPolicyItem, 0, len(policies))

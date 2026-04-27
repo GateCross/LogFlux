@@ -48,7 +48,7 @@ func TestCheckWafSourceRejectsNonHTTPSAndUpdatesAudit(t *testing.T) {
 
 	logic := NewCheckWafSourceLogic(context.Background(), &svc.ServiceContext{DB: db})
 	_, err := logic.CheckWafSource(&types.WafSourceActionReq{ID: 1})
-	if err == nil || !strings.Contains(err.Error(), "only https url is allowed") {
+	if err == nil || !strings.Contains(err.Error(), "仅允许 HTTPS URL") {
 		t.Fatalf("expected only https url error, got %v", err)
 	}
 

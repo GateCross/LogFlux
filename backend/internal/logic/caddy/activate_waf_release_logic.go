@@ -30,7 +30,7 @@ func (l *ActivateWafReleaseLogic) ActivateWafRelease(req *types.WafReleaseActiva
 
 	var release model.WafRelease
 	if err := helper.svcCtx.DB.WithContext(helper.ctx).First(&release, req.ID).Error; err != nil {
-		return nil, fmt.Errorf("release not found")
+		return nil, fmt.Errorf("版本不存在")
 	}
 	if normalizeWafKind(release.Kind) == wafKindCorazaEngine {
 		return nil, fmt.Errorf("Coraza 引擎不支持在线激活，仅支持版本检查")
@@ -46,9 +46,9 @@ func (l *ActivateWafReleaseLogic) ActivateWafRelease(req *types.WafReleaseActiva
 
 	if err := helper.markReleaseActive(&release); err != nil {
 		helper.finishJob(job, wafJobStatusFailed, err.Error(), release.ID)
-		return nil, fmt.Errorf("mark active failed: %w", err)
+		return nil, fmt.Errorf("标记激活状态失败: %w", err)
 	}
 
-	helper.finishJob(job, wafJobStatusSuccess, "activate success", release.ID)
-	return &types.BaseResp{Code: 200, Msg: "success"}, nil
+	helper.finishJob(job, wafJobStatusSuccess, "激活成功", release.ID)
+	return &types.BaseResp{Code: 200, Msg: "成功"}, nil
 }

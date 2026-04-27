@@ -32,7 +32,7 @@ func (l *UpdateWafPolicyBindingLogic) UpdateWafPolicyBinding(req *types.WafPolic
 	}()
 
 	if req == nil || req.ID == 0 {
-		return nil, fmt.Errorf("policy binding id is required")
+		return nil, fmt.Errorf("策略绑定 ID 不能为空")
 	}
 	if err := validatePolicyIDExists(l.svcCtx.DB.WithContext(l.ctx), req.PolicyId); err != nil {
 		return nil, err
@@ -40,7 +40,7 @@ func (l *UpdateWafPolicyBindingLogic) UpdateWafPolicyBinding(req *types.WafPolic
 
 	var binding model.WafPolicyBinding
 	if err := l.svcCtx.DB.WithContext(l.ctx).First(&binding, req.ID).Error; err != nil {
-		return nil, fmt.Errorf("policy binding not found")
+		return nil, fmt.Errorf("策略绑定不存在")
 	}
 
 	scopeType, host, path, method, err := normalizeAndValidateBindingScopeFields(req.ScopeType, req.Host, req.Path, req.Method)
@@ -67,8 +67,8 @@ func (l *UpdateWafPolicyBindingLogic) UpdateWafPolicyBinding(req *types.WafPolic
 		return nil, err
 	}
 	if err := l.svcCtx.DB.WithContext(l.ctx).Save(&binding).Error; err != nil {
-		return nil, fmt.Errorf("update policy binding failed: %w", err)
+		return nil, fmt.Errorf("更新策略绑定失败: %w", err)
 	}
 
-	return &types.BaseResp{Code: 200, Msg: "success"}, nil
+	return &types.BaseResp{Code: 200, Msg: "成功"}, nil
 }

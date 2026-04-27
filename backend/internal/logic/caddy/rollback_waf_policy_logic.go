@@ -39,7 +39,7 @@ func (l *RollbackWafPolicyLogic) RollbackWafPolicy(req *types.WafPolicyRollbackR
 	}()
 
 	if req == nil || req.RevisionId == 0 {
-		return nil, fmt.Errorf("revisionId is required")
+		return nil, fmt.Errorf("策略版本 ID 不能为空")
 	}
 
 	publishService := NewPolicyPublishService(l.ctx, l.svcCtx)
@@ -51,7 +51,7 @@ func (l *RollbackWafPolicyLogic) RollbackWafPolicy(req *types.WafPolicyRollbackR
 	policyName = candidate.Policy.Name
 
 	if err := publishService.ValidateCandidate(candidate, "rollback"); err != nil {
-		return nil, fmt.Errorf("policy rollback validate failed: %w", err)
+		return nil, fmt.Errorf("策略回滚前校验失败: %w", err)
 	}
 	if err := publishService.LoadCandidate(candidate, "rollback"); err != nil {
 		helper.NotifyAutoRollback(fmt.Sprintf("WAF 策略回滚加载失败，已自动回滚到 last_good：policy=%s", policyName), policyID, policyName, operator)
@@ -76,5 +76,5 @@ func (l *RollbackWafPolicyLogic) RollbackWafPolicy(req *types.WafPolicyRollbackR
 		syncCaddyLogSources(l.svcCtx, candidate.Server, l.Logger)
 	})
 
-	return &types.BaseResp{Code: 200, Msg: "success"}, nil
+	return &types.BaseResp{Code: 200, Msg: "成功"}, nil
 }

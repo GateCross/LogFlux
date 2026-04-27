@@ -38,7 +38,7 @@ func (store *Store) EnsureDirs() error {
 	directories := []string{store.BaseDir, store.PackagesDir, store.ReleasesDir}
 	for _, directory := range directories {
 		if err := os.MkdirAll(directory, 0o755); err != nil {
-			return fmt.Errorf("create dir failed: %s, %w", directory, err)
+			return fmt.Errorf("创建目录失败: %s, %w", directory, err)
 		}
 	}
 	return nil
@@ -98,7 +98,7 @@ func (store *Store) SetLink(linkPath, targetPath string) error {
 	metaPath := cleanLinkPath + linkTargetSuffix
 
 	if err := os.MkdirAll(filepath.Dir(cleanLinkPath), 0o755); err != nil {
-		return fmt.Errorf("prepare link dir failed: %w", err)
+		return fmt.Errorf("准备链接目录失败: %w", err)
 	}
 
 	tempLink := cleanLinkPath + ".tmp"
@@ -107,12 +107,12 @@ func (store *Store) SetLink(linkPath, targetPath string) error {
 		if shouldUseLinkMetadataFallback(err) {
 			return writeLinkMetadata(cleanLinkPath, cleanTargetPath)
 		}
-		return fmt.Errorf("create temp symlink failed: %w", err)
+		return fmt.Errorf("创建临时符号链接失败: %w", err)
 	}
 	_ = os.Remove(cleanLinkPath)
 	if err := os.Rename(tempLink, cleanLinkPath); err != nil {
 		_ = os.Remove(tempLink)
-		return fmt.Errorf("replace symlink failed: %w", err)
+		return fmt.Errorf("替换符号链接失败: %w", err)
 	}
 	_ = os.Remove(metaPath)
 	return nil
@@ -148,11 +148,11 @@ func writeLinkMetadata(linkPath, targetPath string) error {
 	_ = os.Remove(cleanLinkPath)
 	_ = os.Remove(tempPath)
 	if err := os.WriteFile(tempPath, []byte(cleanTargetPath), 0o644); err != nil {
-		return fmt.Errorf("write link metadata failed: %w", err)
+		return fmt.Errorf("写入链接元数据失败: %w", err)
 	}
 	if err := os.Rename(tempPath, metaPath); err != nil {
 		_ = os.Remove(tempPath)
-		return fmt.Errorf("replace link metadata failed: %w", err)
+		return fmt.Errorf("替换链接元数据失败: %w", err)
 	}
 	return nil
 }

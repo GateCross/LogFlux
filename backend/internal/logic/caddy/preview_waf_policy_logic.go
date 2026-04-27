@@ -31,12 +31,12 @@ func (l *PreviewWafPolicyLogic) PreviewWafPolicy(req *types.WafPolicyActionReq) 
 	}()
 
 	if req == nil || req.ID == 0 {
-		return nil, fmt.Errorf("policy id is required")
+		return nil, fmt.Errorf("策略 ID 不能为空")
 	}
 
 	var policy model.WafPolicy
 	if err := l.svcCtx.DB.WithContext(l.ctx).First(&policy, req.ID).Error; err != nil {
-		return nil, fmt.Errorf("policy not found")
+		return nil, fmt.Errorf("策略不存在")
 	}
 
 	directives, err := buildPolicyDirectivesWithExclusions(l.svcCtx.DB.WithContext(l.ctx), &policy)

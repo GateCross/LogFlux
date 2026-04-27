@@ -22,7 +22,7 @@ func (helper *wafLogicHelper) applyReleaseRetention(kind string) {
 	}
 
 	if err := helper.pruneOldReleases(kind, keepCount); err != nil {
-		helper.logger.Errorf("apply release retention failed: kind=%s keep=%d err=%v", kind, keepCount, err)
+		helper.logger.Errorf("应用版本保留策略失败: kind=%s keep=%d err=%v", kind, keepCount, err)
 	}
 }
 
@@ -45,7 +45,7 @@ func (helper *wafLogicHelper) pruneOldReleases(kind string, keepCount int) error
 		Where("kind = ?", normalizedKind).
 		Order("created_at desc, id desc").
 		Find(&releases).Error; err != nil {
-		return fmt.Errorf("query release retention candidates failed: %w", err)
+		return fmt.Errorf("查询版本保留候选项失败: %w", err)
 	}
 	if len(releases) <= keepCount {
 		return nil
@@ -98,10 +98,10 @@ func (helper *wafLogicHelper) pruneOldReleases(kind string, keepCount int) error
 
 	if err := helper.svcCtx.DB.WithContext(helper.ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("release_id IN ?", deleteIDs).Delete(&model.WafUpdateJob{}).Error; err != nil {
-			return fmt.Errorf("delete retained release jobs failed: %w", err)
+			return fmt.Errorf("删除保留版本关联任务失败: %w", err)
 		}
 		if err := tx.Where("id IN ?", deleteIDs).Delete(&model.WafRelease{}).Error; err != nil {
-			return fmt.Errorf("delete retained releases failed: %w", err)
+			return fmt.Errorf("删除保留版本失败: %w", err)
 		}
 		return nil
 	}); err != nil {
@@ -110,7 +110,7 @@ func (helper *wafLogicHelper) pruneOldReleases(kind string, keepCount int) error
 
 	for _, pathValue := range dedupeNonEmptyStrings(pathsToRemove) {
 		if removeErr := os.RemoveAll(pathValue); removeErr != nil {
-			helper.logger.Errorf("remove retained release path failed: path=%s err=%v", pathValue, removeErr)
+			helper.logger.Errorf("删除保留版本路径失败: path=%s err=%v", pathValue, removeErr)
 		}
 	}
 	return nil

@@ -37,7 +37,7 @@ func TestVerifyPackage_UnsupportedExt(t *testing.T) {
 	}
 
 	_, err := VerifyPackage(packagePath, VerifyOptions{})
-	if err == nil || !strings.Contains(err.Error(), "unsupported package extension") {
+	if err == nil || !strings.Contains(err.Error(), "不支持的包扩展名") {
 		t.Fatalf("expected unsupported ext error, got %v", err)
 	}
 }
@@ -50,7 +50,7 @@ func TestVerifyPackage_SHA256Mismatch(t *testing.T) {
 	}
 
 	_, err := VerifyPackage(packagePath, VerifyOptions{ExpectedSHA256: strings.Repeat("a", 64)})
-	if err == nil || !strings.Contains(err.Error(), "sha256 mismatch") {
+	if err == nil || !strings.Contains(err.Error(), "SHA256 不匹配") {
 		t.Fatalf("expected sha mismatch error, got %v", err)
 	}
 }
@@ -63,7 +63,7 @@ func TestVerifyPackage_TooLarge(t *testing.T) {
 	}
 
 	_, err := VerifyPackage(packagePath, VerifyOptions{MaxPackageBytes: 4})
-	if err == nil || !strings.Contains(err.Error(), "package too large") {
+	if err == nil || !strings.Contains(err.Error(), "包文件过大") {
 		t.Fatalf("expected too large error, got %v", err)
 	}
 }

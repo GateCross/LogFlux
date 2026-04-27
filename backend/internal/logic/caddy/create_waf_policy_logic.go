@@ -35,7 +35,7 @@ func (l *CreateWafPolicyLogic) CreateWafPolicy(req *types.WafPolicyReq) (resp *t
 
 	helper := newWafLogicHelper(l.ctx, l.svcCtx, l.Logger)
 	if req == nil {
-		return nil, fmt.Errorf("invalid policy payload")
+		return nil, fmt.Errorf("策略参数不合法")
 	}
 
 	policy := &model.WafPolicy{}
@@ -45,14 +45,14 @@ func (l *CreateWafPolicyLogic) CreateWafPolicy(req *types.WafPolicyReq) (resp *t
 
 	name := strings.TrimSpace(policy.Name)
 	if name == "" {
-		return nil, fmt.Errorf("policy name is required")
+		return nil, fmt.Errorf("策略名称不能为空")
 	}
 
 	var existing model.WafPolicy
 	if err := helper.svcCtx.DB.WithContext(helper.ctx).Where("name = ?", name).First(&existing).Error; err == nil {
-		return nil, fmt.Errorf("policy name already exists: %s", name)
+		return nil, fmt.Errorf("策略名称已存在: %s", name)
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, fmt.Errorf("check policy name failed: %w", err)
+		return nil, fmt.Errorf("检查策略名称失败: %w", err)
 	}
 
 	directives, err := buildWafPolicyDirectives(policy)
@@ -68,9 +68,9 @@ func (l *CreateWafPolicyLogic) CreateWafPolicy(req *types.WafPolicyReq) (resp *t
 
 		if err := tx.Create(policy).Error; err != nil {
 			if strings.Contains(strings.ToLower(err.Error()), "duplicate key") {
-				return fmt.Errorf("policy name already exists: %s", name)
+				return fmt.Errorf("策略名称已存在: %s", name)
 			}
-			return fmt.Errorf("create policy failed: %w", err)
+			return fmt.Errorf("创建策略失败: %w", err)
 		}
 
 		if _, err := createPolicyRevision(tx, policy, wafPolicyStatusDraft, directives, "create policy", operator); err != nil {
@@ -82,5 +82,5 @@ func (l *CreateWafPolicyLogic) CreateWafPolicy(req *types.WafPolicyReq) (resp *t
 		return nil, err
 	}
 
-	return &types.BaseResp{Code: 200, Msg: "success"}, nil
+	return &types.BaseResp{Code: 200, Msg: "成功"}, nil
 }

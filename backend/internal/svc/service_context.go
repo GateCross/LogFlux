@@ -97,9 +97,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		rdb, err = redisClient.NewRedisClient(c.Redis.Addr(), c.Redis.Password, c.Redis.DB)
 		if err != nil {
 			// Redis 连接失败只打印警告，不中断启动
-			logx.Errorf("Warning: Failed to connect to Redis: %s", err.Error())
+			logx.Errorf("警告: 连接 Redis 失败: %s", err.Error())
 		} else {
-			logx.Info("Redis connected successfully")
+			logx.Info("Redis 连接成功")
 		}
 	}
 
@@ -216,14 +216,14 @@ func initWafWorkspace(c *config.Config) {
 func ensureWafWorkspaceDirs(baseDir string) error {
 	trimmed := strings.TrimSpace(baseDir)
 	if trimmed == "" {
-		return fmt.Errorf("workdir is empty")
+		return fmt.Errorf("工作目录为空")
 	}
 
 	subDirs := []string{"", "packages", "releases"}
 	for _, subDir := range subDirs {
 		target := filepath.Join(trimmed, subDir)
 		if err := os.MkdirAll(target, 0o755); err != nil {
-			return fmt.Errorf("create dir failed: %s, %w", target, err)
+			return fmt.Errorf("创建目录失败: %s, %w", target, err)
 		}
 	}
 
@@ -652,9 +652,9 @@ END;
 $$ LANGUAGE plpgsql;
 `
 	if err := db.Exec(sql).Error; err != nil {
-		logx.Errorf("Warning: Failed to create archive function: %s", err.Error())
+		logx.Errorf("警告: 创建归档函数失败: %s", err.Error())
 	} else {
-		logx.Info("Archive function created successfully")
+		logx.Info("归档函数创建成功")
 	}
 }
 
@@ -680,11 +680,11 @@ func initNotificationManager(db *gorm2.DB, rdb *redis.Client) notification.Notif
 
 	// 启动通知管理器（渠道/规则均从数据库加载）
 	if err := mgr.Start(context.Background()); err != nil {
-		logx.Errorf("Warning: Failed to start notification manager: %s", err.Error())
+		logx.Errorf("警告: 启动通知管理器失败: %s", err.Error())
 		return nil
 	}
 
-	logx.Info("Notification manager started successfully")
+	logx.Info("通知管理器启动成功")
 
 	// 发送系统启动通知
 	event := notification.NewEvent(

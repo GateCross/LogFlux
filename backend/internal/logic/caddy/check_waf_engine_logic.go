@@ -36,12 +36,12 @@ func (l *CheckWafEngineLogic) CheckWafEngine() (resp *types.BaseResp, err error)
 	if job != nil {
 		if err := helper.svcCtx.DB.WithContext(helper.ctx).Model(job).Updates(map[string]interface{}{
 			"meta":    map[string]interface{}{"latestVersion": latestVersion},
-			"message": fmt.Sprintf("engine source check success: latest=%s", latestVersion),
+			"message": fmt.Sprintf("引擎源检查成功: latest=%s", latestVersion),
 		}).Error; err != nil {
-			helper.logger.Errorf("update engine check job meta failed: %v", err)
+			helper.logger.Errorf("更新引擎检查任务元数据失败: %v", err)
 		}
 	}
-	helper.finishJob(job, wafJobStatusSuccess, fmt.Sprintf("engine source check success: latest=%s", latestVersion), 0)
+	helper.finishJob(job, wafJobStatusSuccess, fmt.Sprintf("引擎源检查成功: latest=%s", latestVersion), 0)
 
-	return &types.BaseResp{Code: 200, Msg: "success"}, nil
+	return &types.BaseResp{Code: 200, Msg: "成功"}, nil
 }

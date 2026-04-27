@@ -34,12 +34,12 @@ func (l *UpdateWafPolicyLogic) UpdateWafPolicy(req *types.WafPolicyUpdateReq) (r
 
 	helper := newWafLogicHelper(l.ctx, l.svcCtx, l.Logger)
 	if req == nil || req.ID == 0 {
-		return nil, fmt.Errorf("policy id is required")
+		return nil, fmt.Errorf("策略 ID 不能为空")
 	}
 
 	var policy model.WafPolicy
 	if err := helper.svcCtx.DB.WithContext(helper.ctx).First(&policy, req.ID).Error; err != nil {
-		return nil, fmt.Errorf("policy not found")
+		return nil, fmt.Errorf("策略不存在")
 	}
 
 	originalName := strings.TrimSpace(policy.Name)
@@ -48,16 +48,16 @@ func (l *UpdateWafPolicyLogic) UpdateWafPolicy(req *types.WafPolicyUpdateReq) (r
 	}
 
 	if name := strings.TrimSpace(policy.Name); name == "" {
-		return nil, fmt.Errorf("policy name is required")
+		return nil, fmt.Errorf("策略名称不能为空")
 	} else if name != originalName {
 		var count int64
 		if err := helper.svcCtx.DB.WithContext(helper.ctx).Model(&model.WafPolicy{}).
 			Where("name = ? AND id <> ?", name, policy.ID).
 			Count(&count).Error; err != nil {
-			return nil, fmt.Errorf("check policy name failed: %w", err)
+			return nil, fmt.Errorf("检查策略名称失败: %w", err)
 		}
 		if count > 0 {
-			return nil, fmt.Errorf("policy name already exists: %s", name)
+			return nil, fmt.Errorf("策略名称已存在: %s", name)
 		}
 	}
 
@@ -74,9 +74,9 @@ func (l *UpdateWafPolicyLogic) UpdateWafPolicy(req *types.WafPolicyUpdateReq) (r
 
 		if err := tx.Save(&policy).Error; err != nil {
 			if strings.Contains(strings.ToLower(err.Error()), "duplicate key") {
-				return fmt.Errorf("policy name already exists: %s", policy.Name)
+				return fmt.Errorf("策略名称已存在: %s", policy.Name)
 			}
-			return fmt.Errorf("update policy failed: %w", err)
+			return fmt.Errorf("更新策略失败: %w", err)
 		}
 
 		if _, err := createPolicyRevision(tx, &policy, wafPolicyStatusDraft, directives, "update policy", operator); err != nil {
@@ -88,5 +88,5 @@ func (l *UpdateWafPolicyLogic) UpdateWafPolicy(req *types.WafPolicyUpdateReq) (r
 		return nil, err
 	}
 
-	return &types.BaseResp{Code: 200, Msg: "success"}, nil
+	return &types.BaseResp{Code: 200, Msg: "成功"}, nil
 }

@@ -152,7 +152,7 @@ func generateComplexPassword(length int) (string, error) {
 
 	password := string(passwordChars)
 	if !validateComplexity(password) {
-		return "", fmt.Errorf("generated password does not meet complexity")
+		return "", fmt.Errorf("生成的密码不满足复杂度要求")
 	}
 
 	return password, nil

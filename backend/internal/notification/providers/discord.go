@@ -30,7 +30,7 @@ func (d *DiscordProvider) Send(ctx context.Context, config map[string]interface{
 	// 解析配置
 	discordConfig := &model.DiscordConfig{}
 	if err := mapToStruct(config, discordConfig); err != nil {
-		return fmt.Errorf("invalid discord config: %w", err)
+		return fmt.Errorf("Discord 配置无效: %w", err)
 	}
 
 	// 构建消息
@@ -72,24 +72,24 @@ func (d *DiscordProvider) Send(ctx context.Context, config map[string]interface{
 
 	jsonData, err := json.Marshal(message)
 	if err != nil {
-		return fmt.Errorf("failed to marshal discord message: %w", err)
+		return fmt.Errorf("序列化 Discord 消息失败: %w", err)
 	}
 
 	// 发送请求
 	req, err := http.NewRequestWithContext(ctx, "POST", discordConfig.WebhookURL, bytes.NewBuffer(jsonData))
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+		return fmt.Errorf("创建请求失败: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := d.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to send request to discord: %w", err)
+		return fmt.Errorf("发送 Discord 请求失败: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("discord webhook returned status: %d", resp.StatusCode)
+		return fmt.Errorf("Discord 回调返回状态: %d", resp.StatusCode)
 	}
 
 	return nil
@@ -99,11 +99,11 @@ func (d *DiscordProvider) Send(ctx context.Context, config map[string]interface{
 func (d *DiscordProvider) Validate(config map[string]interface{}) error {
 	discordConfig := &model.DiscordConfig{}
 	if err := mapToStruct(config, discordConfig); err != nil {
-		return fmt.Errorf("invalid discord config: %w", err)
+		return fmt.Errorf("Discord 配置无效: %w", err)
 	}
 
 	if discordConfig.WebhookURL == "" {
-		return fmt.Errorf("webhook url is required")
+		return fmt.Errorf("回调 URL 不能为空")
 	}
 
 	return nil

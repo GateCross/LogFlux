@@ -53,11 +53,11 @@ func (l *RollbackWafReleaseLogic) RollbackWafRelease(req *types.WafReleaseRollba
 
 	if err := helper.markReleaseActive(targetRelease); err != nil {
 		helper.finishJob(job, wafJobStatusFailed, err.Error(), targetRelease.ID)
-		return nil, fmt.Errorf("mark rollback active failed: %w", err)
+		return nil, fmt.Errorf("标记回滚激活状态失败: %w", err)
 	}
 
-	helper.finishJob(job, wafJobStatusSuccess, "rollback success", targetRelease.ID)
-	return &types.BaseResp{Code: 200, Msg: "success"}, nil
+	helper.finishJob(job, wafJobStatusSuccess, "回滚成功", targetRelease.ID)
+	return &types.BaseResp{Code: 200, Msg: "成功"}, nil
 }
 
 func (l *RollbackWafReleaseLogic) resolveRollbackTarget(helper *wafLogicHelper, req *types.WafReleaseRollbackReq) (*model.WafRelease, error) {
@@ -66,17 +66,17 @@ func (l *RollbackWafReleaseLogic) resolveRollbackTarget(helper *wafLogicHelper, 
 	}
 
 	if strings.EqualFold(strings.TrimSpace(req.Target), "version") {
-		return nil, fmt.Errorf("version is required when target=version")
+		return nil, fmt.Errorf("目标为 version 时版本不能为空")
 	}
 
 	lastGoodPath, err := helper.store.LinkTarget(helper.store.LastGoodLinkPath())
 	if err != nil {
-		return nil, fmt.Errorf("last_good link not found")
+		return nil, fmt.Errorf("last_good 链接不存在")
 	}
 
 	version := filepath.Base(lastGoodPath)
 	if version == "" || version == "." || version == "/" {
-		return nil, fmt.Errorf("invalid last_good target")
+		return nil, fmt.Errorf("last_good 目标无效")
 	}
 	return l.findReleaseByVersion(helper, version)
 }
@@ -86,9 +86,9 @@ func (l *RollbackWafReleaseLogic) findReleaseByVersion(helper *wafLogicHelper, v
 	err := helper.svcCtx.DB.WithContext(helper.ctx).Where("version = ?", strings.TrimSpace(version)).Order("id desc").First(&release).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, fmt.Errorf("target release not found")
+			return nil, fmt.Errorf("目标版本不存在")
 		}
-		return nil, fmt.Errorf("query target release failed: %w", err)
+		return nil, fmt.Errorf("查询目标版本失败: %w", err)
 	}
 	return &release, nil
 }

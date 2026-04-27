@@ -31,12 +31,12 @@ func (l *ValidateWafPolicyLogic) ValidateWafPolicy(req *types.WafPolicyActionReq
 	}()
 
 	if req == nil || req.ID == 0 {
-		return nil, fmt.Errorf("policy id is required")
+		return nil, fmt.Errorf("策略 ID 不能为空")
 	}
 
 	var policy model.WafPolicy
 	if err := l.svcCtx.DB.WithContext(l.ctx).First(&policy, req.ID).Error; err != nil {
-		return nil, fmt.Errorf("policy not found")
+		return nil, fmt.Errorf("策略不存在")
 	}
 
 	directives, err := buildPolicyDirectivesWithExclusions(l.svcCtx.DB.WithContext(l.ctx), &policy)
@@ -55,8 +55,8 @@ func (l *ValidateWafPolicyLogic) ValidateWafPolicy(req *types.WafPolicyActionReq
 	}
 
 	if err := adaptCaddyfile(server, candidateConfig); err != nil {
-		return nil, fmt.Errorf("policy validate failed: %w", err)
+		return nil, fmt.Errorf("策略校验失败: %w", err)
 	}
 
-	return &types.BaseResp{Code: 200, Msg: "success"}, nil
+	return &types.BaseResp{Code: 200, Msg: "成功"}, nil
 }

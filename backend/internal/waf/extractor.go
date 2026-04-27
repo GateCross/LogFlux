@@ -29,20 +29,20 @@ type ExtractResult struct {
 
 func ExtractPackage(packagePath, targetDir string, options ExtractOptions) (*ExtractResult, error) {
 	if strings.TrimSpace(packagePath) == "" {
-		return nil, fmt.Errorf("package path is required")
+		return nil, fmt.Errorf("包路径不能为空")
 	}
 	if strings.TrimSpace(targetDir) == "" {
-		return nil, fmt.Errorf("target dir is required")
+		return nil, fmt.Errorf("目标目录不能为空")
 	}
 
 	cleanTargetDir := filepath.Clean(targetDir)
 	if err := os.MkdirAll(cleanTargetDir, 0o755); err != nil {
-		return nil, fmt.Errorf("create target dir failed: %w", err)
+		return nil, fmt.Errorf("创建目标目录失败: %w", err)
 	}
 
 	ext := detectPackageExt(packagePath)
 	if ext == "" {
-		return nil, fmt.Errorf("unsupported package extension")
+		return nil, fmt.Errorf("不支持的包扩展名")
 	}
 
 	opts := normalizeExtractOptions(options)
@@ -76,7 +76,7 @@ func normalizeExtractOptions(options ExtractOptions) normalizedExtractOptions {
 func extractZip(packagePath, targetDir string, options normalizedExtractOptions) (*ExtractResult, error) {
 	reader, err := zip.OpenReader(packagePath)
 	if err != nil {
-		return nil, fmt.Errorf("open zip failed: %w", err)
+		return nil, fmt.Errorf("打开 ZIP 包失败: %w", err)
 	}
 	defer reader.Close()
 
@@ -86,24 +86,24 @@ func extractZip(packagePath, targetDir string, options normalizedExtractOptions)
 			return nil, err
 		}
 		if file.Mode()&os.ModeSymlink != 0 {
-			return nil, fmt.Errorf("symlink entry is not allowed: %s", file.Name)
+			return nil, fmt.Errorf("不允许解压符号链接条目: %s", file.Name)
 		}
 
 		targetPath := filepath.Join(targetDir, file.Name)
 		if file.FileInfo().IsDir() {
 			if err := os.MkdirAll(targetPath, 0o755); err != nil {
-				return nil, fmt.Errorf("create dir failed: %w", err)
+				return nil, fmt.Errorf("创建目录失败: %w", err)
 			}
 			continue
 		}
 
 		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
-			return nil, fmt.Errorf("create parent dir failed: %w", err)
+			return nil, fmt.Errorf("创建父目录失败: %w", err)
 		}
 
 		srcFile, err := file.Open()
 		if err != nil {
-			return nil, fmt.Errorf("open zip entry failed: %w", err)
+			return nil, fmt.Errorf("打开 ZIP 条目失败: %w", err)
 		}
 
 		writtenBytes, err := writeExtractedFile(targetPath, srcFile)
@@ -125,13 +125,13 @@ func extractZip(packagePath, targetDir string, options normalizedExtractOptions)
 func extractTarGz(packagePath, targetDir string, options normalizedExtractOptions) (*ExtractResult, error) {
 	packageFile, err := os.Open(packagePath)
 	if err != nil {
-		return nil, fmt.Errorf("open package failed: %w", err)
+		return nil, fmt.Errorf("打开包文件失败: %w", err)
 	}
 	defer packageFile.Close()
 
 	gzipReader, err := gzip.NewReader(packageFile)
 	if err != nil {
-		return nil, fmt.Errorf("create gzip reader failed: %w", err)
+		return nil, fmt.Errorf("创建 gzip 读取器失败: %w", err)
 	}
 	defer gzipReader.Close()
 
@@ -144,7 +144,7 @@ func extractTarGz(packagePath, targetDir string, options normalizedExtractOption
 			break
 		}
 		if err != nil {
-			return nil, fmt.Errorf("read tar entry failed: %w", err)
+			return nil, fmt.Errorf("读取 tar 条目失败: %w", err)
 		}
 
 		if err := validateArchiveEntry(header.Name, targetDir); err != nil {
@@ -155,11 +155,11 @@ func extractTarGz(packagePath, targetDir string, options normalizedExtractOption
 		switch header.Typeflag {
 		case tar.TypeDir:
 			if err := os.MkdirAll(targetPath, 0o755); err != nil {
-				return nil, fmt.Errorf("create dir failed: %w", err)
+				return nil, fmt.Errorf("创建目录失败: %w", err)
 			}
 		case tar.TypeReg, tar.TypeRegA:
 			if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
-				return nil, fmt.Errorf("create parent dir failed: %w", err)
+				return nil, fmt.Errorf("创建父目录失败: %w", err)
 			}
 			writtenBytes, err := writeExtractedFile(targetPath, tarReader)
 			if err != nil {
@@ -171,7 +171,7 @@ func extractTarGz(packagePath, targetDir string, options normalizedExtractOption
 				return nil, err
 			}
 		case tar.TypeSymlink, tar.TypeLink:
-			return nil, fmt.Errorf("symlink entry is not allowed: %s", header.Name)
+			return nil, fmt.Errorf("不允许解压符号链接条目: %s", header.Name)
 		default:
 			continue
 		}
@@ -182,25 +182,25 @@ func extractTarGz(packagePath, targetDir string, options normalizedExtractOption
 
 func validateArchiveEntry(entryName, targetDir string) error {
 	if strings.TrimSpace(entryName) == "" {
-		return fmt.Errorf("archive entry name is empty")
+		return fmt.Errorf("归档条目名称为空")
 	}
 
 	if filepath.IsAbs(entryName) {
-		return fmt.Errorf("absolute path is not allowed: %s", entryName)
+		return fmt.Errorf("不允许使用绝对路径: %s", entryName)
 	}
 
 	cleanName := filepath.Clean(entryName)
 	if cleanName == "." || strings.HasPrefix(cleanName, "..") {
-		return fmt.Errorf("path traversal detected: %s", entryName)
+		return fmt.Errorf("检测到路径穿越: %s", entryName)
 	}
 
 	targetPath := filepath.Clean(filepath.Join(targetDir, cleanName))
 	relativePath, err := filepath.Rel(targetDir, targetPath)
 	if err != nil {
-		return fmt.Errorf("resolve entry path failed: %w", err)
+		return fmt.Errorf("解析条目路径失败: %w", err)
 	}
 	if strings.HasPrefix(relativePath, "..") || filepath.IsAbs(relativePath) {
-		return fmt.Errorf("entry escapes target dir: %s", entryName)
+		return fmt.Errorf("条目超出目标目录: %s", entryName)
 	}
 	return nil
 }
@@ -208,23 +208,23 @@ func validateArchiveEntry(entryName, targetDir string) error {
 func writeExtractedFile(targetPath string, source io.Reader) (int64, error) {
 	targetFile, err := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
 	if err != nil {
-		return 0, fmt.Errorf("create target file failed: %w", err)
+		return 0, fmt.Errorf("创建目标文件失败: %w", err)
 	}
 	defer targetFile.Close()
 
 	writtenBytes, err := io.Copy(targetFile, source)
 	if err != nil {
-		return 0, fmt.Errorf("write target file failed: %w", err)
+		return 0, fmt.Errorf("写入目标文件失败: %w", err)
 	}
 	return writtenBytes, nil
 }
 
 func validateExtractLimits(result *ExtractResult, options normalizedExtractOptions) error {
 	if result.FileCount > options.maxFiles {
-		return fmt.Errorf("too many extracted files: %d > %d", result.FileCount, options.maxFiles)
+		return fmt.Errorf("解压文件数量超出限制: %d > %d", result.FileCount, options.maxFiles)
 	}
 	if result.TotalBytes > options.maxTotalBytes {
-		return fmt.Errorf("extracted bytes exceed limit: %d > %d", result.TotalBytes, options.maxTotalBytes)
+		return fmt.Errorf("解压总大小超出限制: %d > %d", result.TotalBytes, options.maxTotalBytes)
 	}
 	return nil
 }
