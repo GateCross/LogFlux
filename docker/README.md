@@ -83,7 +83,9 @@ docker compose -f docker/docker-compose.yml up -d --no-build
 可选先构建自定义 Caddy：
 
 ```bash
-docker build -f docker/caddy.Dockerfile -t logflux-caddy:local .
+docker build -f docker/caddy.Dockerfile \
+  --build-arg CORAZA_CADDY_VERSION=v2.5.0 \
+  -t logflux-caddy:local .
 ```
 
 再构建 LogFlux 应用镜像：
@@ -91,7 +93,7 @@ docker build -f docker/caddy.Dockerfile -t logflux-caddy:local .
 ```bash
 docker build -f docker/Dockerfile \
   --build-arg CADDY_IMAGE=logflux-caddy:local \
-  --build-arg CORAZA_CURRENT_VERSION=v2.1.0 \
+  --build-arg CORAZA_CURRENT_VERSION=v2.5.0 \
   -t logflux:local .
 ```
 
