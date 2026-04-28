@@ -70,3 +70,4 @@ export * from './caddy-source';
 export * from './caddy-policy';
 export * from './caddy-observe';
 export * from './caddy-release-job';
+export * from './caddy-simple-waf';

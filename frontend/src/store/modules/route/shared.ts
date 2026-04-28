@@ -75,9 +75,10 @@ export function sortRoutesByOrder(routes: ElegantConstRoute[]) {
  */
 export function getGlobalMenusByAuthRoutes(routes: ElegantConstRoute[]) {
   const menus: App.Global.Menu[] = [];
+  const hiddenAdvancedMenus = new Set(['security']);
 
   routes.forEach(route => {
-    if (!route.meta?.hideInMenu) {
+    if (!route.meta?.hideInMenu && !hiddenAdvancedMenus.has(String(route.name))) {
       const menu = getGlobalMenuByBaseRoute(route);
 
       if (route.children?.some(child => !child.meta?.hideInMenu)) {

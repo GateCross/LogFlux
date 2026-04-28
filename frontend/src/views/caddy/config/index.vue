@@ -7,6 +7,7 @@ import { fetchCaddyServers, fetchCaddyConfig, updateCaddyConfigRaw, updateCaddyC
 import ConfigPreviewPanel from './components/ConfigPreviewPanel.vue';
 import QuickConfigPanel from './components/QuickConfigPanel.vue';
 import RawEditorPanel from './components/RawEditorPanel.vue';
+import SimpleWafPanel from './components/SimpleWafPanel.vue';
 import WafIntegrationCard from './components/WafIntegrationCard.vue';
 import SvgIcon from '@/components/custom/svg-icon.vue';
 import type { CaddyFormModel, Route, RouteMatch, Site } from './types';
@@ -58,7 +59,7 @@ const loading = ref(false);
 const saving = ref(false);
 const servers = ref<CaddyServer[]>([]);
 const currentServerId = ref<number | null>(null);
-const pageMode = ref<'quick' | 'raw' | 'preview'>('quick');
+const pageMode = ref<'quick' | 'waf' | 'raw' | 'preview'>('quick');
 const lastEditMode = ref<'quick' | 'raw'>('quick');
 const configContent = ref('');
 const showSettingsDrawer = ref(false);
@@ -145,11 +146,13 @@ const historyCompareLeftFormatted = computed(() => formatCaddyfile(historyCompar
 const historyCompareRight = computed(() => formattedConfigContent.value);
 const pageModeOptions = [
   { label: '快速配置', value: 'quick' },
+  { label: '防火墙', value: 'waf' },
   { label: '原始配置', value: 'raw' },
   { label: '预览', value: 'preview' }
 ] as const;
 const pageModeSummary = computed(() => {
   if (pageMode.value === 'quick') return '只编辑常用站点能力，复杂配置自动保留。';
+  if (pageMode.value === 'waf') return '配置 Coraza / OWASP CRS 的常用开关。';
   if (pageMode.value === 'raw') return '直接维护完整 Caddyfile，适合高级规则。';
   return lastEditMode.value === 'raw' ? '展示当前原始配置内容。' : '展示当前快速配置生成结果。';
 });
@@ -461,8 +464,13 @@ async function saveQuickConfig() {
   pageMode.value = 'preview';
 }
 
-function handleModeChange(nextMode: 'quick' | 'raw' | 'preview') {
+function handleModeChange(nextMode: 'quick' | 'waf' | 'raw' | 'preview') {
   if (nextMode === pageMode.value) return;
+
+  if (nextMode === 'waf') {
+    pageMode.value = 'waf';
+    return;
+  }
 
   if (nextMode === 'raw') {
     configContent.value = lastEditMode.value === 'raw' ? configContent.value : generatedQuickCaddyfile.value;
@@ -483,6 +491,11 @@ function handleModeChange(nextMode: 'quick' | 'raw' | 'preview') {
   }
 
   pageMode.value = 'preview';
+}
+
+async function handleSimpleWafApplied() {
+  await getConfig();
+  await fetchWafIntegrationState();
 }
 
 function openSettingsDrawer() {
@@ -1828,6 +1841,7 @@ onMounted(() => {
             >
               保存原始配置
             </NButton>
+            <NTag v-else-if="pageMode === 'waf'" size="small" type="warning" :bordered="false">防火墙设置</NTag>
             <NTag v-else size="small" type="info" :bordered="false">预览模式</NTag>
 
             <NDropdown :options="moreOptions" @select="handleMoreAction">
@@ -1883,6 +1897,11 @@ onMounted(() => {
             @duplicate="duplicateQuickSite"
             @remove="removeQuickSite"
             @switch-raw="switchToRawFromQuick"
+          />
+          <SimpleWafPanel
+            v-else-if="pageMode === 'waf'"
+            :server-id="currentServerId"
+            :on-applied="handleSimpleWafApplied"
           />
           <RawEditorPanel
             v-else-if="pageMode === 'raw'"

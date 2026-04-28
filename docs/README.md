@@ -1,6 +1,6 @@
 # LogFlux 文档中心
 
-本文档按当前仓库代码与部署方式整理，优先覆盖 Docker 部署与安全管理（CRS/Coraza）。
+本文档按当前仓库代码与部署方式整理，优先覆盖 Docker 部署、Caddy 图形化配置与简单 WAF 设置。
 
 ## 快速入口
 
@@ -8,7 +8,7 @@
 - Docker 部署主文档：[`docker/README.md`](../docker/README.md)
 - Docker 配置模板：[`docker/config.example.yaml`](../docker/config.example.yaml)
 - Compose 编排文件：[`docker/docker-compose.yml`](../docker/docker-compose.yml)
-- WAF/CRS 运行策略计划与进度：
+- WAF/CRS 历史计划与进度：
   - [`plans/waf-crs-frontend-security-config-overall-plan.md`](./plans/waf-crs-frontend-security-config-overall-plan.md)
   - [`plans/waf-crs-frontend-security-config-progress.md`](./plans/waf-crs-frontend-security-config-progress.md)
 
@@ -27,11 +27,10 @@
 
 - 环境准备与配置项说明
 - 镜像使用与本地构建
+- Caddy 图形化配置、热加载与回滚
+- 简单 WAF 设置（关闭 / 仅检测 / 阻断、低误报 / 平衡 / 严格、审计与请求体限制）
 - Coraza 版本检查机制（GitHub Release）
-- 运行策略（SecRuleEngine / 审计 / 请求体限制）发布与回滚
-- CRS 调优（低误报/平衡/高拦截模板、PL 与 anomaly 阈值）独立发布
-- 规则例外与策略绑定（global/site/route）配置
-- 代理配置与失败回退策略
+- 高级 WAF 能力的保留边界
 - 常见故障排查与运维命令
 
 ### 2) 关键配置文件
@@ -42,7 +41,7 @@
 
 ## 安全管理相关文档
 
-以下文档主要用于设计背景、实施计划和运维规范，部分内容可能早于当前实现，请以代码与 `docker/README.md` 的“当前行为”章节为准：
+以下文档主要用于设计背景、实施计划和运维规范。当前默认产品入口已收敛到 `Caddy管理 -> Caddy配置 -> 防火墙`；高级安全管理页面默认隐藏，部分历史文档不再代表默认使用路径：
 
 - [`plans/waf-crs-frontend-security-config-overall-plan.md`](./plans/waf-crs-frontend-security-config-overall-plan.md)
 - [`plans/waf-crs-frontend-security-config-progress.md`](./plans/waf-crs-frontend-security-config-progress.md)
@@ -65,4 +64,4 @@
 
 ---
 
-最后更新：2026-02-13
+最后更新：2026-04-28

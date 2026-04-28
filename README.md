@@ -1,6 +1,6 @@
 # LogFlux
 
-日志流量分析与安全升级管理系统（Caddy + Go + Vue）。
+日志流量分析与 Caddy 图形化配置系统（Caddy + Coraza WAF + Go + Vue）。
 
 ## 快速开始
 
@@ -58,11 +58,14 @@ curl -f http://localhost/api/health
 
 ## 关键能力
 
-- Caddy 反向代理与日志采集
+- Caddy 反向代理图形化配置
+- Coraza + OWASP CRS 简单防火墙开关
+- Caddy 访问日志采集
 - 日志分析与归档
 - RBAC 权限控制
-- 安全升级管理（CRS）
-- Coraza 引擎版本检查（基于 GitHub Release）
+- Caddy 配置热加载、历史与回滚
+
+> 高级安全管理能力仍保留在代码中，但默认入口收敛到 `Caddy管理 -> Caddy配置 -> 防火墙`。
 
 ## 架构概览
 
