@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -15,6 +16,36 @@ const defaultCRSReleaseAPI = "https://api.github.com/repos/coreruleset/corerules
 var crsTagPathPattern = regexp.MustCompile(`/refs/tags/([^/?#]+)`)
 var githubReleaseDownloadTagPattern = regexp.MustCompile(`/releases/download/([^/]+)/`)
 var branchLikeVersionPattern = regexp.MustCompile(`(?i)^(main|master|head|latest)([_-].*)?$`)
+
+func (helper *wafLogicHelper) crsCurrentVersion() string {
+	if helper == nil || helper.svcCtx == nil || helper.svcCtx.DB == nil {
+		return ""
+	}
+
+	var release model.WafRelease
+	if err := helper.svcCtx.DB.WithContext(helper.ctx).
+		Where("kind = ? AND status = ?", wafKindCRS, wafReleaseStatusActive).
+		Order("updated_at desc, id desc").
+		First(&release).Error; err == nil {
+		if version := strings.TrimSpace(release.Version); version != "" {
+			return version
+		}
+	}
+
+	if helper.store != nil {
+		if targetPath, err := helper.store.LinkTarget(helper.store.CurrentLinkPath()); err == nil {
+			if version := strings.TrimSpace(filepath.Base(targetPath)); version != "" && version != "." && version != string(filepath.Separator) {
+				return version
+			}
+		}
+	}
+
+	detectedVersion, detectErr := helper.detectCRSCurrentVersion()
+	if detectErr != nil {
+		helper.logger.Errorf("检测 CRS 当前版本失败: %v", detectErr)
+	}
+	return strings.TrimSpace(detectedVersion)
+}
 
 func (helper *wafLogicHelper) resolveCRSSyncTarget(source *model.WafSource) (string, string) {
 	if source == nil {

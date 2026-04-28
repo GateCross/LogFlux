@@ -20,6 +20,7 @@ import (
 const defaultCorazaReleaseAPI = "https://api.github.com/repos/corazawaf/coraza-caddy/releases/latest"
 
 var corazaModuleVersionPattern = regexp.MustCompile(`github\.com/corazawaf/coraza-caddy(?:/v\d+)?@([A-Za-z0-9._+\-~]+)`)
+var crsModuleVersionPattern = regexp.MustCompile(`github\.com/corazawaf/coraza-coreruleset(?:/v\d+)?@([A-Za-z0-9._+\-~]+)`)
 var semverPattern = regexp.MustCompile(`v\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.\-]+)?`)
 
 type githubLatestReleaseResp struct {
@@ -119,6 +120,86 @@ func extractCorazaVersionFromText(rawOutput string) string {
 			continue
 		}
 		if !strings.Contains(strings.ToLower(lineText), "coraza") {
+			continue
+		}
+		if matched := semverPattern.FindString(lineText); matched != "" {
+			return strings.TrimSpace(matched)
+		}
+	}
+
+	return ""
+}
+
+func (helper *wafLogicHelper) detectCRSCurrentVersion() (string, error) {
+	commandCandidates := [][]string{
+		{"caddy", "list-modules", "--versions"},
+		{"/usr/bin/caddy", "list-modules", "--versions"},
+		{"caddy", "build-info"},
+		{"/usr/bin/caddy", "build-info"},
+	}
+
+	var lastErr error
+	for _, command := range commandCandidates {
+		if len(command) == 0 {
+			continue
+		}
+		version, err := detectCRSVersionByCommand(helper.ctx, command[0], command[1:]...)
+		if err != nil {
+			if isCommandNotFoundError(err) {
+				continue
+			}
+			lastErr = err
+			continue
+		}
+		if version != "" {
+			return version, nil
+		}
+	}
+
+	if lastErr != nil {
+		return "", lastErr
+	}
+	return "", nil
+}
+
+func detectCRSVersionByCommand(parentCtx context.Context, name string, args ...string) (string, error) {
+	baseCtx := parentCtx
+	if baseCtx == nil {
+		baseCtx = context.Background()
+	}
+	timeoutCtx, cancel := context.WithTimeout(baseCtx, 3*time.Second)
+	defer cancel()
+
+	command := exec.CommandContext(timeoutCtx, name, args...)
+	outputBytes, err := command.CombinedOutput()
+	outputText := strings.TrimSpace(string(outputBytes))
+	if err != nil {
+		if outputText != "" {
+			return "", fmt.Errorf("执行命令失败: %s %s err=%w output=%s", name, strings.Join(args, " "), err, outputText)
+		}
+		return "", fmt.Errorf("执行命令失败: %s %s err=%w", name, strings.Join(args, " "), err)
+	}
+
+	return extractCRSVersionFromText(outputText), nil
+}
+
+func extractCRSVersionFromText(rawOutput string) string {
+	output := strings.TrimSpace(rawOutput)
+	if output == "" {
+		return ""
+	}
+
+	if matches := crsModuleVersionPattern.FindStringSubmatch(output); len(matches) == 2 {
+		return strings.TrimSpace(matches[1])
+	}
+
+	for _, line := range strings.Split(output, "\n") {
+		lineText := strings.TrimSpace(line)
+		if lineText == "" {
+			continue
+		}
+		lowerLine := strings.ToLower(lineText)
+		if !strings.Contains(lowerLine, "coraza-coreruleset") && !strings.Contains(lowerLine, "owasp_crs") && !strings.Contains(lowerLine, "crs") {
 			continue
 		}
 		if matched := semverPattern.FindString(lineText); matched != "" {

@@ -139,67 +139,49 @@ compose 已默认持久化：
 
 检查逻辑：**优先代理，请求失败自动回退直连**。
 
-### 5.5 WAF 运行策略（P0）发布与回滚
+### 5.5 简单 WAF 设置（默认入口）
 
-前端入口：`安全管理` -> `运行模式`
+前端入口：`Caddy管理` -> `Caddy配置` -> `防火墙`
 
-可配置项（当前已支持）：
+默认入口只暴露常用项：
 
-- `SecRuleEngine`：`On | Off | DetectionOnly`
-- `SecAuditEngine`、`SecAuditLogFormat`、`SecAuditLogRelevantStatus`
-- `SecRequestBodyAccess`、`SecRequestBodyLimit`、`SecRequestBodyNoFilesLimit`
+- 模式：关闭 / 仅检测 / 阻断
+- 强度：低误报 / 平衡 / 严格
+- 审计日志：关闭 / 相关请求 / 全量
+- 请求体检查与大小限制
+- 适用站点
 
 推荐发布流程：
 
-1. 先在 `运行模式` 页签点 `预览`，确认生成的 directives。
-2. 点 `校验`（仅调用 `/adapt`，不生效）。
-3. 点 `发布`（调用 `/adapt + /load`），`On` 模式会二次确认。
-4. 若出现误拦截，可在“最近发布记录”里选择历史版本执行回滚。
+1. 在 `Caddy配置` 中先保存站点配置。
+2. 切换到 `防火墙`，选择模式、强度和适用站点。
+3. 点 `预览变更` 查看生成的 directives 与候选 Caddyfile。
+4. 点 `应用到 Caddy`，后端执行 `/adapt + /load` 并写入配置历史。
+5. 若出现异常，可在 Caddy 配置历史中回滚。
 
 后端 API（前缀 `/api/caddy/waf`）：
 
-- `POST /policy/:id/preview`
-- `POST /policy/:id/validate`
-- `POST /policy/:id/publish`
-- `POST /policy/rollback`
-- `GET /policy/revision`
+- `GET /simple-config`
+- `PUT /simple-config`
+- `POST /simple-config/preview`
+- `POST /simple-config/apply`
 
 失败保护（当前行为）：
 
-- 发布/回滚失败时会尝试自动回退到 `last_good` Caddy 配置。
-- 会记录 `policy_last_good` / `policy_publish` / `policy_rollback` 配置历史动作。
+- 应用前先调用 Caddy `/adapt` 校验。
+- `/load` 失败时不写入数据库。
+- 落库失败时会尝试回滚到 `last_good` Caddy 配置。
+- 会记录 `simple_waf_last_good` / `simple_waf_apply` 配置历史动作。
 
-### 5.6 CRS 调优模板（P1）
+### 5.6 高级安全管理（默认隐藏）
 
-前端入口：`安全管理` -> `CRS 调优`
+高级安全管理页面仍保留代码与路由，但默认不显示在侧边菜单中。它包含：
 
-当前支持：
+- 更新源管理、上传、激活、回滚
+- 多策略、规则例外、策略绑定
+- 策略观测、误报反馈与任务审计
 
-- 模板：`低误报 (low_fp)` / `平衡 (balanced)` / `高拦截 (high_blocking)` / `自定义`
-- 字段：`tx.paranoia_level`、`tx.inbound_anomaly_score_threshold`、`tx.outbound_anomaly_score_threshold`
-- 操作：`保存调优参数` -> `预览` -> `校验` -> `发布`
-
-风险提示（当前行为）：
-
-- 当 `PL >= 3` 时，前端会弹出高风险发布确认提示。
-- 发布动作会先保存当前 CRS 调优参数，再执行策略发布，确保 revision 可追溯。
-
-### 5.7 规则例外与策略绑定（P2）
-
-前端入口：
-
-- `安全管理` -> `规则例外`
-- `安全管理` -> `策略绑定`
-
-当前支持：
-
-- 规则例外：`removeById` / `removeByTag`
-- 作用域：`global` / `site(host)` / `route(path + optional method)`
-- 策略绑定：按作用域和优先级管理策略生效范围
-
-发布门禁（当前行为）：
-
-- 若存在“同作用域 + 同优先级”的多条启用绑定冲突，发布会被阻断并返回冲突提示。
+默认使用路径优先采用 `Caddy配置 -> 防火墙`，避免把简单 WAF 设置拆散到多个页面。
 
 ## 6. 配置文件示例（WAF 段）
 

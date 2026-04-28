@@ -494,6 +494,42 @@ type RuleUpdateReq struct {
 	Description     string  `json:"description,optional"`
 }
 
+type SimpleWafConfigReq struct {
+	ServerId uint `form:"serverId,optional"` // 为空时使用默认 Caddy 服务器
+}
+
+type SimpleWafConfigResp struct {
+	ServerId                uint     `json:"serverId"`
+	Enabled                 bool     `json:"enabled"`
+	Integrated              bool     `json:"integrated"`
+	Mode                    string   `json:"mode"`
+	Strength                string   `json:"strength"`
+	Audit                   string   `json:"audit"`
+	RequestBodyAccess       bool     `json:"requestBodyAccess"`
+	RequestBodyLimit        int64    `json:"requestBodyLimit"`
+	RequestBodyNoFilesLimit int64    `json:"requestBodyNoFilesLimit"`
+	SiteAddresses           []string `json:"siteAddresses"`
+	AvailableSites          []string `json:"availableSites"`
+	CorazaVersion           string   `json:"corazaVersion,optional"`
+	CrsVersion              string   `json:"crsVersion,optional"`
+	Actions                 []string `json:"actions,optional"`
+	Directives              string   `json:"directives,optional"`
+	Config                  string   `json:"config,optional"`
+	Message                 string   `json:"message,optional"`
+}
+
+type SimpleWafConfigUpdateReq struct {
+	ServerId                uint     `json:"serverId,optional"`          // 为空时使用默认 Caddy 服务器
+	Enabled                 bool     `json:"enabled"`                    // 是否将 WAF 挂载到站点
+	Mode                    string   `json:"mode,default=detectiononly"` // off | detectiononly | on
+	Strength                string   `json:"strength,default=low_fp"`    // low_fp | balanced | high_blocking
+	Audit                   string   `json:"audit,default=relevantonly"` // off | relevantonly | on
+	RequestBodyAccess       bool     `json:"requestBodyAccess,optional"`
+	RequestBodyLimit        int64    `json:"requestBodyLimit,optional"`
+	RequestBodyNoFilesLimit int64    `json:"requestBodyNoFilesLimit,optional"`
+	SiteAddresses           []string `json:"siteAddresses,optional"` // 为空时默认使用全部可识别站点
+}
+
 type SystemLogItem struct {
 	ID        uint   `json:"id"`
 	LogTime   string `json:"logTime"`

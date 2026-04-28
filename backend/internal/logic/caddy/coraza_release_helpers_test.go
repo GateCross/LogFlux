@@ -35,6 +35,39 @@ func TestExtractCorazaVersionFromText(t *testing.T) {
 	}
 }
 
+func TestExtractCRSVersionFromText(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  string
+		output string
+	}{
+		{
+			name:   "module path with version",
+			input:  "http.handlers.coraza_waf github.com/corazawaf/coraza-coreruleset/v4@v4.15.0",
+			output: "v4.15.0",
+		},
+		{
+			name:   "owasp crs line fallback semver",
+			input:  "rule_set=owasp_crs version=v4.14.0",
+			output: "v4.14.0",
+		},
+		{
+			name:   "no crs",
+			input:  "http.handlers.reverse_proxy github.com/caddyserver/caddy/v2@v2.9.0",
+			output: "",
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			got := extractCRSVersionFromText(testCase.input)
+			if got != testCase.output {
+				t.Fatalf("unexpected version, want=%q got=%q", testCase.output, got)
+			}
+		})
+	}
+}
+
 func TestIsCommandNotFoundError(t *testing.T) {
 	notFoundErr := "exec caddy list-modules --versions failed: fork/exec caddy: executable file not found in $PATH"
 	if !isCommandNotFoundError(assertErr(notFoundErr)) {
