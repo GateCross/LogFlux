@@ -15,7 +15,7 @@ type SystemLog struct {
 	TraceID string    `gorm:"size:128;index"`
 	SpanID  string    `gorm:"size:128"`
 
-	Source   string `gorm:"size:50;index:idx_system_log_time_source,priority:2"` // backend | caddy_runtime
+	Source   string `gorm:"size:50;index:idx_system_log_time_source,priority:2"` // backend | caddy_runtime | caddy_internal
 	FilePath string `gorm:"size:1024"`
 
 	RawLog    string `gorm:"type:text;comment:原始完整日志"`

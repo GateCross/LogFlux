@@ -198,6 +198,7 @@ const autoRefreshOptions = [
 const quickPresetOptions = [
   { label: '仅后端', source: 'backend', level: '' },
   { label: '仅 Caddy 后台', source: 'caddy_runtime', level: '' },
+  { label: '仅本机访问', source: 'caddy_internal', level: '' },
   { label: '仅错误级别', source: '', level: 'error' }
 ];
 
@@ -312,7 +313,8 @@ const columns: DataTableColumns<SystemLog> = [
 const sourceOptions = [
   { label: '全部来源', value: '' },
   { label: '后端', value: 'backend' },
-  { label: 'Caddy 后台', value: 'caddy_runtime' }
+  { label: 'Caddy 后台', value: 'caddy_runtime' },
+  { label: 'Caddy 本机访问', value: 'caddy_internal' }
 ];
 
 const levelOptions = [
@@ -476,12 +478,14 @@ function levelTagType(level: string) {
 function sourceTagType(source: string) {
   if (source === 'backend') return 'success';
   if (source === 'caddy_runtime') return 'warning';
+  if (source === 'caddy_internal') return 'info';
   return 'default';
 }
 
 function sourceLabel(source: string) {
   if (source === 'backend') return '后端';
   if (source === 'caddy_runtime') return 'Caddy 后台';
+  if (source === 'caddy_internal') return 'Caddy 本机访问';
   return source || '-';
 }
 

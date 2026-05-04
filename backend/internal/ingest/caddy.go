@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -30,7 +32,10 @@ import (
 
 var logRegex = regexp.MustCompile(`^\[(.*?)\] "(.*?)" "(.*?)" "(.*?)" "(.*?)" "(.*?) (.*?) (.*?)" (\d+) (\d+) "(.*?)" "(.*?)" "(.*?)"$`)
 
-const defaultScanIntervalSec = 60
+const (
+	defaultScanIntervalSec = 60
+	caddyInternalSource    = "caddy_internal"
+)
 
 type dirWatcher struct {
 	stopCh   chan struct{}
@@ -118,9 +123,20 @@ func (i *CaddyIngestor) parseTime(ts string) (time.Time, error) {
 }
 
 func (i *CaddyIngestor) Ingest(line string) error {
+	return i.IngestWithPath("", line)
+}
+
+func (i *CaddyIngestor) IngestWithPath(filePath string, line string) error {
 	logEntry, err := i.ParseLine(line)
 	if err != nil {
 		return err
+	}
+	if isInternalCaddyAccess(logEntry) {
+		if err := i.saveInternalAccessLog(filePath, line, logEntry); err != nil {
+			logx.Errorf("写入系统日志失败: %v", err)
+			return err
+		}
+		return nil
 	}
 	if err := i.db.Create(logEntry).Error; err != nil {
 		logx.Errorf("写入数据库失败: %v", err)
@@ -192,7 +208,7 @@ func (i *CaddyIngestor) startFile(filePath string) bool {
 				logx.Errorf("读取监听内容失败: %v", line.Err)
 				continue
 			}
-			if err := i.Ingest(line.Text); err != nil {
+			if err := i.IngestWithPath(path, line.Text); err != nil {
 				// keep noisy errors in stdout for now
 				logx.Errorf("日志入库失败: %v", err)
 				continue
@@ -526,4 +542,121 @@ func mustJSONRaw(line string) string {
 		return "\"\""
 	}
 	return string(raw)
+}
+
+func (i *CaddyIngestor) saveInternalAccessLog(filePath string, rawLine string, entry *model.CaddyLog) error {
+	logTime := entry.LogTime
+	if logTime.IsZero() {
+		logTime = time.Now()
+	}
+
+	extra := map[string]any{
+		"host":      entry.Host,
+		"method":    entry.Method,
+		"uri":       entry.Uri,
+		"proto":     entry.Proto,
+		"status":    entry.Status,
+		"size":      entry.Size,
+		"userAgent": entry.UserAgent,
+		"remoteIP":  entry.RemoteIP,
+		"clientIP":  entry.ClientIP,
+		"country":   entry.Country,
+		"province":  entry.Province,
+		"city":      entry.City,
+	}
+	extraData := "{}"
+	if data, err := json.Marshal(extra); err == nil {
+		extraData = string(data)
+	}
+
+	systemLog := &model.SystemLog{
+		LogTime:   logTime,
+		Level:     caddyAccessLevel(entry.Status),
+		Message:   fmt.Sprintf("Caddy 本机访问 %s %s %d host=%s remote=%s client=%s", entry.Method, entry.Uri, entry.Status, entry.Host, entry.RemoteIP, entry.ClientIP),
+		Source:    caddyInternalSource,
+		FilePath:  strings.TrimSpace(filePath),
+		RawLog:    rawLine,
+		ExtraData: extraData,
+	}
+	return i.db.Create(systemLog).Error
+}
+
+// isInternalCaddyAccess 将本机和私有地址访问从代理访问日志中剥离。
+func isInternalCaddyAccess(entry *model.CaddyLog) bool {
+	if entry == nil {
+		return false
+	}
+	if isPrivateAccessHost(entry.Host) {
+		return true
+	}
+
+	return isPrivateAddressLiteral(entry.ClientIP)
+}
+
+func isPrivateAccessHost(value string) bool {
+	host := normalizeAddressToken(value)
+	if host == "" {
+		return false
+	}
+
+	normalized := strings.ToLower(host)
+	if normalized == "localhost" || strings.HasSuffix(normalized, ".localhost") || normalized == "localhost.localdomain" {
+		return true
+	}
+	return isPrivateAddressLiteral(host)
+}
+
+func isPrivateAddressLiteral(value string) bool {
+	host := normalizeAddressToken(value)
+	if host == "" {
+		return false
+	}
+	addr, err := netip.ParseAddr(host)
+	if err != nil {
+		return false
+	}
+	addr = addr.Unmap()
+	return addr.IsLoopback() || addr.IsPrivate() || addr.IsLinkLocalUnicast() || addr.IsLinkLocalMulticast() || addr.IsUnspecified()
+}
+
+func normalizeAddressToken(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	if idx := strings.Index(value, ","); idx >= 0 {
+		value = strings.TrimSpace(value[:idx])
+	}
+	if fields := strings.Fields(value); len(fields) > 0 {
+		value = fields[0]
+	}
+	value = strings.Trim(value, `"'`)
+
+	if host, _, err := net.SplitHostPort(value); err == nil {
+		return strings.Trim(host, "[]")
+	}
+	if strings.HasPrefix(value, "[") {
+		if idx := strings.Index(value, "]"); idx > 0 {
+			return strings.Trim(value[1:idx], "[]")
+		}
+	}
+	if strings.Count(value, ":") == 1 {
+		host, port, ok := strings.Cut(value, ":")
+		if ok && host != "" && port != "" {
+			if _, err := strconv.Atoi(port); err == nil {
+				return strings.Trim(host, "[]")
+			}
+		}
+	}
+	return strings.Trim(value, "[]")
+}
+
+func caddyAccessLevel(status int) string {
+	if status >= 500 {
+		return "error"
+	}
+	if status >= 400 {
+		return "warn"
+	}
+	return "info"
 }
