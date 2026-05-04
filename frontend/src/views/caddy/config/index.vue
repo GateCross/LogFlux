@@ -3,7 +3,7 @@ import { ref, onMounted, computed, watch, h } from 'vue';
 import { useMessage, useDialog, NTag, NButton } from 'naive-ui';
 import type { DataTableColumns } from 'naive-ui';
 import { VueMonacoEditor, VueMonacoDiffEditor, loader } from '@guolao/vue-monaco-editor';
-import { fetchCaddyServers, fetchCaddyConfig, updateCaddyConfigRaw, updateCaddyConfigStructured, addCaddyServer, updateCaddyServer, deleteCaddyServer, fetchCaddyConfigHistory, fetchCaddyConfigHistoryDetail, rollbackCaddyConfig } from '@/service/api/caddy';
+import { fetchCaddyServers, fetchCaddyConfig, updateCaddyConfigRaw, updateCaddyConfigStructured, addCaddyServer, updateCaddyServer, deleteCaddyServer, fetchCaddyConfigHistory, fetchCaddyConfigHistoryDetail, rollbackCaddyConfig, previewCaddyConfig } from '@/service/api/caddy';
 import ConfigPreviewPanel from './components/ConfigPreviewPanel.vue';
 import QuickConfigPanel from './components/QuickConfigPanel.vue';
 import RawEditorPanel from './components/RawEditorPanel.vue';
@@ -113,6 +113,13 @@ const wafIntegrationUnavailable = ref(false);
 const wafIntegrationStatus = ref<WafIntegrationStatusResp | null>(null);
 const selectedWafIntegrationSites = ref<string[]>([]);
 const wafIntegrationPreviewActions = ref<string[]>([]);
+const savePreviewVisible = ref(false);
+const savePreviewKind = ref<'quick' | 'raw'>('quick');
+const savePreviewConfig = ref('');
+const savePreviewActions = ref<string[]>([]);
+const savePreviewErrors = ref<string[]>([]);
+const savePreviewModules = ref('');
+const savePreviewOriginal = ref('');
 
 // Computed
 const serverOptions = computed(() => servers.value.map(s => ({ label: s.name, value: s.id })));
@@ -368,17 +375,29 @@ async function saveRawConfig() {
   if (!currentServerId.value) return;
 
   saving.value = true;
-  const { error } = await updateCaddyConfigRaw(currentServerId.value, configContent.value);
-  saving.value = false;
-
-  if (error) {
-    message.error('保存配置失败');
+  const { data: preview, error: previewError } = await previewCaddyConfig(currentServerId.value, {
+    mode: 'raw',
+    config: configContent.value
+  });
+  if (previewError || !preview) {
+    saving.value = false;
+    message.error('预览配置失败');
     return;
   }
-  message.success('配置已保存并自动热重载 Caddy');
-  structuredAvailable.value = false;
-  lastEditMode.value = 'raw';
-  pageMode.value = 'preview';
+  if (!preview.valid) {
+    saving.value = false;
+    message.error(`校验失败：${preview.errors?.[0] || 'Caddy 配置不可用'}`);
+    return;
+  }
+
+  savePreviewKind.value = 'raw';
+  savePreviewConfig.value = preview.config || configContent.value;
+  savePreviewActions.value = preview.actions || [];
+  savePreviewErrors.value = preview.errors || [];
+  savePreviewOriginal.value = configContent.value;
+  savePreviewModules.value = '';
+  savePreviewVisible.value = true;
+  saving.value = false;
 }
 
 function applyStructuredParsed(parsed: CaddyFormModel, notify?: boolean) {
@@ -446,22 +465,85 @@ async function saveQuickConfig() {
 
   saving.value = true;
   const modules = JSON.stringify(nextFormModel);
-  const { error } = await updateCaddyConfigStructured(currentServerId.value, content, modules);
-  saving.value = false;
-
-  if (error) {
-    message.error('保存配置失败');
+  const { data: preview, error: previewError } = await previewCaddyConfig(currentServerId.value, {
+    mode: 'quick',
+    config: content,
+    modules
+  });
+  if (previewError || !preview) {
+    saving.value = false;
+    message.error('预览配置失败');
+    return;
+  }
+  if (!preview.valid) {
+    saving.value = false;
+    message.error(`校验失败：${preview.errors?.[0] || 'Caddy 配置不可用'}`);
     return;
   }
 
-  message.success('配置已保存并自动热重载 Caddy');
-  formModel.value = nextFormModel;
-  configContent.value = content;
-  structuredAvailable.value = true;
-  initialGlobalRaw.value = formModel.value.global?.raw ?? '';
-  syncQuickStateFromForm(formModel.value);
-  lastEditMode.value = 'quick';
-  pageMode.value = 'preview';
+  savePreviewKind.value = 'quick';
+  savePreviewConfig.value = preview.config || content;
+  savePreviewActions.value = preview.actions || [];
+  savePreviewErrors.value = preview.errors || [];
+  savePreviewOriginal.value = content;
+  savePreviewModules.value = modules;
+  savePreviewVisible.value = true;
+  saving.value = false;
+}
+
+async function confirmSavePreview() {
+  if (!currentServerId.value) return;
+
+  saving.value = true;
+  let saved = false;
+  try {
+    if (savePreviewKind.value === 'raw') {
+      const { error } = await updateCaddyConfigRaw(currentServerId.value, savePreviewConfig.value || savePreviewOriginal.value);
+      if (error) {
+        message.error('保存配置失败');
+        return;
+      }
+      message.success('配置已保存并自动热重载 Caddy');
+      configContent.value = savePreviewConfig.value || savePreviewOriginal.value;
+      structuredAvailable.value = false;
+      lastEditMode.value = 'raw';
+      pageMode.value = 'preview';
+      saved = true;
+      return;
+    }
+
+    const { error } = await updateCaddyConfigStructured(currentServerId.value, savePreviewConfig.value || savePreviewOriginal.value, savePreviewModules.value);
+    if (error) {
+      message.error('保存配置失败');
+      return;
+    }
+
+    message.success('配置已保存并自动热重载 Caddy');
+    if (savePreviewModules.value) {
+      try {
+        formModel.value = normalizeModules(JSON.parse(savePreviewModules.value));
+      } catch {
+        // 保持原表单状态，避免因为快照格式异常中断保存结果
+      }
+    }
+    configContent.value = savePreviewConfig.value || savePreviewOriginal.value;
+    structuredAvailable.value = true;
+    initialGlobalRaw.value = formModel.value.global?.raw ?? '';
+    syncQuickStateFromForm(formModel.value);
+    lastEditMode.value = 'quick';
+    pageMode.value = 'preview';
+    saved = true;
+  } finally {
+    saving.value = false;
+    if (saved) {
+      savePreviewVisible.value = false;
+    }
+  }
+}
+
+function closeSavePreview() {
+  if (saving.value) return;
+  savePreviewVisible.value = false;
 }
 
 function handleModeChange(nextMode: 'quick' | 'waf' | 'raw' | 'preview') {
@@ -2084,6 +2166,38 @@ onMounted(() => {
             <span class="diff-line">{{ row.right !== null ? row.right : '' }}</span>
           </div>
         </div>
+      </div>
+    </NModal>
+
+    <NModal v-model:show="savePreviewVisible" preset="card" title="保存预览" class="w-[90vw] max-w-5xl">
+      <div class="flex flex-wrap items-center gap-2 mb-3 text-xs text-gray-500">
+        <n-tag size="small" type="info" :bordered="false">
+          {{ savePreviewKind === 'quick' ? '快速配置' : '原始配置' }}
+        </n-tag>
+        <span v-if="savePreviewActions.length">动作：{{ savePreviewActions.join(' / ') }}</span>
+      </div>
+      <n-alert v-if="savePreviewErrors.length" type="error" :show-icon="true" class="mb-3">
+        {{ savePreviewErrors[0] }}
+      </n-alert>
+      <div class="relative h-[60vh]">
+        <VueMonacoEditor
+          :value="savePreviewConfig"
+          language="shell"
+          theme="vs"
+          :options="{
+            automaticLayout: true,
+            fixedOverflowWidgets: true,
+            readOnly: true,
+            minimap: { enabled: false },
+            scrollBeyondLastLine: false,
+            wordWrap: 'on'
+          }"
+          class="absolute inset-0"
+        />
+      </div>
+      <div class="mt-4 flex justify-end gap-2">
+        <NButton secondary :disabled="saving" @click="closeSavePreview">取消</NButton>
+        <NButton type="primary" :loading="saving" @click="confirmSavePreview">确认保存</NButton>
       </div>
     </NModal>
 

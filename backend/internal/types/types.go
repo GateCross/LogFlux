@@ -52,6 +52,20 @@ type CaddyConfigHistoryListResp struct {
 	Total int64                    `json:"total"`
 }
 
+type CaddyConfigPreviewReq struct {
+	ServerId uint   `path:"serverId"`
+	Mode     string `json:"mode,optional"`    // quick | raw；为空时根据 modules 自动判断
+	Config   string `json:"config,optional"`  // 原始 Caddyfile 或前端兜底生成结果
+	Modules  string `json:"modules,optional"` // 结构化配置(JSON)
+}
+
+type CaddyConfigPreviewResp struct {
+	Valid   bool     `json:"valid"`
+	Config  string   `json:"config"`
+	Errors  []string `json:"errors"`
+	Actions []string `json:"actions"`
+}
+
 type CaddyConfigReq struct {
 	ServerId uint `path:"serverId"`
 }
@@ -68,8 +82,9 @@ type CaddyConfigRollbackReq struct {
 
 type CaddyConfigUpdateReq struct {
 	ServerId uint   `path:"serverId"`
-	Config   string `json:"config"`           // JSON string
-	Modules  string `json:"modules,optional"` // structured modules (JSON)
+	Mode     string `json:"mode,optional"`    // quick | raw；为空时兼容旧版请求
+	Config   string `json:"config,optional"`  // 原始 Caddyfile 或前端兜底生成结果
+	Modules  string `json:"modules,optional"` // 结构化配置(JSON)
 }
 
 type CaddyLogItem struct {

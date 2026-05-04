@@ -3,7 +3,6 @@ package caddy
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"logflux/internal/svc"
@@ -24,25 +23,7 @@ func newCaddyConfigApplyService(svcCtx *svc.ServiceContext, logger logx.Logger) 
 }
 
 func (s *caddyConfigApplyService) loadCurrent(server *model.CaddyServer) (string, string, error) {
-	if server == nil {
-		return "", emptyModulesJSON, fmt.Errorf("Caddy 服务器不存在")
-	}
-
-	if trimmed := strings.TrimSpace(server.Config); trimmed != "" {
-		return server.Config, normalizeCaddyModulesJSON(server.Modules), nil
-	}
-
-	if strings.EqualFold(server.Type, "local") {
-		raw, err := os.ReadFile("/etc/caddy/Caddyfile")
-		if err == nil {
-			config := strings.TrimSpace(string(raw))
-			if config != "" {
-				return config, normalizeCaddyModulesJSON(server.Modules), nil
-			}
-		}
-	}
-
-	return "", normalizeCaddyModulesJSON(server.Modules), fmt.Errorf("Caddy 配置为空，请先保存 Caddy 配置")
+	return loadCurrentCaddyConfig(server)
 }
 
 func (s *caddyConfigApplyService) apply(server *model.CaddyServer, config, modules, action string) error {

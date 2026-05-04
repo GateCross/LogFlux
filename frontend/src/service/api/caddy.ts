@@ -24,7 +24,7 @@ export function updateCaddyConfigRaw(serverId: number, config: string) {
   return request<any>({
     url: `/api/caddy/server/${serverId}/config`,
     method: 'post',
-    data: { config }
+    data: { mode: 'raw', config }
   });
 }
 
@@ -32,7 +32,25 @@ export function updateCaddyConfigStructured(serverId: number, config: string, mo
   return request<any>({
     url: `/api/caddy/server/${serverId}/config`,
     method: 'post',
-    data: { config, modules }
+    data: { mode: 'quick', config, modules }
+  });
+}
+
+export interface CaddyConfigPreviewResp {
+  valid: boolean;
+  config: string;
+  errors: string[];
+  actions: string[];
+}
+
+export function previewCaddyConfig(
+  serverId: number,
+  data: { mode?: 'quick' | 'raw'; config?: string; modules?: string }
+) {
+  return request<CaddyConfigPreviewResp>({
+    url: `/api/caddy/server/${serverId}/config/preview`,
+    method: 'post',
+    data
   });
 }
 

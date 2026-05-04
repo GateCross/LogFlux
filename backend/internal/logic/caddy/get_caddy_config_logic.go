@@ -3,8 +3,6 @@ package caddy
 import (
 	"context"
 	"fmt"
-	"os"
-	"strings"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
@@ -33,35 +31,21 @@ func (l *GetCaddyConfigLogic) GetCaddyConfig(req *types.CaddyConfigReq) (resp *t
 		return nil, fmt.Errorf("服务器不存在")
 	}
 
-	// Read from Database (Source of Truth)
-	if server.Config != "" {
+	config, modules, err := loadCurrentCaddyConfig(&server)
+	if err == nil {
 		return &types.CaddyConfigResp{
-			Config:  server.Config,
-			Modules: server.Modules,
+			Config:  config,
+			Modules: modules,
 		}, nil
 	}
 
-	// If DB is empty for local server, try to read the Caddyfile on disk.
-	if strings.EqualFold(server.Type, "local") {
-		if raw, err := os.ReadFile("/etc/caddy/Caddyfile"); err == nil {
-			config := strings.TrimSpace(string(raw))
-			if config != "" {
-				return &types.CaddyConfigResp{
-					Config:  config,
-					Modules: server.Modules,
-				}, nil
-			}
-		}
-	}
-
-	// If DB is empty, return a template or guide
 	defaultConfig := `# No Caddyfile found in database.
 # Please paste your existing Caddyfile content here.
 # It will be saved to the database and pushed to Caddy.
 `
 	return &types.CaddyConfigResp{
 		Config:  defaultConfig,
-		Modules: server.Modules,
+		Modules: emptyModulesJSON,
 	}, nil
 
 }

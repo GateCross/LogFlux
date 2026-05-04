@@ -207,7 +207,7 @@ func (s *simpleWafConfigService) loadPreferredConfig(serverID uint) (*model.Cadd
 	applyService := newCaddyConfigApplyService(s.svcCtx, s.logger)
 	config, modules, err := applyService.loadCurrent(server)
 	if err != nil {
-		return server, "", normalizeCaddyModulesJSON(server.Modules), err
+		return server, "", emptyModulesJSON, err
 	}
 	return server, config, modules, nil
 }

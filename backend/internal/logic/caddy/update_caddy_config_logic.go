@@ -3,7 +3,6 @@ package caddy
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
@@ -34,16 +33,18 @@ func (l *UpdateCaddyConfigLogic) UpdateCaddyConfig(req *types.CaddyConfigUpdateR
 		return nil, fmt.Errorf("服务器不存在")
 	}
 	applyService := newCaddyConfigApplyService(l.svcCtx, l.Logger)
-
-	modulesPayload := strings.TrimSpace(req.Modules)
-	if modulesPayload == "" {
-		if err := l.updateRawConfig(applyService, &server, req.Config); err != nil {
-			return nil, err
-		}
-	} else {
-		if err := l.updateStructuredConfig(applyService, &server, req.Config, req.Modules); err != nil {
-			return nil, err
-		}
+	configService := newCaddyConfigService()
+	candidate, err := configService.Prepare(caddyConfigPrepareInput{
+		Mode:    req.Mode,
+		Config:  req.Config,
+		Modules: req.Modules,
+	})
+	if err != nil {
+		return nil, err
+	}
+	modules := resolveCaddyConfigModulesForUpdate(req.Mode, req.Modules)
+	if err := applyService.apply(&server, candidate.Config, modules, "update"); err != nil {
+		return nil, err
 	}
 
 	l.Logger.Info("Caddy 配置更新成功")
@@ -51,16 +52,4 @@ func (l *UpdateCaddyConfigLogic) UpdateCaddyConfig(req *types.CaddyConfigUpdateR
 		Code: 200,
 		Msg:  "成功",
 	}, nil
-}
-
-func (l *UpdateCaddyConfigLogic) updateRawConfig(applyService *caddyConfigApplyService, server *model.CaddyServer, config string) error {
-	modules := strings.TrimSpace(server.Modules)
-	if modules == "" {
-		modules = emptyModulesJSON
-	}
-	return applyService.apply(server, config, modules, "update")
-}
-
-func (l *UpdateCaddyConfigLogic) updateStructuredConfig(applyService *caddyConfigApplyService, server *model.CaddyServer, config, modules string) error {
-	return applyService.apply(server, config, modules, "update")
 }

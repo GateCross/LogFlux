@@ -84,6 +84,11 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				},
 				{
 					Method:  http.MethodPost,
+					Path:    "/caddy/server/:serverId/config/preview",
+					Handler: caddy.PreviewCaddyConfigHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
 					Path:    "/caddy/server/:serverId/config/rollback",
 					Handler: caddy.RollbackCaddyConfigHandler(serverCtx),
 				},
