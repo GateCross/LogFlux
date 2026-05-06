@@ -3,10 +3,10 @@ package notification
 import (
 	"context"
 	"fmt"
+	commonmodel "logflux/model/common"
+	notificationmodel "logflux/model/notification"
 	"math/rand"
 	"time"
-
-	"logflux/model"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -38,10 +38,10 @@ func (m *Manager) scanLoop(ctx context.Context) {
 }
 
 func (m *Manager) dispatchDueJobs(ctx context.Context) {
-	var jobs []model.NotificationJob
+	var jobs []notificationmodel.NotificationJob
 	err := m.db.WithContext(ctx).
 		Session(&gorm.Session{Logger: logger.Default.LogMode(logger.Silent)}).
-		Where("status = ? AND next_run_at <= ?", model.NotificationJobStatusQueued, time.Now()).
+		Where("status = ? AND next_run_at <= ?", notificationmodel.NotificationJobStatusQueued, time.Now()).
 		Order("id asc").
 		Limit(100).
 		Find(&jobs).Error
@@ -62,10 +62,10 @@ func (m *Manager) dispatchDueJobs(ctx context.Context) {
 func (m *Manager) processJob(ctx context.Context, jobID uint) {
 	// 1) Claim: queued -> processing
 	res := m.db.WithContext(ctx).
-		Model(&model.NotificationJob{}).
-		Where("id = ? AND status = ?", jobID, model.NotificationJobStatusQueued).
+		Model(&notificationmodel.NotificationJob{}).
+		Where("id = ? AND status = ?", jobID, notificationmodel.NotificationJobStatusQueued).
 		Updates(map[string]interface{}{
-			"status":          model.NotificationJobStatusProcessing,
+			"status":          notificationmodel.NotificationJobStatusProcessing,
 			"last_attempt_at": time.Now(),
 		})
 	if res.Error != nil {
@@ -77,26 +77,26 @@ func (m *Manager) processJob(ctx context.Context, jobID uint) {
 	}
 
 	// 2) Load job
-	var job model.NotificationJob
+	var job notificationmodel.NotificationJob
 	if err := m.db.WithContext(ctx).First(&job, jobID).Error; err != nil {
 		m.logger.Errorf("加载通知任务失败: jobID=%d err=%v", jobID, err)
 		return
 	}
 
 	// 3) Load channel (latest config)
-	var channel model.NotificationChannel
+	var channel notificationmodel.NotificationChannel
 	if err := m.db.WithContext(ctx).First(&channel, job.ChannelID).Error; err != nil {
 		// channel 不存在时无法重试
-		m.db.WithContext(ctx).Model(&model.NotificationLog{}).
+		m.db.WithContext(ctx).Model(&notificationmodel.NotificationLog{}).
 			Where("id = ?", job.LogID).
 			Updates(map[string]interface{}{
-				"status":        model.NotificationStatusFailed,
+				"status":        notificationmodel.NotificationStatusFailed,
 				"error_message": fmt.Sprintf("通知渠道不存在: %v", err),
 			})
-		m.db.WithContext(ctx).Model(&model.NotificationJob{}).
+		m.db.WithContext(ctx).Model(&notificationmodel.NotificationJob{}).
 			Where("id = ?", job.ID).
 			Updates(map[string]interface{}{
-				"status":     model.NotificationJobStatusFailed,
+				"status":     notificationmodel.NotificationJobStatusFailed,
 				"last_error": fmt.Sprintf("通知渠道不存在: %v", err),
 			})
 		return
@@ -109,10 +109,10 @@ func (m *Manager) processJob(ctx context.Context, jobID uint) {
 	}
 
 	// 4) Update log to sending
-	m.db.WithContext(ctx).Model(&model.NotificationLog{}).
+	m.db.WithContext(ctx).Model(&notificationmodel.NotificationLog{}).
 		Where("id = ?", job.LogID).
 		Updates(map[string]interface{}{
-			"status": model.NotificationStatusSending,
+			"status": notificationmodel.NotificationStatusSending,
 		})
 
 	// 5) Render template at execution time, using latest templates
@@ -153,18 +153,18 @@ func (m *Manager) processJob(ctx context.Context, jobID uint) {
 
 	// 6) Success: update log + job
 	now := time.Now()
-	m.db.WithContext(ctx).Model(&model.NotificationLog{}).
+	m.db.WithContext(ctx).Model(&notificationmodel.NotificationLog{}).
 		Where("id = ?", job.LogID).
 		Updates(map[string]interface{}{
-			"status":        model.NotificationStatusSuccess,
+			"status":        notificationmodel.NotificationStatusSuccess,
 			"error_message": "",
 			"sent_at":       &now,
 		})
 
-	m.db.WithContext(ctx).Model(&model.NotificationJob{}).
+	m.db.WithContext(ctx).Model(&notificationmodel.NotificationJob{}).
 		Where("id = ?", job.ID).
 		Updates(map[string]interface{}{
-			"status": model.NotificationJobStatusSucceeded,
+			"status": notificationmodel.NotificationJobStatusSucceeded,
 		})
 }
 
@@ -186,7 +186,7 @@ func defaultRetryPolicy() retryPolicy {
 	}
 }
 
-func parseRetryPolicy(config model.JSONMap) retryPolicy {
+func parseRetryPolicy(config commonmodel.JSONMap) retryPolicy {
 	policy := defaultRetryPolicy()
 	if config == nil {
 		return policy
@@ -248,23 +248,23 @@ func parseRetryPolicy(config model.JSONMap) retryPolicy {
 	return policy
 }
 
-func (m *Manager) scheduleRetry(ctx context.Context, job *model.NotificationJob, channel *model.NotificationChannel, errMsg string) {
+func (m *Manager) scheduleRetry(ctx context.Context, job *notificationmodel.NotificationJob, channel *notificationmodel.NotificationChannel, errMsg string) {
 	policy := parseRetryPolicy(channel.Config)
 	nextAttempt := job.RetryCount + 1
 
 	// 达到最大次数：终态 failed
 	if nextAttempt >= policy.MaxAttempts {
-		m.db.WithContext(ctx).Model(&model.NotificationLog{}).
+		m.db.WithContext(ctx).Model(&notificationmodel.NotificationLog{}).
 			Where("id = ?", job.LogID).
 			Updates(map[string]interface{}{
-				"status":        model.NotificationStatusFailed,
+				"status":        notificationmodel.NotificationStatusFailed,
 				"error_message": errMsg,
 			})
 
-		m.db.WithContext(ctx).Model(&model.NotificationJob{}).
+		m.db.WithContext(ctx).Model(&notificationmodel.NotificationJob{}).
 			Where("id = ?", job.ID).
 			Updates(map[string]interface{}{
-				"status":      model.NotificationJobStatusFailed,
+				"status":      notificationmodel.NotificationJobStatusFailed,
 				"retry_count": nextAttempt,
 				"last_error":  errMsg,
 			})
@@ -272,10 +272,10 @@ func (m *Manager) scheduleRetry(ctx context.Context, job *model.NotificationJob,
 	}
 
 	// 还有重试次数：log 回到 pending，等待下一次发送
-	m.db.WithContext(ctx).Model(&model.NotificationLog{}).
+	m.db.WithContext(ctx).Model(&notificationmodel.NotificationLog{}).
 		Where("id = ?", job.LogID).
 		Updates(map[string]interface{}{
-			"status":        model.NotificationStatusPending,
+			"status":        notificationmodel.NotificationStatusPending,
 			"error_message": errMsg,
 		})
 
@@ -302,17 +302,17 @@ func (m *Manager) scheduleRetry(ctx context.Context, job *model.NotificationJob,
 
 	nextRunAt := time.Now().Add(d)
 
-	m.db.WithContext(ctx).Model(&model.NotificationJob{}).
+	m.db.WithContext(ctx).Model(&notificationmodel.NotificationJob{}).
 		Where("id = ?", job.ID).
 		Updates(map[string]interface{}{
-			"status":      model.NotificationJobStatusQueued,
+			"status":      notificationmodel.NotificationJobStatusQueued,
 			"retry_count": nextAttempt,
 			"next_run_at": nextRunAt,
 			"last_error":  errMsg,
 		})
 }
 
-func (m *Manager) failJob(ctx context.Context, job *model.NotificationJob, channel *model.NotificationChannel, errMsg string) {
+func (m *Manager) failJob(ctx context.Context, job *notificationmodel.NotificationJob, channel *notificationmodel.NotificationChannel, errMsg string) {
 	// 默认开启重试
 	m.scheduleRetry(ctx, job, channel, errMsg)
 }

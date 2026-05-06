@@ -2,9 +2,8 @@ package caddy
 
 import (
 	"fmt"
+	wafmodel "logflux/model/waf"
 	"strings"
-
-	"logflux/model"
 
 	"gorm.io/gorm"
 )
@@ -174,7 +173,7 @@ func validatePolicyIDExists(db *gorm.DB, policyID uint) error {
 		return fmt.Errorf("策略 ID 不能为空")
 	}
 	var count int64
-	if err := db.Model(&model.WafPolicy{}).Where("id = ?", policyID).Count(&count).Error; err != nil {
+	if err := db.Model(&wafmodel.WafPolicy{}).Where("id = ?", policyID).Count(&count).Error; err != nil {
 		return fmt.Errorf("查询策略失败: %w", err)
 	}
 	if count == 0 {
@@ -183,7 +182,7 @@ func validatePolicyIDExists(db *gorm.DB, policyID uint) error {
 	return nil
 }
 
-func buildWafRuleExclusionDirectives(exclusions []model.WafRuleExclusion) (string, error) {
+func buildWafRuleExclusionDirectives(exclusions []wafmodel.WafRuleExclusion) (string, error) {
 	if len(exclusions) == 0 {
 		return "", nil
 	}
@@ -290,7 +289,7 @@ func buildScopedWafRuleExclusionDirectives(
 	return lines, nil
 }
 
-func buildPolicyDirectivesWithExclusions(db *gorm.DB, policy *model.WafPolicy) (string, error) {
+func buildPolicyDirectivesWithExclusions(db *gorm.DB, policy *wafmodel.WafPolicy) (string, error) {
 	baseDirectives, err := buildWafPolicyDirectives(policy)
 	if err != nil {
 		return "", err
@@ -299,7 +298,7 @@ func buildPolicyDirectivesWithExclusions(db *gorm.DB, policy *model.WafPolicy) (
 		return baseDirectives, nil
 	}
 
-	var exclusions []model.WafRuleExclusion
+	var exclusions []wafmodel.WafRuleExclusion
 	if err := db.Where("policy_id = ? AND enabled = ?", policy.ID, true).Order("id asc").Find(&exclusions).Error; err != nil {
 		return "", fmt.Errorf("查询策略排除规则失败: %w", err)
 	}
@@ -318,13 +317,13 @@ func normalizeBindingScopeKey(scopeType, host, path, method string, priority int
 	return fmt.Sprintf("%s|%s|%s|%s|%d", scopeType, host, path, method, priority)
 }
 
-func validatePolicyBindingConflict(tx *gorm.DB, candidate *model.WafPolicyBinding) error {
+func validatePolicyBindingConflict(tx *gorm.DB, candidate *wafmodel.WafPolicyBinding) error {
 	if tx == nil || candidate == nil {
 		return fmt.Errorf("策略绑定上下文无效")
 	}
 
 	var count int64
-	query := tx.Model(&model.WafPolicyBinding{}).
+	query := tx.Model(&wafmodel.WafPolicyBinding{}).
 		Where("enabled = ? AND scope_type = ? AND host = ? AND path = ? AND method = ? AND priority = ?",
 			true, candidate.ScopeType, candidate.Host, candidate.Path, candidate.Method, candidate.Priority)
 	if candidate.ID > 0 {
@@ -355,7 +354,7 @@ func ensureNoPolicyBindingConflicts(db *gorm.DB) error {
 	}
 
 	var conflicts []bindingGroup
-	if err := db.Model(&model.WafPolicyBinding{}).
+	if err := db.Model(&wafmodel.WafPolicyBinding{}).
 		Select("scope_type, host, path, method, priority, COUNT(*) as count").
 		Where("enabled = ?", true).
 		Group("scope_type, host, path, method, priority").

@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"fmt"
+	caddymodel "logflux/model/caddy"
+	ingestmodel "logflux/model/ingest"
 	"strings"
 
 	"logflux/internal/svc"
@@ -10,7 +12,6 @@ import (
 	"logflux/internal/utils"
 	"logflux/internal/utils/logger"
 	"logflux/internal/xerr"
-	"logflux/model"
 )
 
 // LogService 负责日志查询与响应组装。
@@ -38,7 +39,7 @@ func (s *LogService) GetCaddyLogs(req *types.CaddyLogReq) (*types.CaddyLogResp, 
 		return nil, xerr.NewBusinessErrorWith(fmt.Sprintf("结束时间格式无效: %v", err))
 	}
 
-	logs, total, err := s.caddyLogModel().List(s.ctx, model.CaddyLogQuery{
+	logs, total, err := s.caddyLogModel().List(s.ctx, caddymodel.CaddyLogQuery{
 		Keyword:  req.Keyword,
 		Host:     req.Host,
 		Status:   req.Status,
@@ -91,7 +92,7 @@ func (s *LogService) GetSystemLogs(req *types.SystemLogReq) (*types.SystemLogRes
 		return nil, xerr.NewBusinessErrorWith(fmt.Sprintf("结束时间格式无效: %v", err))
 	}
 
-	logs, total, err := s.systemLogModel().List(s.ctx, model.SystemLogQuery{
+	logs, total, err := s.systemLogModel().List(s.ctx, ingestmodel.SystemLogQuery{
 		Keyword:  req.Keyword,
 		Source:   req.Source,
 		Level:    req.Level,
@@ -124,16 +125,16 @@ func (s *LogService) GetSystemLogs(req *types.SystemLogReq) (*types.SystemLogRes
 	return &types.SystemLogResp{List: list, Total: total}, nil
 }
 
-func (s *LogService) caddyLogModel() model.CaddyLogModel {
+func (s *LogService) caddyLogModel() caddymodel.CaddyLogModel {
 	if s.svcCtx.CaddyLogModel != nil {
 		return s.svcCtx.CaddyLogModel
 	}
-	return model.NewCaddyLogModel(s.svcCtx.DB)
+	return caddymodel.NewCaddyLogModel(s.svcCtx.DB)
 }
 
-func (s *LogService) systemLogModel() model.SystemLogModel {
+func (s *LogService) systemLogModel() ingestmodel.SystemLogModel {
 	if s.svcCtx.SystemLogModel != nil {
 		return s.svcCtx.SystemLogModel
 	}
-	return model.NewSystemLogModel(s.svcCtx.DB)
+	return ingestmodel.NewSystemLogModel(s.svcCtx.DB)
 }

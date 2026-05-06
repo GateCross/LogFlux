@@ -2,10 +2,9 @@ package caddy
 
 import (
 	"fmt"
+	wafmodel "logflux/model/waf"
 	"strings"
 	"unicode"
-
-	"logflux/model"
 )
 
 const (
@@ -178,7 +177,7 @@ func derivePolicyCRSTemplateFromValues(paranoiaLevel, inboundThreshold, outbound
 	return wafPolicyCRSTemplateCustom
 }
 
-func ensurePolicyCRSTuning(policy *model.WafPolicy) error {
+func ensurePolicyCRSTuning(policy *wafmodel.WafPolicy) error {
 	if policy == nil {
 		return fmt.Errorf("策略为空")
 	}
@@ -222,7 +221,7 @@ func ensurePolicyCRSTuning(policy *model.WafPolicy) error {
 	return nil
 }
 
-func buildWafPolicyDirectives(policy *model.WafPolicy) (string, error) {
+func buildWafPolicyDirectives(policy *wafmodel.WafPolicy) (string, error) {
 	if policy == nil {
 		return "", fmt.Errorf("策略为空")
 	}

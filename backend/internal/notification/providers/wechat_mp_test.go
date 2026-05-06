@@ -1,7 +1,7 @@
 package providers
 
 import (
-	"logflux/model"
+	notificationmodel "logflux/model/notification"
 	"testing"
 )
 
@@ -74,7 +74,7 @@ func TestWeChatMPProvider_Validate(t *testing.T) {
 
 func TestWeChatMPProvider_Type(t *testing.T) {
 	provider := NewWeChatMPProvider()
-	if provider.Type() != model.ChannelTypeWeChatMP {
-		t.Fatalf("Type() = %v, want %v", provider.Type(), model.ChannelTypeWeChatMP)
+	if provider.Type() != notificationmodel.ChannelTypeWeChatMP {
+		t.Fatalf("Type() = %v, want %v", provider.Type(), notificationmodel.ChannelTypeWeChatMP)
 	}
 }

@@ -3,11 +3,11 @@ package caddy
 import (
 	"context"
 	"fmt"
+	wafmodel "logflux/model/waf"
 	"strings"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"gorm.io/gorm"
@@ -41,7 +41,7 @@ func (l *ListWafPolicyRevisionsLogic) ListWafPolicyRevisions(req *types.WafPolic
 		pageSize = 20
 	}
 
-	db := l.svcCtx.DB.WithContext(l.ctx).Model(&model.WafPolicyRevision{})
+	db := l.svcCtx.DB.WithContext(l.ctx).Model(&wafmodel.WafPolicyRevision{})
 	if req.PolicyId > 0 {
 		db = db.Where("policy_id = ?", req.PolicyId)
 	}
@@ -51,7 +51,7 @@ func (l *ListWafPolicyRevisionsLogic) ListWafPolicyRevisions(req *types.WafPolic
 		return nil, fmt.Errorf("统计策略版本失败: %w", err)
 	}
 
-	var revisions []model.WafPolicyRevision
+	var revisions []wafmodel.WafPolicyRevision
 	offset := (page - 1) * pageSize
 	if err := db.Order("created_at desc, id desc").Limit(pageSize).Offset(offset).Find(&revisions).Error; err != nil {
 		return nil, fmt.Errorf("查询策略版本失败: %w", err)
@@ -72,8 +72,8 @@ func (l *ListWafPolicyRevisionsLogic) ListWafPolicyRevisions(req *types.WafPolic
 			policyIDs = append(policyIDs, revision.PolicyID)
 		}
 		if len(policyIDs) > 0 {
-			var policies []model.WafPolicy
-			if err := l.svcCtx.DB.WithContext(l.ctx).Model(&model.WafPolicy{}).Where("id IN ?", policyIDs).Find(&policies).Error; err != nil {
+			var policies []wafmodel.WafPolicy
+			if err := l.svcCtx.DB.WithContext(l.ctx).Model(&wafmodel.WafPolicy{}).Where("id IN ?", policyIDs).Find(&policies).Error; err != nil {
 				return nil, fmt.Errorf("查询策略名称失败: %w", err)
 			}
 			for _, policy := range policies {
@@ -84,9 +84,9 @@ func (l *ListWafPolicyRevisionsLogic) ListWafPolicyRevisions(req *types.WafPolic
 
 	items := make([]types.WafPolicyRevisionItem, 0, len(revisions))
 	for _, revision := range revisions {
-		var previousRevision *model.WafPolicyRevision
+		var previousRevision *wafmodel.WafPolicyRevision
 		if revision.Version > 1 {
-			var prev model.WafPolicyRevision
+			var prev wafmodel.WafPolicyRevision
 			prevErr := l.svcCtx.DB.WithContext(l.ctx).
 				Where("policy_id = ? AND version < ?", revision.PolicyID, revision.Version).
 				Order("version desc").

@@ -1,7 +1,7 @@
 package providers
 
 import (
-	"logflux/model"
+	notificationmodel "logflux/model/notification"
 	"testing"
 )
 
@@ -48,7 +48,7 @@ func TestWeComProvider_Validate(t *testing.T) {
 
 func TestWeComProvider_Type(t *testing.T) {
 	provider := NewWeComProvider()
-	if provider.Type() != model.ChannelTypeWeCom {
-		t.Fatalf("Type() = %v, want %v", provider.Type(), model.ChannelTypeWeCom)
+	if provider.Type() != notificationmodel.ChannelTypeWeCom {
+		t.Fatalf("Type() = %v, want %v", provider.Type(), notificationmodel.ChannelTypeWeCom)
 	}
 }

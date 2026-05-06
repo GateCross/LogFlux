@@ -3,12 +3,13 @@ package caddy
 import (
 	"context"
 	"fmt"
+	usermodel "logflux/model/user"
+	wafmodel "logflux/model/waf"
 	"strconv"
 	"strings"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -39,7 +40,7 @@ func (l *ListWafJobsLogic) ListWafJobs(req *types.WafJobListReq) (resp *types.Wa
 		pageSize = 20
 	}
 
-	db := helper.svcCtx.DB.WithContext(helper.ctx).Model(&model.WafUpdateJob{})
+	db := helper.svcCtx.DB.WithContext(helper.ctx).Model(&wafmodel.WafUpdateJob{})
 	if status := strings.TrimSpace(req.Status); status != "" {
 		db = db.Where("status = ?", strings.ToLower(status))
 	}
@@ -52,7 +53,7 @@ func (l *ListWafJobsLogic) ListWafJobs(req *types.WafJobListReq) (resp *types.Wa
 		return nil, fmt.Errorf("统计任务失败: %w", err)
 	}
 
-	var jobs []model.WafUpdateJob
+	var jobs []wafmodel.WafUpdateJob
 	offset := (page - 1) * pageSize
 	if err := db.Order("created_at desc, id desc").Limit(pageSize).Offset(offset).Find(&jobs).Error; err != nil {
 		return nil, fmt.Errorf("查询任务失败: %w", err)
@@ -79,7 +80,7 @@ func (l *ListWafJobsLogic) ListWafJobs(req *types.WafJobListReq) (resp *types.Wa
 	return &types.WafJobListResp{List: items, Total: total}, nil
 }
 
-func (l *ListWafJobsLogic) buildJobOperatorNameMap(jobs []model.WafUpdateJob) map[string]string {
+func (l *ListWafJobsLogic) buildJobOperatorNameMap(jobs []wafmodel.WafUpdateJob) map[string]string {
 	operatorNameMap := map[string]string{}
 	if len(jobs) == 0 || l == nil || l.svcCtx == nil || l.svcCtx.DB == nil {
 		return operatorNameMap
@@ -102,8 +103,8 @@ func (l *ListWafJobsLogic) buildJobOperatorNameMap(jobs []model.WafUpdateJob) ma
 		return operatorNameMap
 	}
 
-	var users []model.User
-	if err := l.svcCtx.DB.WithContext(l.ctx).Model(&model.User{}).Select("id", "username").Where("id IN ?", userIDs).Find(&users).Error; err != nil {
+	var users []usermodel.User
+	if err := l.svcCtx.DB.WithContext(l.ctx).Model(&usermodel.User{}).Select("id", "username").Where("id IN ?", userIDs).Find(&users).Error; err != nil {
 		l.Logger.Errorf("查询操作人用户名失败: userIDs=%v err=%v", userIDs, err)
 		return operatorNameMap
 	}

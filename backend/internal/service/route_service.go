@@ -3,13 +3,14 @@ package service
 import (
 	"context"
 	"encoding/json"
+	menumodel "logflux/model/menu"
+	rolemodel "logflux/model/role"
 	"strings"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
 	"logflux/internal/utils/logger"
 	"logflux/internal/xerr"
-	"logflux/model"
 )
 
 // RouteService 负责前端路由树业务。
@@ -61,7 +62,7 @@ func (s *RouteService) GetUserRoutes() (*types.UserRouteResp, error) {
 	}, nil
 }
 
-func buildRouteTree(allMenus []model.Menu, parentID *uint, userRoles []model.Role, permissions map[string]bool) []types.MenuRoute {
+func buildRouteTree(allMenus []menumodel.Menu, parentID *uint, userRoles []rolemodel.Role, permissions map[string]bool) []types.MenuRoute {
 	routes := make([]types.MenuRoute, 0)
 	for _, menu := range allMenus {
 		if !matchMenuParent(menu, parentID) || !hasMenuPermission(menu, userRoles, permissions) {
@@ -87,7 +88,7 @@ func buildRouteTree(allMenus []model.Menu, parentID *uint, userRoles []model.Rol
 	return routes
 }
 
-func parseRouteMeta(menu model.Menu) types.RouteMeta {
+func parseRouteMeta(menu menumodel.Menu) types.RouteMeta {
 	var meta types.RouteMeta
 	if menu.Meta != "" {
 		_ = json.Unmarshal([]byte(menu.Meta), &meta)
@@ -98,7 +99,7 @@ func parseRouteMeta(menu model.Menu) types.RouteMeta {
 	return meta
 }
 
-func hasMenuPermission(menu model.Menu, userRoles []model.Role, permissions map[string]bool) bool {
+func hasMenuPermission(menu menumodel.Menu, userRoles []rolemodel.Role, permissions map[string]bool) bool {
 	for _, role := range userRoles {
 		if role.Name == "admin" {
 			return true

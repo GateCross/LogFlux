@@ -3,13 +3,13 @@ package caddy
 import (
 	"context"
 	"fmt"
+	wafmodel "logflux/model/waf"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"gorm.io/gorm"
@@ -39,7 +39,7 @@ func (l *ClearWafReleasesLogic) ClearWafReleases(req *types.WafReleaseClearReq) 
 		return nil, fmt.Errorf("仅支持清空 CRS 非激活版本")
 	}
 
-	var candidates []model.WafRelease
+	var candidates []wafmodel.WafRelease
 	if err := l.svcCtx.DB.WithContext(l.ctx).
 		Where("kind = ? AND status <> ?", kind, wafReleaseStatusActive).
 		Order("id asc").
@@ -53,7 +53,7 @@ func (l *ClearWafReleasesLogic) ClearWafReleases(req *types.WafReleaseClearReq) 
 
 	activePathSet := make(map[string]struct{})
 	var activePaths []string
-	if err := l.svcCtx.DB.WithContext(l.ctx).Model(&model.WafRelease{}).
+	if err := l.svcCtx.DB.WithContext(l.ctx).Model(&wafmodel.WafRelease{}).
 		Where("kind = ? AND status = ?", kind, wafReleaseStatusActive).
 		Pluck("storage_path", &activePaths).Error; err != nil {
 		return nil, fmt.Errorf("查询激活版本路径失败: %w", err)
@@ -89,10 +89,10 @@ func (l *ClearWafReleasesLogic) ClearWafReleases(req *types.WafReleaseClearReq) 
 
 	if err := l.svcCtx.DB.WithContext(l.ctx).Transaction(func(tx *gorm.DB) error {
 		if len(releaseIDs) > 0 {
-			if err := tx.Where("release_id IN ?", releaseIDs).Delete(&model.WafUpdateJob{}).Error; err != nil {
+			if err := tx.Where("release_id IN ?", releaseIDs).Delete(&wafmodel.WafUpdateJob{}).Error; err != nil {
 				return fmt.Errorf("删除关联 WAF 任务失败: %w", err)
 			}
-			if err := tx.Where("id IN ?", releaseIDs).Delete(&model.WafRelease{}).Error; err != nil {
+			if err := tx.Where("id IN ?", releaseIDs).Delete(&wafmodel.WafRelease{}).Error; err != nil {
 				return fmt.Errorf("删除 WAF 版本失败: %w", err)
 			}
 		}

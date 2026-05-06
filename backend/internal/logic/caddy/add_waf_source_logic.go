@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	wafmodel "logflux/model/waf"
 	"strings"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"gorm.io/gorm"
@@ -64,14 +64,14 @@ func (l *AddWafSourceLogic) AddWafSource(req *types.WafSourceReq) (resp *types.B
 		return nil, err
 	}
 
-	var existing model.WafSource
+	var existing wafmodel.WafSource
 	if err := helper.svcCtx.DB.WithContext(helper.ctx).Where("name = ?", name).First(&existing).Error; err == nil {
 		return nil, fmt.Errorf("源名称已存在: %s", name)
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, fmt.Errorf("检查源名称失败: %w", err)
 	}
 
-	source := &model.WafSource{
+	source := &wafmodel.WafSource{
 		Name:         name,
 		Kind:         kind,
 		Mode:         mode,

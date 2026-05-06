@@ -2,11 +2,12 @@ package notification
 
 import (
 	"context"
+	commonmodel "logflux/model/common"
+	notificationmodel "logflux/model/notification"
 
 	"encoding/json"
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -33,13 +34,13 @@ func (l *CreateRuleLogic) CreateRule(req *types.RuleReq) (resp *types.BaseResp, 
 		}
 	}
 
-	rule := &model.NotificationRule{
+	rule := &notificationmodel.NotificationRule{
 		Name:            req.Name,
 		Enabled:         req.Enabled,
 		RuleType:        req.RuleType,
 		EventType:       req.EventType,
-		Condition:       model.JSONMap(conditionMap),
-		ChannelIDs:      model.Int64Array(req.ChannelIDs),
+		Condition:       commonmodel.JSONMap(conditionMap),
+		ChannelIDs:      notificationmodel.Int64Array(req.ChannelIDs),
 		Template:        req.Template,
 		SilenceDuration: req.SilenceDuration,
 		Description:     req.Description,

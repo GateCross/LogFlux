@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"logflux/internal/notification"
-	"logflux/model"
+	notificationmodel "logflux/model/notification"
 	"net/http"
 	"time"
 )
@@ -28,7 +28,7 @@ func NewDiscordProvider() *DiscordProvider {
 // Send 发送通知
 func (d *DiscordProvider) Send(ctx context.Context, config map[string]interface{}, event *notification.Event) error {
 	// 解析配置
-	discordConfig := &model.DiscordConfig{}
+	discordConfig := &notificationmodel.DiscordConfig{}
 	if err := mapToStruct(config, discordConfig); err != nil {
 		return fmt.Errorf("Discord 配置无效: %w", err)
 	}
@@ -97,7 +97,7 @@ func (d *DiscordProvider) Send(ctx context.Context, config map[string]interface{
 
 // Validate 验证配置
 func (d *DiscordProvider) Validate(config map[string]interface{}) error {
-	discordConfig := &model.DiscordConfig{}
+	discordConfig := &notificationmodel.DiscordConfig{}
 	if err := mapToStruct(config, discordConfig); err != nil {
 		return fmt.Errorf("Discord 配置无效: %w", err)
 	}
@@ -111,5 +111,5 @@ func (d *DiscordProvider) Validate(config map[string]interface{}) error {
 
 // Type 返回提供者类型
 func (d *DiscordProvider) Type() string {
-	return model.ChannelTypeDiscord
+	return notificationmodel.ChannelTypeDiscord
 }

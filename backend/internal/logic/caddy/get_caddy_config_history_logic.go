@@ -2,10 +2,10 @@ package caddy
 
 import (
 	"context"
+	caddymodel "logflux/model/caddy"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -25,10 +25,10 @@ func NewGetCaddyConfigHistoryLogic(ctx context.Context, svcCtx *svc.ServiceConte
 }
 
 func (l *GetCaddyConfigHistoryLogic) GetCaddyConfigHistory(req *types.CaddyConfigHistoryListReq) (resp *types.CaddyConfigHistoryListResp, err error) {
-	var history []model.CaddyConfigHistory
+	var history []caddymodel.CaddyConfigHistory
 	var total int64
 
-	db := l.svcCtx.DB.WithContext(l.ctx).Model(&model.CaddyConfigHistory{}).Where("server_id = ?", req.ServerId)
+	db := l.svcCtx.DB.WithContext(l.ctx).Model(&caddymodel.CaddyConfigHistory{}).Where("server_id = ?", req.ServerId)
 
 	if err := db.Count(&total).Error; err != nil {
 		return nil, err

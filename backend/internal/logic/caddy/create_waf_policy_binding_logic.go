@@ -3,11 +3,11 @@ package caddy
 import (
 	"context"
 	"fmt"
+	wafmodel "logflux/model/waf"
 	"strings"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -48,7 +48,7 @@ func (l *CreateWafPolicyBindingLogic) CreateWafPolicyBinding(req *types.WafPolic
 		return nil, err
 	}
 
-	binding := &model.WafPolicyBinding{
+	binding := &wafmodel.WafPolicyBinding{
 		PolicyID:    req.PolicyId,
 		Name:        strings.TrimSpace(req.Name),
 		Description: strings.TrimSpace(req.Description),

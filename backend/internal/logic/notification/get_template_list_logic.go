@@ -2,10 +2,10 @@ package notification
 
 import (
 	"context"
+	notificationmodel "logflux/model/notification"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -25,7 +25,7 @@ func NewGetTemplateListLogic(ctx context.Context, svcCtx *svc.ServiceContext) *G
 }
 
 func (l *GetTemplateListLogic) GetTemplateList() (resp *types.TemplateListResp, err error) {
-	var templates []model.NotificationTemplate
+	var templates []notificationmodel.NotificationTemplate
 	if err := l.svcCtx.DB.WithContext(l.ctx).Find(&templates).Error; err != nil {
 		return nil, err
 	}

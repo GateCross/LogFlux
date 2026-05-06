@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	caddymodel "logflux/model/caddy"
 	"time"
 
 	"logflux/internal/svc"
@@ -10,7 +11,6 @@ import (
 	"logflux/internal/utils"
 	"logflux/internal/utils/logger"
 	"logflux/internal/xerr"
-	"logflux/model"
 )
 
 // DashboardService 负责首页看板聚合查询。
@@ -200,9 +200,9 @@ func (s *DashboardService) loadRecentLogs(startTime, endTime time.Time, limit in
 	return items, nil
 }
 
-func (s *DashboardService) caddyLogModel() model.CaddyLogModel {
+func (s *DashboardService) caddyLogModel() caddymodel.CaddyLogModel {
 	if s.svcCtx.CaddyLogModel != nil {
 		return s.svcCtx.CaddyLogModel
 	}
-	return model.NewCaddyLogModel(s.svcCtx.DB)
+	return caddymodel.NewCaddyLogModel(s.svcCtx.DB)
 }

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"logflux/internal/notification"
-	"logflux/model"
+	notificationmodel "logflux/model/notification"
 	"strconv"
 	"strings"
 
@@ -22,7 +22,7 @@ func NewTelegramProvider() *TelegramProvider {
 // Send 发送通知
 func (t *TelegramProvider) Send(ctx context.Context, config map[string]interface{}, event *notification.Event) error {
 	// 解析配置
-	tgConfig := &model.TelegramConfig{}
+	tgConfig := &notificationmodel.TelegramConfig{}
 	if err := mapToStruct(config, tgConfig); err != nil {
 		return fmt.Errorf("Telegram 配置无效: %w", err)
 	}
@@ -66,7 +66,7 @@ func (t *TelegramProvider) Send(ctx context.Context, config map[string]interface
 
 // Validate 验证配置
 func (t *TelegramProvider) Validate(config map[string]interface{}) error {
-	tgConfig := &model.TelegramConfig{}
+	tgConfig := &notificationmodel.TelegramConfig{}
 	if err := mapToStruct(config, tgConfig); err != nil {
 		return fmt.Errorf("Telegram 配置无效: %w", err)
 	}
@@ -76,11 +76,11 @@ func (t *TelegramProvider) Validate(config map[string]interface{}) error {
 
 // Type 返回提供者类型
 func (t *TelegramProvider) Type() string {
-	return model.ChannelTypeTelegram
+	return notificationmodel.ChannelTypeTelegram
 }
 
 // validateTelegramConfig 验证 Telegram 配置
-func validateTelegramConfig(config *model.TelegramConfig) error {
+func validateTelegramConfig(config *notificationmodel.TelegramConfig) error {
 	if config.BotToken == "" {
 		return fmt.Errorf("Bot Token 不能为空")
 	}

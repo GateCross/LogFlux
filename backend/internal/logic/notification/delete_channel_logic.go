@@ -2,10 +2,10 @@ package notification
 
 import (
 	"context"
+	notificationmodel "logflux/model/notification"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -25,7 +25,7 @@ func NewDeleteChannelLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Del
 }
 
 func (l *DeleteChannelLogic) DeleteChannel(req *types.IDReq) (resp *types.BaseResp, err error) {
-	if err := l.svcCtx.DB.WithContext(l.ctx).Delete(&model.NotificationChannel{}, req.ID).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).Delete(&notificationmodel.NotificationChannel{}, req.ID).Error; err != nil {
 		return nil, err
 	}
 

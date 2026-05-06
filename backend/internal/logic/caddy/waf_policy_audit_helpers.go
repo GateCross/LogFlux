@@ -2,11 +2,10 @@ package caddy
 
 import (
 	"fmt"
+	wafmodel "logflux/model/waf"
 	"reflect"
 	"regexp"
 	"strings"
-
-	"logflux/model"
 )
 
 var (
@@ -22,7 +21,7 @@ var (
 	regexDirectiveOutboundThreshold       = regexp.MustCompile(`(?i)setvar:tx\.outbound_anomaly_score_threshold=([0-9]+)`)
 )
 
-func buildWafPolicyRevisionChangeSummary(current *model.WafPolicyRevision, previous *model.WafPolicyRevision) string {
+func buildWafPolicyRevisionChangeSummary(current *wafmodel.WafPolicyRevision, previous *wafmodel.WafPolicyRevision) string {
 	if current == nil {
 		return "-"
 	}

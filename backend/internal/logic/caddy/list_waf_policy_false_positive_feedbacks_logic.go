@@ -3,12 +3,12 @@ package caddy
 import (
 	"context"
 	"fmt"
+	wafmodel "logflux/model/waf"
 	"strings"
 	"time"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -48,7 +48,7 @@ func (l *ListWafPolicyFalsePositiveFeedbacksLogic) ListWafPolicyFalsePositiveFee
 		pageSize = 100
 	}
 
-	db := l.svcCtx.DB.WithContext(l.ctx).Model(&model.WafPolicyFalsePositiveFeedback{})
+	db := l.svcCtx.DB.WithContext(l.ctx).Model(&wafmodel.WafPolicyFalsePositiveFeedback{})
 	if req.PolicyId > 0 {
 		db = db.Where("policy_id = ?", req.PolicyId)
 	}
@@ -97,7 +97,7 @@ func (l *ListWafPolicyFalsePositiveFeedbacksLogic) ListWafPolicyFalsePositiveFee
 		return nil, fmt.Errorf("统计误报反馈失败: %w", err)
 	}
 
-	var feedbacks []model.WafPolicyFalsePositiveFeedback
+	var feedbacks []wafmodel.WafPolicyFalsePositiveFeedback
 	offset := (page - 1) * pageSize
 	if err := db.Order("created_at desc, id desc").Limit(pageSize).Offset(offset).Find(&feedbacks).Error; err != nil {
 		return nil, fmt.Errorf("查询误报反馈列表失败: %w", err)
@@ -118,8 +118,8 @@ func (l *ListWafPolicyFalsePositiveFeedbacksLogic) ListWafPolicyFalsePositiveFee
 			policyIDs = append(policyIDs, item.PolicyID)
 		}
 		if len(policyIDs) > 0 {
-			var policies []model.WafPolicy
-			if err := l.svcCtx.DB.WithContext(l.ctx).Model(&model.WafPolicy{}).Where("id IN ?", policyIDs).Find(&policies).Error; err != nil {
+			var policies []wafmodel.WafPolicy
+			if err := l.svcCtx.DB.WithContext(l.ctx).Model(&wafmodel.WafPolicy{}).Where("id IN ?", policyIDs).Find(&policies).Error; err != nil {
 				return nil, fmt.Errorf("查询策略名称失败: %w", err)
 			}
 			for _, policy := range policies {

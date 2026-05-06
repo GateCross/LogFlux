@@ -2,10 +2,10 @@ package notification
 
 import (
 	"context"
+	notificationmodel "logflux/model/notification"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -25,7 +25,7 @@ func NewCreateTemplateLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Cr
 }
 
 func (l *CreateTemplateLogic) CreateTemplate(req *types.TemplateReq) (resp *types.BaseResp, err error) {
-	template := &model.NotificationTemplate{
+	template := &notificationmodel.NotificationTemplate{
 		Name:    req.Name,
 		Format:  req.Format,
 		Content: req.Content,

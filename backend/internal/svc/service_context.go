@@ -4,18 +4,27 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	cronutil "logflux/common/cron"
 	"logflux/common/gorm"
+	"logflux/common/ingest"
 	"logflux/common/logging"
 	redisClient "logflux/common/redis"
 	"logflux/internal/config"
-	"logflux/internal/ingest"
 	"logflux/internal/middleware"
 	"logflux/internal/notification"
 	"logflux/internal/notification/providers"
 	"logflux/internal/notification/template"
 	"logflux/internal/tasks"
 	"logflux/internal/utils/safego"
-	"logflux/model"
+	caddymodel "logflux/model/caddy"
+	commonmodel "logflux/model/common"
+	cronmodel "logflux/model/cron"
+	ingestmodel "logflux/model/ingest"
+	menumodel "logflux/model/menu"
+	notificationmodel "logflux/model/notification"
+	rolemodel "logflux/model/role"
+	usermodel "logflux/model/user"
+	wafmodel "logflux/model/waf"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,22 +36,23 @@ import (
 )
 
 type ServiceContext struct {
-	Config          config.Config
-	DB              *gorm2.DB
-	Redis           *redis.Client
-	Ingestor        *ingest.IngestManager
-	ArchiveTask     *tasks.ArchiveTask
-	CronScheduler   *tasks.CronScheduler
-	WafScheduler    *tasks.WafScheduler
-	NotificationMgr notification.NotificationManager
-	Permission      rest.Middleware
-	UserModel       model.UserModel
-	RoleModel       model.RoleModel
-	MenuModel       model.MenuModel
-	CronTaskModel   model.CronTaskModel
-	LogSourceModel  model.LogSourceModel
-	CaddyLogModel   model.CaddyLogModel
-	SystemLogModel  model.SystemLogModel
+	Config            config.Config
+	DB                *gorm2.DB
+	Redis             *redis.Client
+	Ingestor          *ingest.IngestManager
+	ArchiveTask       *tasks.ArchiveTask
+	CronScheduler     *tasks.CronScheduler
+	WafScheduler      *tasks.WafScheduler
+	NotificationMgr   notification.NotificationManager
+	Permission        rest.Middleware
+	UserModel         usermodel.UserModel
+	RoleModel         rolemodel.RoleModel
+	MenuModel         menumodel.MenuModel
+	CronTaskModel     cronmodel.CronTaskModel
+	CronTaskFileModel cronmodel.CronTaskFileModel
+	LogSourceModel    ingestmodel.LogSourceModel
+	CaddyLogModel     caddymodel.CaddyLogModel
+	SystemLogModel    ingestmodel.SystemLogModel
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -50,37 +60,41 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	// Auto Migrate - 包含归档表和通知表
 	db.AutoMigrate(
-		&model.User{},
-		&model.CaddyLog{},
-		&model.CaddyLogArchive{}, // 归档表
-		&model.SystemLog{},
-		&model.LogIngestCursor{},
-		&model.LogSource{},
-		&model.Role{},
-		&model.Menu{},
-		&model.CaddyServer{},
-		&model.CaddyConfigHistory{},
+		&usermodel.User{},
+		&caddymodel.CaddyLog{},
+		&caddymodel.CaddyLogArchive{}, // 归档表
+		&ingestmodel.SystemLog{},
+		&ingestmodel.LogIngestCursor{},
+		&ingestmodel.LogSource{},
+		&rolemodel.Role{},
+		&menumodel.Menu{},
+		&caddymodel.CaddyServer{},
+		&caddymodel.CaddyConfigHistory{},
 		// 通知相关表
-		&model.NotificationChannel{},
-		&model.NotificationRule{},
-		&model.NotificationLog{},
-		&model.NotificationJob{},
-		&model.NotificationTemplate{},
+		&notificationmodel.NotificationChannel{},
+		&notificationmodel.NotificationRule{},
+		&notificationmodel.NotificationLog{},
+		&notificationmodel.NotificationJob{},
+		&notificationmodel.NotificationTemplate{},
 		// 定时任务表
-		&model.CronTask{},
-		&model.CronTaskLog{},
+		&cronmodel.CronTask{},
+		&cronmodel.CronTaskLog{},
+		&cronmodel.CronTaskFile{},
 		// WAF 更新管理
-		&model.WafSource{},
-		&model.WafRelease{},
-		&model.WafUpdateJob{},
-		&model.WafPolicy{},
-		&model.WafPolicyRevision{},
-		&model.WafRuleExclusion{},
-		&model.WafPolicyBinding{},
-		&model.WafPolicyFalsePositiveFeedback{},
+		&wafmodel.WafSource{},
+		&wafmodel.WafRelease{},
+		&wafmodel.WafUpdateJob{},
+		&wafmodel.WafPolicy{},
+		&wafmodel.WafPolicyRevision{},
+		&wafmodel.WafRuleExclusion{},
+		&wafmodel.WafPolicyBinding{},
+		&wafmodel.WafPolicyFalsePositiveFeedback{},
 	)
 
+	ensureCronTaskLogRetentionConstraints(db)
+	backfillCronTaskLogTaskNames(db)
 	initWafWorkspace(&c)
+	initCronWorkspace(&c)
 
 	// 创建归档存储过程（如果不存在）
 	createArchiveFunction(db)
@@ -115,7 +129,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	ingestor := ingest.NewIngestManager(db)
 
 	// Load enabled sources from DB
-	var sources []model.LogSource
+	var sources []ingestmodel.LogSource
 	db.Where("enabled = ?", true).Find(&sources)
 	for _, source := range sources {
 		ingestor.StartSource(source)
@@ -125,9 +139,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	if c.CaddyLogPath != "" {
 		// Check if exists in DB, if not add it
 		var cnt int64
-		db.Model(&model.LogSource{}).Where("path = ?", c.CaddyLogPath).Count(&cnt)
+		db.Model(&ingestmodel.LogSource{}).Where("path = ?", c.CaddyLogPath).Count(&cnt)
 		if cnt == 0 {
-			db.Create(&model.LogSource{
+			db.Create(&ingestmodel.LogSource{
 				Name:         "Default Config",
 				Path:         c.CaddyLogPath,
 				Type:         "caddy",
@@ -141,9 +155,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	caddyRuntimeLogPath := strings.TrimSpace(c.CaddyRuntimeLogPath)
 	if caddyRuntimeLogPath != "" {
 		var cnt int64
-		db.Model(&model.LogSource{}).Where("path = ?", caddyRuntimeLogPath).Count(&cnt)
+		db.Model(&ingestmodel.LogSource{}).Where("path = ?", caddyRuntimeLogPath).Count(&cnt)
 		if cnt == 0 {
-			db.Create(&model.LogSource{
+			db.Create(&ingestmodel.LogSource{
 				Name:         "Caddy Runtime",
 				Path:         caddyRuntimeLogPath,
 				Type:         "caddy_runtime",
@@ -167,28 +181,30 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	// 初始化定时任务调度器
 	cronScheduler := tasks.NewCronScheduler(db)
+	cronScheduler.SetExecutor(tasks.NewCronTaskExecutor(db, c.CronFilesDir))
 	cronScheduler.Start()
 
 	// 初始化 WAF 更新调度器（执行器在 main 中注入）
 	wafScheduler := tasks.NewWafScheduler(db)
 
 	return &ServiceContext{
-		Config:          c,
-		DB:              db,
-		Redis:           rdb,
-		Ingestor:        ingestor,
-		ArchiveTask:     archiveTask,
-		CronScheduler:   cronScheduler,
-		WafScheduler:    wafScheduler,
-		NotificationMgr: notificationMgr,
-		Permission:      middleware.NewPermissionMiddleware(db).Handle,
-		UserModel:       model.NewUserModel(db),
-		RoleModel:       model.NewRoleModel(db),
-		MenuModel:       model.NewMenuModel(db),
-		CronTaskModel:   model.NewCronTaskModel(db),
-		LogSourceModel:  model.NewLogSourceModel(db),
-		CaddyLogModel:   model.NewCaddyLogModel(db),
-		SystemLogModel:  model.NewSystemLogModel(db),
+		Config:            c,
+		DB:                db,
+		Redis:             rdb,
+		Ingestor:          ingestor,
+		ArchiveTask:       archiveTask,
+		CronScheduler:     cronScheduler,
+		WafScheduler:      wafScheduler,
+		NotificationMgr:   notificationMgr,
+		Permission:        middleware.NewPermissionMiddleware(db).Handle,
+		UserModel:         usermodel.NewUserModel(db),
+		RoleModel:         rolemodel.NewRoleModel(db),
+		MenuModel:         menumodel.NewMenuModel(db),
+		CronTaskModel:     cronmodel.NewCronTaskModel(db),
+		CronTaskFileModel: cronmodel.NewCronTaskFileModel(db),
+		LogSourceModel:    ingestmodel.NewLogSourceModel(db),
+		CaddyLogModel:     caddymodel.NewCaddyLogModel(db),
+		SystemLogModel:    ingestmodel.NewSystemLogModel(db),
 	}
 }
 
@@ -213,6 +229,87 @@ func initWafWorkspace(c *config.Config) {
 	logx.Infof("WAF 工作目录已初始化: %s", fmt.Sprintf("%s/{packages,releases}", securityDir))
 }
 
+func initCronWorkspace(c *config.Config) {
+	if c == nil {
+		return
+	}
+
+	configuredDir := strings.TrimSpace(c.CronFilesDir)
+	if configuredDir == "" {
+		configuredDir = cronutil.DefaultFilesDir
+	}
+
+	c.CronFilesDir = configuredDir
+	if err := cronutil.EnsureWorkspace(configuredDir); err != nil {
+		logx.Errorf("初始化定时任务脚本目录失败: %s, err=%v", configuredDir, err)
+		return
+	}
+
+	logx.Infof("定时任务脚本目录已初始化: %s", fmt.Sprintf("%s/{tasks,staging}", configuredDir))
+}
+
+func ensureCronTaskLogRetentionConstraints(db *gorm2.DB) {
+	if db == nil || db.Dialector == nil || db.Dialector.Name() != "postgres" {
+		return
+	}
+
+	type fkConstraint struct {
+		Name string `gorm:"column:constraint_name"`
+	}
+
+	var constraints []fkConstraint
+	query := `
+SELECT con.conname AS constraint_name
+FROM pg_constraint con
+JOIN pg_class rel ON rel.oid = con.conrelid
+JOIN pg_class ref ON ref.oid = con.confrelid
+WHERE con.contype = 'f'
+  AND rel.relname = 'cron_task_logs'
+  AND ref.relname = 'cron_tasks'
+`
+	if err := db.Raw(query).Scan(&constraints).Error; err != nil {
+		logx.Errorf("查询 Cron 日志外键约束失败: %v", err)
+		return
+	}
+
+	for _, constraint := range constraints {
+		name := strings.TrimSpace(constraint.Name)
+		if name == "" {
+			continue
+		}
+		dropSQL := fmt.Sprintf(`ALTER TABLE "cron_task_logs" DROP CONSTRAINT IF EXISTS %s`, quoteIdentifier(name))
+		if err := db.Exec(dropSQL).Error; err != nil {
+			logx.Errorf("删除 Cron 日志外键约束失败: %s err=%v", name, err)
+		} else {
+			logx.Infof("已移除 Cron 日志外键约束: %s", name)
+		}
+	}
+}
+
+func backfillCronTaskLogTaskNames(db *gorm2.DB) {
+	if db == nil || db.Dialector == nil || db.Dialector.Name() != "postgres" {
+		return
+	}
+	if !db.Migrator().HasTable(&cronmodel.CronTaskLog{}) || !db.Migrator().HasColumn(&cronmodel.CronTaskLog{}, "task_name") {
+		return
+	}
+
+	updateSQL := `
+UPDATE cron_task_logs AS log
+SET task_name = task.name
+FROM cron_tasks AS task
+WHERE log.task_id = task.id
+  AND COALESCE(log.task_name, '') = ''
+`
+	if err := db.Exec(updateSQL).Error; err != nil {
+		logx.Errorf("回填 Cron 日志任务名称失败: %v", err)
+	}
+}
+
+func quoteIdentifier(name string) string {
+	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
+}
+
 func ensureWafWorkspaceDirs(baseDir string) error {
 	trimmed := strings.TrimSpace(baseDir)
 	if trimmed == "" {
@@ -232,7 +329,7 @@ func ensureWafWorkspaceDirs(baseDir string) error {
 
 func initWafDefaultSources(db *gorm2.DB) {
 	var total int64
-	if err := db.Model(&model.WafSource{}).Count(&total).Error; err != nil {
+	if err := db.Model(&wafmodel.WafSource{}).Count(&total).Error; err != nil {
 		logx.Errorf("统计 WAF 源数量失败: %v", err)
 		return
 	}
@@ -241,7 +338,7 @@ func initWafDefaultSources(db *gorm2.DB) {
 		return
 	}
 
-	defaultSources := []model.WafSource{
+	defaultSources := []wafmodel.WafSource{
 		{
 			Name:         "default-crs",
 			Kind:         "crs",
@@ -256,7 +353,7 @@ func initWafDefaultSources(db *gorm2.DB) {
 			AutoCheck:    true,
 			AutoDownload: true,
 			AutoActivate: false,
-			Meta: model.JSONMap{
+			Meta: commonmodel.JSONMap{
 				"default":  true,
 				"official": true,
 				"repo":     "https://github.com/coreruleset/coreruleset",
@@ -276,7 +373,7 @@ func initWafDefaultSources(db *gorm2.DB) {
 			AutoCheck:    true,
 			AutoDownload: true,
 			AutoActivate: false,
-			Meta: model.JSONMap{
+			Meta: commonmodel.JSONMap{
 				"official": true,
 				"repo":     "https://github.com/coreruleset/coreruleset",
 			},
@@ -285,7 +382,7 @@ func initWafDefaultSources(db *gorm2.DB) {
 
 	for i := range defaultSources {
 		source := defaultSources[i]
-		var existing model.WafSource
+		var existing wafmodel.WafSource
 		err := db.Where("name = ?", source.Name).First(&existing).Error
 		if errors.Is(err, gorm2.ErrRecordNotFound) {
 			if createErr := db.Create(&source).Error; createErr != nil {
@@ -303,7 +400,7 @@ func initWafDefaultPolicies(db *gorm2.DB) {
 	}
 
 	var total int64
-	if err := db.Model(&model.WafPolicy{}).Count(&total).Error; err != nil {
+	if err := db.Model(&wafmodel.WafPolicy{}).Count(&total).Error; err != nil {
 		logx.Errorf("统计 WAF 策略数量失败: %v", err)
 		return
 	}
@@ -311,7 +408,7 @@ func initWafDefaultPolicies(db *gorm2.DB) {
 		return
 	}
 
-	defaultPolicy := model.WafPolicy{
+	defaultPolicy := wafmodel.WafPolicy{
 		Name:                        "default-global-policy",
 		Description:                 "默认全局策略",
 		Enabled:                     true,
@@ -327,7 +424,7 @@ func initWafDefaultPolicies(db *gorm2.DB) {
 		CrsParanoiaLevel:            1,
 		CrsInboundAnomalyThreshold:  10,
 		CrsOutboundAnomalyThreshold: 8,
-		Config: model.JSONMap{
+		Config: commonmodel.JSONMap{
 			"scope": "global",
 		},
 	}
@@ -338,7 +435,7 @@ func initWafDefaultPolicies(db *gorm2.DB) {
 	}
 
 	directives := "SecRuleEngine DetectionOnly\nSecAuditEngine RelevantOnly\nSecAuditLogFormat JSON\nSecAuditLogRelevantStatus ^(?:5|4(?!04))\nSecRequestBodyAccess On\nSecRequestBodyLimit 10485760\nSecRequestBodyNoFilesLimit 1048576\nSecAction \"id:900000,phase:1,pass,nolog,t:none,setvar:tx.paranoia_level=1\"\nSecAction \"id:900110,phase:1,pass,nolog,t:none,setvar:tx.inbound_anomaly_score_threshold=10\"\nSecAction \"id:900100,phase:1,pass,nolog,t:none,setvar:tx.outbound_anomaly_score_threshold=8\""
-	revision := model.WafPolicyRevision{
+	revision := wafmodel.WafPolicyRevision{
 		PolicyID:           defaultPolicy.ID,
 		Version:            1,
 		Status:             "published",
@@ -351,7 +448,7 @@ func initWafDefaultPolicies(db *gorm2.DB) {
 		logx.Errorf("初始化默认 WAF 策略版本失败: %v", err)
 	}
 
-	defaultBinding := model.WafPolicyBinding{
+	defaultBinding := wafmodel.WafPolicyBinding{
 		PolicyID:  defaultPolicy.ID,
 		Name:      "default-global-binding",
 		Enabled:   true,
@@ -378,7 +475,7 @@ func (svc *ServiceContext) EnsureWafEngineDefaultSource() {
 // initRBACData 初始化 RBAC 角色和菜单数据
 func initRBACData(db *gorm2.DB) {
 	// 初始化默认角色
-	roles := []model.Role{
+	roles := []rolemodel.Role{
 		{
 			Name:        "admin",
 			DisplayName: "管理员",
@@ -405,7 +502,7 @@ func initRBACData(db *gorm2.DB) {
 	}
 
 	for _, role := range roles {
-		var existingRole model.Role
+		var existingRole rolemodel.Role
 		if db.Where("name = ?", role.Name).First(&existingRole).Error == gorm2.ErrRecordNotFound {
 			db.Create(&role)
 		} else {
@@ -414,7 +511,7 @@ func initRBACData(db *gorm2.DB) {
 	}
 
 	// 初始化菜单数据
-	menus := []model.Menu{
+	menus := []menumodel.Menu{
 		{
 			Name:          "dashboard",
 			Path:          "/dashboard",
@@ -563,7 +660,7 @@ func initRBACData(db *gorm2.DB) {
 	createdMenus := make(map[string]bool)
 	for i := range menus {
 		menu := menus[i]
-		var existingMenu model.Menu
+		var existingMenu menumodel.Menu
 		if db.Where("name = ?", menu.Name).First(&existingMenu).Error == gorm2.ErrRecordNotFound {
 			db.Create(&menu)
 			createdMenus[menu.Name] = true
@@ -574,7 +671,7 @@ func initRBACData(db *gorm2.DB) {
 	}
 
 	// 兼容历史菜单数据：统一系统日志菜单的组件与 i18nKey
-	db.Model(&model.Menu{}).Where("name = ?", "caddy_system_log").Updates(map[string]interface{}{
+	db.Model(&menumodel.Menu{}).Where("name = ?", "caddy_system_log").Updates(map[string]interface{}{
 		"component": "view.caddy_system-log",
 		"meta":      `{"title":"caddy_system-log","i18nKey":"route.caddy_system-log","icon":"carbon:terminal"}`,
 	})
@@ -586,7 +683,7 @@ func initRBACData(db *gorm2.DB) {
 			return
 		}
 
-		var child, parent model.Menu
+		var child, parent menumodel.Menu
 		if db.Where("name = ?", childName).First(&child).Error == nil &&
 			db.Where("name = ?", parentName).First(&parent).Error == nil {
 			db.Model(&child).Update("parent_id", parent.ID)
@@ -594,7 +691,7 @@ func initRBACData(db *gorm2.DB) {
 	}
 
 	setParentForce := func(childName, parentName string) {
-		var child, parent model.Menu
+		var child, parent menumodel.Menu
 		if db.Where("name = ?", childName).First(&child).Error == nil &&
 			db.Where("name = ?", parentName).First(&parent).Error == nil {
 			db.Model(&child).Update("parent_id", parent.ID)
@@ -618,11 +715,11 @@ func initRBACData(db *gorm2.DB) {
 	// setParent("cron", "manage") // moved to top level
 
 	// 清理遗留数据
-	db.Where("name = ?", "home").Delete(&model.Menu{})
-	db.Where("path = ?", "/home").Delete(&model.Menu{})
-	db.Where("component = ?", "home").Delete(&model.Menu{})
-	db.Where("name = ?", "caddy_waf").Delete(&model.Menu{})
-	db.Where("name in ?", []string{"waf", "crs"}).Delete(&model.Menu{})
+	db.Where("name = ?", "home").Delete(&menumodel.Menu{})
+	db.Where("path = ?", "/home").Delete(&menumodel.Menu{})
+	db.Where("component = ?", "home").Delete(&menumodel.Menu{})
+	db.Where("name = ?", "caddy_waf").Delete(&menumodel.Menu{})
+	db.Where("name in ?", []string{"waf", "crs"}).Delete(&menumodel.Menu{})
 }
 
 // createArchiveFunction 创建归档存储过程

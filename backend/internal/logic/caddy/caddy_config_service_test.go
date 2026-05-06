@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	caddymodel "logflux/model/caddy"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -16,7 +17,6 @@ import (
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 )
 
 func TestCaddyConfigServicePrepareQuick(t *testing.T) {
@@ -164,7 +164,7 @@ func TestResolveCaddyConfigModulesForUpdateClearsRawSnapshot(t *testing.T) {
 }
 
 func TestCaddyConfigFromServerReturnsEmptyModulesWhenConfigMissing(t *testing.T) {
-	server := &model.CaddyServer{
+	server := &caddymodel.CaddyServer{
 		Config:  "",
 		Modules: mustCaddyModules(t, caddyFormModel{SchemaVersion: 1, Global: caddyGlobal{Raw: "{x}"}}),
 	}
@@ -188,7 +188,7 @@ func TestLoadCurrentCaddyConfigUsesEmptyModulesForLocalFallback(t *testing.T) {
 		localCaddyfilePath = originalPath
 	}()
 
-	server := &model.CaddyServer{
+	server := &caddymodel.CaddyServer{
 		Type:    "local",
 		Config:  "",
 		Modules: mustCaddyModules(t, caddyFormModel{SchemaVersion: 1, Global: caddyGlobal{Raw: "{\"stale\":true}"}}),

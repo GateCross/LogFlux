@@ -2,6 +2,7 @@ package notification
 
 import (
 	"context"
+	notificationmodel "logflux/model/notification"
 	"sync"
 	"testing"
 	"time"
@@ -10,8 +11,6 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-
-	"logflux/model"
 )
 
 type stubProvider struct {
@@ -20,7 +19,7 @@ type stubProvider struct {
 	err    error
 }
 
-func (p *stubProvider) Type() string                            { return model.ChannelTypeWebhook }
+func (p *stubProvider) Type() string                            { return notificationmodel.ChannelTypeWebhook }
 func (p *stubProvider) Validate(_ map[string]interface{}) error { return nil }
 func (p *stubProvider) Send(_ context.Context, _ map[string]interface{}, _ *Event) error {
 	p.mu.Lock()
@@ -77,14 +76,14 @@ func TestManager_processJob_Success(t *testing.T) {
 			now,
 			1,
 			1,
-			model.ChannelTypeWebhook,
+			notificationmodel.ChannelTypeWebhook,
 			"system.test",
 			"info",
 			"Title",
 			"Message",
 			[]byte(`{"foo":"bar"}`),
 			"default_markdown",
-			model.NotificationJobStatusQueued,
+			notificationmodel.NotificationJobStatusQueued,
 			0,
 			now,
 			"",
@@ -109,7 +108,7 @@ func TestManager_processJob_Success(t *testing.T) {
 			now,
 			now,
 			"test",
-			model.ChannelTypeWebhook,
+			notificationmodel.ChannelTypeWebhook,
 			true,
 			"",
 			[]byte(`{}`),
@@ -133,7 +132,7 @@ func TestManager_processJob_Success(t *testing.T) {
 	m := &Manager{
 		db:        gdb,
 		logger:    logx.WithContext(context.Background()),
-		providers: map[string]NotificationProvider{model.ChannelTypeWebhook: prov},
+		providers: map[string]NotificationProvider{notificationmodel.ChannelTypeWebhook: prov},
 	}
 
 	m.processJob(context.Background(), 10)

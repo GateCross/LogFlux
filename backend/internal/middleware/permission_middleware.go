@@ -3,11 +3,12 @@ package middleware
 import (
 	"encoding/json"
 	"errors"
+	rolemodel "logflux/model/role"
+	usermodel "logflux/model/user"
 	"net/http"
 	"strings"
 
 	"logflux/internal/response"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/rest/httpx"
@@ -48,7 +49,7 @@ func (m *PermissionMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		var user model.User
+		var user usermodel.User
 		if err := m.db.Select("id", "roles", "status").First(&user, userID).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				writePermissionError(w, http.StatusUnauthorized, 401, "用户不存在")
@@ -92,7 +93,7 @@ func (m *PermissionMiddleware) loadPermissions(roleNames []string) ([]string, er
 		return nil, nil
 	}
 
-	var roles []model.Role
+	var roles []rolemodel.Role
 	if err := m.db.Select("name", "permissions").Where("name IN ?", roleNames).Find(&roles).Error; err != nil {
 		return nil, err
 	}

@@ -3,6 +3,7 @@ package notification
 import (
 	"context"
 	"errors"
+	notificationmodel "logflux/model/notification"
 	"testing"
 	"time"
 
@@ -10,8 +11,6 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-
-	"logflux/model"
 )
 
 func TestManager_processJob_Failure_WithRetry_SetsLogBackToPending(t *testing.T) {
@@ -55,14 +54,14 @@ func TestManager_processJob_Failure_WithRetry_SetsLogBackToPending(t *testing.T)
 			now,
 			1,
 			1,
-			model.ChannelTypeWebhook,
+			notificationmodel.ChannelTypeWebhook,
 			"system.test",
 			"info",
 			"Title",
 			"Message",
 			[]byte(`{"foo":"bar"}`),
 			"default_markdown",
-			model.NotificationJobStatusQueued,
+			notificationmodel.NotificationJobStatusQueued,
 			0,
 			now,
 			"",
@@ -86,7 +85,7 @@ func TestManager_processJob_Failure_WithRetry_SetsLogBackToPending(t *testing.T)
 			now,
 			now,
 			"test",
-			model.ChannelTypeWebhook,
+			notificationmodel.ChannelTypeWebhook,
 			true,
 			"",
 			[]byte(`{"retry":{"maxAttempts":2,"baseDelay":"1s","maxDelay":"10s","factor":2,"jitter":false}}`),
@@ -111,7 +110,7 @@ func TestManager_processJob_Failure_WithRetry_SetsLogBackToPending(t *testing.T)
 	m := &Manager{
 		db:        gdb,
 		logger:    logx.WithContext(context.Background()),
-		providers: map[string]NotificationProvider{model.ChannelTypeWebhook: prov},
+		providers: map[string]NotificationProvider{notificationmodel.ChannelTypeWebhook: prov},
 	}
 
 	m.processJob(context.Background(), 10)

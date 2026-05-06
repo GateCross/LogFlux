@@ -2,16 +2,16 @@ package caddy
 
 import (
 	"context"
+	wafmodel "logflux/model/waf"
 	"strings"
 	"testing"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 )
 
 func TestBuildWafPolicyDirectivesDeterministic(t *testing.T) {
-	policy := &model.WafPolicy{
+	policy := &wafmodel.WafPolicy{
 		Name:                        "default-runtime",
 		Enabled:                     true,
 		IsDefault:                   true,
@@ -109,7 +109,7 @@ func TestRenderManagedCaddyfileDisabledWaf(t *testing.T) {
 }
 
 func TestBuildWafPolicyDirectivesInvalidEnum(t *testing.T) {
-	policy := &model.WafPolicy{
+	policy := &wafmodel.WafPolicy{
 		EngineMode:                  "invalid_mode",
 		AuditEngine:                 "relevantonly",
 		AuditLogFormat:              "json",
@@ -133,7 +133,7 @@ func TestBuildWafPolicyDirectivesInvalidEnum(t *testing.T) {
 }
 
 func TestBuildWafPolicyDirectivesOutOfRange(t *testing.T) {
-	policy := &model.WafPolicy{
+	policy := &wafmodel.WafPolicy{
 		EngineMode:                  "on",
 		AuditEngine:                 "relevantonly",
 		AuditLogFormat:              "json",
@@ -172,7 +172,7 @@ func TestApplyPolicyReqToModelOutOfRange(t *testing.T) {
 		CrsInboundAnomalyThreshold:  5,
 		CrsOutboundAnomalyThreshold: 4,
 	}
-	policy := &model.WafPolicy{}
+	policy := &wafmodel.WafPolicy{}
 
 	err := applyPolicyReqToModel(helper, req, policy)
 	if err == nil {
@@ -199,7 +199,7 @@ func TestApplyPolicyReqToModelCRSParanoiaOutOfRange(t *testing.T) {
 		CrsInboundAnomalyThreshold:  5,
 		CrsOutboundAnomalyThreshold: 4,
 	}
-	policy := &model.WafPolicy{}
+	policy := &wafmodel.WafPolicy{}
 
 	err := applyPolicyReqToModel(helper, req, policy)
 	if err == nil {

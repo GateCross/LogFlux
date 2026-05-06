@@ -3,11 +3,11 @@ package caddy
 import (
 	"context"
 	"fmt"
+	caddymodel "logflux/model/caddy"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
 	"logflux/internal/utils/safego"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"gorm.io/gorm"
@@ -28,12 +28,12 @@ func NewRollbackCaddyConfigLogic(ctx context.Context, svcCtx *svc.ServiceContext
 }
 
 func (l *RollbackCaddyConfigLogic) RollbackCaddyConfig(req *types.CaddyConfigRollbackReq) (resp *types.BaseResp, err error) {
-	var server model.CaddyServer
+	var server caddymodel.CaddyServer
 	if err := l.svcCtx.DB.WithContext(l.ctx).First(&server, req.ServerId).Error; err != nil {
 		return nil, fmt.Errorf("服务器不存在")
 	}
 
-	var history model.CaddyConfigHistory
+	var history caddymodel.CaddyConfigHistory
 	if err := l.svcCtx.DB.WithContext(l.ctx).Where("id = ? AND server_id = ?", req.HistoryId, req.ServerId).First(&history).Error; err != nil {
 		return nil, fmt.Errorf("历史记录不存在")
 	}
@@ -51,7 +51,7 @@ func (l *RollbackCaddyConfigLogic) RollbackCaddyConfig(req *types.CaddyConfigRol
 		if err := tx.Save(&server).Error; err != nil {
 			return err
 		}
-		record := &model.CaddyConfigHistory{
+		record := &caddymodel.CaddyConfigHistory{
 			ServerID: server.ID,
 			Action:   "rollback",
 			Hash:     hashConfig(history.Config),

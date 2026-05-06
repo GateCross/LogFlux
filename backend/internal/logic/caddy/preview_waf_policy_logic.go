@@ -3,10 +3,10 @@ package caddy
 import (
 	"context"
 	"fmt"
+	wafmodel "logflux/model/waf"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -34,7 +34,7 @@ func (l *PreviewWafPolicyLogic) PreviewWafPolicy(req *types.WafPolicyActionReq) 
 		return nil, fmt.Errorf("策略 ID 不能为空")
 	}
 
-	var policy model.WafPolicy
+	var policy wafmodel.WafPolicy
 	if err := l.svcCtx.DB.WithContext(l.ctx).First(&policy, req.ID).Error; err != nil {
 		return nil, fmt.Errorf("策略不存在")
 	}

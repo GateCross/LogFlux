@@ -3,10 +3,11 @@ package notification
 import (
 	"context"
 	"encoding/json"
+	commonmodel "logflux/model/common"
+	notificationmodel "logflux/model/notification"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -26,7 +27,7 @@ func NewUpdateChannelLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Upd
 }
 
 func (l *UpdateChannelLogic) UpdateChannel(req *types.ChannelUpdateReq) (resp *types.BaseResp, err error) {
-	var channel model.NotificationChannel
+	var channel notificationmodel.NotificationChannel
 	if err := l.svcCtx.DB.WithContext(l.ctx).First(&channel, req.ID).Error; err != nil {
 		return nil, err
 	}
@@ -54,7 +55,7 @@ func (l *UpdateChannelLogic) UpdateChannel(req *types.ChannelUpdateReq) (resp *t
 		if err := json.Unmarshal([]byte(req.Config), &configMap); err != nil {
 			return nil, err
 		}
-		channel.Config = model.JSONMap(configMap)
+		channel.Config = commonmodel.JSONMap(configMap)
 	}
 
 	if req.Events != "" {
@@ -62,7 +63,7 @@ func (l *UpdateChannelLogic) UpdateChannel(req *types.ChannelUpdateReq) (resp *t
 		if err := json.Unmarshal([]byte(req.Events), &events); err != nil {
 			return nil, err
 		}
-		channel.Events = model.StringArray(events)
+		channel.Events = notificationmodel.StringArray(events)
 	}
 
 	if err := l.svcCtx.DB.WithContext(l.ctx).Save(&channel).Error; err != nil {

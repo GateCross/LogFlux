@@ -3,6 +3,7 @@ package caddy
 import (
 	"context"
 	"fmt"
+	wafmodel "logflux/model/waf"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,7 +12,6 @@ import (
 	"logflux/internal/svc"
 	"logflux/internal/types"
 	"logflux/internal/waf"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -37,7 +37,7 @@ func (l *SyncWafSourceLogic) SyncWafSource(req *types.WafSourceSyncReq) (resp *t
 		return nil, err
 	}
 
-	var source model.WafSource
+	var source wafmodel.WafSource
 	if err := helper.svcCtx.DB.WithContext(helper.ctx).First(&source, req.ID).Error; err != nil {
 		return nil, fmt.Errorf("源不存在")
 	}
@@ -167,7 +167,7 @@ func (l *SyncWafSourceLogic) SyncWafSource(req *types.WafSourceSyncReq) (resp *t
 		return nil, err
 	}
 
-	release := &model.WafRelease{
+	release := &wafmodel.WafRelease{
 		SourceID:     source.ID,
 		Kind:         source.Kind,
 		Version:      version,

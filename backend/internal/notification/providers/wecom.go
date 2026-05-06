@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io"
 	"logflux/internal/notification"
-	"logflux/model"
+	notificationmodel "logflux/model/notification"
 	"net/http"
 	"strings"
 	"time"
@@ -27,7 +27,7 @@ func NewWeComProvider() *WeComProvider {
 
 // Send 发送通知
 func (w *WeComProvider) Send(ctx context.Context, config map[string]interface{}, event *notification.Event) error {
-	wecomConfig := &model.WeComConfig{}
+	wecomConfig := &notificationmodel.WeComConfig{}
 	if err := mapToStruct(config, wecomConfig); err != nil {
 		return fmt.Errorf("企业微信配置无效: %w", err)
 	}
@@ -76,7 +76,7 @@ func (w *WeComProvider) Send(ctx context.Context, config map[string]interface{},
 
 // Validate 验证配置
 func (w *WeComProvider) Validate(config map[string]interface{}) error {
-	wecomConfig := &model.WeComConfig{}
+	wecomConfig := &notificationmodel.WeComConfig{}
 	if err := mapToStruct(config, wecomConfig); err != nil {
 		return fmt.Errorf("企业微信配置无效: %w", err)
 	}
@@ -94,7 +94,7 @@ func (w *WeComProvider) Validate(config map[string]interface{}) error {
 
 // Type 返回提供者类型
 func (w *WeComProvider) Type() string {
-	return model.ChannelTypeWeCom
+	return notificationmodel.ChannelTypeWeCom
 }
 
 func formatWeComMessage(event *notification.Event) string {

@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	wafmodel "logflux/model/waf"
 	"strings"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -41,7 +41,7 @@ func (l *ListWafPoliciesLogic) ListWafPolicies(req *types.WafPolicyListReq) (res
 		pageSize = 20
 	}
 
-	db := l.svcCtx.DB.WithContext(l.ctx).Model(&model.WafPolicy{})
+	db := l.svcCtx.DB.WithContext(l.ctx).Model(&wafmodel.WafPolicy{})
 	if keyword := strings.TrimSpace(req.Name); keyword != "" {
 		db = db.Where("name ILIKE ?", "%"+keyword+"%")
 	}
@@ -51,7 +51,7 @@ func (l *ListWafPoliciesLogic) ListWafPolicies(req *types.WafPolicyListReq) (res
 		return nil, fmt.Errorf("统计策略失败: %w", err)
 	}
 
-	var policies []model.WafPolicy
+	var policies []wafmodel.WafPolicy
 	offset := (page - 1) * pageSize
 	if err := db.Order("updated_at desc, id desc").Limit(pageSize).Offset(offset).Find(&policies).Error; err != nil {
 		return nil, fmt.Errorf("查询策略失败: %w", err)

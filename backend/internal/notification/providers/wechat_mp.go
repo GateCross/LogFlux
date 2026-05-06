@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io"
 	"logflux/internal/notification"
-	"logflux/model"
+	notificationmodel "logflux/model/notification"
 	"net/http"
 	"net/url"
 	"strings"
@@ -38,7 +38,7 @@ func NewWeChatMPProvider() *WeChatMPProvider {
 
 // Send 发送通知
 func (w *WeChatMPProvider) Send(ctx context.Context, config map[string]interface{}, event *notification.Event) error {
-	wechatConfig := &model.WechatMPConfig{}
+	wechatConfig := &notificationmodel.WechatMPConfig{}
 	if err := mapToStruct(config, wechatConfig); err != nil {
 		return fmt.Errorf("企业微信应用配置无效: %w", err)
 	}
@@ -129,7 +129,7 @@ func (w *WeChatMPProvider) Send(ctx context.Context, config map[string]interface
 
 // Validate 验证配置
 func (w *WeChatMPProvider) Validate(config map[string]interface{}) error {
-	wechatConfig := &model.WechatMPConfig{}
+	wechatConfig := &notificationmodel.WechatMPConfig{}
 	if err := mapToStruct(config, wechatConfig); err != nil {
 		return fmt.Errorf("企业微信应用配置无效: %w", err)
 	}
@@ -139,10 +139,10 @@ func (w *WeChatMPProvider) Validate(config map[string]interface{}) error {
 
 // Type 返回提供者类型
 func (w *WeChatMPProvider) Type() string {
-	return model.ChannelTypeWeChatMP
+	return notificationmodel.ChannelTypeWeChatMP
 }
 
-func validateWeChatMPConfig(config *model.WechatMPConfig) error {
+func validateWeChatMPConfig(config *notificationmodel.WechatMPConfig) error {
 	if strings.TrimSpace(config.CorpID) == "" {
 		return fmt.Errorf("企业 ID 不能为空")
 	}
@@ -161,7 +161,7 @@ func validateWeChatMPConfig(config *model.WechatMPConfig) error {
 	return nil
 }
 
-func (w *WeChatMPProvider) getAccessToken(ctx context.Context, config *model.WechatMPConfig) (string, error) {
+func (w *WeChatMPProvider) getAccessToken(ctx context.Context, config *notificationmodel.WechatMPConfig) (string, error) {
 	cacheKey := fmt.Sprintf("%s|%s", config.CorpID, config.CorpSecret)
 
 	w.mu.Lock()

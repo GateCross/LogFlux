@@ -2,10 +2,10 @@ package caddy
 
 import (
 	"context"
+	caddymodel "logflux/model/caddy"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -25,7 +25,7 @@ func NewGetCaddyServersLogic(ctx context.Context, svcCtx *svc.ServiceContext) *G
 }
 
 func (l *GetCaddyServersLogic) GetCaddyServers() (resp *types.CaddyServerListResp, err error) {
-	var servers []model.CaddyServer
+	var servers []caddymodel.CaddyServer
 	if err := l.svcCtx.DB.WithContext(l.ctx).Find(&servers).Error; err != nil {
 		return nil, err
 	}

@@ -4,11 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	caddymodel "logflux/model/caddy"
 	"regexp"
 	"strconv"
 	"strings"
-
-	"logflux/model"
 )
 
 const (
@@ -1020,7 +1019,7 @@ func caddyRedirectCode(code int) string {
 	}
 }
 
-func caddyConfigFromServer(server *model.CaddyServer) (string, string) {
+func caddyConfigFromServer(server *caddymodel.CaddyServer) (string, string) {
 	if server == nil {
 		return "", emptyModulesJSON
 	}

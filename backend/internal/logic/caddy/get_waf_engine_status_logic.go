@@ -2,11 +2,11 @@ package caddy
 
 import (
 	"context"
+	wafmodel "logflux/model/waf"
 	"strings"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -30,7 +30,7 @@ func (l *GetWafEngineStatusLogic) GetWafEngineStatus() (resp *types.WafEngineSta
 	currentVersion := helper.corazaCurrentVersion()
 
 	latestVersion := ""
-	var latestCheckJob model.WafUpdateJob
+	var latestCheckJob wafmodel.WafUpdateJob
 	if queryErr := helper.svcCtx.DB.WithContext(helper.ctx).
 		Where("action = ? AND status = ?", "engine_check", wafJobStatusSuccess).
 		Order("finished_at desc, id desc").

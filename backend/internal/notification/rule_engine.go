@@ -4,7 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"logflux/model"
+	commonmodel "logflux/model/common"
+	notificationmodel "logflux/model/notification"
 	"regexp"
 	"sync"
 	"time"
@@ -17,10 +18,10 @@ import (
 // RuleEngine 规则引擎接口
 type RuleEngine interface {
 	// Evaluate 评估规则是否触发
-	Evaluate(ctx context.Context, rule *model.NotificationRule, event *Event) (bool, error)
+	Evaluate(ctx context.Context, rule *notificationmodel.NotificationRule, event *Event) (bool, error)
 
 	// GetMatchingRules 获取匹配事件的所有规则
-	GetMatchingRules(ctx context.Context, eventType string) ([]*model.NotificationRule, error)
+	GetMatchingRules(ctx context.Context, eventType string) ([]*notificationmodel.NotificationRule, error)
 }
 
 // ruleEngine 规则引擎实现
@@ -37,9 +38,9 @@ func NewRuleEngine(redis *redis.Client) RuleEngine {
 	}
 
 	// 注册内置评估器
-	engine.RegisterEvaluator(model.RuleTypeThreshold, NewThresholdEvaluator())
-	engine.RegisterEvaluator(model.RuleTypeFrequency, NewFrequencyEvaluator(redis))
-	engine.RegisterEvaluator(model.RuleTypePattern, NewPatternEvaluator())
+	engine.RegisterEvaluator(notificationmodel.RuleTypeThreshold, NewThresholdEvaluator())
+	engine.RegisterEvaluator(notificationmodel.RuleTypeFrequency, NewFrequencyEvaluator(redis))
+	engine.RegisterEvaluator(notificationmodel.RuleTypePattern, NewPatternEvaluator())
 
 	return engine
 }
@@ -50,7 +51,7 @@ func (e *ruleEngine) RegisterEvaluator(ruleType string, evaluator RuleEvaluator)
 }
 
 // Evaluate 评估规则是否触发
-func (e *ruleEngine) Evaluate(ctx context.Context, rule *model.NotificationRule, event *Event) (bool, error) {
+func (e *ruleEngine) Evaluate(ctx context.Context, rule *notificationmodel.NotificationRule, event *Event) (bool, error) {
 	// 检查规则是否启用
 	if !rule.Enabled {
 		return false, nil
@@ -80,7 +81,7 @@ func (e *ruleEngine) Evaluate(ctx context.Context, rule *model.NotificationRule,
 }
 
 // GetMatchingRules 获取匹配事件的所有规则
-func (e *ruleEngine) GetMatchingRules(ctx context.Context, eventType string) ([]*model.NotificationRule, error) {
+func (e *ruleEngine) GetMatchingRules(ctx context.Context, eventType string) ([]*notificationmodel.NotificationRule, error) {
 	// 这个方法将由 Manager 实现,因为它需要访问数据库
 	// 这里只是接口定义
 	return nil, nil
@@ -88,7 +89,7 @@ func (e *ruleEngine) GetMatchingRules(ctx context.Context, eventType string) ([]
 
 // RuleEvaluator 规则评估器接口
 type RuleEvaluator interface {
-	Evaluate(ctx context.Context, condition model.JSONMap, event *Event) (bool, error)
+	Evaluate(ctx context.Context, condition commonmodel.JSONMap, event *Event) (bool, error)
 }
 
 // ThresholdEvaluator 阈值规则评估器
@@ -102,9 +103,9 @@ func NewThresholdEvaluator() *ThresholdEvaluator {
 }
 
 // Evaluate 评估阈值规则
-func (t *ThresholdEvaluator) Evaluate(ctx context.Context, condition model.JSONMap, event *Event) (bool, error) {
+func (t *ThresholdEvaluator) Evaluate(ctx context.Context, condition commonmodel.JSONMap, event *Event) (bool, error) {
 	// 解析条件
-	var cond model.ThresholdCondition
+	var cond notificationmodel.ThresholdCondition
 	if err := mapToCondition(condition, &cond); err != nil {
 		return false, fmt.Errorf("阈值条件无效: %w", err)
 	}
@@ -177,9 +178,9 @@ func NewFrequencyEvaluator(redis *redis.Client) *FrequencyEvaluator {
 }
 
 // Evaluate 评估频率规则
-func (f *FrequencyEvaluator) Evaluate(ctx context.Context, condition model.JSONMap, event *Event) (bool, error) {
+func (f *FrequencyEvaluator) Evaluate(ctx context.Context, condition commonmodel.JSONMap, event *Event) (bool, error) {
 	// 解析条件
-	var cond model.FrequencyCondition
+	var cond notificationmodel.FrequencyCondition
 	if err := mapToCondition(condition, &cond); err != nil {
 		return false, fmt.Errorf("频率条件无效: %w", err)
 	}
@@ -234,9 +235,9 @@ func NewPatternEvaluator() *PatternEvaluator {
 }
 
 // Evaluate 评估模式匹配规则
-func (p *PatternEvaluator) Evaluate(ctx context.Context, condition model.JSONMap, event *Event) (bool, error) {
+func (p *PatternEvaluator) Evaluate(ctx context.Context, condition commonmodel.JSONMap, event *Event) (bool, error) {
 	// 解析条件
-	var cond model.PatternCondition
+	var cond notificationmodel.PatternCondition
 	if err := mapToCondition(condition, &cond); err != nil {
 		return false, fmt.Errorf("模式条件无效: %w", err)
 	}
@@ -270,7 +271,7 @@ func (p *PatternEvaluator) Evaluate(ctx context.Context, condition model.JSONMap
 // 辅助函数
 
 // mapToCondition 将 JSONMap 转换为条件结构体
-func mapToCondition(m model.JSONMap, v interface{}) error {
+func mapToCondition(m commonmodel.JSONMap, v interface{}) error {
 	// 使用 JSON 序列化/反序列化转换
 	data, err := json.Marshal(m)
 	if err != nil {

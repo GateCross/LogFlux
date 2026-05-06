@@ -3,10 +3,10 @@ package caddy
 import (
 	"context"
 	"fmt"
+	wafmodel "logflux/model/waf"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"gorm.io/gorm"
@@ -36,13 +36,13 @@ func (l *DeleteWafPolicyLogic) DeleteWafPolicy(req *types.IDReq) (resp *types.Ba
 		return nil, fmt.Errorf("策略 ID 不能为空")
 	}
 
-	var policy model.WafPolicy
+	var policy wafmodel.WafPolicy
 	if err := helper.svcCtx.DB.WithContext(helper.ctx).First(&policy, req.ID).Error; err != nil {
 		return nil, fmt.Errorf("策略不存在")
 	}
 
 	if err := helper.svcCtx.DB.WithContext(helper.ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("policy_id = ?", policy.ID).Delete(&model.WafPolicyRevision{}).Error; err != nil {
+		if err := tx.Where("policy_id = ?", policy.ID).Delete(&wafmodel.WafPolicyRevision{}).Error; err != nil {
 			return fmt.Errorf("删除策略版本失败: %w", err)
 		}
 

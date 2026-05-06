@@ -3,10 +3,10 @@ package caddy
 import (
 	"context"
 	"fmt"
+	wafmodel "logflux/model/waf"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -28,7 +28,7 @@ func NewActivateWafReleaseLogic(ctx context.Context, svcCtx *svc.ServiceContext)
 func (l *ActivateWafReleaseLogic) ActivateWafRelease(req *types.WafReleaseActivateReq) (resp *types.BaseResp, err error) {
 	helper := newWafLogicHelper(l.ctx, l.svcCtx, l.Logger)
 
-	var release model.WafRelease
+	var release wafmodel.WafRelease
 	if err := helper.svcCtx.DB.WithContext(helper.ctx).First(&release, req.ID).Error; err != nil {
 		return nil, fmt.Errorf("版本不存在")
 	}

@@ -8,13 +8,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	caddymodel "logflux/model/caddy"
+	ingestmodel "logflux/model/ingest"
 	"net/http"
 	"strings"
 	"time"
 
-	"logflux/internal/ingest"
+	"logflux/common/ingest"
 	"logflux/internal/svc"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"gorm.io/gorm"
@@ -25,7 +26,7 @@ const (
 	caddyMaxRetries     = 2
 )
 
-func adaptCaddyfile(server *model.CaddyServer, config string) error {
+func adaptCaddyfile(server *caddymodel.CaddyServer, config string) error {
 	_, _, err := postCaddyText(server, "/adapt", "text/caddyfile", config)
 	if err != nil {
 		return fmt.Errorf("适配失败: %w", err)
@@ -33,7 +34,7 @@ func adaptCaddyfile(server *model.CaddyServer, config string) error {
 	return nil
 }
 
-func loadCaddyfile(server *model.CaddyServer, config string) error {
+func loadCaddyfile(server *caddymodel.CaddyServer, config string) error {
 	_, _, err := postCaddyText(server, "/load", "text/caddyfile", config)
 	if err != nil {
 		return fmt.Errorf("加载失败: %w", err)
@@ -41,7 +42,7 @@ func loadCaddyfile(server *model.CaddyServer, config string) error {
 	return nil
 }
 
-func postCaddyText(server *model.CaddyServer, endpoint, contentType, body string) (int, []byte, error) {
+func postCaddyText(server *caddymodel.CaddyServer, endpoint, contentType, body string) (int, []byte, error) {
 	var lastErr error
 	for attempt := 0; attempt < caddyMaxRetries; attempt++ {
 		req, err := http.NewRequest("POST", strings.TrimRight(server.Url, "/")+endpoint, bytes.NewBufferString(body))
@@ -70,7 +71,7 @@ func postCaddyText(server *model.CaddyServer, endpoint, contentType, body string
 	return 0, nil, lastErr
 }
 
-func getCaddyConfigJSON(server *model.CaddyServer) ([]byte, error) {
+func getCaddyConfigJSON(server *caddymodel.CaddyServer) ([]byte, error) {
 	req, err := http.NewRequest("GET", strings.TrimRight(server.Url, "/")+"/config/", nil)
 	if err != nil {
 		return nil, err
@@ -96,7 +97,7 @@ func hashConfig(config string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func syncCaddyLogSources(svcCtx *svc.ServiceContext, server *model.CaddyServer, logger logx.Logger) {
+func syncCaddyLogSources(svcCtx *svc.ServiceContext, server *caddymodel.CaddyServer, logger logx.Logger) {
 	body, err := getCaddyConfigJSON(server)
 	if err != nil {
 		logger.Errorf("同步日志配置失败: %v", err)
@@ -112,20 +113,20 @@ func syncCaddyLogSources(svcCtx *svc.ServiceContext, server *model.CaddyServer, 
 		pathSet[path] = struct{}{}
 	}
 
-	var autoSources []model.LogSource
+	var autoSources []ingestmodel.LogSource
 	svcCtx.DB.Where("type = ? AND name LIKE ?", "caddy", "Caddy Auto:%").Find(&autoSources)
 	for _, source := range autoSources {
 		if _, ok := pathSet[source.Path]; !ok {
-			svcCtx.DB.Model(&model.LogSource{}).Where("id = ?", source.ID).Update("enabled", false)
+			svcCtx.DB.Model(&ingestmodel.LogSource{}).Where("id = ?", source.ID).Update("enabled", false)
 			svcCtx.Ingestor.Stop(source.Path, source.Type)
 		}
 	}
 
 	for path := range pathSet {
-		var source model.LogSource
+		var source ingestmodel.LogSource
 		err := svcCtx.DB.Where("path = ?", path).First(&source).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			newSource := model.LogSource{
+			newSource := ingestmodel.LogSource{
 				Name:         fmt.Sprintf("Caddy 自动: %s", path),
 				Path:         path,
 				Type:         "caddy",
@@ -143,7 +144,7 @@ func syncCaddyLogSources(svcCtx *svc.ServiceContext, server *model.CaddyServer, 
 			continue
 		}
 		if !source.Enabled {
-			svcCtx.DB.Model(&model.LogSource{}).Where("id = ?", source.ID).Update("enabled", true)
+			svcCtx.DB.Model(&ingestmodel.LogSource{}).Where("id = ?", source.ID).Update("enabled", true)
 		}
 		svcCtx.Ingestor.StartWithInterval(path, source.ScanInterval, source.Type)
 	}

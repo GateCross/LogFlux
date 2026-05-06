@@ -3,10 +3,10 @@ package caddy
 import (
 	"context"
 	"fmt"
+	caddymodel "logflux/model/caddy"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -28,7 +28,7 @@ func NewUpdateCaddyConfigLogic(ctx context.Context, svcCtx *svc.ServiceContext) 
 }
 
 func (l *UpdateCaddyConfigLogic) UpdateCaddyConfig(req *types.CaddyConfigUpdateReq) (resp *types.BaseResp, err error) {
-	var server model.CaddyServer
+	var server caddymodel.CaddyServer
 	if err := l.svcCtx.DB.WithContext(l.ctx).First(&server, req.ServerId).Error; err != nil {
 		return nil, fmt.Errorf("服务器不存在")
 	}

@@ -11,6 +11,7 @@ services:
       - caddy_data:/data/caddy
       - caddy_config:/config/caddy
       - security_data:/config/security
+      - cron_files:/config/cron-files
       - caddy_logs:/var/log/caddy
       
       # 后端配置文件（只读）
@@ -47,6 +48,8 @@ volumes:
   caddy_config:
     driver: local
   security_data:
+    driver: local
+  cron_files:
     driver: local
   caddy_logs:
     driver: local

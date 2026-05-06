@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"io"
 	"logflux/internal/notification"
-	"logflux/model"
+	notificationmodel "logflux/model/notification"
 	"net/http"
 	"strings"
 	"time"
@@ -31,7 +31,7 @@ func NewWebhookProvider() *WebhookProvider {
 // Send 发送通知
 func (w *WebhookProvider) Send(ctx context.Context, config map[string]interface{}, event *notification.Event) error {
 	// 解析配置
-	webhookConfig := &model.WebhookConfig{}
+	webhookConfig := &notificationmodel.WebhookConfig{}
 	if err := mapToStruct(config, webhookConfig); err != nil {
 		return fmt.Errorf("回调配置无效: %w", err)
 	}
@@ -94,7 +94,7 @@ func (w *WebhookProvider) Send(ctx context.Context, config map[string]interface{
 
 // Validate 验证配置
 func (w *WebhookProvider) Validate(config map[string]interface{}) error {
-	webhookConfig := &model.WebhookConfig{}
+	webhookConfig := &notificationmodel.WebhookConfig{}
 	if err := mapToStruct(config, webhookConfig); err != nil {
 		return fmt.Errorf("回调配置无效: %w", err)
 	}
@@ -104,11 +104,11 @@ func (w *WebhookProvider) Validate(config map[string]interface{}) error {
 
 // Type 返回提供者类型
 func (w *WebhookProvider) Type() string {
-	return model.ChannelTypeWebhook
+	return notificationmodel.ChannelTypeWebhook
 }
 
 // validateWebhookConfig 验证 Webhook 配置
-func validateWebhookConfig(config *model.WebhookConfig) error {
+func validateWebhookConfig(config *notificationmodel.WebhookConfig) error {
 	if config.URL == "" {
 		return fmt.Errorf("回调 URL 不能为空")
 	}
@@ -142,7 +142,7 @@ func validateWebhookConfig(config *model.WebhookConfig) error {
 	return nil
 }
 
-func buildWebhookPayload(config *model.WebhookConfig, event *notification.Event) map[string]interface{} {
+func buildWebhookPayload(config *notificationmodel.WebhookConfig, event *notification.Event) map[string]interface{} {
 	if len(config.BodyFields) > 0 {
 		return buildCustomWebhookPayload(config, event)
 	}
@@ -180,7 +180,7 @@ func buildWebhookPayload(config *model.WebhookConfig, event *notification.Event)
 	}
 }
 
-func buildCustomWebhookPayload(config *model.WebhookConfig, event *notification.Event) map[string]interface{} {
+func buildCustomWebhookPayload(config *notificationmodel.WebhookConfig, event *notification.Event) map[string]interface{} {
 	payload := make(map[string]interface{}, len(config.BodyFields))
 	for key, valueType := range config.BodyFields {
 		fieldName := strings.TrimSpace(key)

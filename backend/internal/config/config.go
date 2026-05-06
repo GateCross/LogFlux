@@ -18,6 +18,7 @@ type Config struct {
 	CaddyLogPath        string `json:",optional"`
 	BackendLogPath      string `json:",optional"` // 后端日志文件/目录（用于入库）
 	CaddyRuntimeLogPath string `json:",optional"` // Caddy 后台日志文件/目录（用于入库）
+	CronFilesDir        string `json:",optional"` // 定时任务脚本文件目录
 	Archive             ArchiveConf
 	Waf                 WafConf
 	Notification        NotificationConf `json:",optional"`

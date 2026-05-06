@@ -3,12 +3,12 @@ package caddy
 import (
 	"context"
 	"fmt"
+	wafmodel "logflux/model/waf"
 	"strings"
 	"time"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"gorm.io/gorm"
@@ -49,7 +49,7 @@ func (l *UpdateWafPolicyFalsePositiveFeedbackStatusLogic) UpdateWafPolicyFalsePo
 		return nil, err
 	}
 
-	var feedback model.WafPolicyFalsePositiveFeedback
+	var feedback wafmodel.WafPolicyFalsePositiveFeedback
 	if err := l.svcCtx.DB.WithContext(l.ctx).First(&feedback, req.ID).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, fmt.Errorf("未找到误报反馈记录")
@@ -72,7 +72,7 @@ func (l *UpdateWafPolicyFalsePositiveFeedbackStatusLogic) UpdateWafPolicyFalsePo
 		updates["processed_at"] = &now
 	}
 
-	if err := l.svcCtx.DB.WithContext(l.ctx).Model(&model.WafPolicyFalsePositiveFeedback{}).Where("id = ?", req.ID).Updates(updates).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).Model(&wafmodel.WafPolicyFalsePositiveFeedback{}).Where("id = ?", req.ID).Updates(updates).Error; err != nil {
 		return nil, fmt.Errorf("更新误报反馈状态失败: %w", err)
 	}
 

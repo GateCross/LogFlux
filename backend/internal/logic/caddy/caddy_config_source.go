@@ -2,10 +2,9 @@ package caddy
 
 import (
 	"fmt"
+	caddymodel "logflux/model/caddy"
 	"os"
 	"strings"
-
-	"logflux/model"
 )
 
 // 默认读取本地 Caddyfile 的路径，测试可以临时覆盖。
@@ -13,7 +12,7 @@ var localCaddyfilePath = "/etc/caddy/Caddyfile"
 
 // loadCurrentCaddyConfig 统一返回当前可用的 Caddy 配置。
 // 只有数据库里已经确认的结构化快照才保留 modules；本地文件回退一律返回空快照。
-func loadCurrentCaddyConfig(server *model.CaddyServer) (string, string, error) {
+func loadCurrentCaddyConfig(server *caddymodel.CaddyServer) (string, string, error) {
 	if server == nil {
 		return "", emptyModulesJSON, fmt.Errorf("Caddy 服务器不存在")
 	}

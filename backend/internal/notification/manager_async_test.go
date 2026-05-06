@@ -3,6 +3,8 @@ package notification
 import (
 	"context"
 	"errors"
+	commonmodel "logflux/model/common"
+	notificationmodel "logflux/model/notification"
 	"sync"
 	"testing"
 	"time"
@@ -13,7 +15,6 @@ import (
 	"gorm.io/gorm"
 
 	"logflux/internal/notification/template"
-	"logflux/model"
 )
 
 type recordingProvider struct {
@@ -22,7 +23,7 @@ type recordingProvider struct {
 	err    error
 }
 
-func (p *recordingProvider) Type() string { return model.ChannelTypeWebhook }
+func (p *recordingProvider) Type() string { return notificationmodel.ChannelTypeWebhook }
 
 func (p *recordingProvider) Validate(_ map[string]interface{}) error { return nil }
 
@@ -101,19 +102,19 @@ func TestManager_Notify_EnqueuesJobsAndReturns(t *testing.T) {
 		db:          gdb,
 		logger:      logx.WithContext(context.Background()),
 		started:     true,
-		providers:   map[string]NotificationProvider{model.ChannelTypeWebhook: prov},
+		providers:   map[string]NotificationProvider{notificationmodel.ChannelTypeWebhook: prov},
 		templateMgr: tm,
-		channels: map[uint]*model.NotificationChannel{
+		channels: map[uint]*notificationmodel.NotificationChannel{
 			1: {
 				ID:      1,
 				Name:    "test",
-				Type:    model.ChannelTypeWebhook,
+				Type:    notificationmodel.ChannelTypeWebhook,
 				Enabled: true,
-				Events:  model.StringArray{"*"},
-				Config:  model.JSONMap{"url": "http://example.invalid"},
+				Events:  notificationmodel.StringArray{"*"},
+				Config:  commonmodel.JSONMap{"url": "http://example.invalid"},
 			},
 		},
-		rules:      map[uint]*model.NotificationRule{},
+		rules:      map[uint]*notificationmodel.NotificationRule{},
 		ruleEngine: NewRuleEngine(nil),
 	}
 

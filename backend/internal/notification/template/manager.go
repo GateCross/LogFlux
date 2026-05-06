@@ -5,11 +5,11 @@ import (
 	"context"
 	"fmt"
 	html_template "html/template"
+	notificationmodel "logflux/model/notification"
 	"sync"
 	text_template "text/template"
 
 	"logflux/internal/utils/safego"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"gorm.io/gorm"
@@ -25,7 +25,7 @@ type TemplateManager struct {
 
 // ParsedTemplate 包含解析后的模板对象
 type ParsedTemplate struct {
-	Model *model.NotificationTemplate
+	Model *notificationmodel.NotificationTemplate
 	Text  *text_template.Template
 	HTML  *html_template.Template
 }
@@ -41,7 +41,7 @@ func NewTemplateManager(db *gorm.DB) *TemplateManager {
 
 // LoadTemplates 从数据库加载所有模板到内存
 func (tm *TemplateManager) LoadTemplates() error {
-	var dbTemplates []model.NotificationTemplate
+	var dbTemplates []notificationmodel.NotificationTemplate
 	// 尝试从数据库加载，如果表不存在（migration未完成），则忽略错误
 	if err := tm.db.Find(&dbTemplates).Error; err != nil {
 		tm.logger.Errorf("从数据库加载模板失败: %v", err)
@@ -70,7 +70,7 @@ func (tm *TemplateManager) LoadTemplates() error {
 }
 
 // parseAndCache 解析模板字符串并缓存
-func (tm *TemplateManager) parseAndCache(t model.NotificationTemplate) error {
+func (tm *TemplateManager) parseAndCache(t notificationmodel.NotificationTemplate) error {
 	parsed := &ParsedTemplate{
 		Model: &t,
 	}
@@ -152,7 +152,7 @@ func (tm *TemplateManager) ensureDefaults() {
 	for _, def := range defaults {
 		if _, exists := tm.templates[def.Name]; !exists {
 			// 创建内存模型
-			modelTmpl := model.NotificationTemplate{
+			modelTmpl := notificationmodel.NotificationTemplate{
 				Name:    def.Name,
 				Format:  def.Format,
 				Content: def.Content,
@@ -170,7 +170,7 @@ func (tm *TemplateManager) ensureDefaults() {
 			tmpl := modelTmpl
 			safego.New(context.Background(), "持久化默认通知模板").Go(func() {
 				t := tmpl
-				if err := tm.db.FirstOrCreate(&t, model.NotificationTemplate{Name: t.Name}).Error; err != nil {
+				if err := tm.db.FirstOrCreate(&t, notificationmodel.NotificationTemplate{Name: t.Name}).Error; err != nil {
 					// 仅记录 debug 日志，因为如果是因为已存在（虽然我们检查了缓存但并发情况下可能）或其他原因，我们不希望太吵
 					// tm.logger.Debugf("持久化默认模板失败: name=%s err=%v", t.Name, err)
 				}

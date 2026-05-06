@@ -3,12 +3,12 @@ package caddy
 import (
 	"context"
 	"fmt"
+	wafmodel "logflux/model/waf"
 	"path/filepath"
 	"strings"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"gorm.io/gorm"
@@ -60,7 +60,7 @@ func (l *RollbackWafReleaseLogic) RollbackWafRelease(req *types.WafReleaseRollba
 	return &types.BaseResp{Code: 200, Msg: "成功"}, nil
 }
 
-func (l *RollbackWafReleaseLogic) resolveRollbackTarget(helper *wafLogicHelper, req *types.WafReleaseRollbackReq) (*model.WafRelease, error) {
+func (l *RollbackWafReleaseLogic) resolveRollbackTarget(helper *wafLogicHelper, req *types.WafReleaseRollbackReq) (*wafmodel.WafRelease, error) {
 	if version := strings.TrimSpace(req.Version); version != "" {
 		return l.findReleaseByVersion(helper, version)
 	}
@@ -81,8 +81,8 @@ func (l *RollbackWafReleaseLogic) resolveRollbackTarget(helper *wafLogicHelper, 
 	return l.findReleaseByVersion(helper, version)
 }
 
-func (l *RollbackWafReleaseLogic) findReleaseByVersion(helper *wafLogicHelper, version string) (*model.WafRelease, error) {
-	var release model.WafRelease
+func (l *RollbackWafReleaseLogic) findReleaseByVersion(helper *wafLogicHelper, version string) (*wafmodel.WafRelease, error) {
+	var release wafmodel.WafRelease
 	err := helper.svcCtx.DB.WithContext(helper.ctx).Where("version = ?", strings.TrimSpace(version)).Order("id desc").First(&release).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {

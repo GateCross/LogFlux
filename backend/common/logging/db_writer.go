@@ -3,12 +3,12 @@ package logging
 import (
 	"context"
 	"encoding/json"
+	ingestmodel "logflux/model/ingest"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"logflux/internal/utils/safego"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"gorm.io/gorm"
@@ -25,7 +25,7 @@ const (
 type DBWriter struct {
 	db           *gorm.DB
 	source       string
-	ch           chan *model.SystemLog
+	ch           chan *ingestmodel.SystemLog
 	wg           sync.WaitGroup
 	closeOnce    sync.Once
 	batchSize    int
@@ -55,7 +55,7 @@ func newDBWriterWithOptions(db *gorm.DB, source string, buffer int, batchSize in
 	writer := &DBWriter{
 		db:           db.Session(&gorm.Session{Logger: logger.Discard, SkipDefaultTransaction: true}),
 		source:       source,
-		ch:           make(chan *model.SystemLog, buffer),
+		ch:           make(chan *ingestmodel.SystemLog, buffer),
 		batchSize:    batchSize,
 		flushTimeout: flushTimeout,
 	}
@@ -126,7 +126,7 @@ func (w *DBWriter) start() {
 		ticker := time.NewTicker(w.flushTimeout)
 		defer ticker.Stop()
 
-		batch := make([]*model.SystemLog, 0, w.batchSize)
+		batch := make([]*ingestmodel.SystemLog, 0, w.batchSize)
 		flush := func() {
 			if len(batch) == 0 {
 				return
@@ -153,8 +153,8 @@ func (w *DBWriter) start() {
 	})
 }
 
-func buildSystemLog(level string, v any, fields ...logx.LogField) *model.SystemLog {
-	entry := &model.SystemLog{
+func buildSystemLog(level string, v any, fields ...logx.LogField) *ingestmodel.SystemLog {
+	entry := &ingestmodel.SystemLog{
 		LogTime:   time.Now(),
 		Level:     level,
 		Message:   formatValue(v),

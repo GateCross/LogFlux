@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	wafmodel "logflux/model/waf"
 	"strings"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"gorm.io/gorm"
@@ -38,7 +38,7 @@ func (l *CreateWafPolicyLogic) CreateWafPolicy(req *types.WafPolicyReq) (resp *t
 		return nil, fmt.Errorf("策略参数不合法")
 	}
 
-	policy := &model.WafPolicy{}
+	policy := &wafmodel.WafPolicy{}
 	if err := applyPolicyReqToModel(helper, req, policy); err != nil {
 		return nil, err
 	}
@@ -48,7 +48,7 @@ func (l *CreateWafPolicyLogic) CreateWafPolicy(req *types.WafPolicyReq) (resp *t
 		return nil, fmt.Errorf("策略名称不能为空")
 	}
 
-	var existing model.WafPolicy
+	var existing wafmodel.WafPolicy
 	if err := helper.svcCtx.DB.WithContext(helper.ctx).Where("name = ?", name).First(&existing).Error; err == nil {
 		return nil, fmt.Errorf("策略名称已存在: %s", name)
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {

@@ -3,11 +3,11 @@ package caddy
 import (
 	"context"
 	"fmt"
+	wafmodel "logflux/model/waf"
 	"strings"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -38,7 +38,7 @@ func (l *ListWafReleasesLogic) ListWafReleases(req *types.WafReleaseListReq) (re
 		pageSize = 20
 	}
 
-	db := helper.svcCtx.DB.WithContext(helper.ctx).Model(&model.WafRelease{})
+	db := helper.svcCtx.DB.WithContext(helper.ctx).Model(&wafmodel.WafRelease{})
 	kind := strings.TrimSpace(req.Kind)
 	if kind == "" {
 		kind = wafKindCRS
@@ -59,7 +59,7 @@ func (l *ListWafReleasesLogic) ListWafReleases(req *types.WafReleaseListReq) (re
 		return nil, fmt.Errorf("统计版本失败: %w", err)
 	}
 
-	var releases []model.WafRelease
+	var releases []wafmodel.WafRelease
 	offset := (page - 1) * pageSize
 	if err := db.Order("created_at desc, id desc").Limit(pageSize).Offset(offset).Find(&releases).Error; err != nil {
 		return nil, fmt.Errorf("查询版本失败: %w", err)

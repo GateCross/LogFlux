@@ -3,10 +3,10 @@ package caddy
 import (
 	"context"
 	"fmt"
+	wafmodel "logflux/model/waf"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -34,7 +34,7 @@ func (l *DeleteWafRuleExclusionLogic) DeleteWafRuleExclusion(req *types.IDReq) (
 		return nil, fmt.Errorf("策略排除规则 ID 不能为空")
 	}
 
-	result := l.svcCtx.DB.WithContext(l.ctx).Where("id = ?", req.ID).Delete(&model.WafRuleExclusion{})
+	result := l.svcCtx.DB.WithContext(l.ctx).Where("id = ?", req.ID).Delete(&wafmodel.WafRuleExclusion{})
 	if result.Error != nil {
 		return nil, fmt.Errorf("删除策略排除规则失败: %w", result.Error)
 	}

@@ -324,6 +324,11 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				},
 				{
 					Method:  http.MethodGet,
+					Path:    "/cron/log/:id",
+					Handler: cron.GetCronLogDetailHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
 					Path:    "/cron/task",
 					Handler: cron.GetCronTaskListHandler(serverCtx),
 				},
@@ -341,6 +346,21 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					Method:  http.MethodDelete,
 					Path:    "/cron/task/:id",
 					Handler: cron.DeleteCronTaskHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/cron/task/:id/script",
+					Handler: cron.UploadCronTaskScriptHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/cron/task/:id/script/:fileId/activate",
+					Handler: cron.ActivateCronTaskScriptHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/cron/task/:id/script/history",
+					Handler: cron.GetCronTaskScriptHistoryHandler(serverCtx),
 				},
 				{
 					Method:  http.MethodPost,

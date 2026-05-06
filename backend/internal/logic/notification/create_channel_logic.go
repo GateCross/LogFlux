@@ -2,12 +2,13 @@ package notification
 
 import (
 	"context"
+	commonmodel "logflux/model/common"
+	notificationmodel "logflux/model/notification"
 
 	"encoding/json"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -41,13 +42,13 @@ func (l *CreateChannelLogic) CreateChannel(req *types.ChannelReq) (resp *types.B
 		}
 	}
 
-	channel := &model.NotificationChannel{
+	channel := &notificationmodel.NotificationChannel{
 		Name:        req.Name,
 		Type:        req.Type,
 		Enabled:     req.Enabled,
 		Description: req.Description,
-		Config:      model.JSONMap(configMap),
-		Events:      model.StringArray(events),
+		Config:      commonmodel.JSONMap(configMap),
+		Events:      notificationmodel.StringArray(events),
 	}
 
 	if err := l.svcCtx.DB.WithContext(l.ctx).Create(channel).Error; err != nil {

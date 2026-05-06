@@ -3,7 +3,7 @@ package tasks
 import (
 	"context"
 	"logflux/internal/utils/safego"
-	"logflux/model"
+	cronmodel "logflux/model/cron"
 	"os/exec"
 	"sync"
 	"time"
@@ -13,10 +13,16 @@ import (
 	"gorm.io/gorm"
 )
 
+// Executor 负责执行调度器触发的任务。
+type Executor interface {
+	ExecuteTask(ctx context.Context, taskID uint, triggerMode string)
+}
+
 type CronScheduler struct {
 	cron     *cron.Cron
 	db       *gorm.DB
 	entryMap sync.Map // map[uint]cron.EntryID
+	executor Executor
 }
 
 func NewCronScheduler(db *gorm.DB) *CronScheduler {
@@ -27,6 +33,10 @@ func NewCronScheduler(db *gorm.DB) *CronScheduler {
 		cron: c,
 		db:   db,
 	}
+}
+
+func (s *CronScheduler) SetExecutor(executor Executor) {
+	s.executor = executor
 }
 
 func (s *CronScheduler) Start() {
@@ -41,7 +51,7 @@ func (s *CronScheduler) Stop() {
 }
 
 func (s *CronScheduler) loadTasks() {
-	var tasks []model.CronTask
+	var tasks []cronmodel.CronTask
 	if err := s.db.Where("status = ?", 1).Find(&tasks).Error; err != nil {
 		logx.Errorf("加载 Cron 任务失败: %v", err)
 		return
@@ -52,7 +62,7 @@ func (s *CronScheduler) loadTasks() {
 	}
 }
 
-func (s *CronScheduler) AddTask(task *model.CronTask) error {
+func (s *CronScheduler) AddTask(task *cronmodel.CronTask) error {
 	s.RemoveTask(task.ID) // Remove existing if any (for updates)
 
 	if task.Status != 1 {
@@ -60,7 +70,7 @@ func (s *CronScheduler) AddTask(task *model.CronTask) error {
 	}
 
 	entryID, err := s.cron.AddFunc(task.Schedule, func() {
-		s.executeTask(task.ID)
+		s.runTask(task.ID, "schedule")
 	})
 	if err != nil {
 		logx.Errorf("添加 Cron 任务失败: name=%s err=%v", task.Name, err)
@@ -82,18 +92,26 @@ func (s *CronScheduler) RemoveTask(taskID uint) {
 
 func (s *CronScheduler) TriggerTask(taskID uint) {
 	safego.New(context.Background(), "手动触发定时任务").Go(func() {
-		s.executeTask(taskID)
+		s.runTask(taskID, "manual")
 	})
 }
 
-func (s *CronScheduler) executeTask(taskID uint) {
-	var task model.CronTask
+func (s *CronScheduler) runTask(taskID uint, triggerMode string) {
+	if s != nil && s.executor != nil {
+		s.executor.ExecuteTask(context.Background(), taskID, triggerMode)
+		return
+	}
+	s.executeLegacyTask(taskID)
+}
+
+func (s *CronScheduler) executeLegacyTask(taskID uint) {
+	var task cronmodel.CronTask
 	if err := s.db.First(&task, taskID).Error; err != nil {
 		logx.Errorf("任务执行失败，未找到任务: %d", taskID)
 		return
 	}
 
-	logEntry := model.CronTaskLog{
+	logEntry := cronmodel.CronTaskLog{
 		TaskID:    task.ID,
 		StartTime: time.Now(),
 		Status:    0, // Running

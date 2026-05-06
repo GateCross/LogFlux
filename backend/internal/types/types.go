@@ -193,17 +193,29 @@ type CreateMenuReq struct {
 	ParentID      uint      `json:"parentId,optional"`
 }
 
+type CronLogDetailReq struct {
+	ID uint `path:"id"`
+}
+
 type CronLogItem struct {
-	ID        uint   `json:"id"`
-	TaskID    uint   `json:"taskId"`
-	TaskName  string `json:"taskName"`
-	StartTime string `json:"startTime"`
-	EndTime   string `json:"endTime"`
-	Status    int    `json:"status"`
-	ExitCode  int    `json:"exitCode"`
-	Output    string `json:"output"`
-	Error     string `json:"error"`
-	Duration  int64  `json:"duration"`
+	ID                uint   `json:"id"`
+	TaskID            uint   `json:"taskId"`
+	TaskName          string `json:"taskName"`
+	StartTime         string `json:"startTime"`
+	EndTime           string `json:"endTime"`
+	Status            int    `json:"status"`
+	ExitCode          int    `json:"exitCode"`
+	Output            string `json:"output"`
+	Error             string `json:"error"`
+	Duration          int64  `json:"duration"`
+	TriggerMode       string `json:"triggerMode"`
+	ScriptMode        string `json:"scriptMode"`
+	ScriptSnapshot    string `json:"scriptSnapshot"`
+	ScriptFileID      uint   `json:"scriptFileId"`
+	ScriptFileVersion int    `json:"scriptFileVersion"`
+	ScriptFileName    string `json:"scriptFileName"`
+	ScriptFilePath    string `json:"scriptFilePath"`
+	ScriptFileSHA256  string `json:"scriptFileSha256"`
 }
 
 type CronLogListReq struct {
@@ -218,16 +230,51 @@ type CronLogListResp struct {
 	Total int64         `json:"total"`
 }
 
+type CronTaskFileActivateReq struct {
+	ID     uint `path:"id"`
+	FileID uint `path:"fileId"`
+}
+
+type CronTaskFileItem struct {
+	ID           uint   `json:"id"`
+	TaskID       uint   `json:"taskId"`
+	Version      int    `json:"version"`
+	OriginalName string `json:"originalName"`
+	StoredName   string `json:"storedName"`
+	FilePath     string `json:"filePath"`
+	SizeBytes    int64  `json:"sizeBytes"`
+	SHA256       string `json:"sha256"`
+	IsCurrent    bool   `json:"isCurrent"`
+	CreatedAt    string `json:"createdAt"`
+}
+
+type CronTaskFileListReq struct {
+	ID       uint `path:"id"`
+	Page     int  `form:"page,default=1"`
+	PageSize int  `form:"pageSize,default=20"`
+}
+
+type CronTaskFileListResp struct {
+	List  []CronTaskFileItem `json:"list"`
+	Total int64              `json:"total"`
+}
+
 type CronTaskItem struct {
-	ID        uint   `json:"id"`
-	Name      string `json:"name"`
-	Schedule  string `json:"schedule"`
-	Script    string `json:"script"`
-	Status    int    `json:"status"`
-	Timeout   int    `json:"timeout"`
-	NextRun   string `json:"nextRun"`
-	CreatedAt string `json:"createdAt"`
-	UpdatedAt string `json:"updatedAt"`
+	ID                 uint   `json:"id"`
+	Name               string `json:"name"`
+	Schedule           string `json:"schedule"`
+	Script             string `json:"script"`
+	ScriptMode         string `json:"scriptMode"`
+	CurrentFileID      uint   `json:"currentFileId"`
+	CurrentFileName    string `json:"currentFileName"`
+	CurrentFileVersion int    `json:"currentFileVersion"`
+	CurrentFilePath    string `json:"currentFilePath"`
+	CurrentFileSHA256  string `json:"currentFileSha256"`
+	Status             int    `json:"status"`
+	Timeout            int    `json:"timeout"`
+	NextRun            string `json:"nextRun"`
+	CreatedAt          string `json:"createdAt"`
+	UpdatedAt          string `json:"updatedAt"`
 }
 
 type CronTaskListReq struct {
@@ -242,20 +289,26 @@ type CronTaskListResp struct {
 }
 
 type CronTaskReq struct {
-	Name     string `json:"name"`
-	Schedule string `json:"schedule"`
-	Script   string `json:"script"`
-	Status   int    `json:"status"` // 1: enable, 0: disable
-	Timeout  int    `json:"timeout,default=60"`
+	Name       string `json:"name"`
+	Schedule   string `json:"schedule"`
+	ScriptMode string `json:"scriptMode,default=inline"`
+	Script     string `json:"script,optional"`
+	Status     int    `json:"status"` // 1: enable, 0: disable
+	Timeout    int    `json:"timeout,default=60"`
+}
+
+type CronTaskScriptUploadReq struct {
+	ID uint `path:"id"`
 }
 
 type CronTaskUpdateReq struct {
-	ID       uint   `path:"id"`
-	Name     string `json:"name,optional"`
-	Schedule string `json:"schedule,optional"`
-	Script   string `json:"script,optional"`
-	Status   int    `json:"status,optional"`
-	Timeout  int    `json:"timeout,optional"`
+	ID         uint   `path:"id"`
+	Name       string `json:"name,optional"`
+	Schedule   string `json:"schedule,optional"`
+	ScriptMode string `json:"scriptMode,optional"`
+	Script     string `json:"script,optional"`
+	Status     int    `json:"status,default=-1,optional"`
+	Timeout    int    `json:"timeout,default=-1,optional"`
 }
 
 type DashboardErrorStats struct {

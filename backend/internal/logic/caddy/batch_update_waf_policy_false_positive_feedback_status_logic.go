@@ -3,12 +3,12 @@ package caddy
 import (
 	"context"
 	"fmt"
+	wafmodel "logflux/model/waf"
 	"strings"
 	"time"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -53,7 +53,7 @@ func (l *BatchUpdateWafPolicyFalsePositiveFeedbackStatusLogic) BatchUpdateWafPol
 	}
 
 	var existingCount int64
-	if err := l.svcCtx.DB.WithContext(l.ctx).Model(&model.WafPolicyFalsePositiveFeedback{}).Where("id IN ?", feedbackIDs).Count(&existingCount).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).Model(&wafmodel.WafPolicyFalsePositiveFeedback{}).Where("id IN ?", feedbackIDs).Count(&existingCount).Error; err != nil {
 		return nil, fmt.Errorf("统计误报反馈失败: %w", err)
 	}
 	if existingCount == 0 {
@@ -79,7 +79,7 @@ func (l *BatchUpdateWafPolicyFalsePositiveFeedbackStatusLogic) BatchUpdateWafPol
 		updates["processed_at"] = &now
 	}
 
-	tx := l.svcCtx.DB.WithContext(l.ctx).Model(&model.WafPolicyFalsePositiveFeedback{}).Where("id IN ?", feedbackIDs).Updates(updates)
+	tx := l.svcCtx.DB.WithContext(l.ctx).Model(&wafmodel.WafPolicyFalsePositiveFeedback{}).Where("id IN ?", feedbackIDs).Updates(updates)
 	if tx.Error != nil {
 		return nil, fmt.Errorf("批量更新误报反馈状态失败: %w", tx.Error)
 	}

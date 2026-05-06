@@ -3,11 +3,11 @@ package caddy
 import (
 	"context"
 	"fmt"
+	wafmodel "logflux/model/waf"
 	"strings"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -43,7 +43,7 @@ func (l *ListWafRuleExclusionsLogic) ListWafRuleExclusions(req *types.WafRuleExc
 		pageSize = 20
 	}
 
-	db := l.svcCtx.DB.WithContext(l.ctx).Model(&model.WafRuleExclusion{})
+	db := l.svcCtx.DB.WithContext(l.ctx).Model(&wafmodel.WafRuleExclusion{})
 	if req.PolicyId > 0 {
 		db = db.Where("policy_id = ?", req.PolicyId)
 	}
@@ -63,7 +63,7 @@ func (l *ListWafRuleExclusionsLogic) ListWafRuleExclusions(req *types.WafRuleExc
 		return nil, fmt.Errorf("统计策略排除规则失败: %w", err)
 	}
 
-	var exclusions []model.WafRuleExclusion
+	var exclusions []wafmodel.WafRuleExclusion
 	offset := (page - 1) * pageSize
 	if err := db.Order("updated_at desc, id desc").Limit(pageSize).Offset(offset).Find(&exclusions).Error; err != nil {
 		return nil, fmt.Errorf("查询策略排除规则失败: %w", err)

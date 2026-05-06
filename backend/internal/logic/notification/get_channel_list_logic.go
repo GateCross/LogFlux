@@ -3,11 +3,11 @@ package notification
 import (
 	"context"
 	"encoding/json"
+	notificationmodel "logflux/model/notification"
 	"time"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -27,7 +27,7 @@ func NewGetChannelListLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Ge
 }
 
 func (l *GetChannelListLogic) GetChannelList() (resp *types.ChannelListResp, err error) {
-	var channels []model.NotificationChannel
+	var channels []notificationmodel.NotificationChannel
 	if err := l.svcCtx.DB.WithContext(l.ctx).Find(&channels).Error; err != nil {
 		return nil, err
 	}

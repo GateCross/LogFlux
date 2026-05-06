@@ -3,12 +3,14 @@ package caddy
 import (
 	"context"
 	"fmt"
+	caddymodel "logflux/model/caddy"
+	commonmodel "logflux/model/common"
+	wafmodel "logflux/model/waf"
 	"strings"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
 	"logflux/internal/utils/safego"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"gorm.io/gorm"
@@ -35,8 +37,8 @@ type simpleWafNormalizedConfig struct {
 }
 
 type simpleWafCandidate struct {
-	Server       *model.CaddyServer
-	Policy       *model.WafPolicy
+	Server       *caddymodel.CaddyServer
+	Policy       *wafmodel.WafPolicy
 	Config       string
 	Modules      string
 	LastGood     string
@@ -198,7 +200,7 @@ func (s *simpleWafConfigService) buildCandidate(req *types.SimpleWafConfigUpdate
 	}, nil
 }
 
-func (s *simpleWafConfigService) loadPreferredConfig(serverID uint) (*model.CaddyServer, string, string, error) {
+func (s *simpleWafConfigService) loadPreferredConfig(serverID uint) (*caddymodel.CaddyServer, string, string, error) {
 	server, err := findPreferredCaddyServer(s.svcCtx.DB.WithContext(s.ctx), serverID)
 	if err != nil {
 		return nil, "", emptyModulesJSON, err
@@ -212,9 +214,9 @@ func (s *simpleWafConfigService) loadPreferredConfig(serverID uint) (*model.Cadd
 	return server, config, modules, nil
 }
 
-func (s *simpleWafConfigService) findOrCreateDefaultPolicy() (*model.WafPolicy, error) {
+func (s *simpleWafConfigService) findOrCreateDefaultPolicy() (*wafmodel.WafPolicy, error) {
 	db := s.svcCtx.DB.WithContext(s.ctx)
-	var policy model.WafPolicy
+	var policy wafmodel.WafPolicy
 
 	err := db.Where("is_default = ?", true).Order("id asc").First(&policy).Error
 	if err == nil {
@@ -238,7 +240,7 @@ func (s *simpleWafConfigService) findOrCreateDefaultPolicy() (*model.WafPolicy, 
 		return nil, fmt.Errorf("查询默认 WAF 策略失败: %w", err)
 	}
 
-	policy = model.WafPolicy{
+	policy = wafmodel.WafPolicy{
 		Name:                        simpleWafDefaultPolicyName,
 		Description:                 "默认简单 WAF 策略",
 		Enabled:                     true,
@@ -254,7 +256,7 @@ func (s *simpleWafConfigService) findOrCreateDefaultPolicy() (*model.WafPolicy, 
 		CrsParanoiaLevel:            1,
 		CrsInboundAnomalyThreshold:  10,
 		CrsOutboundAnomalyThreshold: 8,
-		Config: model.JSONMap{
+		Config: commonmodel.JSONMap{
 			"scope":      "global",
 			"simpleMode": true,
 		},
@@ -280,7 +282,7 @@ func (s *simpleWafConfigService) persistAppliedCandidate(candidate *simpleWafCan
 		if err := createCaddyPolicyHistory(tx, candidate.Server.ID, "simple_waf_last_good", candidate.LastGood, candidate.LastModules); err != nil {
 			return err
 		}
-		if err := tx.Model(&model.CaddyServer{}).
+		if err := tx.Model(&caddymodel.CaddyServer{}).
 			Where("id = ?", candidate.Server.ID).
 			Updates(map[string]interface{}{
 				"config":  candidate.Config,
@@ -305,7 +307,7 @@ func (s *simpleWafConfigService) persistAppliedCandidate(candidate *simpleWafCan
 	return nil
 }
 
-func (s *simpleWafConfigService) buildResponse(server *model.CaddyServer, policy *model.WafPolicy, snapshot *wafIntegrationSnapshot, actions []string, directives []string) *types.SimpleWafConfigResp {
+func (s *simpleWafConfigService) buildResponse(server *caddymodel.CaddyServer, policy *wafmodel.WafPolicy, snapshot *wafIntegrationSnapshot, actions []string, directives []string) *types.SimpleWafConfigResp {
 	resp := &types.SimpleWafConfigResp{
 		Mode:                    "detectiononly",
 		Strength:                wafPolicyCRSTemplateLowFP,
@@ -422,7 +424,7 @@ func normalizeSimpleWafConfigReq(req *types.SimpleWafConfigUpdateReq) (simpleWaf
 	}, nil
 }
 
-func applySimpleWafConfigToPolicy(config simpleWafNormalizedConfig, policy *model.WafPolicy) error {
+func applySimpleWafConfigToPolicy(config simpleWafNormalizedConfig, policy *wafmodel.WafPolicy) error {
 	if policy == nil {
 		return fmt.Errorf("默认 WAF 策略不存在")
 	}
@@ -448,7 +450,7 @@ func applySimpleWafConfigToPolicy(config simpleWafNormalizedConfig, policy *mode
 	policy.CrsInboundAnomalyThreshold = preset.InboundAnomalyThreshold
 	policy.CrsOutboundAnomalyThreshold = preset.OutboundAnomalyThreshold
 	if policy.Config == nil {
-		policy.Config = model.JSONMap{}
+		policy.Config = commonmodel.JSONMap{}
 	}
 	policy.Config["scope"] = "global"
 	policy.Config["simpleMode"] = true

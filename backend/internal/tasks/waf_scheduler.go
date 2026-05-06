@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	wafmodel "logflux/model/waf"
 	"strings"
 	"sync"
 
 	"logflux/internal/utils/safego"
-	"logflux/model"
 
 	"github.com/robfig/cron/v3"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -103,7 +103,7 @@ func (scheduler *WafScheduler) Reload() error {
 		return fmt.Errorf("WAF 调度器数据库为空")
 	}
 
-	var sources []model.WafSource
+	var sources []wafmodel.WafSource
 	if err := scheduler.db.
 		Where("enabled = ? AND COALESCE(schedule, '') <> ''", true).
 		Order("id asc").
@@ -132,7 +132,7 @@ func (scheduler *WafScheduler) ReloadSource(sourceID uint) error {
 		return fmt.Errorf("WAF 调度器数据库为空")
 	}
 
-	var source model.WafSource
+	var source wafmodel.WafSource
 	if err := scheduler.db.First(&source, sourceID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			scheduler.RemoveSource(sourceID)
@@ -166,7 +166,7 @@ func (scheduler *WafScheduler) TriggerSourceNow(sourceID uint) error {
 		return fmt.Errorf("WAF 调度器数据库为空")
 	}
 
-	var source model.WafSource
+	var source wafmodel.WafSource
 	if err := scheduler.db.First(&source, sourceID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return fmt.Errorf("WAF 源不存在")
@@ -182,7 +182,7 @@ func (scheduler *WafScheduler) TriggerSourceNow(sourceID uint) error {
 	return nil
 }
 
-func (scheduler *WafScheduler) addOrUpdateSourceEntry(source *model.WafSource) error {
+func (scheduler *WafScheduler) addOrUpdateSourceEntry(source *wafmodel.WafSource) error {
 	if scheduler == nil || source == nil {
 		return nil
 	}
@@ -211,7 +211,7 @@ func (scheduler *WafScheduler) executeSource(sourceID uint) {
 		return
 	}
 
-	var source model.WafSource
+	var source wafmodel.WafSource
 	if err := scheduler.db.First(&source, sourceID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			scheduler.RemoveSource(sourceID)
@@ -254,7 +254,7 @@ func (scheduler *WafScheduler) removeAllEntries() {
 	})
 }
 
-func shouldScheduleWafSource(source *model.WafSource) bool {
+func shouldScheduleWafSource(source *wafmodel.WafSource) bool {
 	if source == nil {
 		return false
 	}

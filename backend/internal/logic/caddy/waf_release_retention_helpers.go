@@ -2,11 +2,10 @@ package caddy
 
 import (
 	"fmt"
+	wafmodel "logflux/model/waf"
 	"os"
 	"path/filepath"
 	"strings"
-
-	"logflux/model"
 
 	"gorm.io/gorm"
 )
@@ -40,7 +39,7 @@ func (helper *wafLogicHelper) pruneOldReleases(kind string, keepCount int) error
 	}
 
 	normalizedKind := normalizeWafKind(kind)
-	var releases []model.WafRelease
+	var releases []wafmodel.WafRelease
 	if err := helper.svcCtx.DB.WithContext(helper.ctx).
 		Where("kind = ?", normalizedKind).
 		Order("created_at desc, id desc").
@@ -97,10 +96,10 @@ func (helper *wafLogicHelper) pruneOldReleases(kind string, keepCount int) error
 	}
 
 	if err := helper.svcCtx.DB.WithContext(helper.ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("release_id IN ?", deleteIDs).Delete(&model.WafUpdateJob{}).Error; err != nil {
+		if err := tx.Where("release_id IN ?", deleteIDs).Delete(&wafmodel.WafUpdateJob{}).Error; err != nil {
 			return fmt.Errorf("删除保留版本关联任务失败: %w", err)
 		}
-		if err := tx.Where("id IN ?", deleteIDs).Delete(&model.WafRelease{}).Error; err != nil {
+		if err := tx.Where("id IN ?", deleteIDs).Delete(&wafmodel.WafRelease{}).Error; err != nil {
 			return fmt.Errorf("删除保留版本失败: %w", err)
 		}
 		return nil

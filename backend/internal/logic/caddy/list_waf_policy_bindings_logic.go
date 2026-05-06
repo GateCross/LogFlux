@@ -3,11 +3,11 @@ package caddy
 import (
 	"context"
 	"fmt"
+	wafmodel "logflux/model/waf"
 	"strings"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -43,7 +43,7 @@ func (l *ListWafPolicyBindingsLogic) ListWafPolicyBindings(req *types.WafPolicyB
 		pageSize = 20
 	}
 
-	db := l.svcCtx.DB.WithContext(l.ctx).Model(&model.WafPolicyBinding{})
+	db := l.svcCtx.DB.WithContext(l.ctx).Model(&wafmodel.WafPolicyBinding{})
 	if req.PolicyId > 0 {
 		db = db.Where("policy_id = ?", req.PolicyId)
 	}
@@ -63,7 +63,7 @@ func (l *ListWafPolicyBindingsLogic) ListWafPolicyBindings(req *types.WafPolicyB
 		return nil, fmt.Errorf("统计策略绑定失败: %w", err)
 	}
 
-	var bindings []model.WafPolicyBinding
+	var bindings []wafmodel.WafPolicyBinding
 	offset := (page - 1) * pageSize
 	if err := db.Order("priority asc, updated_at desc, id desc").Limit(pageSize).Offset(offset).Find(&bindings).Error; err != nil {
 		return nil, fmt.Errorf("查询策略绑定失败: %w", err)

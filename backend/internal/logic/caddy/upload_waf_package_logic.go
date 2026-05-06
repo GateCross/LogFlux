@@ -3,6 +3,8 @@ package caddy
 import (
 	"context"
 	"fmt"
+	commonmodel "logflux/model/common"
+	wafmodel "logflux/model/waf"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,7 +13,6 @@ import (
 	"logflux/internal/svc"
 	"logflux/internal/types"
 	"logflux/internal/waf"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -121,7 +122,7 @@ func (l *UploadWafPackageLogic) UploadWafPackage(req *types.WafUploadReq) (resp 
 		return nil, err
 	}
 
-	release := &model.WafRelease{
+	release := &wafmodel.WafRelease{
 		SourceID:     0,
 		Kind:         kind,
 		Version:      version,
@@ -130,7 +131,7 @@ func (l *UploadWafPackageLogic) UploadWafPackage(req *types.WafUploadReq) (resp 
 		SizeBytes:    verifyResult.SizeBytes,
 		StoragePath:  filepath.Clean(releaseDir),
 		Status:       wafReleaseStatusVerified,
-		Meta:         model.JSONMap{"originFileName": basenameSafe(fileName)},
+		Meta:         commonmodel.JSONMap{"originFileName": basenameSafe(fileName)},
 	}
 
 	if err := helper.svcCtx.DB.WithContext(helper.ctx).Create(release).Error; err != nil {

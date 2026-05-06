@@ -3,6 +3,8 @@ package caddy
 import (
 	"context"
 	"fmt"
+	caddymodel "logflux/model/caddy"
+	wafmodel "logflux/model/waf"
 	"sort"
 	"strings"
 	"time"
@@ -10,7 +12,6 @@ import (
 	"logflux/internal/svc"
 	"logflux/internal/types"
 	"logflux/internal/utils"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"gorm.io/gorm"
@@ -45,12 +46,12 @@ func (l *GetWafPolicyStatsLogic) GetWafPolicyStats(req *types.WafPolicyStatsReq)
 		return nil, err
 	}
 
-	policyQuery := l.svcCtx.DB.WithContext(l.ctx).Model(&model.WafPolicy{}).Where("enabled = ?", true)
+	policyQuery := l.svcCtx.DB.WithContext(l.ctx).Model(&wafmodel.WafPolicy{}).Where("enabled = ?", true)
 	if req != nil && req.PolicyId > 0 {
 		policyQuery = policyQuery.Where("id = ?", req.PolicyId)
 	}
 
-	var policies []model.WafPolicy
+	var policies []wafmodel.WafPolicy
 	if err := policyQuery.Order("is_default desc, id asc").Find(&policies).Error; err != nil {
 		return nil, fmt.Errorf("查询策略统计策略列表失败: %w", err)
 	}
@@ -80,7 +81,7 @@ func (l *GetWafPolicyStatsLogic) GetWafPolicyStats(req *types.WafPolicyStatsReq)
 		policyIDs = append(policyIDs, policy.ID)
 	}
 
-	var bindings []model.WafPolicyBinding
+	var bindings []wafmodel.WafPolicyBinding
 	if err := l.svcCtx.DB.WithContext(l.ctx).
 		Where("enabled = ? AND policy_id IN ?", true, policyIDs).
 		Order("priority asc, id asc").
@@ -88,7 +89,7 @@ func (l *GetWafPolicyStatsLogic) GetWafPolicyStats(req *types.WafPolicyStatsReq)
 		return nil, fmt.Errorf("查询策略统计绑定列表失败: %w", err)
 	}
 
-	bindingMap := make(map[uint][]model.WafPolicyBinding, len(policies))
+	bindingMap := make(map[uint][]wafmodel.WafPolicyBinding, len(policies))
 	for _, binding := range bindings {
 		bindingMap[binding.PolicyID] = append(bindingMap[binding.PolicyID], binding)
 	}
@@ -116,7 +117,7 @@ func (l *GetWafPolicyStatsLogic) GetWafPolicyStats(req *types.WafPolicyStatsReq)
 		PolicyId:   0,
 		PolicyName: "全部策略",
 	}
-	trendBindings := []model.WafPolicyBinding(nil)
+	trendBindings := []wafmodel.WafPolicyBinding(nil)
 	trendAllLogs := true
 
 	if req != nil && req.PolicyId > 0 {
@@ -295,8 +296,8 @@ func applyWafPolicyStatsDrillFilter(db *gorm.DB, filter wafPolicyStatsDrillFilte
 
 func (l *GetWafPolicyStatsLogic) queryPolicyStatsItem(
 	startTime, endTime time.Time,
-	policy *model.WafPolicy,
-	bindings []model.WafPolicyBinding,
+	policy *wafmodel.WafPolicy,
+	bindings []wafmodel.WafPolicyBinding,
 	drillFilter wafPolicyStatsDrillFilter,
 ) (types.WafPolicyStatsItem, error) {
 	item := types.WafPolicyStatsItem{
@@ -307,7 +308,7 @@ func (l *GetWafPolicyStatsLogic) queryPolicyStatsItem(
 		item.PolicyName = fmt.Sprintf("#%d", policy.ID)
 	}
 
-	base := l.svcCtx.DB.WithContext(l.ctx).Model(&model.CaddyLog{}).Where("log_time BETWEEN ? AND ?", startTime, endTime)
+	base := l.svcCtx.DB.WithContext(l.ctx).Model(&caddymodel.CaddyLog{}).Where("log_time BETWEEN ? AND ?", startTime, endTime)
 	base = applyWafPolicyStatsDrillFilter(base, drillFilter)
 	scoped := applyWafPolicyBindingScopeQuery(base, bindings)
 
@@ -343,7 +344,7 @@ func (l *GetWafPolicyStatsLogic) queryRangeSummary(startTime, endTime time.Time,
 		PolicyName: "全部策略",
 	}
 
-	base := l.svcCtx.DB.WithContext(l.ctx).Model(&model.CaddyLog{}).Where("log_time BETWEEN ? AND ?", startTime, endTime)
+	base := l.svcCtx.DB.WithContext(l.ctx).Model(&caddymodel.CaddyLog{}).Where("log_time BETWEEN ? AND ?", startTime, endTime)
 	base = applyWafPolicyStatsDrillFilter(base, drillFilter)
 
 	var hitCount int64
@@ -375,7 +376,7 @@ func (l *GetWafPolicyStatsLogic) queryRangeSummary(startTime, endTime time.Time,
 func (l *GetWafPolicyStatsLogic) queryWafPolicyTrend(
 	startTime, endTime time.Time,
 	intervalSec int,
-	bindings []model.WafPolicyBinding,
+	bindings []wafmodel.WafPolicyBinding,
 	allLogs bool,
 	drillFilter wafPolicyStatsDrillFilter,
 ) ([]types.WafPolicyStatsTrendItem, error) {
@@ -389,7 +390,7 @@ func (l *GetWafPolicyStatsLogic) queryWafPolicyTrend(
 		BlockedCount int64 `gorm:"column:blocked_count"`
 	}
 
-	db := l.svcCtx.DB.WithContext(l.ctx).Model(&model.CaddyLog{}).Where("log_time BETWEEN ? AND ?", startTime, endTime)
+	db := l.svcCtx.DB.WithContext(l.ctx).Model(&caddymodel.CaddyLog{}).Where("log_time BETWEEN ? AND ?", startTime, endTime)
 	db = applyWafPolicyStatsDrillFilter(db, drillFilter)
 	if !allLogs {
 		db = applyWafPolicyBindingScopeQuery(db, bindings)
@@ -432,7 +433,7 @@ func (l *GetWafPolicyStatsLogic) queryWafPolicyTrend(
 
 func (l *GetWafPolicyStatsLogic) queryWafPolicyDimensions(
 	startTime, endTime time.Time,
-	bindings []model.WafPolicyBinding,
+	bindings []wafmodel.WafPolicyBinding,
 	allLogs bool,
 	topN int,
 	drillFilter wafPolicyStatsDrillFilter,
@@ -441,7 +442,7 @@ func (l *GetWafPolicyStatsLogic) queryWafPolicyDimensions(
 		return []types.WafPolicyStatsDimensionItem{}, []types.WafPolicyStatsDimensionItem{}, []types.WafPolicyStatsDimensionItem{}, nil
 	}
 
-	base := l.svcCtx.DB.WithContext(l.ctx).Model(&model.CaddyLog{}).Where("log_time BETWEEN ? AND ?", startTime, endTime)
+	base := l.svcCtx.DB.WithContext(l.ctx).Model(&caddymodel.CaddyLog{}).Where("log_time BETWEEN ? AND ?", startTime, endTime)
 	base = applyWafPolicyStatsDrillFilter(base, drillFilter)
 	if !allLogs {
 		base = applyWafPolicyBindingScopeQuery(base, bindings)
@@ -522,7 +523,7 @@ func normalizeWafPolicyDimensionKey(raw string, fallback string) string {
 	return value
 }
 
-func applyWafPolicyBindingScopeQuery(db *gorm.DB, bindings []model.WafPolicyBinding) *gorm.DB {
+func applyWafPolicyBindingScopeQuery(db *gorm.DB, bindings []wafmodel.WafPolicyBinding) *gorm.DB {
 	if db == nil {
 		return nil
 	}
@@ -552,7 +553,7 @@ func applyWafPolicyBindingScopeQuery(db *gorm.DB, bindings []model.WafPolicyBind
 	return db.Where("("+strings.Join(clauses, " OR ")+")", queryArgs...)
 }
 
-func buildWafPolicyBindingCondition(binding *model.WafPolicyBinding) (string, []interface{}) {
+func buildWafPolicyBindingCondition(binding *wafmodel.WafPolicyBinding) (string, []interface{}) {
 	if binding == nil {
 		return "", nil
 	}

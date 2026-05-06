@@ -3,12 +3,12 @@ package service
 import (
 	"context"
 	"encoding/json"
+	menumodel "logflux/model/menu"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
 	"logflux/internal/utils/logger"
 	"logflux/internal/xerr"
-	"logflux/model"
 
 	"github.com/lib/pq"
 )
@@ -39,7 +39,7 @@ func (s *MenuService) CreateMenu(req *types.CreateMenuReq) (*types.BaseResp, err
 	}
 
 	metaBytes, _ := json.Marshal(req.Meta)
-	menu := &model.Menu{
+	menu := &menumodel.Menu{
 		Name:          req.Name,
 		Path:          req.Path,
 		Component:     req.Component,
@@ -115,7 +115,7 @@ func (s *MenuService) UpdateMenu(req *types.UpdateMenuReq) (*types.BaseResp, err
 	return baseResp("更新成功"), nil
 }
 
-func buildMenuTree(allMenus []model.Menu, parentID *uint) []types.MenuItem {
+func buildMenuTree(allMenus []menumodel.Menu, parentID *uint) []types.MenuItem {
 	items := make([]types.MenuItem, 0)
 	for _, menu := range allMenus {
 		if !matchMenuParent(menu, parentID) {
@@ -151,7 +151,7 @@ func buildMenuTree(allMenus []model.Menu, parentID *uint) []types.MenuItem {
 	return items
 }
 
-func matchMenuParent(menu model.Menu, parentID *uint) bool {
+func matchMenuParent(menu menumodel.Menu, parentID *uint) bool {
 	if parentID == nil {
 		return menu.ParentID == nil
 	}

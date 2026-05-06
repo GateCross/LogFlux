@@ -3,11 +3,11 @@ package caddy
 import (
 	"context"
 	"fmt"
+	wafmodel "logflux/model/waf"
 	"strings"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -38,7 +38,7 @@ func (l *UpdateWafPolicyBindingLogic) UpdateWafPolicyBinding(req *types.WafPolic
 		return nil, err
 	}
 
-	var binding model.WafPolicyBinding
+	var binding wafmodel.WafPolicyBinding
 	if err := l.svcCtx.DB.WithContext(l.ctx).First(&binding, req.ID).Error; err != nil {
 		return nil, fmt.Errorf("策略绑定不存在")
 	}

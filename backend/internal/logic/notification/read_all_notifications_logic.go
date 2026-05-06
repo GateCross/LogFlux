@@ -2,11 +2,11 @@ package notification
 
 import (
 	"context"
+	notificationmodel "logflux/model/notification"
 	"time"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -27,7 +27,7 @@ func NewReadAllNotificationsLogic(ctx context.Context, svcCtx *svc.ServiceContex
 
 func (l *ReadAllNotificationsLogic) ReadAllNotifications() (resp *types.BaseResp, err error) {
 	// Update all unread notifications to read
-	err = l.svcCtx.DB.WithContext(l.ctx).Model(&model.NotificationLog{}).
+	err = l.svcCtx.DB.WithContext(l.ctx).Model(&notificationmodel.NotificationLog{}).
 		Where("is_read = ?", false).
 		Updates(map[string]interface{}{
 			"is_read": true,

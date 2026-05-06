@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"logflux/internal/notification"
-	"logflux/model"
+	notificationmodel "logflux/model/notification"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -69,7 +69,7 @@ func TestBuildWebhookPayloadMessageAPI(t *testing.T) {
 		},
 	}
 
-	payload := buildWebhookPayload(&model.WebhookConfig{
+	payload := buildWebhookPayload(&notificationmodel.WebhookConfig{
 		PayloadMode:  "message_api",
 		TitleField:   "title",
 		ContentField: "content",
@@ -96,7 +96,7 @@ func TestBuildWebhookPayloadCustomFields(t *testing.T) {
 		},
 	}
 
-	payload := buildWebhookPayload(&model.WebhookConfig{
+	payload := buildWebhookPayload(&notificationmodel.WebhookConfig{
 		BodyFields: map[string]string{
 			"title":       "title",
 			"content":     "content",
@@ -132,7 +132,7 @@ func TestBuildWebhookPayloadDefault(t *testing.T) {
 		Data:      map[string]interface{}{"foo": "bar"},
 	}
 
-	payload := buildWebhookPayload(&model.WebhookConfig{}, event)
+	payload := buildWebhookPayload(&notificationmodel.WebhookConfig{}, event)
 
 	if got := payload["title"]; got != "Test Title" {
 		t.Fatalf("payload title = %v, want %v", got, "Test Title")

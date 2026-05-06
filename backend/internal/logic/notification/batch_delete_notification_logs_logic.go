@@ -2,10 +2,10 @@ package notification
 
 import (
 	"context"
+	notificationmodel "logflux/model/notification"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -29,10 +29,10 @@ func (l *BatchDeleteNotificationLogsLogic) BatchDeleteNotificationLogs(req *type
 		return &types.BaseResp{Code: 200, Msg: "成功"}, nil
 	}
 
-	if err := l.svcCtx.DB.WithContext(l.ctx).Where("log_id IN ?", req.IDs).Delete(&model.NotificationJob{}).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).Where("log_id IN ?", req.IDs).Delete(&notificationmodel.NotificationJob{}).Error; err != nil {
 		return nil, err
 	}
-	if err := l.svcCtx.DB.WithContext(l.ctx).Where("id IN ?", req.IDs).Delete(&model.NotificationLog{}).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).Where("id IN ?", req.IDs).Delete(&notificationmodel.NotificationLog{}).Error; err != nil {
 		return nil, err
 	}
 

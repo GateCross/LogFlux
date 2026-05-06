@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	wafmodel "logflux/model/waf"
 	"net/http"
 	"net/url"
 	"os"
@@ -13,8 +14,6 @@ import (
 	"regexp"
 	"strings"
 	"time"
-
-	"logflux/model"
 )
 
 const defaultCorazaReleaseAPI = "https://api.github.com/repos/corazawaf/coraza-caddy/releases/latest"
@@ -325,7 +324,7 @@ func fetchGithubLatestReleaseTag(releaseAPI string, timeoutSec int, proxyURL str
 	return tag, nil
 }
 
-func latestEngineCheckVersion(job *model.WafUpdateJob) string {
+func latestEngineCheckVersion(job *wafmodel.WafUpdateJob) string {
 	if job == nil || len(job.Meta) == 0 {
 		return ""
 	}

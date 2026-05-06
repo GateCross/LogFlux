@@ -4,13 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	usermodel "logflux/model/user"
 	"strings"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
 	"logflux/internal/utils/logger"
 	"logflux/internal/xerr"
-	"logflux/model"
 
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -44,7 +44,7 @@ func (s *UserService) AddUser(req *types.AddUserReq) (*types.BaseResp, error) {
 		return nil, xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "密码加密失败", err)
 	}
 
-	newUser := &model.User{
+	newUser := &usermodel.User{
 		Username: strings.TrimSpace(req.Username),
 		Password: string(hash),
 		Roles:    req.Roles,
@@ -217,7 +217,7 @@ func (s *UserService) UpdateUserPreferences(req *types.UserPreferencesReq) (*typ
 	return baseResp("更新成功"), nil
 }
 
-func (s *UserService) ensureOtherActiveAdmin(user *model.User, currentID uint) error {
+func (s *UserService) ensureOtherActiveAdmin(user *usermodel.User, currentID uint) error {
 	if user == nil || user.Status != 1 || !hasRole(user.Roles, "admin") {
 		return nil
 	}

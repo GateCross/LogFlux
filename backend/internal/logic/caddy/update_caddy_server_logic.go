@@ -3,13 +3,13 @@ package caddy
 import (
 	"context"
 	"fmt"
+	caddymodel "logflux/model/caddy"
 	"time"
 
 	"logflux/internal/notification"
 	"logflux/internal/svc"
 	"logflux/internal/types"
 	"logflux/internal/utils/safego"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -29,7 +29,7 @@ func NewUpdateCaddyServerLogic(ctx context.Context, svcCtx *svc.ServiceContext) 
 }
 
 func (l *UpdateCaddyServerLogic) UpdateCaddyServer(req *types.UpdateCaddyServerReq) (resp *types.BaseResp, err error) {
-	var server model.CaddyServer
+	var server caddymodel.CaddyServer
 	if err := l.svcCtx.DB.WithContext(l.ctx).First(&server, req.ID).Error; err != nil {
 		return nil, err
 	}

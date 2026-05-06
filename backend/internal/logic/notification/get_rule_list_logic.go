@@ -2,11 +2,11 @@ package notification
 
 import (
 	"context"
+	notificationmodel "logflux/model/notification"
 
 	"encoding/json"
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -26,7 +26,7 @@ func NewGetRuleListLogic(ctx context.Context, svcCtx *svc.ServiceContext) *GetRu
 }
 
 func (l *GetRuleListLogic) GetRuleList() (resp *types.RuleListResp, err error) {
-	var rules []model.NotificationRule
+	var rules []notificationmodel.NotificationRule
 	if err := l.svcCtx.DB.WithContext(l.ctx).Find(&rules).Error; err != nil {
 		return nil, err
 	}

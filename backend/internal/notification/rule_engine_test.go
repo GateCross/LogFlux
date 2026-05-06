@@ -2,7 +2,8 @@ package notification
 
 import (
 	"context"
-	"logflux/model"
+	commonmodel "logflux/model/common"
+	notificationmodel "logflux/model/notification"
 	"testing"
 	"time"
 
@@ -16,14 +17,14 @@ func TestThresholdEvaluator(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		condition model.JSONMap
+		condition commonmodel.JSONMap
 		event     *Event
 		want      bool
 		wantErr   bool
 	}{
 		{
 			name: "greater than - true",
-			condition: model.JSONMap{
+			condition: commonmodel.JSONMap{
 				"field":    "count",
 				"operator": ">",
 				"value":    10.0,
@@ -39,7 +40,7 @@ func TestThresholdEvaluator(t *testing.T) {
 		},
 		{
 			name: "greater than - false",
-			condition: model.JSONMap{
+			condition: commonmodel.JSONMap{
 				"field":    "count",
 				"operator": ">",
 				"value":    10.0,
@@ -55,7 +56,7 @@ func TestThresholdEvaluator(t *testing.T) {
 		},
 		{
 			name: "equals - true",
-			condition: model.JSONMap{
+			condition: commonmodel.JSONMap{
 				"field":    "status",
 				"operator": "==",
 				"value":    "error",
@@ -90,14 +91,14 @@ func TestPatternEvaluator(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		condition model.JSONMap
+		condition commonmodel.JSONMap
 		event     *Event
 		want      bool
 		wantErr   bool
 	}{
 		{
 			name: "regex match - true",
-			condition: model.JSONMap{
+			condition: commonmodel.JSONMap{
 				"field":   "message",
 				"pattern": "error.*occurred",
 			},
@@ -112,7 +113,7 @@ func TestPatternEvaluator(t *testing.T) {
 		},
 		{
 			name: "regex match - false",
-			condition: model.JSONMap{
+			condition: commonmodel.JSONMap{
 				"field":   "message",
 				"pattern": "error.*occurred",
 			},
@@ -170,15 +171,15 @@ func TestRuleEngine_Evaluate_SilencePeriod(t *testing.T) {
 
 	// 创建规则
 	lastTriggered := time.Now().Add(-1 * time.Minute) // 1 分钟前触发
-	rule := &model.NotificationRule{
+	rule := &notificationmodel.NotificationRule{
 		ID:              1,
 		Name:            "test-rule",
 		Enabled:         true,
-		RuleType:        model.RuleTypeThreshold,
+		RuleType:        notificationmodel.RuleTypeThreshold,
 		EventType:       "test.*",
 		SilenceDuration: 300, // 5 分钟静默期
 		LastTriggeredAt: &lastTriggered,
-		Condition: model.JSONMap{
+		Condition: commonmodel.JSONMap{
 			"field":    "count",
 			"operator": ">",
 			"value":    10.0,
@@ -206,7 +207,7 @@ func TestFrequencyEvaluator_NilRedis_DoesNotPanic(t *testing.T) {
 	evaluator := NewFrequencyEvaluator(nil)
 
 	// 频率规则依赖 Redis；当 Redis 未初始化时不应 panic
-	cond := model.JSONMap{
+	cond := commonmodel.JSONMap{
 		"event":  "test.event",
 		"count":  1,
 		"window": "1m",
@@ -228,8 +229,8 @@ func TestRuleEvaluators_ConcurrentEvaluate_NoPanic(t *testing.T) {
 	pattern := NewPatternEvaluator()
 
 	tEvent := &Event{Type: "test", Data: map[string]interface{}{"count": 15.0, "message": "error has occurred"}}
-	tCond := model.JSONMap{"field": "count", "operator": ">", "value": 10.0}
-	pCond := model.JSONMap{"field": "message", "pattern": "error.*occurred"}
+	tCond := commonmodel.JSONMap{"field": "count", "operator": ">", "value": 10.0}
+	pCond := commonmodel.JSONMap{"field": "message", "pattern": "error.*occurred"}
 
 	const goroutines = 64
 	const iterations = 200
@@ -276,8 +277,8 @@ func TestManager_UpdateRuleTriggerStatus_UpdatesInMemoryRule(t *testing.T) {
 
 	m := &Manager{db: gdb}
 	now := time.Now().Add(-1 * time.Hour)
-	rule := &model.NotificationRule{ID: 1, LastTriggeredAt: &now}
-	m.rules = map[uint]*model.NotificationRule{1: rule}
+	rule := &notificationmodel.NotificationRule{ID: 1, LastTriggeredAt: &now}
+	m.rules = map[uint]*notificationmodel.NotificationRule{1: rule}
 
 	m.updateRuleTriggerStatus(context.Background(), rule)
 

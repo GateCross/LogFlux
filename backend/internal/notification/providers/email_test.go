@@ -1,7 +1,7 @@
 package providers
 
 import (
-	"logflux/model"
+	notificationmodel "logflux/model/notification"
 	"testing"
 )
 
@@ -48,8 +48,8 @@ func TestEmailProvider_Validate(t *testing.T) {
 
 func TestEmailProvider_Type(t *testing.T) {
 	p := &EmailProvider{}
-	if got := p.Type(); got != model.ChannelTypeEmail {
-		t.Errorf("EmailProvider.Type() = %v, want %v", got, model.ChannelTypeEmail)
+	if got := p.Type(); got != notificationmodel.ChannelTypeEmail {
+		t.Errorf("EmailProvider.Type() = %v, want %v", got, notificationmodel.ChannelTypeEmail)
 	}
 }
 
@@ -69,7 +69,7 @@ func TestNewEmailProvider(t *testing.T) {
 	}
 
 	// Check internal structure if needed, or just type
-	if p.Type() != model.ChannelTypeEmail {
-		t.Errorf("Type() = %v, want %v", p.Type(), model.ChannelTypeEmail)
+	if p.Type() != notificationmodel.ChannelTypeEmail {
+		t.Errorf("Type() = %v, want %v", p.Type(), notificationmodel.ChannelTypeEmail)
 	}
 }

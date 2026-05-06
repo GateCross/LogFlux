@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	wafmodel "logflux/model/waf"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"gorm.io/gorm"
@@ -28,7 +28,7 @@ func NewDeleteWafSourceLogic(ctx context.Context, svcCtx *svc.ServiceContext) *D
 }
 
 func (l *DeleteWafSourceLogic) DeleteWafSource(req *types.IDReq) (resp *types.BaseResp, err error) {
-	var source model.WafSource
+	var source wafmodel.WafSource
 	if err := l.svcCtx.DB.WithContext(l.ctx).First(&source, req.ID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("源不存在")
@@ -37,15 +37,15 @@ func (l *DeleteWafSourceLogic) DeleteWafSource(req *types.IDReq) (resp *types.Ba
 	}
 
 	err = l.svcCtx.DB.WithContext(l.ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("source_id = ?", req.ID).Delete(&model.WafUpdateJob{}).Error; err != nil {
+		if err := tx.Where("source_id = ?", req.ID).Delete(&wafmodel.WafUpdateJob{}).Error; err != nil {
 			return fmt.Errorf("删除源关联任务失败: %w", err)
 		}
 
-		if err := tx.Where("source_id = ?", req.ID).Delete(&model.WafRelease{}).Error; err != nil {
+		if err := tx.Where("source_id = ?", req.ID).Delete(&wafmodel.WafRelease{}).Error; err != nil {
 			return fmt.Errorf("删除源关联版本失败: %w", err)
 		}
 
-		if err := tx.Delete(&model.WafSource{}, req.ID).Error; err != nil {
+		if err := tx.Delete(&wafmodel.WafSource{}, req.ID).Error; err != nil {
 			return fmt.Errorf("删除源失败: %w", err)
 		}
 

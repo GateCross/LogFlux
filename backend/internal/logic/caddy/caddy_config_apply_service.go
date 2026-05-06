@@ -3,11 +3,11 @@ package caddy
 import (
 	"context"
 	"fmt"
+	caddymodel "logflux/model/caddy"
 	"strings"
 
 	"logflux/internal/svc"
 	"logflux/internal/utils/safego"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"gorm.io/gorm"
@@ -22,11 +22,11 @@ func newCaddyConfigApplyService(svcCtx *svc.ServiceContext, logger logx.Logger) 
 	return &caddyConfigApplyService{svcCtx: svcCtx, logger: logger}
 }
 
-func (s *caddyConfigApplyService) loadCurrent(server *model.CaddyServer) (string, string, error) {
+func (s *caddyConfigApplyService) loadCurrent(server *caddymodel.CaddyServer) (string, string, error) {
 	return loadCurrentCaddyConfig(server)
 }
 
-func (s *caddyConfigApplyService) apply(server *model.CaddyServer, config, modules, action string) error {
+func (s *caddyConfigApplyService) apply(server *caddymodel.CaddyServer, config, modules, action string) error {
 	if server == nil {
 		return fmt.Errorf("Caddy 服务器不存在")
 	}
@@ -52,7 +52,7 @@ func (s *caddyConfigApplyService) apply(server *model.CaddyServer, config, modul
 			return fmt.Errorf("保存 Caddy 服务器配置失败: %w", err)
 		}
 
-		history := &model.CaddyConfigHistory{
+		history := &caddymodel.CaddyConfigHistory{
 			ServerID: server.ID,
 			Action:   strings.TrimSpace(action),
 			Hash:     hashConfig(config),
@@ -73,12 +73,12 @@ func (s *caddyConfigApplyService) apply(server *model.CaddyServer, config, modul
 	return nil
 }
 
-func findPreferredCaddyServer(db *gorm.DB, serverID uint) (*model.CaddyServer, error) {
+func findPreferredCaddyServer(db *gorm.DB, serverID uint) (*caddymodel.CaddyServer, error) {
 	if db == nil {
 		return nil, fmt.Errorf("数据库为空")
 	}
 
-	var server model.CaddyServer
+	var server caddymodel.CaddyServer
 	if serverID > 0 {
 		if err := db.First(&server, serverID).Error; err != nil {
 			if err == gorm.ErrRecordNotFound {

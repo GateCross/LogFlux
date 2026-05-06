@@ -3,10 +3,11 @@ package notification
 import (
 	"context"
 	"encoding/json"
+	commonmodel "logflux/model/common"
+	notificationmodel "logflux/model/notification"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -26,7 +27,7 @@ func NewUpdateRuleLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Update
 }
 
 func (l *UpdateRuleLogic) UpdateRule(req *types.RuleUpdateReq) (resp *types.BaseResp, err error) {
-	var rule model.NotificationRule
+	var rule notificationmodel.NotificationRule
 	if err := l.svcCtx.DB.WithContext(l.ctx).First(&rule, req.ID).Error; err != nil {
 		return nil, err
 	}
@@ -46,10 +47,10 @@ func (l *UpdateRuleLogic) UpdateRule(req *types.RuleUpdateReq) (resp *types.Base
 		if err := json.Unmarshal([]byte(req.Condition), &conditionMap); err != nil {
 			return nil, err
 		}
-		rule.Condition = model.JSONMap(conditionMap)
+		rule.Condition = commonmodel.JSONMap(conditionMap)
 	}
 	if req.ChannelIDs != nil {
-		rule.ChannelIDs = model.Int64Array(req.ChannelIDs)
+		rule.ChannelIDs = notificationmodel.Int64Array(req.ChannelIDs)
 	}
 	if req.Template != "" {
 		rule.Template = req.Template

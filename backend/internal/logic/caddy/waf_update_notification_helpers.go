@@ -2,16 +2,16 @@ package caddy
 
 import (
 	"context"
+	wafmodel "logflux/model/waf"
 	"strings"
 
 	"logflux/internal/notification"
 	"logflux/internal/utils/safego"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-func (helper *wafLogicHelper) notifyWafUpdateJobEvent(job *model.WafUpdateJob, status, message string, releaseID uint) {
+func (helper *wafLogicHelper) notifyWafUpdateJobEvent(job *wafmodel.WafUpdateJob, status, message string, releaseID uint) {
 	if helper == nil || helper.svcCtx == nil || helper.svcCtx.NotificationMgr == nil || job == nil {
 		return
 	}
@@ -106,7 +106,7 @@ func (helper *wafLogicHelper) queryWafSourceName(sourceID uint) string {
 		return ""
 	}
 
-	var source model.WafSource
+	var source wafmodel.WafSource
 	if err := helper.svcCtx.DB.WithContext(helper.ctx).Select("name").First(&source, sourceID).Error; err != nil {
 		return ""
 	}
@@ -118,7 +118,7 @@ func (helper *wafLogicHelper) queryWafReleaseVersion(releaseID uint) string {
 		return ""
 	}
 
-	var release model.WafRelease
+	var release wafmodel.WafRelease
 	if err := helper.svcCtx.DB.WithContext(helper.ctx).Select("version").First(&release, releaseID).Error; err != nil {
 		return ""
 	}

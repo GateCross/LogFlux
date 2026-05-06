@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"logflux/internal/notification"
-	"logflux/model"
+	notificationmodel "logflux/model/notification"
 	"net/http"
 	"time"
 )
@@ -28,7 +28,7 @@ func NewSlackProvider() *SlackProvider {
 // Send 发送通知
 func (s *SlackProvider) Send(ctx context.Context, config map[string]interface{}, event *notification.Event) error {
 	// 解析配置
-	slackConfig := &model.SlackConfig{}
+	slackConfig := &notificationmodel.SlackConfig{}
 	if err := mapToStruct(config, slackConfig); err != nil {
 		return fmt.Errorf("Slack 配置无效: %w", err)
 	}
@@ -76,7 +76,7 @@ func (s *SlackProvider) Send(ctx context.Context, config map[string]interface{},
 
 // Validate 验证配置
 func (s *SlackProvider) Validate(config map[string]interface{}) error {
-	slackConfig := &model.SlackConfig{}
+	slackConfig := &notificationmodel.SlackConfig{}
 	if err := mapToStruct(config, slackConfig); err != nil {
 		return fmt.Errorf("Slack 配置无效: %w", err)
 	}
@@ -90,5 +90,5 @@ func (s *SlackProvider) Validate(config map[string]interface{}) error {
 
 // Type 返回提供者类型
 func (s *SlackProvider) Type() string {
-	return model.ChannelTypeSlack
+	return notificationmodel.ChannelTypeSlack
 }

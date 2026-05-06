@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"logflux/internal/notification"
-	"logflux/model"
+	notificationmodel "logflux/model/notification"
 	"strings"
 
 	"gopkg.in/gomail.v2"
@@ -24,7 +24,7 @@ func NewEmailProvider() *EmailProvider {
 // Send 发送通知
 func (e *EmailProvider) Send(ctx context.Context, config map[string]interface{}, event *notification.Event) error {
 	// 解析配置
-	emailConfig := &model.EmailConfig{}
+	emailConfig := &notificationmodel.EmailConfig{}
 	if err := mapToStruct(config, emailConfig); err != nil {
 		return fmt.Errorf("邮件配置无效: %w", err)
 	}
@@ -71,7 +71,7 @@ func (e *EmailProvider) Send(ctx context.Context, config map[string]interface{},
 
 // Validate 验证配置
 func (e *EmailProvider) Validate(config map[string]interface{}) error {
-	emailConfig := &model.EmailConfig{}
+	emailConfig := &notificationmodel.EmailConfig{}
 	if err := mapToStruct(config, emailConfig); err != nil {
 		return fmt.Errorf("邮件配置无效: %w", err)
 	}
@@ -81,11 +81,11 @@ func (e *EmailProvider) Validate(config map[string]interface{}) error {
 
 // Type 返回提供者类型
 func (e *EmailProvider) Type() string {
-	return model.ChannelTypeEmail
+	return notificationmodel.ChannelTypeEmail
 }
 
 // validateEmailConfig 验证邮件配置
-func validateEmailConfig(config *model.EmailConfig) error {
+func validateEmailConfig(config *notificationmodel.EmailConfig) error {
 	if config.SmtpHost == "" {
 		return fmt.Errorf("SMTP 主机不能为空")
 	}

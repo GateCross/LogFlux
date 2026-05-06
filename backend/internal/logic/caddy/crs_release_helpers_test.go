@@ -1,9 +1,9 @@
 package caddy
 
 import (
+	commonmodel "logflux/model/common"
+	wafmodel "logflux/model/waf"
 	"testing"
-
-	"logflux/model"
 )
 
 func TestExtractVersionFromSourceURL(t *testing.T) {
@@ -61,17 +61,17 @@ func TestIsBranchLikeVersion(t *testing.T) {
 }
 
 func TestIsOfficialCRSSource(t *testing.T) {
-	official := &model.WafSource{Kind: "crs", URL: "https://github.com/coreruleset/coreruleset/archive/refs/heads/main.tar.gz"}
+	official := &wafmodel.WafSource{Kind: "crs", URL: "https://github.com/coreruleset/coreruleset/archive/refs/heads/main.tar.gz"}
 	if !isOfficialCRSSource(official) {
 		t.Fatalf("expected official CRS source")
 	}
 
-	officialByMeta := &model.WafSource{Kind: "crs", URL: "https://mirror.example.com/crs.tar.gz", Meta: model.JSONMap{"repo": "https://github.com/coreruleset/coreruleset"}}
+	officialByMeta := &wafmodel.WafSource{Kind: "crs", URL: "https://mirror.example.com/crs.tar.gz", Meta: commonmodel.JSONMap{"repo": "https://github.com/coreruleset/coreruleset"}}
 	if !isOfficialCRSSource(officialByMeta) {
 		t.Fatalf("expected official CRS source by meta")
 	}
 
-	custom := &model.WafSource{Kind: "crs", URL: "https://example.com/security-rules.tar.gz"}
+	custom := &wafmodel.WafSource{Kind: "crs", URL: "https://example.com/security-rules.tar.gz"}
 	if isOfficialCRSSource(custom) {
 		t.Fatalf("expected custom source not official")
 	}
@@ -87,7 +87,7 @@ func TestBuildCRSReleaseTagDownloadURL(t *testing.T) {
 
 func TestResolveCRSSyncTargetFallbackForCustomSource(t *testing.T) {
 	helper := &wafLogicHelper{}
-	source := &model.WafSource{
+	source := &wafmodel.WafSource{
 		Name: "custom-crs",
 		Kind: "crs",
 		URL:  "https://mirror.example.com/main_1770792061.tar.gz",

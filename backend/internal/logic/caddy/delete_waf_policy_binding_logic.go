@@ -3,10 +3,10 @@ package caddy
 import (
 	"context"
 	"fmt"
+	wafmodel "logflux/model/waf"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -34,7 +34,7 @@ func (l *DeleteWafPolicyBindingLogic) DeleteWafPolicyBinding(req *types.IDReq) (
 		return nil, fmt.Errorf("策略绑定 ID 不能为空")
 	}
 
-	result := l.svcCtx.DB.WithContext(l.ctx).Where("id = ?", req.ID).Delete(&model.WafPolicyBinding{})
+	result := l.svcCtx.DB.WithContext(l.ctx).Where("id = ?", req.ID).Delete(&wafmodel.WafPolicyBinding{})
 	if result.Error != nil {
 		return nil, fmt.Errorf("删除策略绑定失败: %w", result.Error)
 	}

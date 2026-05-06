@@ -2,10 +2,10 @@ package notification
 
 import (
 	"context"
+	notificationmodel "logflux/model/notification"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -25,7 +25,7 @@ func NewDeleteRuleLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Delete
 }
 
 func (l *DeleteRuleLogic) DeleteRule(req *types.IDReq) (resp *types.BaseResp, err error) {
-	if err := l.svcCtx.DB.WithContext(l.ctx).Delete(&model.NotificationRule{}, req.ID).Error; err != nil {
+	if err := l.svcCtx.DB.WithContext(l.ctx).Delete(&notificationmodel.NotificationRule{}, req.ID).Error; err != nil {
 		return nil, err
 	}
 

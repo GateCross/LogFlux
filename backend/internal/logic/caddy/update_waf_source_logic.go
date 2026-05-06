@@ -3,11 +3,11 @@ package caddy
 import (
 	"context"
 	"fmt"
+	wafmodel "logflux/model/waf"
 	"strings"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -29,7 +29,7 @@ func NewUpdateWafSourceLogic(ctx context.Context, svcCtx *svc.ServiceContext) *U
 func (l *UpdateWafSourceLogic) UpdateWafSource(req *types.WafSourceUpdateReq) (resp *types.BaseResp, err error) {
 	helper := newWafLogicHelper(l.ctx, l.svcCtx, l.Logger)
 
-	var source model.WafSource
+	var source wafmodel.WafSource
 	if err := helper.svcCtx.DB.WithContext(helper.ctx).First(&source, req.ID).Error; err != nil {
 		return nil, fmt.Errorf("源不存在")
 	}

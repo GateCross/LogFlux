@@ -2,13 +2,12 @@ package caddy
 
 import (
 	"fmt"
+	wafmodel "logflux/model/waf"
 	"net/url"
 	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
-
-	"logflux/model"
 )
 
 const defaultCRSReleaseAPI = "https://api.github.com/repos/coreruleset/coreruleset/releases/latest"
@@ -22,7 +21,7 @@ func (helper *wafLogicHelper) crsCurrentVersion() string {
 		return ""
 	}
 
-	var release model.WafRelease
+	var release wafmodel.WafRelease
 	if err := helper.svcCtx.DB.WithContext(helper.ctx).
 		Where("kind = ? AND status = ?", wafKindCRS, wafReleaseStatusActive).
 		Order("updated_at desc, id desc").
@@ -47,7 +46,7 @@ func (helper *wafLogicHelper) crsCurrentVersion() string {
 	return strings.TrimSpace(detectedVersion)
 }
 
-func (helper *wafLogicHelper) resolveCRSSyncTarget(source *model.WafSource) (string, string) {
+func (helper *wafLogicHelper) resolveCRSSyncTarget(source *wafmodel.WafSource) (string, string) {
 	if source == nil {
 		return "", ""
 	}
@@ -146,7 +145,7 @@ func isBranchLikeVersion(version string) bool {
 	return branchLikeVersionPattern.MatchString(normalized)
 }
 
-func isOfficialCRSSource(source *model.WafSource) bool {
+func isOfficialCRSSource(source *wafmodel.WafSource) bool {
 	if source == nil {
 		return false
 	}

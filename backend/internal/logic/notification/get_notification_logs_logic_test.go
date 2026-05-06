@@ -2,6 +2,7 @@ package notification
 
 import (
 	"context"
+	notificationmodel "logflux/model/notification"
 	"testing"
 	"time"
 
@@ -11,7 +12,6 @@ import (
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 )
 
 func TestGetNotificationLogs_MapsSendingStatusTo1(t *testing.T) {
@@ -138,4 +138,4 @@ func TestGetNotificationLogs_FilterBySending(t *testing.T) {
 	}
 }
 
-var _ = model.NotificationStatusPending
+var _ = notificationmodel.NotificationStatusPending

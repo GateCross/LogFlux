@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"logflux/internal/notification"
-	"logflux/model"
+	notificationmodel "logflux/model/notification"
 	"time"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -95,7 +95,7 @@ func (t *ArchiveTask) runArchive() {
 
 	// 清理过期的通知日志 (保留 30 天)
 	retentionDate := time.Now().AddDate(0, 0, -30)
-	if err := t.db.Where("created_at < ?", retentionDate).Delete(&model.NotificationLog{}).Error; err != nil {
+	if err := t.db.Where("created_at < ?", retentionDate).Delete(&notificationmodel.NotificationLog{}).Error; err != nil {
 		logx.Errorf("清理旧通知日志失败: %v", err)
 	} else {
 		logx.Infof("已清理早于 %s 的通知日志", retentionDate.Format("2006-01-02"))

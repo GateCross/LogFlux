@@ -3,11 +3,12 @@ package notification
 import (
 	"context"
 	"encoding/json"
+	notificationmodel "logflux/model/notification"
+	usermodel "logflux/model/user"
 	"strings"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -51,7 +52,7 @@ func (l *GetUnreadNotificationsLogic) GetUnreadNotifications() (resp *types.LogL
 	}
 
 	if uid > 0 {
-		var user model.User
+		var user usermodel.User
 		if err := l.svcCtx.DB.WithContext(l.ctx).First(&user, uid).Error; err == nil && user.Preferences != nil {
 			// 解析 JSONMap
 			if levelObj, ok := user.Preferences["minLevel"]; ok {
@@ -65,13 +66,13 @@ func (l *GetUnreadNotificationsLogic) GetUnreadNotifications() (resp *types.LogL
 	minLevelScore := levelMap[minLevel]
 
 	// 3. 查询未读通知
-	var logs []model.NotificationLog
+	var logs []notificationmodel.NotificationLog
 	// 查找类型为 in_app 且 status=success 且 is_read=false 的日志
 	err = l.svcCtx.DB.WithContext(l.ctx).Table("notification_logs").
 		Select("notification_logs.*").
 		Joins("left join notification_channels on notification_channels.id = notification_logs.channel_id").
 		Where("notification_channels.type = ?", "in_app").
-		Where("notification_logs.status = ?", model.NotificationStatusSuccess).
+		Where("notification_logs.status = ?", notificationmodel.NotificationStatusSuccess).
 		Where("notification_logs.is_read = ?", false).
 		Order("notification_logs.created_at desc").
 		Limit(50).

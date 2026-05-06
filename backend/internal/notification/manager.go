@@ -6,7 +6,8 @@ import (
 	"fmt"
 	"logflux/internal/notification/template"
 	"logflux/internal/utils/safego"
-	"logflux/model"
+	commonmodel "logflux/model/common"
+	notificationmodel "logflux/model/notification"
 	"strings"
 	"sync"
 	"time"
@@ -28,10 +29,10 @@ type Manager struct {
 	providers map[string]NotificationProvider
 
 	// 通知渠道 (从数据库加载)
-	channels map[uint]*model.NotificationChannel
+	channels map[uint]*notificationmodel.NotificationChannel
 
 	// 告警规则 (从数据库加载)
-	rules map[uint]*model.NotificationRule
+	rules map[uint]*notificationmodel.NotificationRule
 
 	// 规则引擎
 	ruleEngine RuleEngine
@@ -50,8 +51,8 @@ func NewManager(db *gorm.DB, redis *redis.Client, tm *template.TemplateManager) 
 		redis:       redis,
 		logger:      logx.WithContext(context.Background()),
 		providers:   make(map[string]NotificationProvider),
-		channels:    make(map[uint]*model.NotificationChannel),
-		rules:       make(map[uint]*model.NotificationRule),
+		channels:    make(map[uint]*notificationmodel.NotificationChannel),
+		rules:       make(map[uint]*notificationmodel.NotificationRule),
 		ruleEngine:  NewRuleEngine(redis),
 		templateMgr: tm,
 		workCh:      make(chan uint, 1024),
@@ -183,13 +184,13 @@ func (m *Manager) ReloadTemplates() error {
 
 // loadChannelsLocked 加载通知渠道 (需要持有锁)
 func (m *Manager) loadChannelsLocked() error {
-	var channels []model.NotificationChannel
+	var channels []notificationmodel.NotificationChannel
 	if err := m.db.Where("enabled = ?", true).Find(&channels).Error; err != nil {
 		return err
 	}
 
 	// 清空并重新加载
-	m.channels = make(map[uint]*model.NotificationChannel)
+	m.channels = make(map[uint]*notificationmodel.NotificationChannel)
 	for i := range channels {
 		m.channels[channels[i].ID] = &channels[i]
 	}
@@ -200,13 +201,13 @@ func (m *Manager) loadChannelsLocked() error {
 
 // loadRulesLocked 加载告警规则 (需要持有锁)
 func (m *Manager) loadRulesLocked() error {
-	var rules []model.NotificationRule
+	var rules []notificationmodel.NotificationRule
 	if err := m.db.Where("enabled = ?", true).Find(&rules).Error; err != nil {
 		return err
 	}
 
 	// 清空并重新加载
-	m.rules = make(map[uint]*model.NotificationRule)
+	m.rules = make(map[uint]*notificationmodel.NotificationRule)
 	for i := range rules {
 		m.rules[rules[i].ID] = &rules[i]
 	}
@@ -238,7 +239,7 @@ func (m *Manager) Notify(ctx context.Context, event *Event) error {
 	matchedChannels := m.findMatchingChannels(event.Type)
 
 	// 4. 合并规则触发的渠道和直接匹配的渠道
-	channelsToNotify := make(map[uint]*model.NotificationChannel)
+	channelsToNotify := make(map[uint]*notificationmodel.NotificationChannel)
 	for _, channel := range matchedChannels {
 		channelsToNotify[channel.ID] = channel
 	}
@@ -262,7 +263,7 @@ func (m *Manager) Notify(ctx context.Context, event *Event) error {
 	// 6. 入队（写 notification_logs + notification_jobs），不做网络发送
 	for _, channel := range channelsToNotify {
 		// 查找对应的规则 (用于模板渲染)
-		var rule *model.NotificationRule
+		var rule *notificationmodel.NotificationRule
 		for _, r := range triggeredRules {
 			for _, cid := range r.ChannelIDs {
 				if uint(cid) == channel.ID {
@@ -286,8 +287,8 @@ func (m *Manager) Notify(ctx context.Context, event *Event) error {
 }
 
 // evaluateRules 评估所有规则
-func (m *Manager) evaluateRules(ctx context.Context, event *Event) []*model.NotificationRule {
-	var triggered []*model.NotificationRule
+func (m *Manager) evaluateRules(ctx context.Context, event *Event) []*notificationmodel.NotificationRule {
+	var triggered []*notificationmodel.NotificationRule
 
 	for _, rule := range m.rules {
 		if !rule.Enabled {
@@ -311,14 +312,14 @@ func (m *Manager) evaluateRules(ctx context.Context, event *Event) []*model.Noti
 }
 
 // updateRuleTriggerStatus 更新规则触发状态
-func (m *Manager) updateRuleTriggerStatus(ctx context.Context, rule *model.NotificationRule) {
+func (m *Manager) updateRuleTriggerStatus(ctx context.Context, rule *notificationmodel.NotificationRule) {
 	now := time.Now()
 	updates := map[string]interface{}{
 		"last_triggered_at": now,
 		"trigger_count":     gorm.Expr("trigger_count + 1"),
 	}
 
-	if err := m.db.WithContext(ctx).Model(&model.NotificationRule{}).
+	if err := m.db.WithContext(ctx).Model(&notificationmodel.NotificationRule{}).
 		Where("id = ?", rule.ID).
 		Updates(updates).Error; err != nil {
 		m.logger.Errorf("更新规则触发状态失败: %v", err)
@@ -336,8 +337,8 @@ func (m *Manager) updateRuleTriggerStatus(ctx context.Context, rule *model.Notif
 }
 
 // findMatchingChannels 查找匹配的通知渠道
-func (m *Manager) findMatchingChannels(eventType string) []*model.NotificationChannel {
-	var matched []*model.NotificationChannel
+func (m *Manager) findMatchingChannels(eventType string) []*notificationmodel.NotificationChannel {
+	var matched []*notificationmodel.NotificationChannel
 
 	for _, channel := range m.channels {
 		if m.eventMatches(eventType, channel.Events) {
@@ -380,13 +381,13 @@ func (m *Manager) matchPattern(eventType, pattern string) bool {
 }
 
 // sendToChannel 发送通知到指定渠道
-func (m *Manager) sendToChannel(ctx context.Context, channel *model.NotificationChannel, event *Event, rule *model.NotificationRule) {
+func (m *Manager) sendToChannel(ctx context.Context, channel *notificationmodel.NotificationChannel, event *Event, rule *notificationmodel.NotificationRule) {
 	// 创建通知日志
-	log := &model.NotificationLog{
+	log := &notificationmodel.NotificationLog{
 		ChannelID: &channel.ID,
 		EventType: event.Type,
-		EventData: model.JSONMap(event.Data),
-		Status:    model.NotificationStatusPending,
+		EventData: commonmodel.JSONMap(event.Data),
+		Status:    notificationmodel.NotificationStatusPending,
 	}
 	if rule != nil {
 		log.RuleID = &rule.ID
@@ -401,7 +402,7 @@ func (m *Manager) sendToChannel(ctx context.Context, channel *model.Notification
 	// 获取提供者
 	provider, exists := m.providers[channel.Type]
 	if !exists {
-		m.updateLogStatus(log.ID, model.NotificationStatusFailed, fmt.Sprintf("通知提供者 %s 不存在", channel.Type))
+		m.updateLogStatus(log.ID, notificationmodel.NotificationStatusFailed, fmt.Sprintf("通知提供者 %s 不存在", channel.Type))
 		m.logger.Errorf("通知提供者 %s 不存在，渠道=%s", channel.Type, channel.Name)
 		return
 	}
@@ -428,11 +429,11 @@ func (m *Manager) sendToChannel(ctx context.Context, channel *model.Notification
 	// 更新日志状态
 	now := time.Now()
 	if err != nil {
-		log.Status = model.NotificationStatusFailed
+		log.Status = notificationmodel.NotificationStatusFailed
 		log.ErrorMessage = err.Error()
 		m.logger.Errorf("通过 %s 发送通知失败: %v（耗时 %v）", channel.Name, err, duration)
 	} else {
-		log.Status = model.NotificationStatusSuccess
+		log.Status = notificationmodel.NotificationStatusSuccess
 		log.SentAt = &now
 		m.logger.Infof("已通过 %s 发送通知（耗时 %v）", channel.Name, duration)
 	}
@@ -452,16 +453,16 @@ func (m *Manager) updateLogStatus(logID uint, status, errorMessage string) {
 	if errorMessage != "" {
 		updates["error_message"] = errorMessage
 	}
-	if status == model.NotificationStatusSuccess {
+	if status == notificationmodel.NotificationStatusSuccess {
 		now := time.Now()
 		updates["sent_at"] = &now
 	}
 
-	m.db.Model(&model.NotificationLog{}).Where("id = ?", logID).Updates(updates)
+	m.db.Model(&notificationmodel.NotificationLog{}).Where("id = ?", logID).Updates(updates)
 }
 
 // determineTemplateName 确定使用的模板名称
-func (m *Manager) determineTemplateName(channel *model.NotificationChannel, rule *model.NotificationRule) string {
+func (m *Manager) determineTemplateName(channel *notificationmodel.NotificationChannel, rule *notificationmodel.NotificationRule) string {
 	// 1. 优先使用规则中定义的模板
 	if rule != nil && rule.Template != "" {
 		return rule.Template
@@ -480,7 +481,7 @@ func (m *Manager) determineTemplateName(channel *model.NotificationChannel, rule
 	return "default_markdown" // Fallback
 }
 
-func (m *Manager) enqueueJob(ctx context.Context, channel *model.NotificationChannel, event *Event, rule *model.NotificationRule) uint {
+func (m *Manager) enqueueJob(ctx context.Context, channel *notificationmodel.NotificationChannel, event *Event, rule *notificationmodel.NotificationRule) uint {
 	// 渲染通知内容（在入队时渲染，避免 worker 发送时再依赖共享 event.Data）
 	templateName := m.determineTemplateName(channel, rule)
 	content := ""
@@ -511,11 +512,11 @@ func (m *Manager) enqueueJob(ctx context.Context, channel *model.NotificationCha
 	}
 
 	// 创建通知日志
-	log := &model.NotificationLog{
+	log := &notificationmodel.NotificationLog{
 		ChannelID: &channel.ID,
 		EventType: event.Type,
-		EventData: model.JSONMap(eventData),
-		Status:    model.NotificationStatusPending,
+		EventData: commonmodel.JSONMap(eventData),
+		Status:    notificationmodel.NotificationStatusPending,
 	}
 	if rule != nil {
 		log.RuleID = &rule.ID
@@ -526,7 +527,7 @@ func (m *Manager) enqueueJob(ctx context.Context, channel *model.NotificationCha
 	}
 
 	// 创建 job
-	job := &model.NotificationJob{
+	job := &notificationmodel.NotificationJob{
 		LogID:        log.ID,
 		ChannelID:    channel.ID,
 		ProviderType: channel.Type,
@@ -534,16 +535,16 @@ func (m *Manager) enqueueJob(ctx context.Context, channel *model.NotificationCha
 		EventLevel:   event.Level,
 		EventTitle:   event.Title,
 		EventMessage: event.Message,
-		EventData:    model.JSONMap(eventData),
+		EventData:    commonmodel.JSONMap(eventData),
 		TemplateName: templateName,
-		Status:       model.NotificationJobStatusQueued,
+		Status:       notificationmodel.NotificationJobStatusQueued,
 		RetryCount:   0,
 		NextRunAt:    time.Now(),
 	}
 	if err := m.db.WithContext(ctx).Create(job).Error; err != nil {
 		m.logger.Errorf("创建通知任务失败: %v", err)
 		// 同步标记 log 失败（避免 UI 长期 pending）
-		m.updateLogStatus(log.ID, model.NotificationStatusFailed, fmt.Sprintf("入队失败: %v", err))
+		m.updateLogStatus(log.ID, notificationmodel.NotificationStatusFailed, fmt.Sprintf("入队失败: %v", err))
 		return 0
 	}
 

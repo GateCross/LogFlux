@@ -1,18 +1,17 @@
 package caddy
 
 import (
+	wafmodel "logflux/model/waf"
 	"strings"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-
-	"logflux/model"
 )
 
 func TestBuildWafRuleExclusionDirectives(t *testing.T) {
-	exclusions := []model.WafRuleExclusion{
+	exclusions := []wafmodel.WafRuleExclusion{
 		{
 			Enabled:     true,
 			ScopeType:   "global",

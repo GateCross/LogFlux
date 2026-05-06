@@ -3,15 +3,15 @@ package service
 import (
 	"context"
 	"errors"
+	ingestmodel "logflux/model/ingest"
 	"strings"
 	"time"
 
-	"logflux/internal/ingest"
+	"logflux/common/ingest"
 	"logflux/internal/svc"
 	"logflux/internal/types"
 	"logflux/internal/utils/logger"
 	"logflux/internal/xerr"
-	"logflux/model"
 
 	"gorm.io/gorm"
 )
@@ -52,7 +52,7 @@ func (s *LogSourceService) Add(req *types.LogSourceReq) (*types.BaseResp, error)
 		scanInterval = ingest.DefaultScanIntervalSec()
 	}
 
-	source := &model.LogSource{
+	source := &ingestmodel.LogSource{
 		Name:         name,
 		Path:         path,
 		Type:         sourceType,

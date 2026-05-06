@@ -2,6 +2,8 @@ package notification
 
 import (
 	"context"
+	commonmodel "logflux/model/common"
+	notificationmodel "logflux/model/notification"
 	"sync"
 	"testing"
 
@@ -10,7 +12,6 @@ import (
 	"gorm.io/gorm"
 
 	"logflux/internal/notification/template"
-	"logflux/model"
 )
 
 type directSendProvider struct {
@@ -19,7 +20,7 @@ type directSendProvider struct {
 	lastEvent  *Event
 }
 
-func (p *directSendProvider) Type() string { return model.ChannelTypeWebhook }
+func (p *directSendProvider) Type() string { return notificationmodel.ChannelTypeWebhook }
 
 func (p *directSendProvider) Validate(_ map[string]interface{}) error { return nil }
 
@@ -49,13 +50,13 @@ func TestManagerSendToChannel(t *testing.T) {
 	provider := &directSendProvider{}
 	m := &Manager{
 		db:          gdb,
-		providers:   map[string]NotificationProvider{model.ChannelTypeWebhook: provider},
+		providers:   map[string]NotificationProvider{notificationmodel.ChannelTypeWebhook: provider},
 		templateMgr: tm,
-		channels: map[uint]*model.NotificationChannel{
+		channels: map[uint]*notificationmodel.NotificationChannel{
 			1: {
 				ID:     1,
-				Type:   model.ChannelTypeWebhook,
-				Config: model.JSONMap{"url": "https://example.com"},
+				Type:   notificationmodel.ChannelTypeWebhook,
+				Config: commonmodel.JSONMap{"url": "https://example.com"},
 			},
 		},
 	}

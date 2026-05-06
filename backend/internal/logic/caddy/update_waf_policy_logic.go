@@ -3,11 +3,11 @@ package caddy
 import (
 	"context"
 	"fmt"
+	wafmodel "logflux/model/waf"
 	"strings"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"gorm.io/gorm"
@@ -37,7 +37,7 @@ func (l *UpdateWafPolicyLogic) UpdateWafPolicy(req *types.WafPolicyUpdateReq) (r
 		return nil, fmt.Errorf("策略 ID 不能为空")
 	}
 
-	var policy model.WafPolicy
+	var policy wafmodel.WafPolicy
 	if err := helper.svcCtx.DB.WithContext(helper.ctx).First(&policy, req.ID).Error; err != nil {
 		return nil, fmt.Errorf("策略不存在")
 	}
@@ -51,7 +51,7 @@ func (l *UpdateWafPolicyLogic) UpdateWafPolicy(req *types.WafPolicyUpdateReq) (r
 		return nil, fmt.Errorf("策略名称不能为空")
 	} else if name != originalName {
 		var count int64
-		if err := helper.svcCtx.DB.WithContext(helper.ctx).Model(&model.WafPolicy{}).
+		if err := helper.svcCtx.DB.WithContext(helper.ctx).Model(&wafmodel.WafPolicy{}).
 			Where("name = ? AND id <> ?", name, policy.ID).
 			Count(&count).Error; err != nil {
 			return nil, fmt.Errorf("检查策略名称失败: %w", err)

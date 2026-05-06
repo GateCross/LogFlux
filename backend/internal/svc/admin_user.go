@@ -3,7 +3,7 @@ package svc
 import (
 	"crypto/rand"
 	"fmt"
-	"logflux/model"
+	usermodel "logflux/model/user"
 	"math/big"
 	"strings"
 
@@ -21,7 +21,7 @@ const (
 )
 
 func ensureAdminUser(db *gorm.DB) {
-	var admin model.User
+	var admin usermodel.User
 	err := db.Where("username = ?", defaultAdminUsername).First(&admin).Error
 	if err == nil {
 		ensureAdminPasswordHashed(db, &admin)
@@ -35,7 +35,7 @@ func ensureAdminUser(db *gorm.DB) {
 	}
 
 	var adminCount int64
-	if countErr := db.Model(&model.User{}).Where("? = ANY(roles)", "admin").Count(&adminCount).Error; countErr != nil {
+	if countErr := db.Model(&usermodel.User{}).Where("? = ANY(roles)", "admin").Count(&adminCount).Error; countErr != nil {
 		logx.Errorf("检查管理员账号数量失败: %v", countErr)
 		return
 	}
@@ -57,7 +57,7 @@ func ensureAdminUser(db *gorm.DB) {
 		return
 	}
 
-	newAdmin := model.User{
+	newAdmin := usermodel.User{
 		Username: defaultAdminUsername,
 		Password: string(hashedPassword),
 		Roles:    pq.StringArray{"admin"},
@@ -72,7 +72,7 @@ func ensureAdminUser(db *gorm.DB) {
 	logx.Infof("默认管理员初始密码(仅显示一次): %s", plainPassword)
 }
 
-func ensureAdminPasswordHashed(db *gorm.DB, admin *model.User) {
+func ensureAdminPasswordHashed(db *gorm.DB, admin *usermodel.User) {
 	if _, err := bcrypt.Cost([]byte(admin.Password)); err == nil {
 		return
 	}
@@ -99,7 +99,7 @@ func ensureAdminPasswordHashed(db *gorm.DB, admin *model.User) {
 	logx.Infof("管理员新初始密码(仅显示一次): %s", plainPassword)
 }
 
-func ensureAdminRole(db *gorm.DB, admin *model.User) {
+func ensureAdminRole(db *gorm.DB, admin *usermodel.User) {
 	for _, role := range admin.Roles {
 		if role == "admin" {
 			return

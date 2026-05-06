@@ -3,13 +3,13 @@ package caddy
 import (
 	"context"
 	"fmt"
+	caddymodel "logflux/model/caddy"
 	"time"
 
 	"logflux/internal/notification"
 	"logflux/internal/svc"
 	"logflux/internal/types"
 	"logflux/internal/utils/safego"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -29,7 +29,7 @@ func NewAddCaddyServerLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Ad
 }
 
 func (l *AddCaddyServerLogic) AddCaddyServer(req *types.CaddyServerReq) (resp *types.BaseResp, err error) {
-	server := &model.CaddyServer{
+	server := &caddymodel.CaddyServer{
 		Name:      req.Name,
 		Url:       req.Url,
 		Token:     req.Token,

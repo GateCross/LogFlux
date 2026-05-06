@@ -2,11 +2,11 @@ package notification
 
 import (
 	"context"
+	notificationmodel "logflux/model/notification"
 	"time"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/model"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -27,7 +27,7 @@ func NewGetNotificationLogsLogic(ctx context.Context, svcCtx *svc.ServiceContext
 
 func (l *GetNotificationLogsLogic) GetNotificationLogs(req *types.LogListReq) (resp *types.LogListResp, err error) {
 	type logWithJob struct {
-		model.NotificationLog
+		notificationmodel.NotificationLog
 		JobStatus     string     `gorm:"column:job_status"`
 		JobRetryCount int        `gorm:"column:job_retry_count"`
 		JobNextRunAt  *time.Time `gorm:"column:job_next_run_at"`
@@ -35,7 +35,7 @@ func (l *GetNotificationLogsLogic) GetNotificationLogs(req *types.LogListReq) (r
 	}
 
 	var logs []logWithJob
-	db := l.svcCtx.DB.WithContext(l.ctx).Model(&model.NotificationLog{}).
+	db := l.svcCtx.DB.WithContext(l.ctx).Model(&notificationmodel.NotificationLog{}).
 		Select("notification_logs.*, notification_jobs.status as job_status, notification_jobs.retry_count as job_retry_count, notification_jobs.next_run_at as job_next_run_at, notification_jobs.last_error as job_last_error").
 		Joins("LEFT JOIN notification_jobs ON notification_jobs.log_id = notification_logs.id")
 
@@ -44,14 +44,14 @@ func (l *GetNotificationLogsLogic) GetNotificationLogs(req *types.LogListReq) (r
 		switch req.Status {
 		case 0:
 			// 前端 0 = pending (排队/未发送)
-			db = db.Where("status = ?", model.NotificationStatusPending)
+			db = db.Where("status = ?", notificationmodel.NotificationStatusPending)
 		case 1:
 			// 前端 1 = sending
-			db = db.Where("status = ?", model.NotificationStatusSending)
+			db = db.Where("status = ?", notificationmodel.NotificationStatusSending)
 		case 2:
-			db = db.Where("status = ?", model.NotificationStatusSuccess)
+			db = db.Where("status = ?", notificationmodel.NotificationStatusSuccess)
 		case 3:
-			db = db.Where("status = ?", model.NotificationStatusFailed)
+			db = db.Where("status = ?", notificationmodel.NotificationStatusFailed)
 		}
 	}
 
@@ -79,13 +79,13 @@ func (l *GetNotificationLogsLogic) GetNotificationLogs(req *types.LogListReq) (r
 		// 映射 status string 到 int（与前端一致）
 		statusInt := 0
 		switch log.Status {
-		case model.NotificationStatusPending:
+		case notificationmodel.NotificationStatusPending:
 			statusInt = 0
-		case model.NotificationStatusSending:
+		case notificationmodel.NotificationStatusSending:
 			statusInt = 1
-		case model.NotificationStatusSuccess:
+		case notificationmodel.NotificationStatusSuccess:
 			statusInt = 2
-		case model.NotificationStatusFailed:
+		case notificationmodel.NotificationStatusFailed:
 			statusInt = 3
 		}
 

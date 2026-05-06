@@ -3,18 +3,19 @@ package caddy
 import (
 	"context"
 	"fmt"
+	caddymodel "logflux/model/caddy"
+	wafmodel "logflux/model/waf"
 	"strings"
 
 	"logflux/internal/svc"
-	"logflux/model"
 
 	"gorm.io/gorm"
 )
 
 type PolicyPublishCandidate struct {
-	Policy          *model.WafPolicy
+	Policy          *wafmodel.WafPolicy
 	Directives      string
-	Server          *model.CaddyServer
+	Server          *caddymodel.CaddyServer
 	CandidateConfig string
 	LastGoodConfig  string
 	LastGoodModules string
@@ -37,7 +38,7 @@ func (s *PolicyPublishService) BuildPublishCandidate(policyID uint) (*PolicyPubl
 		return nil, fmt.Errorf("策略 ID 不能为空")
 	}
 
-	var policy model.WafPolicy
+	var policy wafmodel.WafPolicy
 	if err := s.svcCtx.DB.WithContext(s.ctx).First(&policy, policyID).Error; err != nil {
 		return nil, fmt.Errorf("策略不存在")
 	}
@@ -71,7 +72,7 @@ func (s *PolicyPublishService) BuildPublishCandidate(policyID uint) (*PolicyPubl
 	}, nil
 }
 
-func (s *PolicyPublishService) BuildRollbackCandidate(revisionID uint) (*PolicyPublishCandidate, *model.WafPolicyRevision, error) {
+func (s *PolicyPublishService) BuildRollbackCandidate(revisionID uint) (*PolicyPublishCandidate, *wafmodel.WafPolicyRevision, error) {
 	if s == nil || s.svcCtx == nil || s.svcCtx.DB == nil {
 		return nil, nil, fmt.Errorf("数据库为空")
 	}
@@ -79,7 +80,7 @@ func (s *PolicyPublishService) BuildRollbackCandidate(revisionID uint) (*PolicyP
 		return nil, nil, fmt.Errorf("策略版本 ID 不能为空")
 	}
 
-	var revision model.WafPolicyRevision
+	var revision wafmodel.WafPolicyRevision
 	if err := s.svcCtx.DB.WithContext(s.ctx).First(&revision, revisionID).Error; err != nil {
 		return nil, nil, fmt.Errorf("策略版本不存在")
 	}
@@ -87,7 +88,7 @@ func (s *PolicyPublishService) BuildRollbackCandidate(revisionID uint) (*PolicyP
 		return nil, nil, fmt.Errorf("策略版本无效")
 	}
 
-	var policy model.WafPolicy
+	var policy wafmodel.WafPolicy
 	if err := s.svcCtx.DB.WithContext(s.ctx).First(&policy, revision.PolicyID).Error; err != nil {
 		return nil, nil, fmt.Errorf("策略不存在")
 	}
@@ -154,7 +155,7 @@ func (s *PolicyPublishService) PersistPublishedCandidate(candidate *PolicyPublis
 		if err := createCaddyPolicyHistory(tx, candidate.Server.ID, "policy_last_good", candidate.LastGoodConfig, candidate.LastGoodModules); err != nil {
 			return err
 		}
-		if err := tx.Model(&model.CaddyServer{}).
+		if err := tx.Model(&caddymodel.CaddyServer{}).
 			Where("id = ?", candidate.Server.ID).
 			Updates(map[string]interface{}{
 				"config":  candidate.CandidateConfig,
@@ -180,7 +181,7 @@ func (s *PolicyPublishService) PersistPublishedCandidate(candidate *PolicyPublis
 	return nil
 }
 
-func (s *PolicyPublishService) PersistRolledBackCandidate(candidate *PolicyPublishCandidate, revision *model.WafPolicyRevision, operator string) error {
+func (s *PolicyPublishService) PersistRolledBackCandidate(candidate *PolicyPublishCandidate, revision *wafmodel.WafPolicyRevision, operator string) error {
 	if candidate == nil || candidate.Policy == nil || candidate.Server == nil || revision == nil {
 		return fmt.Errorf("回滚候选配置无效")
 	}
@@ -190,7 +191,7 @@ func (s *PolicyPublishService) PersistRolledBackCandidate(candidate *PolicyPubli
 		if err := createCaddyPolicyHistory(tx, candidate.Server.ID, "policy_last_good", candidate.LastGoodConfig, candidate.LastGoodModules); err != nil {
 			return err
 		}
-		if err := tx.Model(&model.CaddyServer{}).
+		if err := tx.Model(&caddymodel.CaddyServer{}).
 			Where("id = ?", candidate.Server.ID).
 			Updates(map[string]interface{}{
 				"config":  candidate.CandidateConfig,
@@ -204,7 +205,7 @@ func (s *PolicyPublishService) PersistRolledBackCandidate(candidate *PolicyPubli
 		if err := markPolicyRevisionsRolledBack(tx, revision.PolicyID, revision.ID); err != nil {
 			return err
 		}
-		if err := tx.Model(&model.WafPolicyRevision{}).
+		if err := tx.Model(&wafmodel.WafPolicyRevision{}).
 			Where("id = ?", revision.ID).
 			Updates(map[string]interface{}{
 				"status":   wafPolicyStatusPublished,
