@@ -56,22 +56,30 @@ func parseCronTaskScriptMultipart(ctx context.Context, r *http.Request, svcCtx *
 		return nil, ctx, err
 	}
 
+	uploadCtx, err := storeCronTaskScriptUpload(ctx, r, svcCtx)
+	if err != nil {
+		return nil, ctx, err
+	}
+	return &req, uploadCtx, nil
+}
+
+func storeCronTaskScriptUpload(ctx context.Context, r *http.Request, svcCtx *svc.ServiceContext) (context.Context, error) {
 	file, fileHeader, err := r.FormFile("file")
 	if err != nil {
-		return nil, ctx, fmt.Errorf("上传文件不能为空")
+		return ctx, fmt.Errorf("上传文件不能为空")
 	}
 	defer file.Close()
 
 	baseDir := cronutil.FilesBaseDir(&svcCtx.Config)
 	if err := cronutil.EnsureWorkspace(baseDir); err != nil {
-		return nil, ctx, fmt.Errorf("准备脚本目录失败: %w", err)
+		return ctx, fmt.Errorf("准备脚本目录失败: %w", err)
 	}
 
 	tempName := fmt.Sprintf("upload_%d_%s", time.Now().UnixNano(), cronutil.SafeFileName(fileHeader.Filename))
 	tempPath := filepath.Join(cronutil.TempDir(baseDir), tempName)
 	targetFile, err := os.OpenFile(tempPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
 	if err != nil {
-		return nil, ctx, fmt.Errorf("创建临时上传文件失败: %w", err)
+		return ctx, fmt.Errorf("创建临时上传文件失败: %w", err)
 	}
 
 	limitedFile := &io.LimitedReader{R: file, N: cronTaskScriptMaxFileBytes + 1}
@@ -79,21 +87,21 @@ func parseCronTaskScriptMultipart(ctx context.Context, r *http.Request, svcCtx *
 	if err != nil {
 		_ = targetFile.Close()
 		_ = os.Remove(tempPath)
-		return nil, ctx, fmt.Errorf("保存上传文件失败: %w", err)
+		return ctx, fmt.Errorf("保存上传文件失败: %w", err)
 	}
 	if writtenBytes > cronTaskScriptMaxFileBytes {
 		_ = targetFile.Close()
 		_ = os.Remove(tempPath)
-		return nil, ctx, fmt.Errorf("上传文件过大: %d > %d", writtenBytes, cronTaskScriptMaxFileBytes)
+		return ctx, fmt.Errorf("上传文件过大: %d > %d", writtenBytes, cronTaskScriptMaxFileBytes)
 	}
 	if err := targetFile.Close(); err != nil {
 		_ = os.Remove(tempPath)
-		return nil, ctx, fmt.Errorf("关闭上传文件失败: %w", err)
+		return ctx, fmt.Errorf("关闭上传文件失败: %w", err)
 	}
 
 	uploadCtx := cronutil.WithUploadTempPath(ctx, tempPath)
 	uploadCtx = cronutil.WithUploadFileName(uploadCtx, fileHeader.Filename)
-	return &req, uploadCtx, nil
+	return uploadCtx, nil
 }
 
 func maxCronTaskScriptUploadRequestBytes() int64 {

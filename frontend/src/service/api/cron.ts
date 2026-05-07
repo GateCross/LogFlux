@@ -100,6 +100,14 @@ export function createCronTask(data: CronTaskFormPayload) {
   });
 }
 
+export function createCronTaskWithFile(data: FormData) {
+  return request<void>({
+    url: '/api/cron/task',
+    method: 'post',
+    data
+  });
+}
+
 export function updateCronTask(id: number, data: CronTaskUpdatePayload) {
   return request<void>({
     url: `/api/cron/task/${id}`,

@@ -43,15 +43,26 @@ func (s *CronService) CreateTask(req *types.CronTaskReq) (*types.BaseResp, error
 	if err := cronutil.ValidateScriptMode(mode); err != nil {
 		return nil, xerr.NewBusinessErrorWith("脚本来源类型无效")
 	}
-	if mode == cronutil.ScriptModeInline && strings.TrimSpace(req.Script) == "" {
+	schedule, err := validateCronSchedule(req.Schedule)
+	if err != nil {
+		return nil, err
+	}
+	script := strings.TrimSpace(req.Script)
+	if mode == cronutil.ScriptModeInline && script == "" {
 		return nil, xerr.NewBusinessErrorWith("手写脚本不能为空")
+	}
+	if mode == cronutil.ScriptModeFile && cronutil.UploadTempPathFromContext(s.ctx) != "" {
+		return s.createTaskWithUploadedScript(req, schedule, script)
+	}
+	if mode == cronutil.ScriptModeFile && req.Status == 1 {
+		return nil, xerr.NewBusinessErrorWith("请先上传脚本文件后再启用")
 	}
 
 	task := &cronmodel.CronTask{
 		Name:          strings.TrimSpace(req.Name),
-		Schedule:      strings.TrimSpace(req.Schedule),
+		Schedule:      schedule,
 		ScriptMode:    mode,
-		Script:        strings.TrimSpace(req.Script),
+		Script:        script,
 		CurrentFileID: 0,
 		Status:        req.Status,
 		Timeout:       req.Timeout,
@@ -157,6 +168,9 @@ func (s *CronService) TriggerTask(req *types.TriggerTaskReq) (*types.BaseResp, e
 	if err != nil {
 		return nil, xerr.NewBusinessErrorWith("定时任务不存在")
 	}
+	if err := s.ensureTaskExecutable(task); err != nil {
+		return nil, err
+	}
 	s.svcCtx.CronScheduler.TriggerTask(task.ID)
 	return baseResp("触发成功"), nil
 }
@@ -168,30 +182,45 @@ func (s *CronService) UpdateTask(req *types.CronTaskUpdateReq) (*types.BaseResp,
 	}
 
 	updates := make(map[string]interface{})
+	effectiveMode := cronutil.NormalizeScriptMode(task.ScriptMode)
+	effectiveSchedule := strings.TrimSpace(task.Schedule)
+	effectiveScript := strings.TrimSpace(task.Script)
+	effectiveCurrentFileID := task.CurrentFileID
+	effectiveStatus := task.Status
+
 	if req.Name != "" {
 		updates["name"] = strings.TrimSpace(req.Name)
 	}
 	if req.Schedule != "" {
-		updates["schedule"] = strings.TrimSpace(req.Schedule)
+		schedule, validateErr := validateCronSchedule(req.Schedule)
+		if validateErr != nil {
+			return nil, validateErr
+		}
+		effectiveSchedule = schedule
+		updates["schedule"] = schedule
 	}
 	if req.ScriptMode != "" {
 		mode := cronutil.NormalizeScriptMode(req.ScriptMode)
 		if err := cronutil.ValidateScriptMode(mode); err != nil {
 			return nil, xerr.NewBusinessErrorWith("脚本来源类型无效")
 		}
+		effectiveMode = mode
 		if mode == cronutil.ScriptModeInline {
-			effectiveScript := strings.TrimSpace(req.Script)
-			if effectiveScript == "" {
-				effectiveScript = strings.TrimSpace(task.Script)
+			nextScript := strings.TrimSpace(req.Script)
+			if nextScript == "" {
+				nextScript = effectiveScript
 			}
-			if effectiveScript == "" {
+			if nextScript == "" {
 				return nil, xerr.NewBusinessErrorWith("手写脚本不能为空")
 			}
 			if strings.TrimSpace(req.Script) != "" {
-				updates["script"] = effectiveScript
+				effectiveScript = nextScript
+				updates["script"] = nextScript
 			}
+			effectiveCurrentFileID = 0
 		} else if strings.TrimSpace(req.Script) != "" {
-			updates["script"] = strings.TrimSpace(req.Script)
+			effectiveScript = strings.TrimSpace(req.Script)
+			updates["script"] = effectiveScript
 		}
 		updates["script_mode"] = mode
 		if mode == cronutil.ScriptModeInline {
@@ -199,13 +228,35 @@ func (s *CronService) UpdateTask(req *types.CronTaskUpdateReq) (*types.BaseResp,
 		}
 	}
 	if req.ScriptMode == "" && strings.TrimSpace(req.Script) != "" {
-		updates["script"] = strings.TrimSpace(req.Script)
+		effectiveScript = strings.TrimSpace(req.Script)
+		updates["script"] = effectiveScript
 	}
 	if req.Status >= 0 {
+		effectiveStatus = req.Status
 		updates["status"] = req.Status
 	}
 	if req.Timeout > 0 {
 		updates["timeout"] = req.Timeout
+	}
+	if effectiveStatus == 1 {
+		if _, err := validateCronSchedule(effectiveSchedule); err != nil {
+			return nil, err
+		}
+		if effectiveMode == cronutil.ScriptModeInline && strings.TrimSpace(effectiveScript) == "" {
+			return nil, xerr.NewBusinessErrorWith("手写脚本不能为空")
+		}
+		if effectiveMode == cronutil.ScriptModeFile {
+			fileID, err := s.resolveCurrentTaskFileID(task.ID, effectiveCurrentFileID)
+			if err != nil {
+				return nil, err
+			}
+			if fileID == 0 {
+				return nil, xerr.NewBusinessErrorWith("请先上传脚本文件后再启用")
+			}
+			if fileID != effectiveCurrentFileID {
+				updates["current_file_id"] = fileID
+			}
+		}
 	}
 	if err := s.svcCtx.CronTaskModel.UpdateFields(s.ctx, task, updates); err != nil {
 		return nil, xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "更新定时任务失败", err)
@@ -223,40 +274,12 @@ func (s *CronService) UpdateTask(req *types.CronTaskUpdateReq) (*types.BaseResp,
 }
 
 func (s *CronService) UploadTaskScript(req *types.CronTaskScriptUploadReq) (*types.BaseResp, error) {
-	tempPath := cronutil.UploadTempPathFromContext(s.ctx)
-	fileName := cronutil.UploadFileNameFromContext(s.ctx)
-	if strings.TrimSpace(tempPath) == "" {
-		return nil, xerr.NewBusinessErrorWith("上传文件不能为空")
-	}
-	if strings.TrimSpace(fileName) == "" {
-		fileName = "script.sh"
-	}
-
-	baseDir := cronutil.FilesBaseDir(&s.svcCtx.Config)
-	safeTempPath, err := s.ensureUploadPath(tempPath, baseDir)
+	fileName, data, err := s.readUploadedScriptData()
 	if err != nil {
 		return nil, err
 	}
-	tempPath = safeTempPath
-	defer func() {
-		_ = os.Remove(tempPath)
-	}()
 
-	if err := cronutil.EnsureWorkspace(baseDir); err != nil {
-		return nil, xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "准备脚本目录失败", err)
-	}
-
-	data, readErr := os.ReadFile(tempPath)
-	if readErr != nil {
-		return nil, xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "读取上传脚本失败", readErr)
-	}
-	if int64(len(data)) <= 0 {
-		return nil, xerr.NewBusinessErrorWith("上传文件不能为空")
-	}
-	if int64(len(data)) > 1024*1024 {
-		return nil, xerr.NewBusinessErrorWith("上传文件过大")
-	}
-
+	baseDir := cronutil.FilesBaseDir(&s.svcCtx.Config)
 	safeName := cronutil.SafeFileName(fileName)
 	var savedPath string
 	var createdFile *cronmodel.CronTaskFile
@@ -272,42 +295,11 @@ func (s *CronService) UploadTaskScript(req *types.CronTaskScriptUploadReq) (*typ
 			return xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "查询定时任务失败", findErr)
 		}
 
-		latest, latestErr := fileModel.FindLatestByTaskID(s.ctx, currentTask.ID)
-		nextVersion := 1
-		if latestErr == nil && latest != nil {
-			nextVersion = latest.Version + 1
-		} else if latestErr != nil && !errors.Is(latestErr, gorm.ErrRecordNotFound) {
-			return xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "查询脚本版本失败", latestErr)
+		fileRecord, targetPath, err := s.saveTaskFileVersion(s.ctx, fileModel, baseDir, currentTask.ID, safeName, fileName, data)
+		if err != nil {
+			return err
 		}
-
-		taskDir := cronutil.TaskDir(baseDir, currentTask.ID)
-		if err := os.MkdirAll(taskDir, 0o755); err != nil {
-			return xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "准备脚本目录失败", err)
-		}
-
-		storedName := fmt.Sprintf("v%04d_%s", nextVersion, safeName)
-		targetPath := filepath.Join(taskDir, storedName)
 		savedPath = targetPath
-		shaSum := sha256.Sum256(data)
-		hexSHA := hex.EncodeToString(shaSum[:])
-		if err := os.WriteFile(targetPath, data, 0o755); err != nil {
-			return xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "保存脚本文件失败", err)
-		}
-
-		fileRecord := &cronmodel.CronTaskFile{
-			TaskID:       currentTask.ID,
-			Version:      nextVersion,
-			OriginalName: fileName,
-			StoredName:   storedName,
-			FilePath:     targetPath,
-			SizeBytes:    int64(len(data)),
-			SHA256:       hexSHA,
-			IsCurrent:    true,
-		}
-		if err := fileModel.Create(s.ctx, fileRecord); err != nil {
-			_ = os.Remove(targetPath)
-			return xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "保存脚本版本失败", err)
-		}
 		createdFile = fileRecord
 
 		if err := fileModel.ActivateByID(s.ctx, currentTask.ID, fileRecord.ID); err != nil {
@@ -334,6 +326,142 @@ func (s *CronService) UploadTaskScript(req *types.CronTaskScriptUploadReq) (*typ
 		s.Infof("脚本上传成功: taskID=%d fileID=%d version=%d file=%s", req.ID, createdFile.ID, createdFile.Version, createdFile.OriginalName)
 	}
 	return baseResp("上传成功"), nil
+}
+
+func (s *CronService) readUploadedScriptData() (string, []byte, error) {
+	tempPath := cronutil.UploadTempPathFromContext(s.ctx)
+	fileName := cronutil.UploadFileNameFromContext(s.ctx)
+	if strings.TrimSpace(tempPath) == "" {
+		return "", nil, xerr.NewBusinessErrorWith("上传文件不能为空")
+	}
+	if strings.TrimSpace(fileName) == "" {
+		fileName = "script.sh"
+	}
+
+	baseDir := cronutil.FilesBaseDir(&s.svcCtx.Config)
+	safeTempPath, err := s.ensureUploadPath(tempPath, baseDir)
+	if err != nil {
+		return "", nil, err
+	}
+	tempPath = safeTempPath
+	defer func() {
+		_ = os.Remove(tempPath)
+	}()
+
+	if err := cronutil.EnsureWorkspace(baseDir); err != nil {
+		return "", nil, xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "准备脚本目录失败", err)
+	}
+
+	data, readErr := os.ReadFile(tempPath)
+	if readErr != nil {
+		return "", nil, xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "读取上传脚本失败", readErr)
+	}
+	if int64(len(data)) <= 0 {
+		return "", nil, xerr.NewBusinessErrorWith("上传文件不能为空")
+	}
+	if int64(len(data)) > 1024*1024 {
+		return "", nil, xerr.NewBusinessErrorWith("上传文件过大")
+	}
+	return fileName, data, nil
+}
+
+func (s *CronService) createTaskWithUploadedScript(req *types.CronTaskReq, schedule, script string) (*types.BaseResp, error) {
+	fileName, data, err := s.readUploadedScriptData()
+	if err != nil {
+		return nil, err
+	}
+
+	baseDir := cronutil.FilesBaseDir(&s.svcCtx.Config)
+	safeName := cronutil.SafeFileName(fileName)
+	task := &cronmodel.CronTask{
+		Name:          strings.TrimSpace(req.Name),
+		Schedule:      schedule,
+		ScriptMode:    cronutil.ScriptModeFile,
+		Script:        script,
+		CurrentFileID: 0,
+		Status:        req.Status,
+		Timeout:       req.Timeout,
+	}
+
+	var savedPath string
+	var createdFile *cronmodel.CronTaskFile
+	if err := s.svcCtx.DB.Transaction(func(tx *gorm.DB) error {
+		taskModel := cronmodel.NewCronTaskModel(tx)
+		fileModel := cronmodel.NewCronTaskFileModel(tx)
+
+		if err := taskModel.Create(s.ctx, task); err != nil {
+			return xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "创建定时任务失败", err)
+		}
+
+		fileRecord, targetPath, err := s.saveTaskFileVersion(s.ctx, fileModel, baseDir, task.ID, safeName, fileName, data)
+		if err != nil {
+			return err
+		}
+		savedPath = targetPath
+		createdFile = fileRecord
+
+		if err := fileModel.ActivateByID(s.ctx, task.ID, fileRecord.ID); err != nil {
+			return xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "切换当前脚本版本失败", err)
+		}
+		task.CurrentFileID = fileRecord.ID
+		if err := taskModel.UpdateFields(s.ctx, task, map[string]interface{}{"current_file_id": fileRecord.ID}); err != nil {
+			return xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "更新定时任务脚本信息失败", err)
+		}
+
+		return nil
+	}); err != nil {
+		if strings.TrimSpace(savedPath) != "" {
+			_ = os.Remove(savedPath)
+		}
+		return nil, err
+	}
+
+	if err := s.svcCtx.CronScheduler.AddTask(task); err != nil {
+		s.Errorf("同步定时任务调度器失败: taskID=%d err=%v", task.ID, err)
+	}
+	if createdFile != nil {
+		s.Infof("定时任务创建并上传脚本成功: taskID=%d fileID=%d version=%d file=%s", task.ID, createdFile.ID, createdFile.Version, createdFile.OriginalName)
+	}
+	return baseResp("创建成功"), nil
+}
+
+func (s *CronService) saveTaskFileVersion(ctx context.Context, fileModel cronmodel.CronTaskFileModel, baseDir string, taskID uint, safeName, originalName string, data []byte) (*cronmodel.CronTaskFile, string, error) {
+	latest, latestErr := fileModel.FindLatestByTaskID(ctx, taskID)
+	nextVersion := 1
+	if latestErr == nil && latest != nil {
+		nextVersion = latest.Version + 1
+	} else if latestErr != nil && !errors.Is(latestErr, gorm.ErrRecordNotFound) {
+		return nil, "", xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "查询脚本版本失败", latestErr)
+	}
+
+	taskDir := cronutil.TaskDir(baseDir, taskID)
+	if err := os.MkdirAll(taskDir, 0o755); err != nil {
+		return nil, "", xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "准备脚本目录失败", err)
+	}
+
+	storedName := fmt.Sprintf("v%04d_%s", nextVersion, safeName)
+	targetPath := filepath.Join(taskDir, storedName)
+	shaSum := sha256.Sum256(data)
+	hexSHA := hex.EncodeToString(shaSum[:])
+	if err := os.WriteFile(targetPath, data, 0o755); err != nil {
+		return nil, targetPath, xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "保存脚本文件失败", err)
+	}
+
+	fileRecord := &cronmodel.CronTaskFile{
+		TaskID:       taskID,
+		Version:      nextVersion,
+		OriginalName: originalName,
+		StoredName:   storedName,
+		FilePath:     targetPath,
+		SizeBytes:    int64(len(data)),
+		SHA256:       hexSHA,
+		IsCurrent:    true,
+	}
+	if err := fileModel.Create(ctx, fileRecord); err != nil {
+		_ = os.Remove(targetPath)
+		return nil, targetPath, xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "保存脚本版本失败", err)
+	}
+	return fileRecord, targetPath, nil
 }
 
 func (s *CronService) ActivateTaskScript(req *types.CronTaskFileActivateReq) (*types.BaseResp, error) {
@@ -377,6 +505,62 @@ func (s *CronService) ActivateTaskScript(req *types.CronTaskFileActivateReq) (*t
 	}
 
 	return baseResp("激活成功"), nil
+}
+
+func validateCronSchedule(schedule string) (string, error) {
+	schedule = strings.TrimSpace(schedule)
+	if schedule == "" {
+		return "", xerr.NewBusinessErrorWith("Cron 表达式不能为空")
+	}
+	parser := cron.NewParser(cron.Second | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
+	if _, err := parser.Parse(schedule); err != nil {
+		return "", xerr.NewBusinessErrorWith("Cron 表达式无效，请使用包含秒的 6 位表达式")
+	}
+	return schedule, nil
+}
+
+func (s *CronService) ensureTaskExecutable(task *cronmodel.CronTask) error {
+	if task == nil {
+		return xerr.NewBusinessErrorWith("定时任务不存在")
+	}
+	mode := cronutil.ReadTaskScriptMode(task)
+	if mode == cronutil.ScriptModeInline {
+		if strings.TrimSpace(task.Script) == "" {
+			return xerr.NewBusinessErrorWith("手写脚本不能为空")
+		}
+		return nil
+	}
+
+	fileID, err := s.resolveCurrentTaskFileID(task.ID, task.CurrentFileID)
+	if err != nil {
+		return err
+	}
+	if fileID == 0 {
+		return xerr.NewBusinessErrorWith("请先上传脚本文件后再执行")
+	}
+	return nil
+}
+
+func (s *CronService) resolveCurrentTaskFileID(taskID, currentFileID uint) (uint, error) {
+	if currentFileID > 0 {
+		fileEntry, err := s.svcCtx.CronTaskFileModel.FindByID(s.ctx, currentFileID)
+		if err != nil {
+			return 0, xerr.NewBusinessErrorWith("当前脚本文件不存在，请重新上传脚本文件")
+		}
+		if fileEntry.TaskID != taskID {
+			return 0, xerr.NewBusinessErrorWith("当前脚本文件不属于该任务")
+		}
+		return fileEntry.ID, nil
+	}
+
+	fileEntry, err := s.svcCtx.CronTaskFileModel.FindCurrentByTaskID(s.ctx, taskID)
+	if err == nil && fileEntry != nil {
+		return fileEntry.ID, nil
+	}
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return 0, nil
+	}
+	return 0, xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "查询当前脚本文件失败", err)
 }
 
 func (s *CronService) deleteTaskData(taskID uint) error {

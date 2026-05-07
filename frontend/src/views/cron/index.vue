@@ -57,7 +57,12 @@
             <n-input v-model:value="taskForm.name" placeholder="请输入任务名称" />
           </n-form-item-gi>
           <n-form-item-gi label="状态" path="status">
-            <n-switch v-model:value="taskForm.status" :checked-value="1" :unchecked-value="0">
+            <n-switch
+              v-model:value="taskForm.status"
+              :checked-value="1"
+              :unchecked-value="0"
+              :disabled="isTaskStatusSwitchDisabled"
+            >
               <template #checked>启用</template>
               <template #unchecked>禁用</template>
             </n-switch>
@@ -83,8 +88,26 @@
           </n-form-item-gi>
           <n-form-item-gi v-else label="文件模式" :span="2">
             <n-alert type="info" :bordered="false">
-              保存后可在脚本管理中上传脚本文件；上传后会自动切换为文件脚本模式。
+              {{ taskModalMode === 'add' ? '请选择首个脚本文件，提交后会随任务一起上传。' : '如需上传新版本，请在脚本管理中操作。' }}
             </n-alert>
+            <n-upload
+              v-if="taskModalMode === 'add'"
+              :key="taskUploadKey"
+              class="mt-3"
+              :default-upload="false"
+              :max="1"
+              :show-file-list="true"
+              :multiple="false"
+              @before-upload="handleBeforeTaskScriptUpload"
+              @remove="handleRemoveTaskScriptUpload"
+            >
+              <n-button>
+                <template #icon>
+                  <SvgIcon icon="carbon:cloud-upload" />
+                </template>
+                选择脚本文件
+              </n-button>
+            </n-upload>
             <div v-if="editingTaskInfo?.currentFileName" class="mt-3 text-12px text-neutral-500">
               当前脚本：v{{ editingTaskInfo.currentFileVersion }} · {{ editingTaskInfo.currentFileName }}
             </div>
@@ -200,6 +223,7 @@ import { useMessage, NButton, NPopconfirm, NRadioButton, NRadioGroup, NTag, NSpa
 import {
   activateCronTaskScript,
   createCronTask,
+  createCronTaskWithFile,
   deleteCronTask,
   fetchCronTaskList,
   fetchCronTaskScriptHistory,
@@ -226,16 +250,7 @@ const pagination = reactive<PaginationProps>({
   pageSize: 20,
   showSizePicker: true,
   pageSizes: [10, 20, 50, 100],
-  itemCount: 0,
-  onChange(page: number) {
-    pagination.page = page;
-    void getData();
-  },
-  onUpdatePageSize(pageSize: number) {
-    pagination.pageSize = pageSize;
-    pagination.page = 1;
-    void getData();
-  }
+  itemCount: 0
 });
 
 const showTaskModal = ref(false);
@@ -280,26 +295,27 @@ const scriptHistoryLoading = ref(false);
 const scriptUploadLoading = ref(false);
 const scriptUploadFile = ref<File | null>(null);
 const scriptUploadKey = ref(0);
+const taskUploadFile = ref<File | null>(null);
+const taskUploadKey = ref(0);
 
 const scriptHistoryPagination = reactive<PaginationProps>({
   page: 1,
   pageSize: 10,
   showSizePicker: true,
   pageSizes: [10, 20, 50],
-  itemCount: 0,
-  onChange(page: number) {
-    scriptHistoryPagination.page = page;
-    void loadScriptHistory();
-  },
-  onUpdatePageSize(pageSize: number) {
-    scriptHistoryPagination.pageSize = pageSize;
-    scriptHistoryPagination.page = 1;
-    void loadScriptHistory();
-  }
+  itemCount: 0
 });
 
 const showLogDrawer = ref(false);
 const currentTaskId = ref(0);
+const triggeringTaskIds = ref<Set<number>>(new Set());
+const deletingTaskIds = ref<Set<number>>(new Set());
+const activatingScriptIds = ref<Set<number>>(new Set());
+
+const hasTaskFileForSubmit = computed(() =>
+  taskForm.scriptMode !== 'file' || Boolean(taskUploadFile.value || editingTaskInfo.value?.currentFileId)
+);
+const isTaskStatusSwitchDisabled = computed(() => taskForm.scriptMode === 'file' && !hasTaskFileForSubmit.value);
 
 const columns: DataTableColumns<CronTaskItem> = [
   {
@@ -371,7 +387,9 @@ const columns: DataTableColumns<CronTaskItem> = [
         default: () => [
           h(ButtonIcon, {
             icon: 'carbon:play',
-            tooltipContent: '手动执行',
+            tooltipContent: getTaskTriggerTooltip(row),
+            loading: isTaskTriggering(row.id),
+            disabled: isTaskTriggerDisabled(row),
             onClick: () => handleTrigger(row)
           }),
           h(ButtonIcon, {
@@ -392,14 +410,23 @@ const columns: DataTableColumns<CronTaskItem> = [
           h(
             NPopconfirm,
             {
+              placement: 'left',
               onPositiveClick: () => handleDelete(row.id)
             },
             {
               trigger: () =>
-                h(ButtonIcon, {
-                  icon: 'carbon:trash-can',
-                  tooltipContent: '删除'
-                }),
+                h(
+                  NButton,
+                  {
+                    quaternary: true,
+                    class: 'h-[36px] text-icon',
+                    loading: isTaskDeleting(row.id),
+                    disabled: isTaskDeleting(row.id),
+                    title: '删除',
+                    'aria-label': '删除'
+                  },
+                  { icon: () => h(SvgIcon, { icon: 'carbon:trash-can' }) }
+                ),
               default: () => '确认删除该任务吗？'
             }
           )
@@ -461,6 +488,8 @@ const scriptHistoryColumns: DataTableColumns<CronTaskFileItem> = [
         : h(ButtonIcon, {
             icon: 'carbon:checkmark',
             tooltipContent: '激活此版本',
+            loading: isScriptActivating(row.id),
+            disabled: isScriptActivating(row.id),
             onClick: () => handleActivateScript(row)
           })
   }
@@ -470,6 +499,46 @@ const taskModalTitle = computed(() => (taskModalMode.value === 'add' ? '新增�
 const scriptModalTitle = computed(() =>
   currentScriptTask.value ? `脚本管理 - ${currentScriptTask.value.name}` : '脚本管理'
 );
+
+function updateLoadingSet(target: typeof triggeringTaskIds, id: number, loadingValue: boolean) {
+  const next = new Set(target.value);
+  if (loadingValue) {
+    next.add(id);
+  } else {
+    next.delete(id);
+  }
+  target.value = next;
+}
+
+function canTriggerTask(row: CronTaskItem) {
+  if (row.scriptMode === 'file') {
+    return row.currentFileId > 0;
+  }
+  return Boolean(String(row.script || '').trim());
+}
+
+function getTaskTriggerTooltip(row: CronTaskItem) {
+  if (isTaskTriggering(row.id)) return '执行提交中';
+  if (row.scriptMode === 'file' && row.currentFileId <= 0) return '请先上传脚本';
+  if (row.scriptMode !== 'file' && !String(row.script || '').trim()) return '请先填写脚本';
+  return '手动执行';
+}
+
+function isTaskTriggering(id: number) {
+  return triggeringTaskIds.value.has(id);
+}
+
+function isTaskDeleting(id: number) {
+  return deletingTaskIds.value.has(id);
+}
+
+function isScriptActivating(id: number) {
+  return activatingScriptIds.value.has(id);
+}
+
+function isTaskTriggerDisabled(row: CronTaskItem) {
+  return isTaskTriggering(row.id) || !canTriggerTask(row);
+}
 
 async function getData() {
   loading.value = true;
@@ -513,6 +582,7 @@ function handleAdd() {
 function handleEdit(row: CronTaskItem) {
   taskModalMode.value = 'edit';
   editingTaskInfo.value = row;
+  resetTaskUpload();
   Object.assign(taskForm, {
     id: row.id,
     name: row.name,
@@ -522,6 +592,7 @@ function handleEdit(row: CronTaskItem) {
     status: row.status,
     timeout: row.timeout
   });
+  syncTaskStatusWithScriptMode();
   showTaskModal.value = true;
 }
 
@@ -535,30 +606,59 @@ function resetTaskForm() {
     status: 1,
     timeout: 60
   });
+  resetTaskUpload();
+}
+
+function syncTaskStatusWithScriptMode() {
+  if (taskForm.scriptMode === 'file' && !hasTaskFileForSubmit.value) {
+    taskForm.status = 0;
+  }
 }
 
 async function handleSubmitTask() {
   await taskFormRef.value?.validate();
+  syncTaskStatusWithScriptMode();
   submitLoading.value = true;
   try {
     const payload = {
       name: taskForm.name.trim(),
       schedule: taskForm.schedule.trim(),
       scriptMode: taskForm.scriptMode,
-      script: taskForm.script.trim(),
+      script: taskForm.scriptMode === 'inline' ? taskForm.script.trim() : '',
       status: taskForm.status,
       timeout: taskForm.timeout
     };
 
     if (taskModalMode.value === 'add') {
+      if (taskForm.scriptMode === 'file') {
+        if (!taskUploadFile.value) {
+          message.error('请先选择脚本文件');
+          return;
+        }
+        const formData = new FormData();
+        formData.append('name', payload.name);
+        formData.append('schedule', payload.schedule);
+        formData.append('scriptMode', payload.scriptMode);
+        formData.append('script', payload.script);
+        formData.append('status', String(payload.status));
+        formData.append('timeout', String(payload.timeout));
+        formData.append('file', taskUploadFile.value);
+
+        const { error } = await createCronTaskWithFile(formData);
+        if (!error) {
+          message.success('创建成功');
+          showTaskModal.value = false;
+          resetTaskUpload();
+          await getData();
+        }
+        return;
+      }
+
       const { error } = await createCronTask(payload);
       if (!error) {
         message.success('创建成功');
         showTaskModal.value = false;
-        handleRefresh();
-        if (taskForm.scriptMode === 'file') {
-          message.info('任务已创建，请到脚本管理中上传脚本文件');
-        }
+        await getData();
       }
       return;
     }
@@ -567,7 +667,7 @@ async function handleSubmitTask() {
     if (!error) {
       message.success('更新成功');
       showTaskModal.value = false;
-      handleRefresh();
+      await getData();
     }
   } finally {
     submitLoading.value = false;
@@ -575,24 +675,45 @@ async function handleSubmitTask() {
 }
 
 async function handleDelete(id: number) {
-  const { error } = await deleteCronTask(id);
-  if (!error) {
-    message.success('删除成功');
-    if (currentScriptTask.value?.id === id) {
-      showScriptModal.value = false;
+  if (isTaskDeleting(id)) return;
+  updateLoadingSet(deletingTaskIds, id, true);
+  try {
+    const { error } = await deleteCronTask(id);
+    if (!error) {
+      message.success('删除成功');
+      if (currentScriptTask.value?.id === id) {
+        showScriptModal.value = false;
+      }
+      if (currentTaskId.value === id) {
+        showLogDrawer.value = false;
+        currentTaskId.value = 0;
+      }
+      const nextTotal = Math.max(0, Number(pagination.itemCount || 0) - 1);
+      const maxPage = Math.max(1, Math.ceil(nextTotal / Number(pagination.pageSize || 20)));
+      if (Number(pagination.page || 1) > maxPage) {
+        pagination.page = maxPage;
+      }
+      await getData();
     }
-    if (currentTaskId.value === id) {
-      showLogDrawer.value = false;
-      currentTaskId.value = 0;
-    }
-    handleRefresh();
+  } finally {
+    updateLoadingSet(deletingTaskIds, id, false);
   }
 }
 
 async function handleTrigger(row: CronTaskItem) {
-  const { error } = await triggerCronTask(row.id);
-  if (!error) {
-    message.success('已触发手动执行');
+  if (!canTriggerTask(row)) {
+    message.warning(getTaskTriggerTooltip(row));
+    return;
+  }
+  if (isTaskTriggering(row.id)) return;
+  updateLoadingSet(triggeringTaskIds, row.id, true);
+  try {
+    const { error } = await triggerCronTask(row.id);
+    if (!error) {
+      message.success('执行已提交，可在执行日志查看结果');
+    }
+  } finally {
+    updateLoadingSet(triggeringTaskIds, row.id, false);
   }
 }
 
@@ -641,14 +762,36 @@ function handleBeforeScriptUpload(data: { file: UploadFileInfo }) {
   return false;
 }
 
+function handleBeforeTaskScriptUpload(data: { file: UploadFileInfo }) {
+  const raw = data.file.file;
+  if (!raw) return false;
+  if (raw.size > 1024 * 1024) {
+    message.error('脚本文件不能超过 1 MiB');
+    return false;
+  }
+  taskUploadFile.value = raw;
+  return false;
+}
+
 function handleRemoveScriptUpload() {
   scriptUploadFile.value = null;
+  return true;
+}
+
+function handleRemoveTaskScriptUpload() {
+  taskUploadFile.value = null;
+  syncTaskStatusWithScriptMode();
   return true;
 }
 
 function resetScriptUpload() {
   scriptUploadFile.value = null;
   scriptUploadKey.value += 1;
+}
+
+function resetTaskUpload() {
+  taskUploadFile.value = null;
+  taskUploadKey.value += 1;
 }
 
 async function handleUploadScript() {
@@ -677,11 +820,17 @@ async function handleUploadScript() {
 
 async function handleActivateScript(row: CronTaskFileItem) {
   if (!currentScriptTask.value) return;
-  const { error } = await activateCronTaskScript(currentScriptTask.value.id, row.id);
-  if (!error) {
-    message.success('已切换为当前脚本版本');
-    await handleRefreshAndSyncTask(currentScriptTask.value.id);
-    await loadScriptHistory();
+  if (isScriptActivating(row.id)) return;
+  updateLoadingSet(activatingScriptIds, row.id, true);
+  try {
+    const { error } = await activateCronTaskScript(currentScriptTask.value.id, row.id);
+    if (!error) {
+      message.success('已切换为当前脚本版本');
+      await handleRefreshAndSyncTask(currentScriptTask.value.id);
+      await loadScriptHistory();
+    }
+  } finally {
+    updateLoadingSet(activatingScriptIds, row.id, false);
   }
 }
 
@@ -737,6 +886,20 @@ function shortenHash(hash: string) {
   if (hash.length <= 16) return hash;
   return `${hash.slice(0, 8)}…${hash.slice(-8)}`;
 }
+
+watch(
+  () => taskForm.scriptMode,
+  () => {
+    syncTaskStatusWithScriptMode();
+    taskFormRef.value?.restoreValidation();
+  }
+);
+
+watch(showTaskModal, value => {
+  if (!value) {
+    resetTaskUpload();
+  }
+});
 
 watch(showScriptModal, value => {
   if (!value) {

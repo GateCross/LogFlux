@@ -96,15 +96,7 @@ const pagination = reactive<PaginationProps>({
   pageSize: 20,
   showSizePicker: true,
   pageSizes: [10, 20, 50, 100],
-  itemCount: 0,
-  onChange(page: number) {
-    pagination.page = page;
-  },
-  onUpdatePageSize(pageSize: number) {
-    pagination.pageSize = pageSize;
-    pagination.page = 1;
-    void getData();
-  }
+  itemCount: 0
 });
 
 const columns: DataTableColumns<CronLogItem> = [
