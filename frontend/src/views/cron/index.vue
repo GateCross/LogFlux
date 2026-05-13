@@ -145,11 +145,28 @@
         </n-descriptions>
 
         <div class="rounded-6px border border-neutral-200 p-4 dark:border-neutral-700">
+          <div class="mb-2">
+            <div class="text-14px font-medium">上传新版本</div>
+            <div class="text-12px text-neutral-500">仅支持 1 MiB 以内的脚本文件。</div>
+          </div>
+
           <div class="mb-2 flex items-center justify-between gap-3">
-            <div>
-              <div class="text-14px font-medium">上传新版本</div>
-              <div class="text-12px text-neutral-500">仅支持 1 MiB 以内的脚本文件。</div>
-            </div>
+            <n-upload
+              :key="scriptUploadKey"
+              :default-upload="false"
+              :max="1"
+              :show-file-list="true"
+              :multiple="false"
+              @before-upload="handleBeforeScriptUpload"
+              @remove="handleRemoveScriptUpload"
+            >
+              <n-button>
+                <template #icon>
+                  <SvgIcon icon="carbon:cloud-upload" />
+                </template>
+                选择脚本文件
+              </n-button>
+            </n-upload>
             <n-space>
               <n-button tertiary @click="handleReloadScriptHistory">
                 <template #icon>
@@ -166,23 +183,7 @@
             </n-space>
           </div>
 
-          <n-upload
-            :key="scriptUploadKey"
-            :default-upload="false"
-            :max="1"
-            :show-file-list="true"
-            :multiple="false"
-            @before-upload="handleBeforeScriptUpload"
-            @remove="handleRemoveScriptUpload"
-          >
-            <n-button>
-              <template #icon>
-                <SvgIcon icon="carbon:cloud-upload" />
-              </template>
-              选择脚本文件
-            </n-button>
-          </n-upload>
-          <div class="mt-2 text-12px text-neutral-500">
+          <div class="text-12px text-neutral-500">
             上传后会切换为文件脚本模式，并保留历史版本。
           </div>
         </div>

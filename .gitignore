@@ -21,3 +21,5 @@ docker/.env
 
 # System
 .gemini
+
+.kiro/*

@@ -29,12 +29,16 @@ RUN apk --no-cache add \
     /var/log/caddy \
     /data/caddy \
     /config/caddy \
+    /config/cron-files \
+    /config/cron-files/tasks \
+    /config/cron-files/staging \
     /app/etc && \
     chown -R ${APP_USER}:${APP_GROUP} \
     /app \
     /var/log/caddy \
     /data/caddy \
-    /config/caddy
+    /config/caddy \
+    /config/cron-files
 
 WORKDIR /app
 
