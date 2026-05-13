@@ -87,29 +87,30 @@
             />
           </n-form-item-gi>
           <n-form-item-gi v-else label="文件模式" :span="2">
-            <n-alert type="info" :bordered="false">
-              {{ taskModalMode === 'add' ? '请选择首个脚本文件，提交后会随任务一起上传。' : '如需上传新版本，请在脚本管理中操作。' }}
-            </n-alert>
-            <n-upload
-              v-if="taskModalMode === 'add'"
-              :key="taskUploadKey"
-              class="mt-3"
-              :default-upload="false"
-              :max="1"
-              :show-file-list="true"
-              :multiple="false"
-              @before-upload="handleBeforeTaskScriptUpload"
-              @remove="handleRemoveTaskScriptUpload"
-            >
-              <n-button>
-                <template #icon>
-                  <SvgIcon icon="carbon:cloud-upload" />
-                </template>
-                选择脚本文件
-              </n-button>
-            </n-upload>
-            <div v-if="editingTaskInfo?.currentFileName" class="mt-3 text-12px text-neutral-500">
-              当前脚本：v{{ editingTaskInfo.currentFileVersion }} · {{ editingTaskInfo.currentFileName }}
+            <div class="flex flex-col w-full">
+              <n-upload
+                v-if="taskModalMode === 'add'"
+                :key="taskUploadKey"
+                :default-upload="false"
+                :max="1"
+                :show-file-list="true"
+                :multiple="false"
+                @before-upload="handleBeforeTaskScriptUpload"
+                @remove="handleRemoveTaskScriptUpload"
+              >
+                <n-button>
+                  <template #icon>
+                    <SvgIcon icon="carbon:cloud-upload" />
+                  </template>
+                  选择脚本文件
+                </n-button>
+              </n-upload>
+              <n-alert type="info" :bordered="false" class="mt-3">
+                {{ taskModalMode === 'add' ? '请选择首个脚本文件，提交后会随任务一起上传。' : '如需上传新版本，请在脚本管理中操作。' }}
+              </n-alert>
+              <div v-if="editingTaskInfo?.currentFileName" class="mt-3 text-12px text-neutral-500">
+                当前脚本：v{{ editingTaskInfo.currentFileVersion }} · {{ editingTaskInfo.currentFileName }}
+              </div>
             </div>
           </n-form-item-gi>
           <n-form-item-gi label="超时时间" path="timeout">
