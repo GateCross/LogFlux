@@ -33,8 +33,12 @@ type WafScheduler struct {
 }
 
 func NewWafScheduler(db *gorm.DB) *WafScheduler {
+	// 支持标准的 5 位 Cron 表达式与包含秒的 6 位 Cron 表达式
+	parser := cron.NewParser(
+		cron.SecondOptional | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor,
+	)
 	return &WafScheduler{
-		cron: cron.New(cron.WithSeconds()),
+		cron: cron.New(cron.WithParser(parser)),
 		db:   db,
 	}
 }

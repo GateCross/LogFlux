@@ -122,7 +122,7 @@ func (s *CronService) GetTaskList(req *types.CronTaskListReq) (*types.CronTaskLi
 		return nil, xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "查询定时任务列表失败", err)
 	}
 
-	parser := cron.NewParser(cron.Second | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
+	parser := cron.NewParser(cron.SecondOptional | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
 	fileModel := cronmodel.NewCronTaskFileModel(s.svcCtx.DB)
 	list := make([]types.CronTaskItem, 0, len(tasks))
 	for i := range tasks {
@@ -512,9 +512,9 @@ func validateCronSchedule(schedule string) (string, error) {
 	if schedule == "" {
 		return "", xerr.NewBusinessErrorWith("Cron 表达式不能为空")
 	}
-	parser := cron.NewParser(cron.Second | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
+	parser := cron.NewParser(cron.SecondOptional | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
 	if _, err := parser.Parse(schedule); err != nil {
-		return "", xerr.NewBusinessErrorWith("Cron 表达式无效，请使用包含秒的 6 位表达式")
+		return "", xerr.NewBusinessErrorWith("Cron 表达式无效，请使用 5 位或包含秒的 6 位表达式")
 	}
 	return schedule, nil
 }
