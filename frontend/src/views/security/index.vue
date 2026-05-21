@@ -1267,7 +1267,7 @@ function handleBeforeUpload(data: { file: UploadFileInfo }) {
   }
 
   uploadForm.file = raw;
-  return false;
+  return true;
 }
 
 function handleRemoveUpload() {

@@ -761,7 +761,7 @@ function handleBeforeScriptUpload(data: { file: UploadFileInfo }) {
     return false;
   }
   scriptUploadFile.value = raw;
-  return false;
+  return true;
 }
 
 function handleBeforeTaskScriptUpload(data: { file: UploadFileInfo }) {
@@ -772,7 +772,7 @@ function handleBeforeTaskScriptUpload(data: { file: UploadFileInfo }) {
     return false;
   }
   taskUploadFile.value = raw;
-  return false;
+  return true;
 }
 
 function handleRemoveScriptUpload() {
