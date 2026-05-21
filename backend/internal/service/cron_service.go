@@ -8,6 +8,7 @@ import (
 	"fmt"
 	cronmodel "logflux/model/cron"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -362,6 +363,22 @@ func (s *CronService) readUploadedScriptData() (string, []byte, error) {
 	if int64(len(data)) > 1024*1024 {
 		return "", nil, xerr.NewBusinessErrorWith("上传文件过大")
 	}
+
+	// 提取后缀名进行环境检测
+	ext := strings.ToLower(filepath.Ext(fileName))
+	switch ext {
+	case ".py":
+		_, err3 := exec.LookPath("python3")
+		_, errPy := exec.LookPath("python")
+		if err3 != nil && errPy != nil {
+			return "", nil, xerr.NewBusinessErrorWith("当前运行环境未检测到 Python (python3/python) 解析器，不支持运行 Python 脚本")
+		}
+	case ".go":
+		if _, errGo := exec.LookPath("go"); errGo != nil {
+			return "", nil, xerr.NewBusinessErrorWith("当前运行环境未检测到 Go 编译器，不支持运行 Go 脚本")
+		}
+	}
+
 	return fileName, data, nil
 }
 

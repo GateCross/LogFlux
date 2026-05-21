@@ -151,7 +151,27 @@ func (e *CronTaskExecutor) runCommand(ctx context.Context, task *cronmodel.CronT
 		if _, err := os.Stat(logEntry.ScriptFilePath); err != nil {
 			return fmt.Errorf("脚本文件不存在: %w", err)
 		}
-		cmd = exec.CommandContext(ctx, "sh", logEntry.ScriptFilePath)
+		ext := strings.ToLower(filepath.Ext(logEntry.ScriptFilePath))
+		switch ext {
+		case ".py":
+			pythonCmd := "python3"
+			if _, err := exec.LookPath("python3"); err != nil {
+				if _, err2 := exec.LookPath("python"); err2 == nil {
+					pythonCmd = "python"
+				}
+			}
+			cmd = exec.CommandContext(ctx, pythonCmd, logEntry.ScriptFilePath)
+		case ".go":
+			cmd = exec.CommandContext(ctx, "go", "run", logEntry.ScriptFilePath)
+		case ".bash":
+			shellCmd := "bash"
+			if _, err := exec.LookPath("bash"); err != nil {
+				shellCmd = "sh"
+			}
+			cmd = exec.CommandContext(ctx, shellCmd, logEntry.ScriptFilePath)
+		default:
+			cmd = exec.CommandContext(ctx, "sh", logEntry.ScriptFilePath)
+		}
 		cmd.Dir = filepath.Dir(logEntry.ScriptFilePath)
 	default:
 		script := strings.TrimSpace(task.Script)
