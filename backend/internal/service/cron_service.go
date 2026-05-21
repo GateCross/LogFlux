@@ -8,7 +8,6 @@ import (
 	"fmt"
 	cronmodel "logflux/model/cron"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -364,19 +363,10 @@ func (s *CronService) readUploadedScriptData() (string, []byte, error) {
 		return "", nil, xerr.NewBusinessErrorWith("上传文件过大")
 	}
 
-	// 提取后缀名进行环境检测
+	// 提取后缀名进行校验
 	ext := strings.ToLower(filepath.Ext(fileName))
-	switch ext {
-	case ".py":
-		_, err3 := exec.LookPath("python3")
-		_, errPy := exec.LookPath("python")
-		if err3 != nil && errPy != nil {
-			return "", nil, xerr.NewBusinessErrorWith("当前运行环境未检测到 Python (python3/python) 解析器，不支持运行 Python 脚本")
-		}
-	case ".go":
-		if _, errGo := exec.LookPath("go"); errGo != nil {
-			return "", nil, xerr.NewBusinessErrorWith("当前运行环境未检测到 Go 编译器，不支持运行 Go 脚本")
-		}
+	if ext != ".sh" {
+		return "", nil, xerr.NewBusinessErrorWith("仅支持上传 .sh 格式的 Shell 脚本文件")
 	}
 
 	return fileName, data, nil

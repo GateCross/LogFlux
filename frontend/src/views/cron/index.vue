@@ -93,6 +93,7 @@
                 :key="taskUploadKey"
                 :default-upload="false"
                 :max="1"
+                accept=".sh"
                 :show-file-list="true"
                 :multiple="false"
                 @before-upload="handleBeforeTaskScriptUpload"
@@ -148,7 +149,7 @@
         <div class="rounded-6px border border-neutral-200 p-4 dark:border-neutral-700">
           <div class="mb-2">
             <div class="text-14px font-medium">上传新版本</div>
-            <div class="text-12px text-neutral-500">仅支持 1 MiB 以内的脚本文件。</div>
+            <div class="text-12px text-neutral-500">仅支持 1 MiB 以内的 .sh 脚本文件。</div>
           </div>
 
           <div class="mb-2 flex items-center justify-between gap-3">
@@ -156,6 +157,7 @@
               :key="scriptUploadKey"
               :default-upload="false"
               :max="1"
+              accept=".sh"
               :show-file-list="true"
               :multiple="false"
               @before-upload="handleBeforeScriptUpload"
@@ -760,6 +762,11 @@ function handleBeforeScriptUpload(data: { file: UploadFileInfo }) {
     message.error('脚本文件不能超过 1 MiB');
     return false;
   }
+  const fileName = raw.name.toLowerCase();
+  if (!fileName.endsWith('.sh')) {
+    message.error('仅支持上传 .sh 脚本文件');
+    return false;
+  }
   scriptUploadFile.value = raw;
   return true;
 }
@@ -769,6 +776,11 @@ function handleBeforeTaskScriptUpload(data: { file: UploadFileInfo }) {
   if (!raw) return false;
   if (raw.size > 1024 * 1024) {
     message.error('脚本文件不能超过 1 MiB');
+    return false;
+  }
+  const fileName = raw.name.toLowerCase();
+  if (!fileName.endsWith('.sh')) {
+    message.error('仅支持上传 .sh 脚本文件');
     return false;
   }
   taskUploadFile.value = raw;
