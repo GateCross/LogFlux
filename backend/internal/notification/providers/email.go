@@ -59,7 +59,7 @@ func (e *EmailProvider) Send(ctx context.Context, config map[string]interface{},
 	m.SetBody("text/html", body)
 
 	d := gomail.NewDialer(emailConfig.SmtpHost, emailConfig.SmtpPort, emailConfig.Username, emailConfig.Password)
-	d.TLSConfig = &tls.Config{InsecureSkipVerify: true} // 允许自签名证书 (可选)
+	d.TLSConfig = &tls.Config{InsecureSkipVerify: emailConfig.InsecureSkipVerify}
 
 	// 发送邮件
 	if err := d.DialAndSend(m); err != nil {

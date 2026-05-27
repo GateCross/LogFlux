@@ -151,12 +151,13 @@ type WebhookConfig struct {
 
 // Email 配置结构
 type EmailConfig struct {
-	SmtpHost string   `json:"smtp_host"`
-	SmtpPort int      `json:"smtp_port"`
-	Username string   `json:"username"`
-	Password string   `json:"password"`
-	From     string   `json:"from"`
-	To       []string `json:"to"`
+	SmtpHost           string   `json:"smtp_host"`
+	SmtpPort           int      `json:"smtp_port"`
+	Username           string   `json:"username"`
+	Password           string   `json:"password"`
+	From               string   `json:"from"`
+	To                 []string `json:"to"`
+	InsecureSkipVerify bool     `json:"insecure_skip_verify,omitempty"` // 是否跳过 TLS 证书验证（默认 false）
 }
 
 // Telegram 配置结构

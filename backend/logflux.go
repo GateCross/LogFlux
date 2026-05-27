@@ -52,8 +52,9 @@ func main() {
 	}
 	handler.RegisterHandlers(server, ctx)
 
-	// Global Response Middleware
+	// Global Middlewares
 	server.Use(middleware.ResponseMiddleware)
+	server.Use(ctx.RateLimit) // 登录接口速率限制
 
 	// Global Error Handler (still needed for business errors)
 

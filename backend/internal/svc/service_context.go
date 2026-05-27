@@ -28,6 +28,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -45,6 +46,7 @@ type ServiceContext struct {
 	WafScheduler      *tasks.WafScheduler
 	NotificationMgr   notification.NotificationManager
 	Permission        rest.Middleware
+	RateLimit         rest.Middleware
 	UserModel         usermodel.UserModel
 	RoleModel         rolemodel.RoleModel
 	MenuModel         menumodel.MenuModel
@@ -197,6 +199,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		WafScheduler:      wafScheduler,
 		NotificationMgr:   notificationMgr,
 		Permission:        middleware.NewPermissionMiddleware(db).Handle,
+		RateLimit:         middleware.NewRateLimitMiddleware(5, time.Minute, "/api/login", "/api/refreshToken").Handle, // 登录接口 5 次/分钟
 		UserModel:         usermodel.NewUserModel(db),
 		RoleModel:         rolemodel.NewRoleModel(db),
 		MenuModel:         menumodel.NewMenuModel(db),
@@ -707,8 +710,6 @@ func initRBACData(db *gorm2.DB) {
 	setParent("notification_channel", "notification")
 	setParent("notification_rule", "notification")
 	setParent("notification_template", "notification")
-	setParent("notification_template", "notification")
-	setParent("notification_log", "notification")
 	setParent("notification_log", "notification")
 	setParent("user_center", "user")
 	setParentForce("caddy_system_log", "manage")

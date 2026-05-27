@@ -5,6 +5,16 @@
 }
 
 :9527 {
+    # 安全响应头
+    header {
+        X-Frame-Options "SAMEORIGIN"
+        X-Content-Type-Options "nosniff"
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'"
+        -Server
+    }
+
     # 1. 前端静态资源 (构建后的文件)
     # 请确保您已执行 cd frontend && pnpm build
     root * ./frontend/dist

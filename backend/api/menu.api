@@ -1,0 +1,62 @@
+syntax = "v1"
+
+import "base.api"
+import "route.api"
+
+type (
+	// Menu Management
+	CreateMenuReq {
+		Name          string    `json:"name"`
+		Path          string    `json:"path"`
+		Component     string    `json:"component"`
+		Order         int       `json:"order"`
+		Meta          RouteMeta `json:"meta"`          // JSON string
+		RequiredRoles []string  `json:"requiredRoles"` // Array of role names
+		ParentID      uint      `json:"parentId,optional"`
+	}
+	UpdateMenuReq {
+		ID            uint      `path:"id"`
+		Name          string    `json:"name,optional"`
+		Path          string    `json:"path,optional"`
+		Component     string    `json:"component,optional"`
+		Order         int       `json:"order,optional"`
+		Meta          RouteMeta `json:"meta,optional"`          // JSON string
+		RequiredRoles []string  `json:"requiredRoles,optional"` // Array of role names
+		ParentID      uint      `json:"parentId,optional"`
+	}
+	MenuItem {
+		ID            uint       `json:"id"`
+		Name          string     `json:"name"`
+		Path          string     `json:"path"`
+		Component     string     `json:"component"`
+		Order         int        `json:"order"`
+		Meta          RouteMeta  `json:"meta"`
+		RequiredRoles []string   `json:"requiredRoles"`
+		ParentID      uint       `json:"parentId"`
+		Children      []MenuItem `json:"children,omitempty"`
+		CreatedAt     string     `json:"createdAt"`
+	}
+	MenuListResp {
+		List []MenuItem `json:"list"`
+	}
+)
+
+@server (
+	prefix: /api
+	group:  menu
+	jwt:    Auth
+	middleware: Permission
+)
+service logflux-api {
+	@handler GetMenuList
+	get /menu/list returns (MenuListResp)
+
+	@handler CreateMenu
+	post /menu (CreateMenuReq) returns (BaseResp)
+
+	@handler UpdateMenu
+	put /menu/:id (UpdateMenuReq) returns (BaseResp)
+
+	@handler DeleteMenu
+	delete /menu/:id (IDReq) returns (BaseResp)
+}

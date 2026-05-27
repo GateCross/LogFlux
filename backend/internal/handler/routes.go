@@ -92,6 +92,16 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					Path:    "/caddy/server/:serverId/config/rollback",
 					Handler: caddy.RollbackCaddyConfigHandler(serverCtx),
 				},
+			}...,
+		),
+		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
+		rest.WithPrefix("/api"),
+	)
+
+	server.AddRoutes(
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.Permission},
+			[]rest.Route{
 				{
 					Method:  http.MethodPost,
 					Path:    "/caddy/waf/engine/check",
@@ -393,24 +403,9 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 			[]rest.Middleware{serverCtx.Permission},
 			[]rest.Route{
 				{
-					Method:  http.MethodPost,
-					Path:    "/source",
-					Handler: log.AddLogSourceHandler(serverCtx),
-				},
-				{
 					Method:  http.MethodGet,
-					Path:    "/source",
-					Handler: log.ListLogSourcesHandler(serverCtx),
-				},
-				{
-					Method:  http.MethodPut,
-					Path:    "/source/:id",
-					Handler: log.UpdateLogSourceHandler(serverCtx),
-				},
-				{
-					Method:  http.MethodDelete,
-					Path:    "/source/:id",
-					Handler: log.DeleteLogSourceHandler(serverCtx),
+					Path:    "/system/logs",
+					Handler: log.GetSystemLogsHandler(serverCtx),
 				},
 			}...,
 		),
@@ -438,9 +433,24 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 			[]rest.Middleware{serverCtx.Permission},
 			[]rest.Route{
 				{
+					Method:  http.MethodPost,
+					Path:    "/source",
+					Handler: log.AddLogSourceHandler(serverCtx),
+				},
+				{
 					Method:  http.MethodGet,
-					Path:    "/system/logs",
-					Handler: log.GetSystemLogsHandler(serverCtx),
+					Path:    "/source",
+					Handler: log.ListLogSourcesHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPut,
+					Path:    "/source/:id",
+					Handler: log.UpdateLogSourceHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodDelete,
+					Path:    "/source/:id",
+					Handler: log.DeleteLogSourceHandler(serverCtx),
 				},
 			}...,
 		),
