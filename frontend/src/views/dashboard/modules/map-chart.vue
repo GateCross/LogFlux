@@ -2,6 +2,10 @@
 import { computed, watch } from 'vue';
 import { useEcharts } from '@/hooks/common/echarts';
 import type { ECOption } from '@/hooks/common/echarts';
+import { registerChinaMap } from '@/utils/map-register';
+
+// 注册中国地图
+registerChinaMap();
 
 interface GeoItem {
   name: string;
@@ -33,18 +37,6 @@ const { domRef, updateOptions } = useEcharts((): ECOption => ({
   series: []
 }));
 
-// Mock map registration or use empty one if asset missing
-import * as echarts from 'echarts';
-// Try to register a simple box for demo if real map json is missing in assets
-if (!echarts.getMap('china')) {
-  // Just a placeholder rectangle for visual check if no map data
-   const geoJson = {
-    "type": "FeatureCollection",
-    "features": []
-  };
-  echarts.registerMap('china', geoJson as any);
-}
-
 const visualMax = computed(() => {
   const values = props.data.map(item => item.value);
   return Math.max(10, ...values);
@@ -73,7 +65,7 @@ const syncChart = () => {
 watch(
   () => props.data,
   () => syncChart(),
-  { immediate: true, deep: true }
+  { immediate: true }
 );
 </script>
 

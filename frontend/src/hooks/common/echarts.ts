@@ -137,10 +137,6 @@ export function useEcharts<T extends ECOption>(optionsFactory: () => T, hooks: C
 
     if (!isRendered()) return;
 
-    if (isRendered()) {
-      chart.value?.clear();
-    }
-
     chart.value?.setOption({ ...updatedOpts, backgroundColor: 'transparent' });
 
     await onUpdated?.(chart.value!);

@@ -72,7 +72,7 @@ const syncChart = () => {
 watch(
   () => [props.times, props.values],
   () => syncChart(),
-  { immediate: true, deep: true }
+  { immediate: true }
 );
 </script>
 

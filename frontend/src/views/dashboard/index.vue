@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { useDebounceFn } from '@vueuse/core';
 import HeaderBanner from './modules/header-banner.vue';
 import StatCard from './modules/stat-card.vue';
 import TrendChart from './modules/trend-chart.vue';
 import MapChart from './modules/map-chart.vue';
+import RecentLogs from './modules/recent-logs.vue';
 import type { StatCard as StatCardItem } from './data';
 import {
   fetchDashboardSummary,
-  type DashboardSummaryResp,
-  type DashboardRecentItem
+  type DashboardSummaryResp
 } from '@/service/api/dashboard';
 
 const summary = ref<DashboardSummaryResp | null>(null);
@@ -110,13 +111,15 @@ async function loadSummary() {
   } catch {}
 }
 
+const debouncedLoadSummary = useDebounceFn(loadSummary, 300);
+
 function handleRangeChange(key: string) {
   if (key === activeRangeKey.value) {
     return;
   }
   activeRangeKey.value = key;
   localStorage.setItem('logflux:dashboard.range', key);
-  loadSummary();
+  debouncedLoadSummary();
 }
 
 function handleIntervalChange(key: string) {
@@ -125,29 +128,7 @@ function handleIntervalChange(key: string) {
   }
   activeIntervalKey.value = key;
   localStorage.setItem('logflux:dashboard.interval', key);
-  loadSummary();
-}
-
-function methodClass(method: string) {
-  const key = method.toUpperCase();
-  if (key === 'GET') return 'bg-green-100 text-green-600';
-  if (key === 'POST') return 'bg-blue-100 text-blue-600';
-  if (key === 'PUT' || key === 'PATCH') return 'bg-amber-100 text-amber-700';
-  if (key === 'DELETE') return 'bg-red-100 text-red-600';
-  return 'bg-gray-100 text-gray-600';
-}
-
-function statusClass(status: number) {
-  if (status >= 500) return 'text-red-500';
-  if (status >= 400) return 'text-orange-500';
-  if (status >= 300) return 'text-blue-500';
-  return 'text-green-600';
-}
-
-function formatRecentMeta(item: DashboardRecentItem) {
-  const time = item.logTime?.slice(11) || '';
-  const ip = item.remoteIp ? ` · ${item.remoteIp}` : '';
-  return `${time}${ip}`;
+  debouncedLoadSummary();
 }
 
 onMounted(() => {
@@ -229,63 +210,10 @@ onUnmounted(() => {
       <NGridItem span="24 l:8">
          <NSpace vertical :size="16" class="h-full">
             <TrendChart :times="trendTimes" :values="trendValues" />
-            <NCard title="实时日志" class="flex-1 rounded-2xl shadow-sm">
-               <div v-if="recentLogs.length === 0" class="text-xs text-gray-400">暂无日志</div>
-               <div v-else class="flex flex-col gap-3 text-xs">
-                 <div
-                   v-for="item in recentLogs"
-                   :key="item.id"
-                   class="log-row border-b border-gray-100 pb-2"
-                 >
-                   <div class="log-method">
-                     <span :class="['px-1 rounded', methodClass(item.method)]">{{ item.method || 'N/A' }}</span>
-                   </div>
-                   <NTooltip placement="top-start" :show-arrow="false">
-                     <template #trigger>
-                       <div class="log-path text-gray-600 truncate">{{ item.uri || '-' }}</div>
-                     </template>
-                     {{ item.uri || '-' }}
-                   </NTooltip>
-                   <div class="log-status" :class="statusClass(item.status)">{{ item.status }}</div>
-                   <div class="log-meta text-gray-400">{{ formatRecentMeta(item) }}</div>
-                 </div>
-               </div>
-            </NCard>
+            <RecentLogs :logs="recentLogs" />
          </NSpace>
       </NGridItem>
     </NGrid>
   </NSpace>
 </template>
 
-<style scoped>
-.log-row {
-  display: grid;
-  grid-template-columns: 56px minmax(0, 1fr) 60px 160px;
-  align-items: center;
-  column-gap: 12px;
-}
-
-.log-method,
-.log-status,
-.log-meta {
-  white-space: nowrap;
-}
-
-.log-path {
-  min-width: 0;
-}
-
-@media (max-width: 768px) {
-  .log-row {
-    grid-template-columns: 48px minmax(0, 1fr) 48px 120px;
-    column-gap: 8px;
-  }
-}
-
-@media (max-width: 480px) {
-  .log-row {
-    grid-template-columns: 44px minmax(0, 1fr) 44px 96px;
-    column-gap: 6px;
-  }
-}
-</style>
