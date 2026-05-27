@@ -1,14 +1,13 @@
 import type { AxiosResponse } from 'axios';
-import { BACKEND_ERROR_CODE, createFlatRequest, createRequest } from '@sa/axios';
+import { BACKEND_ERROR_CODE, createFlatRequest } from '@sa/axios';
 import { useAuthStore } from '@/store/modules/auth';
-import { localStg } from '@/utils/storage';
 import { getServiceBaseURL } from '@/utils/service';
 import { $t } from '@/locales';
 import { getAuthorization, handleExpiredRequest, showErrorMsg } from './shared';
 import type { RequestInstanceState } from './type';
 
 const isHttpProxy = import.meta.env.DEV && import.meta.env.VITE_HTTP_PROXY === 'Y';
-const { baseURL, otherBaseURL } = getServiceBaseURL(import.meta.env, isHttpProxy);
+const { baseURL } = getServiceBaseURL(import.meta.env, isHttpProxy);
 
 function getBackendMessage(data: Partial<App.Service.Response<any>> | undefined, fallback = '') {
   return data?.message || data?.msg || fallback;
@@ -19,7 +18,7 @@ export const request = createFlatRequest(
     baseURL,
     timeout: 10000,
     headers: {
-      apifoxToken: 'XL299LiMEDZ0H5h3A29PxwQXdMJqWyY2'
+      ...(import.meta.env.VITE_APIFOX_TOKEN ? { apifoxToken: import.meta.env.VITE_APIFOX_TOKEN } : {})
     }
   },
   {
@@ -185,48 +184,6 @@ export const request = createFlatRequest(
       }
 
       showErrorMsg(request.state, message);
-    }
-  }
-);
-
-export const demoRequest = createRequest(
-  {
-    baseURL: otherBaseURL.demo
-  },
-  {
-    transform(response: AxiosResponse<App.Service.DemoResponse>) {
-      return response.data.result;
-    },
-    async onRequest(config) {
-      const { headers } = config;
-
-      // set token
-      const token = localStg.get('token');
-      const Authorization = token ? `Bearer ${token}` : null;
-      Object.assign(headers, { Authorization });
-
-      return config;
-    },
-    isBackendSuccess(response) {
-      // when the backend response code is "200", it means the request is success
-      // you can change this logic by yourself
-      return response.data.status === '200';
-    },
-    async onBackendFail(_response) {
-      // when the backend response code is not "200", it means the request is fail
-      // for example: the token is expired, refresh token and retry request
-    },
-    onError(error) {
-      // when the request is fail, you can show error message
-
-      let message = error.message;
-
-      // show backend error message
-      if (error.code === BACKEND_ERROR_CODE) {
-        message = error.response?.data?.message || message;
-      }
-
-      window.$message?.error(message);
     }
   }
 );

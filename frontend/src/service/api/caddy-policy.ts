@@ -147,15 +147,15 @@ export function fetchWafPolicyList(params: { page: number; pageSize: number; nam
 }
 
 export function createWafPolicy(data: WafPolicyPayload) {
-  return request<any>({ url: '/api/caddy/waf/policy', method: 'post', data });
+  return request<void>({ url: '/api/caddy/waf/policy', method: 'post', data });
 }
 
 export function updateWafPolicy(id: number, data: Partial<WafPolicyPayload>) {
-  return request<any>({ url: `/api/caddy/waf/policy/${id}`, method: 'put', data });
+  return request<void>({ url: `/api/caddy/waf/policy/${id}`, method: 'put', data });
 }
 
 export function deleteWafPolicy(id: number) {
-  return request<any>({ url: `/api/caddy/waf/policy/${id}`, method: 'delete' });
+  return request<void>({ url: `/api/caddy/waf/policy/${id}`, method: 'delete' });
 }
 
 export function previewWafPolicy(id: number) {
@@ -163,15 +163,15 @@ export function previewWafPolicy(id: number) {
 }
 
 export function validateWafPolicy(id: number) {
-  return request<any>({ url: `/api/caddy/waf/policy/${id}/validate`, method: 'post' });
+  return request<void>({ url: `/api/caddy/waf/policy/${id}/validate`, method: 'post' });
 }
 
 export function publishWafPolicy(id: number) {
-  return request<any>({ url: `/api/caddy/waf/policy/${id}/publish`, method: 'post' });
+  return request<void>({ url: `/api/caddy/waf/policy/${id}/publish`, method: 'post' });
 }
 
 export function rollbackWafPolicy(data: { revisionId: number }) {
-  return request<any>({
+  return request<void>({
     url: '/api/caddy/waf/policy/rollback',
     method: 'post',
     data
@@ -193,15 +193,15 @@ export function fetchWafRuleExclusionList(params: {
 }
 
 export function createWafRuleExclusion(data: WafRuleExclusionPayload) {
-  return request<any>({ url: '/api/caddy/waf/policy/exclusion', method: 'post', data });
+  return request<void>({ url: '/api/caddy/waf/policy/exclusion', method: 'post', data });
 }
 
 export function updateWafRuleExclusion(id: number, data: WafRuleExclusionPayload) {
-  return request<any>({ url: `/api/caddy/waf/policy/exclusion/${id}`, method: 'put', data });
+  return request<void>({ url: `/api/caddy/waf/policy/exclusion/${id}`, method: 'put', data });
 }
 
 export function deleteWafRuleExclusion(id: number) {
-  return request<any>({ url: `/api/caddy/waf/policy/exclusion/${id}`, method: 'delete' });
+  return request<void>({ url: `/api/caddy/waf/policy/exclusion/${id}`, method: 'delete' });
 }
 
 export function fetchWafPolicyBindingList(params: {
@@ -215,13 +215,13 @@ export function fetchWafPolicyBindingList(params: {
 }
 
 export function createWafPolicyBinding(data: WafPolicyBindingPayload) {
-  return request<any>({ url: '/api/caddy/waf/policy/binding', method: 'post', data });
+  return request<void>({ url: '/api/caddy/waf/policy/binding', method: 'post', data });
 }
 
 export function updateWafPolicyBinding(id: number, data: WafPolicyBindingPayload) {
-  return request<any>({ url: `/api/caddy/waf/policy/binding/${id}`, method: 'put', data });
+  return request<void>({ url: `/api/caddy/waf/policy/binding/${id}`, method: 'put', data });
 }
 
 export function deleteWafPolicyBinding(id: number) {
-  return request<any>({ url: `/api/caddy/waf/policy/binding/${id}`, method: 'delete' });
+  return request<void>({ url: `/api/caddy/waf/policy/binding/${id}`, method: 'delete' });
 }

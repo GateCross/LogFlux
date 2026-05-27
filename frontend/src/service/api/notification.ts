@@ -90,86 +90,116 @@ export interface LogItem {
     lastError: string;
 }
 
+export interface ChannelListResp {
+    list: ChannelItem[];
+}
+
+export interface RuleListResp {
+    list: RuleItem[];
+}
+
+export interface TemplateListResp {
+    list: TemplateItem[];
+}
+
+export interface LogListResp {
+    list: LogItem[];
+    total: number;
+}
+
+export interface UnreadNotificationItem {
+    id: number;
+    title: string;
+    content: string;
+    level: string;
+    createdAt: string;
+}
+
+export interface UnreadNotificationResp {
+    list: UnreadNotificationItem[];
+    total: number;
+}
+
 export function getChannelList() {
-    return request<any>({ url: '/api/notification/channel', method: 'get' });
+    return request<ChannelListResp>({ url: '/api/notification/channel', method: 'get' });
 }
 
-export function createChannel(data: any) {
-    return request<any>({ url: '/api/notification/channel', method: 'post', data });
+export function createChannel(data: Omit<ChannelItem, 'id' | 'createdAt' | 'updatedAt'>) {
+    return request<void>({ url: '/api/notification/channel', method: 'post', data });
 }
 
-export function updateChannel(id: number, data: any) {
-    return request<any>({ url: `/api/notification/channel/${id}`, method: 'put', data });
+export function updateChannel(id: number, data: Partial<Omit<ChannelItem, 'id' | 'createdAt' | 'updatedAt'>>) {
+    return request<void>({ url: `/api/notification/channel/${id}`, method: 'put', data });
 }
 
 export function deleteChannel(id: number) {
-    return request<any>({ url: `/api/notification/channel/${id}`, method: 'delete' });
+    return request<void>({ url: `/api/notification/channel/${id}`, method: 'delete' });
 }
 
 export function testChannel(data: TestChannelPayload) {
-    return request<any>({ url: '/api/notification/channel/test', method: 'post', data });
+    return request<void>({ url: '/api/notification/channel/test', method: 'post', data });
 }
 
 export function getRuleList() {
-    return request<any>({ url: '/api/notification/rule', method: 'get' });
+    return request<RuleListResp>({ url: '/api/notification/rule', method: 'get' });
 }
 
-export function createRule(data: any) {
-    return request<any>({ url: '/api/notification/rule', method: 'post', data });
+export function createRule(data: Omit<RuleItem, 'id' | 'createdAt' | 'updatedAt'>) {
+    return request<void>({ url: '/api/notification/rule', method: 'post', data });
 }
 
-export function updateRule(id: number, data: any) {
-    return request<any>({ url: `/api/notification/rule/${id}`, method: 'put', data });
+export function updateRule(id: number, data: Partial<Omit<RuleItem, 'id' | 'createdAt' | 'updatedAt'>>) {
+    return request<void>({ url: `/api/notification/rule/${id}`, method: 'put', data });
 }
 
 export function deleteRule(id: number) {
-    return request<any>({ url: `/api/notification/rule/${id}`, method: 'delete' });
+    return request<void>({ url: `/api/notification/rule/${id}`, method: 'delete' });
 }
 
 export function getTemplateList() {
-    return request<any>({ url: '/api/notification/template', method: 'get' });
+    return request<TemplateListResp>({ url: '/api/notification/template', method: 'get' });
 }
 
-export function createTemplate(data: any) {
-    return request<any>({ url: '/api/notification/template', method: 'post', data });
+export function createTemplate(data: Omit<TemplateItem, 'id' | 'createdAt' | 'updatedAt'>) {
+    return request<void>({ url: '/api/notification/template', method: 'post', data });
 }
 
-export function updateTemplate(id: number, data: any) {
-    return request<any>({ url: `/api/notification/template/${id}`, method: 'put', data });
+export function updateTemplate(id: number, data: Partial<Omit<TemplateItem, 'id' | 'createdAt' | 'updatedAt'>>) {
+    return request<void>({ url: `/api/notification/template/${id}`, method: 'put', data });
 }
 
 export function deleteTemplate(id: number) {
-    return request<any>({ url: `/api/notification/template/${id}`, method: 'delete' });
+    return request<void>({ url: `/api/notification/template/${id}`, method: 'delete' });
 }
 
-export function previewTemplate(data: any) {
-    return request<any>({ url: '/api/notification/template/preview', method: 'post', data });
+export function previewTemplate(data: Pick<TemplateItem, 'format' | 'content' | 'type'>) {
+    return request<void>({ url: '/api/notification/template/preview', method: 'post', data });
 }
 
-export function getLogList(params: any) {
-    return request<any>({ url: '/api/notification/log', method: 'get', params });
+export function getLogList(params: { page: number; pageSize: number }) {
+    return request<LogListResp>({ url: '/api/notification/log', method: 'get', params });
 }
 
 export function deleteNotificationLog(id: number) {
-    return request<any>({ url: `/api/notification/log/${id}`, method: 'delete' });
+    return request<void>({ url: `/api/notification/log/${id}`, method: 'delete' });
 }
 
 export function batchDeleteNotificationLogs(ids: number[]) {
-    return request<any>({ url: '/api/notification/log/batch-delete', method: 'post', data: { ids } });
+    return request<void>({ url: '/api/notification/log/batch-delete', method: 'post', data: { ids } });
 }
 
 export function clearNotificationLogs() {
-    return request<any>({ url: '/api/notification/log/clear', method: 'post' });
+    return request<void>({ url: '/api/notification/log/clear', method: 'post' });
 }
 
 export function getUnreadNotifications() {
-    return request<any>({ url: '/api/notification/unread', method: 'get' });
+    return request<UnreadNotificationResp>({ url: '/api/notification/unread', method: 'get' });
 }
 
 export function readNotification(id: number) {
-    return request<any>({ url: `/api/notification/read/${id}`, method: 'post' });
+    return request<void>({ url: `/api/notification/read/${id}`, method: 'post' });
 }
 
 export function readAllNotifications() {
-    return request<any>({ url: '/api/notification/read/all', method: 'post' });
+    return request<void>({ url: '/api/notification/read/all', method: 'post' });
 }

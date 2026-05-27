@@ -44,7 +44,7 @@ export function fetchSimpleWafConfig(serverId?: number) {
 }
 
 export function updateSimpleWafConfig(data: SimpleWafConfigPayload) {
-  return request<any>({
+  return request<void>({
     url: '/api/caddy/waf/simple-config',
     method: 'put',
     data

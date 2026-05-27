@@ -13,7 +13,7 @@ export function fetchGetRoleList() {
  * @param permissions Permission list
  */
 export function fetchUpdateRolePermissions(id: number, permissions: string[]) {
-    return request<any>({
+    return request<void>({
         url: `/api/role/${id}/permissions`,
         method: 'put',
         data: { id, permissions }

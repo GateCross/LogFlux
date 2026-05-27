@@ -127,7 +127,6 @@ async function handlePasswordSubmit() {
 }
 
 function handleDropdown(key: DropdownKey) {
-  console.log('handleDropdown key:', key);
   if (key === 'logout') {
     logout();
   } else if (key === 'changePassword') {
@@ -136,7 +135,6 @@ function handleDropdown(key: DropdownKey) {
     formModel.confirmPassword = '';
     showModal.value = true;
   } else if (key === 'user-center') {
-    console.log('Navigating to user_center');
     routerPushByKey('user_center');
   } else {
     // If your other options are jumps from other routes, they will be directly supported here

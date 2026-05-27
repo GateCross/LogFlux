@@ -25,7 +25,7 @@ export function fetchLogSourceList(params: { page: number; pageSize: number }) {
 export function createLogSource(
     data: { name?: string; path: string; type?: string; scanInterval?: number }
 ) {
-    return request<any>({
+    return request<void>({
         url: '/api/source',
         method: 'post',
         data
@@ -36,7 +36,7 @@ export function updateLogSource(
     id: number,
     data: { name?: string; path?: string; enabled?: boolean; scanInterval?: number }
 ) {
-    return request<any>({
+    return request<void>({
         url: `/api/source/${id}`,
         method: 'put',
         data
@@ -44,7 +44,7 @@ export function updateLogSource(
 }
 
 export function deleteLogSource(id: number) {
-    return request<any>({
+    return request<void>({
         url: `/api/source/${id}`,
         method: 'delete'
     });

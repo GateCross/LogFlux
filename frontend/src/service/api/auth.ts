@@ -23,11 +23,11 @@ export function fetchGetUserInfo() {
 
 /**
  * Update user preferences
- * 
+ *
  * @param preferences User preferences JSON string
  */
 export function fetchUpdateUserPreferences(preferences: string) {
-  return request<any>({
+  return request<void>({
     url: '/api/user/preferences',
     method: 'put',
     data: {

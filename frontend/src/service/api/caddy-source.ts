@@ -61,23 +61,23 @@ export function fetchWafSourceList(params: { page: number; pageSize: number; kin
 }
 
 export function createWafSource(data: WafSourcePayload) {
-  return request<any>({ url: '/api/caddy/waf/source', method: 'post', data });
+  return request<void>({ url: '/api/caddy/waf/source', method: 'post', data });
 }
 
 export function updateWafSource(id: number, data: Partial<WafSourcePayload>) {
-  return request<any>({ url: `/api/caddy/waf/source/${id}`, method: 'put', data });
+  return request<void>({ url: `/api/caddy/waf/source/${id}`, method: 'put', data });
 }
 
 export function deleteWafSource(id: number) {
-  return request<any>({ url: `/api/caddy/waf/source/${id}`, method: 'delete' });
+  return request<void>({ url: `/api/caddy/waf/source/${id}`, method: 'delete' });
 }
 
 export function checkWafSource(id: number) {
-  return request<any>({ url: `/api/caddy/waf/source/${id}/check`, method: 'post' });
+  return request<void>({ url: `/api/caddy/waf/source/${id}/check`, method: 'post' });
 }
 
 export function syncWafSource(id: number, activateNow?: boolean) {
-  return request<any>({
+  return request<void>({
     url: `/api/caddy/waf/source/${id}/sync`,
     method: 'post',
     timeout: 240000,
@@ -86,7 +86,7 @@ export function syncWafSource(id: number, activateNow?: boolean) {
 }
 
 export function uploadWafPackage(data: FormData) {
-  return request<any>({
+  return request<void>({
     url: '/api/caddy/waf/upload',
     method: 'post',
     data
@@ -98,5 +98,5 @@ export function fetchWafEngineStatus() {
 }
 
 export function checkWafEngine() {
-  return request<any>({ url: '/api/caddy/waf/engine/check', method: 'post' });
+  return request<void>({ url: '/api/caddy/waf/engine/check', method: 'post' });
 }

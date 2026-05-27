@@ -128,11 +128,11 @@ export function fetchWafPolicyFalsePositiveFeedbackList(params: {
 }
 
 export function createWafPolicyFalsePositiveFeedback(data: WafPolicyFalsePositiveFeedbackPayload) {
-  return request<any>({ url: '/api/caddy/waf/policy/false-positive-feedback', method: 'post', data });
+  return request<void>({ url: '/api/caddy/waf/policy/false-positive-feedback', method: 'post', data });
 }
 
 export function updateWafPolicyFalsePositiveFeedbackStatus(id: number, data: WafPolicyFalsePositiveFeedbackStatusUpdatePayload) {
-  return request<any>({ url: `/api/caddy/waf/policy/false-positive-feedback/${id}/status`, method: 'put', data });
+  return request<void>({ url: `/api/caddy/waf/policy/false-positive-feedback/${id}/status`, method: 'put', data });
 }
 
 export function batchUpdateWafPolicyFalsePositiveFeedbackStatus(data: WafPolicyFalsePositiveFeedbackBatchStatusUpdatePayload) {

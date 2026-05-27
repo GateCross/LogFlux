@@ -52,11 +52,11 @@ export function fetchWafReleaseList(params: {
 }
 
 export function activateWafRelease(id: number) {
-  return request<any>({ url: `/api/caddy/waf/release/${id}/activate`, method: 'post' });
+  return request<void>({ url: `/api/caddy/waf/release/${id}/activate`, method: 'post' });
 }
 
 export function rollbackWafRelease(data: { target?: 'last_good' | 'version'; version?: string }) {
-  return request<any>({
+  return request<void>({
     url: '/api/caddy/waf/release/rollback',
     method: 'post',
     data
@@ -64,7 +64,7 @@ export function rollbackWafRelease(data: { target?: 'last_good' | 'version'; ver
 }
 
 export function clearWafReleases(data?: { kind?: WafKind | '' }) {
-  return request<any>({
+  return request<void>({
     url: '/api/caddy/waf/release/clear',
     method: 'post',
     data
@@ -76,7 +76,7 @@ export function fetchWafJobList(params: { page: number; pageSize: number; status
 }
 
 export function clearWafJobs() {
-  return request<any>({
+  return request<void>({
     url: '/api/caddy/waf/job/clear',
     method: 'post'
   });

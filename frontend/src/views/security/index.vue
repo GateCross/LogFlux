@@ -54,6 +54,7 @@ import { usePolicyFeedbackExclusionDraft } from './composables/usePolicyFeedback
 import { useSecurityRefresh } from './composables/useSecurityRefresh';
 import { useWafSource } from './composables/useWafSource';
 import { useWafSourceRuntime } from './composables/useWafSourceRuntime';
+import { createDateTimeValidator, createStatusCodeValidator, createMethodValidator } from './security-validators';
 
 const message = useMessage();
 const dialog = useDialog();
@@ -436,44 +437,9 @@ const observeExport = useWafObserveExport({
 });
 const { handleCopyPolicyStatsLink, handleExportPolicyStatsCsv, handleExportPolicyStatsCompareCsv } = observeExport;
 const policyFeedbackRules: FormRules = {
-  method: {
-    validator(_rule, value: string) {
-      const normalized = String(value || '')
-        .trim()
-        .toUpperCase();
-      if (!normalized) {
-        return true;
-      }
-      if (!methodOptions.some(item => item.value === normalized)) {
-        return new Error('Method 不合法');
-      }
-      return true;
-    },
-    trigger: ['blur', 'change']
-  },
-  status: {
-    validator(_rule, value: number) {
-      const num = Number(value);
-      if (!Number.isFinite(num) || num < 100 || num > 599) {
-        return new Error('状态码必须在 100-599 之间');
-      }
-      return true;
-    },
-    trigger: ['blur', 'change']
-  },
-  dueAt: {
-    validator(_rule, value: string) {
-      const text = String(value || '').trim();
-      if (!text) {
-        return true;
-      }
-      if (!/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}$/.test(text)) {
-        return new Error('截止时间格式应为 YYYY-MM-DD HH:mm:ss');
-      }
-      return true;
-    },
-    trigger: ['blur', 'input']
-  },
+  method: createMethodValidator(methodOptions.map(item => item.value)),
+  status: createStatusCodeValidator(),
+  dueAt: createDateTimeValidator(),
   reason: {
     required: true,
     message: '请填写误报原因',
@@ -487,19 +453,7 @@ const policyFeedbackProcessRules: FormRules = {
     message: '请选择处理状态',
     trigger: 'change'
   },
-  dueAt: {
-    validator(_rule, value: string) {
-      const text = String(value || '').trim();
-      if (!text) {
-        return true;
-      }
-      if (!/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}$/.test(text)) {
-        return new Error('截止时间格式应为 YYYY-MM-DD HH:mm:ss');
-      }
-      return true;
-    },
-    trigger: ['blur', 'input']
-  }
+  dueAt: createDateTimeValidator()
 };
 
 const policyRules: FormRules = {
