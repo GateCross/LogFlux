@@ -1,42 +1,65 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch, h, defineAsyncComponent } from 'vue';
-import { useMessage, useDialog, NTag, NButton } from 'naive-ui';
+import { computed, defineAsyncComponent, h, onMounted, ref, watch } from 'vue';
+import { NButton, NTag, useDialog, useMessage } from 'naive-ui';
 import type { DataTableColumns } from 'naive-ui';
 import { loader } from '@guolao/vue-monaco-editor';
-
-const VueMonacoEditor = defineAsyncComponent(() =>
-  import('@guolao/vue-monaco-editor').then(m => m.VueMonacoEditor)
-);
-const VueMonacoDiffEditor = defineAsyncComponent(() =>
-  import('@guolao/vue-monaco-editor').then(m => m.VueMonacoDiffEditor)
-);
-import { fetchCaddyServers, fetchCaddyConfig, updateCaddyConfigRaw, updateCaddyConfigStructured, addCaddyServer, updateCaddyServer, deleteCaddyServer, fetchCaddyConfigHistory, fetchCaddyConfigHistoryDetail, rollbackCaddyConfig, previewCaddyConfig } from '@/service/api/caddy';
+import {
+  addCaddyServer,
+  deleteCaddyServer,
+  fetchCaddyConfig,
+  fetchCaddyConfigHistory,
+  fetchCaddyConfigHistoryDetail,
+  fetchCaddyServers,
+  previewCaddyConfig,
+  rollbackCaddyConfig,
+  updateCaddyConfigRaw,
+  updateCaddyConfigStructured,
+  updateCaddyServer
+} from '@/service/api/caddy';
+import {
+  type WafIntegrationStatusResp,
+  applyWafIntegration,
+  fetchWafIntegrationStatus
+} from '@/service/api/caddy-integration';
+import SvgIcon from '@/components/custom/svg-icon.vue';
 import ConfigPreviewPanel from './components/ConfigPreviewPanel.vue';
 import QuickConfigPanel from './components/QuickConfigPanel.vue';
 import RawEditorPanel from './components/RawEditorPanel.vue';
 import SimpleWafPanel from './components/SimpleWafPanel.vue';
 import WafIntegrationCard from './components/WafIntegrationCard.vue';
-import SvgIcon from '@/components/custom/svg-icon.vue';
 import type { CaddyFormModel, Route, RouteMatch, Site } from './types';
-import { buildCaddyfile, buildLineDiff, formatCaddyfile, genId, normalizeModules, parseCaddyfileToModules, validateStructuredConfig, type DiffRow } from './caddy-config-utils';
-import { applyWafIntegration, fetchWafIntegrationStatus, type WafIntegrationStatusResp } from '@/service/api/caddy-integration';
 import {
+  type DiffRow,
+  buildCaddyfile,
+  buildLineDiff,
+  formatCaddyfile,
+  genId,
+  normalizeModules,
+  parseCaddyfileToModules,
+  validateStructuredConfig
+} from './caddy-config-utils';
+import {
+  type ComplexSiteSummary,
+  type QuickSiteDraft,
   buildQuickConfigState,
   createQuickSiteDraft,
-  mergeQuickConfigDrafts,
-  type ComplexSiteSummary,
-  type QuickSiteDraft
+  mergeQuickConfigDrafts
 } from './quick-config-utils';
+
+const VueMonacoEditor = defineAsyncComponent(() => import('@guolao/vue-monaco-editor').then(m => m.VueMonacoEditor));
+const VueMonacoDiffEditor = defineAsyncComponent(() =>
+  import('@guolao/vue-monaco-editor').then(m => m.VueMonacoDiffEditor)
+);
 
 // Configure Monaco Editor loader to use npmmirror for better performance in China
 loader.config({
   paths: {
-    vs: 'https://registry.npmmirror.com/monaco-editor/0.44.0/files/min/vs',
-  },
+    vs: 'https://registry.npmmirror.com/monaco-editor/0.44.0/files/min/vs'
+  }
 });
 
 // Defines
-interface CaddyServer { 
+interface CaddyServer {
   id: number;
   name: string;
   url: string;
@@ -131,7 +154,9 @@ const structuredReady = computed(() => {
 });
 const mergedQuickFormModel = computed(() => mergeQuickConfigDrafts(formModel.value, quickSiteDrafts.value));
 const generatedQuickCaddyfile = computed(() => buildCaddyfile(mergedQuickFormModel.value));
-const effectiveConfigContent = computed(() => (lastEditMode.value === 'raw' ? configContent.value : generatedQuickCaddyfile.value));
+const effectiveConfigContent = computed(() =>
+  lastEditMode.value === 'raw' ? configContent.value : generatedQuickCaddyfile.value
+);
 const formattedConfigContent = computed(() => formatCaddyfile(effectiveConfigContent.value));
 const globalRawChanged = computed(
   () => (formModel.value.global?.raw ?? '').trim() !== (initialGlobalRaw.value ?? '').trim()
@@ -147,7 +172,9 @@ const quickValidationErrors = computed(() => {
   }
   return validateStructuredConfig(mergedQuickFormModel.value);
 });
-const historyDetailFormattedConfig = computed(() => (historyDetail.value ? formatCaddyfile(historyDetail.value.config) : ''));
+const historyDetailFormattedConfig = computed(() =>
+  historyDetail.value ? formatCaddyfile(historyDetail.value.config) : ''
+);
 const historyCompareLeftFormatted = computed(() => formatCaddyfile(historyCompareLeft.value));
 const historyCompareRight = computed(() => formattedConfigContent.value);
 const pageModeOptions = [
@@ -210,7 +237,7 @@ async function getServers() {
 
 async function getConfig() {
   if (!currentServerId.value) return;
-  
+
   loading.value = true;
   const { data, error } = await fetchCaddyConfig(currentServerId.value);
   loading.value = false;
@@ -497,7 +524,10 @@ async function confirmSavePreview() {
   let saved = false;
   try {
     if (savePreviewKind.value === 'raw') {
-      const { error } = await updateCaddyConfigRaw(currentServerId.value, savePreviewConfig.value || savePreviewOriginal.value);
+      const { error } = await updateCaddyConfigRaw(
+        currentServerId.value,
+        savePreviewConfig.value || savePreviewOriginal.value
+      );
       if (error) {
         message.error('保存配置失败');
         return;
@@ -511,7 +541,11 @@ async function confirmSavePreview() {
       return;
     }
 
-    const { error } = await updateCaddyConfigStructured(currentServerId.value, savePreviewConfig.value || savePreviewOriginal.value, savePreviewModules.value);
+    const { error } = await updateCaddyConfigStructured(
+      currentServerId.value,
+      savePreviewConfig.value || savePreviewOriginal.value,
+      savePreviewModules.value
+    );
     if (error) {
       message.error('保存配置失败');
       return;
@@ -743,7 +777,7 @@ async function handleSaveServer() {
     const res = await addCaddyServer(serverFormModel.value);
     error = res.error;
   } else {
-    const res = await updateCaddyServer(serverFormModel.value);
+    const res = await updateCaddyServer(serverFormModel.value as CaddyServer);
     error = res.error;
   }
 
@@ -948,7 +982,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="h-full overflow-hidden flex flex-col">
+  <div class="h-full flex flex-col overflow-hidden">
     <NCard
       class="h-full card-wrapper"
       :content-style="{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }"
@@ -960,7 +994,7 @@ onMounted(() => {
               v-model:value="currentServerId"
               :options="serverOptions"
               placeholder="选择服务器"
-              class="w-full max-w-72"
+              class="max-w-72 w-full"
               size="small"
             />
           </div>
@@ -1000,14 +1034,10 @@ onMounted(() => {
         </div>
       </template>
 
-      <div class="flex-1 min-h-0 flex flex-col gap-4 overflow-hidden">
+      <div class="min-h-0 flex flex-col flex-1 gap-4 overflow-hidden">
         <div class="caddy-mode-strip">
           <NRadioGroup :value="pageMode" size="small" @update:value="handleModeChange">
-            <NRadioButton
-              v-for="option in pageModeOptions"
-              :key="option.value"
-              :value="option.value"
-            >
+            <NRadioButton v-for="option in pageModeOptions" :key="option.value" :value="option.value">
               {{ option.label }}
             </NRadioButton>
           </NRadioGroup>
@@ -1016,21 +1046,21 @@ onMounted(() => {
           </div>
         </div>
 
-        <div v-if="servers.length === 0" class="flex flex-col items-center justify-center p-8 text-gray-400 h-full">
+        <div v-if="servers.length === 0" class="h-full flex flex-col items-center justify-center p-8 text-gray-400">
           <div class="text-lg">未找到 Caddy 服务器</div>
-          <div class="text-sm mt-2">先添加一个服务器，再开始管理配置。</div>
+          <div class="mt-2 text-sm">先添加一个服务器，再开始管理配置。</div>
           <NButton class="mt-4" type="primary" @click="openAddServerModal">添加服务器</NButton>
         </div>
 
-        <NSpin :show="loading" class="flex-1 min-h-0" content-class="h-full min-h-0" v-else>
-          <n-alert
+        <NSpin v-else :show="loading" class="min-h-0 flex-1" content-class="h-full min-h-0">
+          <NAlert
             v-if="pageMode === 'quick' && quickValidationErrors.length"
             type="error"
             :show-icon="true"
             class="mb-3"
           >
             {{ quickValidationErrors[0] }}
-          </n-alert>
+          </NAlert>
 
           <QuickConfigPanel
             v-if="pageMode === 'quick'"
@@ -1047,49 +1077,47 @@ onMounted(() => {
             :server-id="currentServerId"
             :on-applied="handleSimpleWafApplied"
           />
-          <RawEditorPanel
-            v-else-if="pageMode === 'raw'"
-            v-model="configContent"
-          />
-          <ConfigPreviewPanel
-            v-else
-            :config-content="formattedConfigContent"
-          />
+          <RawEditorPanel v-else-if="pageMode === 'raw'" v-model="configContent" />
+          <ConfigPreviewPanel v-else :config-content="formattedConfigContent" />
         </NSpin>
       </div>
     </NCard>
 
     <NDrawer v-model:show="showSettingsDrawer" :width="560" placement="right">
       <NDrawerContent title="更多设置" closable>
-        <n-space vertical size="large">
-          <n-card size="small" :bordered="false">
+        <NSpace vertical size="large">
+          <NCard size="small" :bordered="false">
             <template #header>配置工具</template>
             <div class="flex flex-wrap gap-2">
-              <n-button size="small" @click="applyPreset">应用默认模板</n-button>
-              <n-button size="small" @click="importRawToStructured">从原始配置解析</n-button>
-              <n-button size="small" @click="openHistoryModal" :disabled="!currentServerId">查看历史版本</n-button>
+              <NButton size="small" @click="applyPreset">应用默认模板</NButton>
+              <NButton size="small" @click="importRawToStructured">从原始配置解析</NButton>
+              <NButton size="small" :disabled="!currentServerId" @click="openHistoryModal">查看历史版本</NButton>
             </div>
-          </n-card>
+          </NCard>
 
-          <n-card size="small" :bordered="false">
+          <NCard size="small" :bordered="false">
             <template #header>
               <div class="flex items-center justify-between gap-3">
                 <span>全局配置</span>
                 <div class="flex items-center gap-2">
-                  <n-tag v-if="globalRawChanged" type="warning" size="small" :bordered="false">未保存</n-tag>
-                  <n-button size="tiny" secondary @click="restoreGlobalRaw" :disabled="!initialGlobalRaw">
+                  <NTag v-if="globalRawChanged" type="warning" size="small" :bordered="false">未保存</NTag>
+                  <NButton size="tiny" secondary :disabled="!initialGlobalRaw" @click="restoreGlobalRaw">
                     恢复已保存
-                  </n-button>
-                  <n-button size="tiny" @click="openGlobalCompare" :disabled="!formModel.global.raw && !initialGlobalRaw">
+                  </NButton>
+                  <NButton
+                    size="tiny"
+                    :disabled="!formModel.global.raw && !initialGlobalRaw"
+                    @click="openGlobalCompare"
+                  >
                     对比
-                  </n-button>
+                  </NButton>
                 </div>
               </div>
             </template>
 
-            <n-alert v-if="pageMode !== 'quick'" type="info" :show-icon="true" class="mb-3">
+            <NAlert v-if="pageMode !== 'quick'" type="info" :show-icon="true" class="mb-3">
               全局配置仅在“快速配置”模式下可编辑；原始配置模式请直接维护完整 Caddyfile。
-            </n-alert>
+            </NAlert>
 
             <div class="relative h-[240px]">
               <VueMonacoEditor
@@ -1107,9 +1135,9 @@ onMounted(() => {
                 class="absolute inset-0"
               />
             </div>
-          </n-card>
+          </NCard>
 
-          <n-card size="small" :bordered="false">
+          <NCard size="small" :bordered="false">
             <template #header>高级集成</template>
             <WafIntegrationCard
               :loading="wafIntegrationLoading"
@@ -1125,13 +1153,13 @@ onMounted(() => {
               :on-disable="handleDisableWafIntegration"
               :on-site-change="handleWafIntegrationSiteChange"
             />
-          </n-card>
-        </n-space>
+          </NCard>
+        </NSpace>
       </NDrawerContent>
     </NDrawer>
 
-    <NModal v-model:show="showHistoryModal" preset="card" title="配置历史" class="w-[90vw] max-w-3xl">
-      <n-data-table
+    <NModal v-model:show="showHistoryModal" preset="card" title="配置历史" class="max-w-3xl w-[90vw]">
+      <NDataTable
         :columns="historyColumns"
         :data="historyList"
         :loading="historyLoading"
@@ -1149,9 +1177,9 @@ onMounted(() => {
       v-model:show="showHistoryDetailModal"
       preset="card"
       :title="historyDetail ? `历史配置预览 - ${historyDetail.createdAt}` : '历史配置预览'"
-      class="w-[90vw] max-w-5xl"
+      class="max-w-5xl w-[90vw]"
     >
-      <div class="flex flex-wrap items-center gap-3 text-xs text-gray-500 mb-3">
+      <div class="mb-3 flex flex-wrap items-center gap-3 text-xs text-gray-500">
         <span>动作：{{ historyDetail ? formatHistoryAction(historyDetail.action) : '-' }}</span>
         <span>时间：{{ historyDetail?.createdAt ?? '-' }}</span>
       </div>
@@ -1173,15 +1201,15 @@ onMounted(() => {
       </div>
     </NModal>
 
-    <NModal v-model:show="showHistoryCompareModal" preset="card" title="历史配置对比" class="w-[90vw] max-w-5xl">
+    <NModal v-model:show="showHistoryCompareModal" preset="card" title="历史配置对比" class="max-w-5xl w-[90vw]">
       <div class="diff-head">
         <div>历史版本</div>
         <div class="flex items-center justify-between">
           <span>当前配置</span>
-          <n-switch v-model:value="historyDiffOnly" size="small">
+          <NSwitch v-model:value="historyDiffOnly" size="small">
             <template #checked>仅差异</template>
             <template #unchecked>全部</template>
-          </n-switch>
+          </NSwitch>
         </div>
       </div>
       <div class="relative h-[65vh]">
@@ -1204,15 +1232,15 @@ onMounted(() => {
       </div>
     </NModal>
 
-    <NModal v-model:show="showGlobalCompareModal" preset="card" title="全局配置对比" class="w-[90vw] max-w-4xl">
+    <NModal v-model:show="showGlobalCompareModal" preset="card" title="全局配置对比" class="max-w-4xl w-[90vw]">
       <div class="diff-head">
         <div>已保存</div>
         <div class="flex items-center justify-between">
           <span>当前</span>
-          <n-switch v-model:value="showGlobalDiffOnly" size="small">
+          <NSwitch v-model:value="showGlobalDiffOnly" size="small">
             <template #checked>仅差异</template>
             <template #unchecked>全部</template>
-          </n-switch>
+          </NSwitch>
         </div>
       </div>
       <div class="diff-body diff-two">
@@ -1231,16 +1259,16 @@ onMounted(() => {
       </div>
     </NModal>
 
-    <NModal v-model:show="savePreviewVisible" preset="card" title="保存预览" class="w-[90vw] max-w-5xl">
-      <div class="flex flex-wrap items-center gap-2 mb-3 text-xs text-gray-500">
-        <n-tag size="small" type="info" :bordered="false">
+    <NModal v-model:show="savePreviewVisible" preset="card" title="保存预览" class="max-w-5xl w-[90vw]">
+      <div class="mb-3 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+        <NTag size="small" type="info" :bordered="false">
           {{ savePreviewKind === 'quick' ? '快速配置' : '原始配置' }}
-        </n-tag>
+        </NTag>
         <span v-if="savePreviewActions.length">动作：{{ savePreviewActions.join(' / ') }}</span>
       </div>
-      <n-alert v-if="savePreviewErrors.length" type="error" :show-icon="true" class="mb-3">
+      <NAlert v-if="savePreviewErrors.length" type="error" :show-icon="true" class="mb-3">
         {{ savePreviewErrors[0] }}
-      </n-alert>
+      </NAlert>
       <div class="relative h-[60vh]">
         <VueMonacoEditor
           :value="savePreviewConfig"
@@ -1265,7 +1293,12 @@ onMounted(() => {
 
     <!-- Server Management Modal -->
     <!-- ... modal content ... -->
-    <NModal v-model:show="showServerModal" preset="card" :title="serverModalType === 'add' ? '添加服务器' : '编辑服务器'" class="w-500px">
+    <NModal
+      v-model:show="showServerModal"
+      preset="card"
+      :title="serverModalType === 'add' ? '添加服务器' : '编辑服务器'"
+      class="w-500px"
+    >
       <!-- ... form content unrelated to layout ... -->
       <NForm label-placement="left" label-width="80">
         <NFormItem label="名称" path="name">
@@ -1280,7 +1313,7 @@ onMounted(() => {
             <NRadioButton value="remote">远程</NRadioButton>
           </NRadioGroup>
         </NFormItem>
-        <NFormItem label="凭证" path="token" v-if="serverFormModel.type === 'remote'">
+        <NFormItem v-if="serverFormModel.type === 'remote'" label="凭证" path="token">
           <NInput v-model:value="serverFormModel.token" placeholder="可选认证凭证" />
         </NFormItem>
         <div class="flex justify-end gap-2">
@@ -1350,7 +1383,6 @@ onMounted(() => {
   }
 }
 
-
 .diff-head {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1388,7 +1420,7 @@ onMounted(() => {
   gap: 8px;
   padding: 6px 10px;
   font-size: 12px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
   white-space: pre-wrap;
 }
 
@@ -1414,5 +1446,4 @@ onMounted(() => {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
-
 </style>

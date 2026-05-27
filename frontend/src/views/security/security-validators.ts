@@ -10,7 +10,7 @@ export function createDateTimeValidator(message = '截止时间格式应为 YYYY
       if (!dateTimePattern.test(text)) return new Error(message);
       return true;
     },
-    trigger: ['blur', 'input'] as const
+    trigger: ['blur', 'input'] as string[]
   };
 }
 
@@ -21,21 +21,20 @@ export function createStatusCodeValidator(message = '状态码必须在 100-599 
       if (!Number.isFinite(num) || num < 100 || num > 599) return new Error(message);
       return true;
     },
-    trigger: ['blur', 'change'] as const
+    trigger: ['blur', 'change'] as string[]
   };
 }
 
-export function createMethodValidator(
-  allowedMethods: string[],
-  message = 'Method 不合法'
-) {
+export function createMethodValidator(allowedMethods: string[], message = 'Method 不合法') {
   return {
     validator(_rule: FormItemRule, value: string) {
-      const normalized = String(value || '').trim().toUpperCase();
+      const normalized = String(value || '')
+        .trim()
+        .toUpperCase();
       if (!normalized) return true;
-      if (!allowedMethods.some(item => item === normalized)) return new Error(message);
+      if (!allowedMethods.includes(normalized)) return new Error(message);
       return true;
     },
-    trigger: ['blur', 'change'] as const
+    trigger: ['blur', 'change'] as string[]
   };
 }

@@ -49,14 +49,21 @@ export interface CaddyConfigHistoryDetailResp {
 export interface CaddyLogItem {
   id: number;
   logTime: string;
+  country: string;
+  province?: string;
+  city: string;
+  location?: string;
+  host: string;
   method: string;
   uri: string;
-  host: string;
   status: number;
+  size: number;
   remoteIp: string;
+  clientIp: string;
   userAgent: string;
   duration: number;
   bodyBytes: number;
+  rawLog: string;
 }
 
 export interface CaddyLogListResp {
