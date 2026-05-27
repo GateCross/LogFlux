@@ -1,10 +1,9 @@
+<script setup lang="ts"></script>
+
 <template>
   <div class="h-full">
-    <router-view />
+    <RouterView />
   </div>
 </template>
-
-<script setup lang="ts">
-</script>
 
 <style scoped></style>

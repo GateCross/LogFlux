@@ -8,7 +8,7 @@ const props = defineProps<{
 
 <template>
   <div class="h-full flex flex-col">
-    <div class="relative flex-1 min-h-0">
+    <div class="relative min-h-0 flex-1">
       <VueMonacoEditor
         :value="props.configContent"
         language="shell"

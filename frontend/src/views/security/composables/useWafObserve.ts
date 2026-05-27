@@ -1,12 +1,12 @@
-import { computed, reactive, ref, type Ref } from 'vue';
+import { type Ref, computed, reactive, ref } from 'vue';
 import type { PaginationProps } from 'naive-ui';
 import {
-  fetchWafPolicyFalsePositiveFeedbackList,
-  fetchWafPolicyStats,
   type WafPolicyFalsePositiveFeedbackItem,
   type WafPolicyStatsDimensionItem,
   type WafPolicyStatsItem,
-  type WafPolicyStatsTrendItem
+  type WafPolicyStatsTrendItem,
+  fetchWafPolicyFalsePositiveFeedbackList,
+  fetchWafPolicyStats
 } from '@/service/api/caddy-observe';
 import { mergePolicyFeedbackCheckedRowKeys } from '../policy-feedback-draft';
 
@@ -103,8 +103,8 @@ export function useWafObserve(options: UseWafObserveOptions) {
     ...crsPolicyOptions.value
   ]);
 
-  const hasPolicyStatsDrillFilters = computed(
-    () => !!(policyStatsQuery.host.trim() || policyStatsQuery.path.trim() || policyStatsQuery.method.trim())
+  const hasPolicyStatsDrillFilters = computed(() =>
+    Boolean(policyStatsQuery.host.trim() || policyStatsQuery.path.trim() || policyStatsQuery.method.trim())
   );
   const hasPolicyFeedbackSelection = computed(() => policyFeedbackCheckedRowKeys.value.length > 0);
   const policyFeedbackCheckedRowKeysInPage = computed(() => {
@@ -168,7 +168,7 @@ export function useWafObserve(options: UseWafObserveOptions) {
     if (Number(policyStatsSummary.value.hitCount || 0) > 0) {
       return true;
     }
-    return !!(policyStatsRange.value.startTime || policyStatsRange.value.endTime);
+    return Boolean(policyStatsRange.value.startTime || policyStatsRange.value.endTime);
   }
 
   function buildPolicyFeedbackListParams() {
@@ -223,7 +223,11 @@ export function useWafObserve(options: UseWafObserveOptions) {
 
   function handlePolicyFeedbackCheckedRowKeysChange(keys: Array<string | number>) {
     const currentPageIDs = policyFeedbackTable.value.map(item => Number(item.id || 0)).filter(id => id > 0);
-    policyFeedbackCheckedRowKeys.value = mergePolicyFeedbackCheckedRowKeys(policyFeedbackCheckedRowKeys.value, currentPageIDs, keys);
+    policyFeedbackCheckedRowKeys.value = mergePolicyFeedbackCheckedRowKeys(
+      policyFeedbackCheckedRowKeys.value,
+      currentPageIDs,
+      keys
+    );
   }
 
   async function fetchPolicyStats() {
@@ -256,7 +260,11 @@ export function useWafObserve(options: UseWafObserveOptions) {
         policyStatsTopHosts.value = data.topHosts || [];
         policyStatsTopPaths.value = data.topPaths || [];
         policyStatsTopMethods.value = data.topMethods || [];
-        policyStatsRange.value = data.range || { startTime: '', endTime: '', intervalSec: Number(policyStatsQuery.intervalSec || 300) };
+        policyStatsRange.value = data.range || {
+          startTime: '',
+          endTime: '',
+          intervalSec: Number(policyStatsQuery.intervalSec || 300)
+        };
         policyStatsPreviousSnapshot.value = previousSnapshot;
       }
     } finally {

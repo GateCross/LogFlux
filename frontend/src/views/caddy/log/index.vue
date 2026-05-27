@@ -1,99 +1,6 @@
-<template>
-  <div class="h-full">
-    <n-card title="Caddy 访问日志" :bordered="false" class="h-full rounded-8px shadow-sm">
-      <div class="flex-col h-full min-h-0">
-        <div class="mb-4 flex flex-wrap items-end gap-3">
-          <n-input
-            v-model:value="searchParams.keyword"
-            placeholder="搜索 域名/URI/IP"
-            clearable
-            class="w-56"
-            @keyup.enter="handleSearch"
-          >
-            <template #prefix>
-              <icon-ic-round-search class="text-16px" />
-            </template>
-          </n-input>
-          <n-select
-            v-model:value="searchParams.status"
-            :options="statusOptions"
-            class="w-36"
-          />
-          <n-date-picker
-            v-model:formatted-value="searchParams.timeRange"
-            type="datetimerange"
-            value-format="yyyy-MM-dd HH:mm:ss"
-            clearable
-            class="w-72"
-          />
-          <n-space>
-            <n-button type="primary" @click="handleSearch">
-              <template #icon>
-                <icon-ic-round-search />
-              </template>
-              搜索
-            </n-button>
-            <n-button @click="handleRefresh">
-              <template #icon>
-                <icon-ic-round-refresh />
-              </template>
-              刷新
-            </n-button>
-            <n-button tertiary @click="handleReset">重置</n-button>
-          </n-space>
-        </div>
-
-        <n-data-table
-          remote
-          :columns="columns"
-          :data="tableData"
-          :loading="loading"
-          :pagination="pagination"
-          :row-key="row => row.id"
-          class="h-full"
-          flex-height
-          :scroll-x="1200"
-          :resizable="true"
-          @update:sorter="handleSorterChange"
-          @update:page="handlePageChange"
-          @update:page-size="handlePageSizeChange"
-          size="small"
-        />
-      </div>
-    </n-card>
-
-    <n-modal v-model:show="showDetail" preset="card" title="日志详情" class="w-720px max-h-85vh">
-      <div class="max-h-70vh overflow-auto">
-        <n-descriptions bordered size="small" :column="1" v-if="selectedLog">
-          <n-descriptions-item label="时间">{{ selectedLog.logTime }}</n-descriptions-item>
-          <n-descriptions-item label="方法">{{ selectedLog.method }}</n-descriptions-item>
-          <n-descriptions-item label="状态">{{ selectedLog.status }}</n-descriptions-item>
-          <n-descriptions-item label="域名">{{ selectedLog.host }}</n-descriptions-item>
-          <n-descriptions-item label="路径">{{ selectedLog.uri }}</n-descriptions-item>
-          <n-descriptions-item label="大小">{{ selectedLog.size }}</n-descriptions-item>
-          <n-descriptions-item label="远端 IP">{{ selectedLog.remoteIp }}</n-descriptions-item>
-          <n-descriptions-item label="客户端 IP">{{ selectedLog.clientIp }}</n-descriptions-item>
-          <n-descriptions-item label="地区">
-            {{ selectedLog.location || [selectedLog.country, selectedLog.province, selectedLog.city].filter(Boolean).join(' ') }}
-          </n-descriptions-item>
-          <n-descriptions-item label="User Agent">{{ selectedLog.userAgent || '-' }}</n-descriptions-item>
-          <n-descriptions-item label="原始日志">
-            <n-input
-              :value="rawLogText"
-              type="textarea"
-              readonly
-              autosize
-            />
-          </n-descriptions-item>
-        </n-descriptions>
-      </div>
-    </n-modal>
-  </div>
-</template>
-
 <script setup lang="ts">
-import { ref, reactive, onMounted, h, computed } from 'vue';
-import { NTag, NButton, useMessage } from 'naive-ui';
+import { computed, h, onMounted, reactive, ref } from 'vue';
+import { NButton, NTag, useMessage } from 'naive-ui';
 import type { DataTableColumns, PaginationProps } from 'naive-ui';
 import { fetchCaddyLogs } from '@/service/api/caddy';
 
@@ -341,5 +248,92 @@ onMounted(() => {
   fetchData();
 });
 </script>
+
+<template>
+  <div class="h-full">
+    <NCard title="Caddy 访问日志" :bordered="false" class="h-full rounded-8px shadow-sm">
+      <div class="h-full min-h-0 flex-col">
+        <div class="mb-4 flex flex-wrap items-end gap-3">
+          <NInput
+            v-model:value="searchParams.keyword"
+            placeholder="搜索 域名/URI/IP"
+            clearable
+            class="w-56"
+            @keyup.enter="handleSearch"
+          >
+            <template #prefix>
+              <icon-ic-round-search class="text-16px" />
+            </template>
+          </NInput>
+          <NSelect v-model:value="searchParams.status" :options="statusOptions" class="w-36" />
+          <NDatePicker
+            v-model:formatted-value="searchParams.timeRange"
+            type="datetimerange"
+            value-format="yyyy-MM-dd HH:mm:ss"
+            clearable
+            class="w-72"
+          />
+          <NSpace>
+            <NButton type="primary" @click="handleSearch">
+              <template #icon>
+                <icon-ic-round-search />
+              </template>
+              搜索
+            </NButton>
+            <NButton @click="handleRefresh">
+              <template #icon>
+                <icon-ic-round-refresh />
+              </template>
+              刷新
+            </NButton>
+            <NButton tertiary @click="handleReset">重置</NButton>
+          </NSpace>
+        </div>
+
+        <NDataTable
+          remote
+          :columns="columns"
+          :data="tableData"
+          :loading="loading"
+          :pagination="pagination"
+          :row-key="row => row.id"
+          class="h-full"
+          flex-height
+          :scroll-x="1200"
+          :resizable="true"
+          size="small"
+          @update:sorter="handleSorterChange"
+          @update:page="handlePageChange"
+          @update:page-size="handlePageSizeChange"
+        />
+      </div>
+    </NCard>
+
+    <NModal v-model:show="showDetail" preset="card" title="日志详情" class="max-h-85vh w-720px">
+      <div class="max-h-70vh overflow-auto">
+        <NDescriptions v-if="selectedLog" bordered size="small" :column="1">
+          <NDescriptionsItem label="时间">{{ selectedLog.logTime }}</NDescriptionsItem>
+          <NDescriptionsItem label="方法">{{ selectedLog.method }}</NDescriptionsItem>
+          <NDescriptionsItem label="状态">{{ selectedLog.status }}</NDescriptionsItem>
+          <NDescriptionsItem label="域名">{{ selectedLog.host }}</NDescriptionsItem>
+          <NDescriptionsItem label="路径">{{ selectedLog.uri }}</NDescriptionsItem>
+          <NDescriptionsItem label="大小">{{ selectedLog.size }}</NDescriptionsItem>
+          <NDescriptionsItem label="远端 IP">{{ selectedLog.remoteIp }}</NDescriptionsItem>
+          <NDescriptionsItem label="客户端 IP">{{ selectedLog.clientIp }}</NDescriptionsItem>
+          <NDescriptionsItem label="地区">
+            {{
+              selectedLog.location ||
+              [selectedLog.country, selectedLog.province, selectedLog.city].filter(Boolean).join(' ')
+            }}
+          </NDescriptionsItem>
+          <NDescriptionsItem label="User Agent">{{ selectedLog.userAgent || '-' }}</NDescriptionsItem>
+          <NDescriptionsItem label="原始日志">
+            <NInput :value="rawLogText" type="textarea" readonly autosize />
+          </NDescriptionsItem>
+        </NDescriptions>
+      </div>
+    </NModal>
+  </div>
+</template>
 
 <style scoped></style>

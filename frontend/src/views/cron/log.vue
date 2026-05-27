@@ -1,83 +1,7 @@
-<template>
-  <div class="h-full flex flex-col">
-    <div class="mb-3 flex items-center justify-between gap-3">
-      <n-text depth="3">
-        {{ taskId ? '当前任务执行日志' : '执行日志' }}
-      </n-text>
-      <n-button tertiary size="small" @click="handleRefresh">
-        <template #icon>
-          <SvgIcon icon="ic:round-refresh" />
-        </template>
-        刷新
-      </n-button>
-    </div>
-
-    <n-data-table
-      remote
-      :columns="columns"
-      :data="data"
-      :loading="loading"
-      :pagination="pagination"
-      :row-key="row => row.id"
-      class="flex-1"
-      flex-height
-      size="small"
-      @update:page="handlePageChange"
-      @update:page-size="handlePageSizeChange"
-    />
-
-    <n-modal v-model:show="showDetail" preset="card" :title="detailTitle" class="w-960px max-h-90vh">
-      <div class="max-h-78vh overflow-auto">
-        <n-spin :show="detailLoading">
-          <template v-if="currentLog">
-            <n-descriptions bordered size="small" :column="2" label-placement="left">
-              <n-descriptions-item label="任务名称">{{ currentLog.taskName }}</n-descriptions-item>
-              <n-descriptions-item label="任务 ID">{{ currentLog.taskId }}</n-descriptions-item>
-              <n-descriptions-item label="开始时间">{{ currentLog.startTime }}</n-descriptions-item>
-              <n-descriptions-item label="结束时间">{{ currentLog.endTime || '-' }}</n-descriptions-item>
-              <n-descriptions-item label="触发方式">{{ formatTriggerMode(currentLog.triggerMode) }}</n-descriptions-item>
-              <n-descriptions-item label="脚本来源">{{ formatScriptMode(currentLog.scriptMode) }}</n-descriptions-item>
-              <n-descriptions-item label="状态">{{ formatStatus(currentLog.status) }}</n-descriptions-item>
-              <n-descriptions-item label="退出码">{{ currentLog.exitCode }}</n-descriptions-item>
-              <n-descriptions-item label="耗时">{{ currentLog.duration }} ms</n-descriptions-item>
-              <n-descriptions-item label="输出行数">{{ outputLineCount }}</n-descriptions-item>
-              <n-descriptions-item v-if="currentLog.scriptFileName" label="脚本文件">
-                {{ currentLog.scriptFileName }}
-              </n-descriptions-item>
-              <n-descriptions-item v-if="currentLog.scriptFileVersion > 0" label="文件版本">
-                v{{ currentLog.scriptFileVersion }}
-              </n-descriptions-item>
-              <n-descriptions-item v-if="currentLog.scriptFilePath" label="文件路径" :span="2">
-                <n-input :value="currentLog.scriptFilePath" type="textarea" readonly autosize />
-              </n-descriptions-item>
-              <n-descriptions-item v-if="currentLog.scriptFileSha256" label="SHA256" :span="2">
-                <n-input :value="currentLog.scriptFileSha256" readonly />
-              </n-descriptions-item>
-              <n-descriptions-item v-if="currentLog.scriptSnapshot" label="脚本快照" :span="2">
-                <n-input :value="currentLog.scriptSnapshot" type="textarea" readonly autosize />
-              </n-descriptions-item>
-            </n-descriptions>
-
-            <div class="mt-4">
-              <div class="mb-2 text-13px font-medium">标准输出</div>
-              <n-input :value="currentLog.output || '-'" type="textarea" readonly autosize />
-            </div>
-
-            <div v-if="currentLog.error" class="mt-4">
-              <div class="mb-2 text-13px font-medium text-error">错误输出</div>
-              <n-input :value="currentLog.error" type="textarea" readonly autosize />
-            </div>
-          </template>
-        </n-spin>
-      </div>
-    </n-modal>
-  </div>
-</template>
-
 <script setup lang="ts">
 import { computed, h, onMounted, reactive, ref, watch } from 'vue';
-import { NButton, NTag, type DataTableColumns, type PaginationProps } from 'naive-ui';
-import { fetchCronLogDetail, fetchCronLogList, type CronLogItem } from '@/service/api/cron';
+import { type DataTableColumns, NButton, NTag, type PaginationProps } from 'naive-ui';
+import { type CronLogItem, fetchCronLogDetail, fetchCronLogList } from '@/service/api/cron';
 import ButtonIcon from '@/components/custom/button-icon.vue';
 import SvgIcon from '@/components/custom/svg-icon.vue';
 
@@ -144,11 +68,7 @@ const columns: DataTableColumns<CronLogItem> = [
     key: 'status',
     width: 90,
     render: row =>
-      h(
-        NTag,
-        { type: statusTagType(row.status), size: 'small' },
-        { default: () => formatStatus(row.status) }
-      )
+      h(NTag, { type: statusTagType(row.status), size: 'small' }, { default: () => formatStatus(row.status) })
   },
   {
     title: '耗时',
@@ -276,3 +196,79 @@ onMounted(() => {
   void getData();
 });
 </script>
+
+<template>
+  <div class="h-full flex flex-col">
+    <div class="mb-3 flex items-center justify-between gap-3">
+      <NText depth="3">
+        {{ taskId ? '当前任务执行日志' : '执行日志' }}
+      </NText>
+      <NButton tertiary size="small" @click="handleRefresh">
+        <template #icon>
+          <SvgIcon icon="ic:round-refresh" />
+        </template>
+        刷新
+      </NButton>
+    </div>
+
+    <NDataTable
+      remote
+      :columns="columns"
+      :data="data"
+      :loading="loading"
+      :pagination="pagination"
+      :row-key="row => row.id"
+      class="flex-1"
+      flex-height
+      size="small"
+      @update:page="handlePageChange"
+      @update:page-size="handlePageSizeChange"
+    />
+
+    <NModal v-model:show="showDetail" preset="card" :title="detailTitle" class="max-h-90vh w-960px">
+      <div class="max-h-78vh overflow-auto">
+        <NSpin :show="detailLoading">
+          <template v-if="currentLog">
+            <NDescriptions bordered size="small" :column="2" label-placement="left">
+              <NDescriptionsItem label="任务名称">{{ currentLog.taskName }}</NDescriptionsItem>
+              <NDescriptionsItem label="任务 ID">{{ currentLog.taskId }}</NDescriptionsItem>
+              <NDescriptionsItem label="开始时间">{{ currentLog.startTime }}</NDescriptionsItem>
+              <NDescriptionsItem label="结束时间">{{ currentLog.endTime || '-' }}</NDescriptionsItem>
+              <NDescriptionsItem label="触发方式">{{ formatTriggerMode(currentLog.triggerMode) }}</NDescriptionsItem>
+              <NDescriptionsItem label="脚本来源">{{ formatScriptMode(currentLog.scriptMode) }}</NDescriptionsItem>
+              <NDescriptionsItem label="状态">{{ formatStatus(currentLog.status) }}</NDescriptionsItem>
+              <NDescriptionsItem label="退出码">{{ currentLog.exitCode }}</NDescriptionsItem>
+              <NDescriptionsItem label="耗时">{{ currentLog.duration }} ms</NDescriptionsItem>
+              <NDescriptionsItem label="输出行数">{{ outputLineCount }}</NDescriptionsItem>
+              <NDescriptionsItem v-if="currentLog.scriptFileName" label="脚本文件">
+                {{ currentLog.scriptFileName }}
+              </NDescriptionsItem>
+              <NDescriptionsItem v-if="currentLog.scriptFileVersion > 0" label="文件版本">
+                v{{ currentLog.scriptFileVersion }}
+              </NDescriptionsItem>
+              <NDescriptionsItem v-if="currentLog.scriptFilePath" label="文件路径" :span="2">
+                <NInput :value="currentLog.scriptFilePath" type="textarea" readonly autosize />
+              </NDescriptionsItem>
+              <NDescriptionsItem v-if="currentLog.scriptFileSha256" label="SHA256" :span="2">
+                <NInput :value="currentLog.scriptFileSha256" readonly />
+              </NDescriptionsItem>
+              <NDescriptionsItem v-if="currentLog.scriptSnapshot" label="脚本快照" :span="2">
+                <NInput :value="currentLog.scriptSnapshot" type="textarea" readonly autosize />
+              </NDescriptionsItem>
+            </NDescriptions>
+
+            <div class="mt-4">
+              <div class="mb-2 text-13px font-medium">标准输出</div>
+              <NInput :value="currentLog.output || '-'" type="textarea" readonly autosize />
+            </div>
+
+            <div v-if="currentLog.error" class="mt-4">
+              <div class="mb-2 text-13px text-error font-medium">错误输出</div>
+              <NInput :value="currentLog.error" type="textarea" readonly autosize />
+            </div>
+          </template>
+        </NSpin>
+      </div>
+    </NModal>
+  </div>
+</template>

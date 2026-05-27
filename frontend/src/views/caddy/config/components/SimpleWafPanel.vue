@@ -2,15 +2,15 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useMessage } from 'naive-ui';
 import {
-  applySimpleWafConfig,
-  fetchSimpleWafConfig,
-  previewSimpleWafConfig,
-  updateSimpleWafConfig,
   type SimpleWafAudit,
   type SimpleWafConfigPayload,
   type SimpleWafConfigResp,
   type SimpleWafMode,
-  type SimpleWafStrength
+  type SimpleWafStrength,
+  applySimpleWafConfig,
+  fetchSimpleWafConfig,
+  previewSimpleWafConfig,
+  updateSimpleWafConfig
 } from '@/service/api/caddy-simple-waf';
 
 const props = defineProps<{
@@ -209,101 +209,101 @@ onMounted(fetchData);
 
 <template>
   <div class="h-full min-h-0 overflow-auto">
-    <n-spin :show="loading">
-      <n-space vertical size="large">
-        <n-card size="small" :bordered="false">
+    <NSpin :show="loading">
+      <NSpace vertical size="large">
+        <NCard size="small" :bordered="false">
           <template #header>
             <div class="flex items-center justify-between gap-3">
               <div class="font-semibold">防火墙设置</div>
-              <n-tag size="small" :type="statusType" :bordered="false">{{ statusText }}</n-tag>
+              <NTag size="small" :type="statusType" :bordered="false">{{ statusText }}</NTag>
             </div>
           </template>
 
-          <div class="mb-4 grid gap-3 lg:grid-cols-2">
-            <div class="rounded-8px border border-#e5e7eb px-3 py-2">
+          <div class="grid mb-4 gap-3 lg:grid-cols-2">
+            <div class="border border-#e5e7eb rounded-8px px-3 py-2">
               <div class="text-xs text-gray-500">Coraza 版本</div>
               <div class="mt-1 font-medium">{{ formatVersion(currentStatus?.corazaVersion) }}</div>
             </div>
-            <div class="rounded-8px border border-#e5e7eb px-3 py-2">
+            <div class="border border-#e5e7eb rounded-8px px-3 py-2">
               <div class="text-xs text-gray-500">CRS 版本</div>
               <div class="mt-1 font-medium">{{ formatVersion(currentStatus?.crsVersion) }}</div>
             </div>
           </div>
 
-          <n-form label-placement="top">
+          <NForm label-placement="top">
             <div class="grid gap-4 lg:grid-cols-3">
-              <n-form-item label="启用">
-                <n-switch v-model:value="form.enabled" />
-              </n-form-item>
-              <n-form-item label="模式">
-                <n-select v-model:value="form.mode" :options="modeOptions" :disabled="!form.enabled" />
-              </n-form-item>
-              <n-form-item label="强度">
-                <n-select v-model:value="form.strength" :options="strengthOptions" :disabled="!form.enabled" />
-              </n-form-item>
+              <NFormItem label="启用">
+                <NSwitch v-model:value="form.enabled" />
+              </NFormItem>
+              <NFormItem label="模式">
+                <NSelect v-model:value="form.mode" :options="modeOptions" :disabled="!form.enabled" />
+              </NFormItem>
+              <NFormItem label="强度">
+                <NSelect v-model:value="form.strength" :options="strengthOptions" :disabled="!form.enabled" />
+              </NFormItem>
             </div>
 
             <div class="grid gap-4 lg:grid-cols-3">
-              <n-form-item label="审计日志">
-                <n-select v-model:value="form.audit" :options="auditOptions" />
-              </n-form-item>
-              <n-form-item label="请求体上限(MB)">
-                <n-input-number v-model:value="form.requestBodyLimitMB" :min="1" :max="1024" />
-              </n-form-item>
-              <n-form-item label="无文件请求体上限(MB)">
-                <n-input-number v-model:value="form.requestBodyNoFilesLimitMB" :min="1" :max="1024" />
-              </n-form-item>
+              <NFormItem label="审计日志">
+                <NSelect v-model:value="form.audit" :options="auditOptions" />
+              </NFormItem>
+              <NFormItem label="请求体上限(MB)">
+                <NInputNumber v-model:value="form.requestBodyLimitMB" :min="1" :max="1024" />
+              </NFormItem>
+              <NFormItem label="无文件请求体上限(MB)">
+                <NInputNumber v-model:value="form.requestBodyNoFilesLimitMB" :min="1" :max="1024" />
+              </NFormItem>
             </div>
 
-            <n-form-item label="请求体检查">
-              <n-switch v-model:value="form.requestBodyAccess" />
-            </n-form-item>
+            <NFormItem label="请求体检查">
+              <NSwitch v-model:value="form.requestBodyAccess" />
+            </NFormItem>
 
-            <n-form-item label="适用站点">
-              <n-checkbox-group :value="form.siteAddresses" @update:value="handleSiteChange">
-                <n-space wrap>
-                  <n-checkbox v-for="item in siteOptions" :key="item.value" :value="item.value" :label="item.label" />
-                </n-space>
-              </n-checkbox-group>
-            </n-form-item>
-          </n-form>
+            <NFormItem label="适用站点">
+              <NCheckboxGroup :value="form.siteAddresses" @update:value="handleSiteChange">
+                <NSpace wrap>
+                  <NCheckbox v-for="item in siteOptions" :key="item.value" :value="item.value" :label="item.label" />
+                </NSpace>
+              </NCheckboxGroup>
+            </NFormItem>
+          </NForm>
 
-          <n-alert v-if="currentStatus?.message" type="info" :show-icon="true">
+          <NAlert v-if="currentStatus?.message" type="info" :show-icon="true">
             {{ currentStatus.message }}
-          </n-alert>
+          </NAlert>
 
           <div class="mt-4 flex flex-wrap justify-end gap-2">
-            <n-button :loading="saving" :disabled="!props.serverId" @click="handleSave">保存设置</n-button>
-            <n-button :loading="previewing" :disabled="!props.serverId" @click="handlePreview">预览变更</n-button>
-            <n-button type="primary" :loading="submitting" :disabled="!props.serverId" @click="handleApply">
+            <NButton :loading="saving" :disabled="!props.serverId" @click="handleSave">保存设置</NButton>
+            <NButton :loading="previewing" :disabled="!props.serverId" @click="handlePreview">预览变更</NButton>
+            <NButton type="primary" :loading="submitting" :disabled="!props.serverId" @click="handleApply">
               应用到 Caddy
-            </n-button>
+            </NButton>
           </div>
-        </n-card>
+        </NCard>
 
-        <n-card v-if="currentStatus?.directives" size="small" :bordered="false">
+        <NCard v-if="currentStatus?.directives" size="small" :bordered="false">
           <template #header>当前指令</template>
-          <n-code :code="currentStatus.directives" language="shell" word-wrap />
-        </n-card>
-      </n-space>
-    </n-spin>
+          <NCode :code="currentStatus.directives" language="shell" word-wrap />
+        </NCard>
+      </NSpace>
+    </NSpin>
 
-    <n-modal v-model:show="showPreviewModal" preset="card" title="防火墙配置预览" class="w-[90vw] max-w-5xl">
-      <n-space vertical size="large">
+    <NModal v-model:show="showPreviewModal" preset="card" title="防火墙配置预览" class="max-w-5xl w-[90vw]">
+      <NSpace vertical size="large">
         <div v-if="previewResult?.actions?.length" class="flex flex-wrap gap-2">
-          <n-tag v-for="item in previewResult.actions" :key="item" size="small" type="info" :bordered="false">
+          <NTag v-for="item in previewResult.actions" :key="item" size="small" type="info" :bordered="false">
             {{ item }}
-          </n-tag>
+          </NTag>
         </div>
-        <n-code v-if="previewResult?.directives" :code="previewResult.directives" language="shell" word-wrap />
-        <n-input
+        <NCode v-if="previewResult?.directives" :code="previewResult.directives" language="shell" word-wrap />
+        <NInput
           v-if="previewResult?.config"
           type="textarea"
           readonly
           :value="previewResult.config"
           :autosize="{ minRows: 12, maxRows: 24 }"
         />
-      </n-space>
-    </n-modal>
+      </NSpace>
+    </NModal>
   </div>
 </template>

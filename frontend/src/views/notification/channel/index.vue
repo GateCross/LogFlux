@@ -1,184 +1,18 @@
-<template>
-  <div class="h-full">
-    <n-card :title="$t('page.notification.channel.title')" :bordered="false" class="h-full rounded-2xl shadow-sm">
-      <template #header-extra>
-        <n-button type="primary" @click="handleAdd">
-          <template #icon>
-            <icon-ic-round-plus />
-          </template>
-          {{ $t('page.notification.channel.add') }}
-        </n-button>
-      </template>
-
-      <n-data-table
-        remote
-        :columns="columns"
-        :data="tableData"
-        :loading="loading"
-        :pagination="pagination"
-        class="h-full"
-        flex-height
-      />
-    </n-card>
-
-    <n-modal
-      v-model:show="showModal"
-      preset="card"
-      :title="modalType === 'add' ? $t('page.notification.channel.add') : $t('page.notification.channel.edit')"
-      class="w-760px"
-    >
-      <n-form ref="formRef" :model="formModel" :rules="rules" label-placement="left" label-width="100">
-        <n-form-item :label="$t('page.notification.channel.name')" path="name">
-          <n-input v-model:value="formModel.name" :placeholder="$t('page.notification.channel.placeholder.name')" />
-        </n-form-item>
-
-        <n-form-item :label="$t('page.notification.channel.type')" path="type">
-          <n-select
-            v-model:value="formModel.type"
-            :options="typeOptions"
-            :placeholder="$t('page.notification.channel.placeholder.type')"
-            @update:value="handleTypeChange"
-          />
-        </n-form-item>
-
-        <n-form-item :label="$t('page.notification.channel.enabled')" path="enabled">
-          <n-switch v-model:value="formModel.enabled" />
-        </n-form-item>
-
-        <template v-if="isWebhookType">
-          <n-alert type="info" :show-icon="false" class="mb-16px">
-            {{ $t('page.notification.channel.webhook.help') }}
-          </n-alert>
-
-          <n-grid :cols="2" :x-gap="12">
-            <n-form-item-gi :label="$t('page.notification.channel.webhook.url')" path="config">
-              <n-input v-model:value="webhookForm.url" :placeholder="$t('page.notification.channel.webhook.placeholder.url')" />
-            </n-form-item-gi>
-
-            <n-form-item-gi :label="$t('page.notification.channel.webhook.method')" path="config">
-              <n-select v-model:value="webhookForm.method" :options="methodOptions" />
-            </n-form-item-gi>
-          </n-grid>
-
-          <n-card size="small" class="mb-16px" :title="$t('page.notification.channel.webhook.sections.headers')">
-            <n-dynamic-input v-model:value="webhookForm.headers" :on-create="createHeaderItem">
-              <template #default="{ value }">
-                <div class="flex w-full gap-2">
-                  <n-input v-model:value="value.key" :placeholder="$t('page.notification.channel.webhook.placeholder.headerKey')" />
-                  <n-input v-model:value="value.value" :placeholder="$t('page.notification.channel.webhook.placeholder.headerValue')" />
-                </div>
-              </template>
-            </n-dynamic-input>
-          </n-card>
-
-          <n-card size="small" class="mb-16px" :title="$t('page.notification.channel.webhook.sections.body')">
-            <div class="mb-12px text-sm text-gray-500">
-              {{ $t('page.notification.channel.webhook.bodyHint') }}
-            </div>
-
-            <n-dynamic-input v-model:value="webhookForm.body_fields" :on-create="createBodyFieldItem">
-              <template #default="{ value }">
-                <div class="grid w-full grid-cols-[1.2fr_1fr_1.2fr] gap-2">
-                  <n-input v-model:value="value.key" :placeholder="$t('page.notification.channel.webhook.placeholder.bodyFieldKey')" />
-                  <n-select v-model:value="value.source" :options="bodySourceOptions" />
-                  <n-input
-                    v-model:value="value.customValue"
-                    :disabled="value.source !== 'custom'"
-                    :placeholder="$t('page.notification.channel.webhook.placeholder.customValue')"
-                  />
-                </div>
-              </template>
-            </n-dynamic-input>
-          </n-card>
-
-          <n-form-item :label="$t('page.notification.channel.config')">
-            <n-input v-model:value="webhookConfigPreview" type="textarea" :rows="10" readonly />
-          </n-form-item>
-        </template>
-
-        <n-form-item v-else :label="$t('page.notification.channel.config')" path="config">
-          <n-input
-            v-model:value="formModel.config"
-            type="textarea"
-            :placeholder="$t('page.notification.channel.placeholder.config')"
-            :rows="6"
-          />
-        </n-form-item>
-
-        <n-form-item :label="$t('page.notification.channel.events')" path="events">
-          <n-dynamic-tags v-model:value="eventTags" />
-        </n-form-item>
-
-        <n-form-item :label="$t('page.notification.channel.description')" path="description">
-          <n-input
-            v-model:value="formModel.description"
-            type="textarea"
-            :placeholder="$t('page.notification.channel.placeholder.description')"
-          />
-        </n-form-item>
-      </n-form>
-
-      <template #footer>
-        <div class="flex justify-end gap-2">
-          <n-button @click="showModal = false">{{ $t('common.cancel') }}</n-button>
-          <n-button type="primary" :loading="submitting" @click="handleSubmit">{{ $t('common.confirm') }}</n-button>
-        </div>
-      </template>
-    </n-modal>
-
-    <n-modal
-      v-model:show="showTestModal"
-      preset="card"
-      :title="$t('page.notification.channel.testDialog.title')"
-      class="w-560px"
-    >
-      <n-form ref="testFormRef" :model="testFormModel" :rules="testRules" label-placement="left" label-width="90">
-        <n-form-item :label="$t('page.notification.channel.testDialog.channel')">
-          <n-input :value="testTargetName" readonly />
-        </n-form-item>
-
-        <n-form-item :label="$t('page.notification.channel.testDialog.titleField')" path="title">
-          <n-input
-            v-model:value="testFormModel.title"
-            :placeholder="$t('page.notification.channel.testDialog.placeholder.title')"
-          />
-        </n-form-item>
-
-        <n-form-item :label="$t('page.notification.channel.testDialog.contentField')" path="content">
-          <n-input
-            v-model:value="testFormModel.content"
-            type="textarea"
-            :rows="5"
-            :placeholder="$t('page.notification.channel.testDialog.placeholder.content')"
-          />
-        </n-form-item>
-      </n-form>
-
-      <template #footer>
-        <div class="flex justify-end gap-2">
-          <n-button @click="showTestModal = false">{{ $t('common.cancel') }}</n-button>
-          <n-button type="primary" :loading="testing" @click="handleConfirmTest">{{ $t('page.notification.channel.test') }}</n-button>
-        </div>
-      </template>
-    </n-modal>
-  </div>
-</template>
-
 <script setup lang="ts">
 import { computed, h, onMounted, ref } from 'vue';
+import { type DataTableColumns, type FormInst, type FormRules, NButton, NTag, useDialog, useMessage } from 'naive-ui';
 import { useI18n } from 'vue-i18n';
-import { NButton, NTag, useDialog, useMessage, type DataTableColumns, type FormInst, type FormRules } from 'naive-ui';
 import {
-  createChannel,
-  deleteChannel,
-  getChannelList,
-  testChannel,
-  updateChannel,
   type ChannelItem,
   type TestChannelPayload,
   type WebhookBodyFieldItem,
   type WebhookConfigForm,
-  type WebhookHeaderItem
+  type WebhookHeaderItem,
+  createChannel,
+  deleteChannel,
+  getChannelList,
+  testChannel,
+  updateChannel
 } from '@/service/api/notification';
 
 interface ChannelFormModel {
@@ -357,7 +191,10 @@ const columns: DataTableColumns<ChannelItem> = [
       return h(
         NTag,
         { type: row.enabled ? 'success' : 'error', bordered: false },
-        { default: () => (row.enabled ? t('page.notification.channel.enabled') : t('page.notification.channel.disabled')) }
+        {
+          default: () =>
+            row.enabled ? t('page.notification.channel.enabled') : t('page.notification.channel.disabled')
+        }
       );
     }
   },
@@ -367,9 +204,17 @@ const columns: DataTableColumns<ChannelItem> = [
     key: 'action',
     render(row) {
       return h('div', { class: 'flex gap-2' }, [
-        h(NButton, { size: 'small', onClick: () => handleTest(row) }, { default: () => t('page.notification.channel.test') }),
+        h(
+          NButton,
+          { size: 'small', onClick: () => handleTest(row) },
+          { default: () => t('page.notification.channel.test') }
+        ),
         h(NButton, { size: 'small', onClick: () => handleEdit(row) }, { default: () => t('common.edit') }),
-        h(NButton, { size: 'small', type: 'error', onClick: () => handleDelete(row) }, { default: () => t('common.delete') })
+        h(
+          NButton,
+          { size: 'small', type: 'error', onClick: () => handleDelete(row) },
+          { default: () => t('common.delete') }
+        )
       ]);
     }
   }
@@ -412,19 +257,26 @@ function applyWebhookConfig(configText: string) {
 
   try {
     const parsed = JSON.parse(configText);
-    const headers = parsed.headers && typeof parsed.headers === 'object'
-      ? Object.entries(parsed.headers as Record<string, string>).map(([key, value]) => ({ key, value: String(value ?? '') }))
-      : next.headers;
+    const headers =
+      parsed.headers && typeof parsed.headers === 'object'
+        ? Object.entries(parsed.headers as Record<string, string>).map(([key, value]) => ({
+            key,
+            value: String(value ?? '')
+          }))
+        : next.headers;
 
-    const bodyFields = parsed.body_fields && typeof parsed.body_fields === 'object'
-      ? Object.entries(parsed.body_fields as Record<string, string>).map(([key, value]) => ({
-          key,
-          source: ['title', 'content', 'message', 'level', 'type', 'timestamp', 'data'].includes(String(value))
-            ? String(value) as WebhookBodyFieldItem['source']
-            : 'custom',
-          customValue: ['title', 'content', 'message', 'level', 'type', 'timestamp', 'data'].includes(String(value)) ? '' : String(value ?? '')
-        }))
-      : next.body_fields;
+    const bodyFields =
+      parsed.body_fields && typeof parsed.body_fields === 'object'
+        ? Object.entries(parsed.body_fields as Record<string, string>).map(([key, value]) => ({
+            key,
+            source: ['title', 'content', 'message', 'level', 'type', 'timestamp', 'data'].includes(String(value))
+              ? (String(value) as WebhookBodyFieldItem['source'])
+              : 'custom',
+            customValue: ['title', 'content', 'message', 'level', 'type', 'timestamp', 'data'].includes(String(value))
+              ? ''
+              : String(value ?? '')
+          }))
+        : next.body_fields;
 
     webhookForm.value = {
       ...next,
@@ -521,9 +373,8 @@ async function handleSubmit() {
       events: JSON.stringify(eventTags.value)
     };
 
-    const { error } = modalType.value === 'add'
-      ? await createChannel(payload)
-      : await updateChannel(formModel.value.id, payload);
+    const { error } =
+      modalType.value === 'add' ? await createChannel(payload) : await updateChannel(formModel.value.id, payload);
 
     if (!error) {
       message.success(t(modalType.value === 'add' ? 'common.addSuccess' : 'common.updateSuccess'));
@@ -592,3 +443,183 @@ onMounted(() => {
   fetchData();
 });
 </script>
+
+<template>
+  <div class="h-full">
+    <NCard :title="$t('page.notification.channel.title')" :bordered="false" class="h-full rounded-2xl shadow-sm">
+      <template #header-extra>
+        <NButton type="primary" @click="handleAdd">
+          <template #icon>
+            <icon-ic-round-plus />
+          </template>
+          {{ $t('page.notification.channel.add') }}
+        </NButton>
+      </template>
+
+      <NDataTable
+        remote
+        :columns="columns"
+        :data="tableData"
+        :loading="loading"
+        :pagination="pagination"
+        class="h-full"
+        flex-height
+      />
+    </NCard>
+
+    <NModal
+      v-model:show="showModal"
+      preset="card"
+      :title="modalType === 'add' ? $t('page.notification.channel.add') : $t('page.notification.channel.edit')"
+      class="w-760px"
+    >
+      <NForm ref="formRef" :model="formModel" :rules="rules" label-placement="left" label-width="100">
+        <NFormItem :label="$t('page.notification.channel.name')" path="name">
+          <NInput v-model:value="formModel.name" :placeholder="$t('page.notification.channel.placeholder.name')" />
+        </NFormItem>
+
+        <NFormItem :label="$t('page.notification.channel.type')" path="type">
+          <NSelect
+            v-model:value="formModel.type"
+            :options="typeOptions"
+            :placeholder="$t('page.notification.channel.placeholder.type')"
+            @update:value="handleTypeChange"
+          />
+        </NFormItem>
+
+        <NFormItem :label="$t('page.notification.channel.enabled')" path="enabled">
+          <NSwitch v-model:value="formModel.enabled" />
+        </NFormItem>
+
+        <template v-if="isWebhookType">
+          <NAlert type="info" :show-icon="false" class="mb-16px">
+            {{ $t('page.notification.channel.webhook.help') }}
+          </NAlert>
+
+          <NGrid :cols="2" :x-gap="12">
+            <NFormItemGi :label="$t('page.notification.channel.webhook.url')" path="config">
+              <NInput
+                v-model:value="webhookForm.url"
+                :placeholder="$t('page.notification.channel.webhook.placeholder.url')"
+              />
+            </NFormItemGi>
+
+            <NFormItemGi :label="$t('page.notification.channel.webhook.method')" path="config">
+              <NSelect v-model:value="webhookForm.method" :options="methodOptions" />
+            </NFormItemGi>
+          </NGrid>
+
+          <NCard size="small" class="mb-16px" :title="$t('page.notification.channel.webhook.sections.headers')">
+            <NDynamicInput v-model:value="webhookForm.headers" :on-create="createHeaderItem">
+              <template #default="{ value }">
+                <div class="w-full flex gap-2">
+                  <NInput
+                    v-model:value="value.key"
+                    :placeholder="$t('page.notification.channel.webhook.placeholder.headerKey')"
+                  />
+                  <NInput
+                    v-model:value="value.value"
+                    :placeholder="$t('page.notification.channel.webhook.placeholder.headerValue')"
+                  />
+                </div>
+              </template>
+            </NDynamicInput>
+          </NCard>
+
+          <NCard size="small" class="mb-16px" :title="$t('page.notification.channel.webhook.sections.body')">
+            <div class="mb-12px text-sm text-gray-500">
+              {{ $t('page.notification.channel.webhook.bodyHint') }}
+            </div>
+
+            <NDynamicInput v-model:value="webhookForm.body_fields" :on-create="createBodyFieldItem">
+              <template #default="{ value }">
+                <div class="grid grid-cols-[1.2fr_1fr_1.2fr] w-full gap-2">
+                  <NInput
+                    v-model:value="value.key"
+                    :placeholder="$t('page.notification.channel.webhook.placeholder.bodyFieldKey')"
+                  />
+                  <NSelect v-model:value="value.source" :options="bodySourceOptions" />
+                  <NInput
+                    v-model:value="value.customValue"
+                    :disabled="value.source !== 'custom'"
+                    :placeholder="$t('page.notification.channel.webhook.placeholder.customValue')"
+                  />
+                </div>
+              </template>
+            </NDynamicInput>
+          </NCard>
+
+          <NFormItem :label="$t('page.notification.channel.config')">
+            <NInput v-model:value="webhookConfigPreview" type="textarea" :rows="10" readonly />
+          </NFormItem>
+        </template>
+
+        <NFormItem v-else :label="$t('page.notification.channel.config')" path="config">
+          <NInput
+            v-model:value="formModel.config"
+            type="textarea"
+            :placeholder="$t('page.notification.channel.placeholder.config')"
+            :rows="6"
+          />
+        </NFormItem>
+
+        <NFormItem :label="$t('page.notification.channel.events')" path="events">
+          <NDynamicTags v-model:value="eventTags" />
+        </NFormItem>
+
+        <NFormItem :label="$t('page.notification.channel.description')" path="description">
+          <NInput
+            v-model:value="formModel.description"
+            type="textarea"
+            :placeholder="$t('page.notification.channel.placeholder.description')"
+          />
+        </NFormItem>
+      </NForm>
+
+      <template #footer>
+        <div class="flex justify-end gap-2">
+          <NButton @click="showModal = false">{{ $t('common.cancel') }}</NButton>
+          <NButton type="primary" :loading="submitting" @click="handleSubmit">{{ $t('common.confirm') }}</NButton>
+        </div>
+      </template>
+    </NModal>
+
+    <NModal
+      v-model:show="showTestModal"
+      preset="card"
+      :title="$t('page.notification.channel.testDialog.title')"
+      class="w-560px"
+    >
+      <NForm ref="testFormRef" :model="testFormModel" :rules="testRules" label-placement="left" label-width="90">
+        <NFormItem :label="$t('page.notification.channel.testDialog.channel')">
+          <NInput :value="testTargetName" readonly />
+        </NFormItem>
+
+        <NFormItem :label="$t('page.notification.channel.testDialog.titleField')" path="title">
+          <NInput
+            v-model:value="testFormModel.title"
+            :placeholder="$t('page.notification.channel.testDialog.placeholder.title')"
+          />
+        </NFormItem>
+
+        <NFormItem :label="$t('page.notification.channel.testDialog.contentField')" path="content">
+          <NInput
+            v-model:value="testFormModel.content"
+            type="textarea"
+            :rows="5"
+            :placeholder="$t('page.notification.channel.testDialog.placeholder.content')"
+          />
+        </NFormItem>
+      </NForm>
+
+      <template #footer>
+        <div class="flex justify-end gap-2">
+          <NButton @click="showTestModal = false">{{ $t('common.cancel') }}</NButton>
+          <NButton type="primary" :loading="testing" @click="handleConfirmTest">
+            {{ $t('page.notification.channel.test') }}
+          </NButton>
+        </div>
+      </template>
+    </NModal>
+  </div>
+</template>

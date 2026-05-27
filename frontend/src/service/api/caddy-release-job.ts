@@ -71,7 +71,12 @@ export function clearWafReleases(data?: { kind?: WafKind | '' }) {
   });
 }
 
-export function fetchWafJobList(params: { page: number; pageSize: number; status?: WafJobStatus | ''; action?: string }) {
+export function fetchWafJobList(params: {
+  page: number;
+  pageSize: number;
+  status?: WafJobStatus | '';
+  action?: string;
+}) {
   return request<WafJobListResp>({ url: '/api/caddy/waf/job', params });
 }
 

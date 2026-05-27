@@ -18,24 +18,26 @@ interface Props {
 
 const props = defineProps<Props>();
 
-const { domRef, updateOptions } = useEcharts((): ECOption => ({
-  tooltip: {
-    show: true,
-    formatter: '{b}: {c}'
-  },
-  visualMap: {
-    min: 0,
-    max: 200,
-    left: 'left',
-    top: 'bottom',
-    text: ['高', '低'],
-    calculable: true,
-    inRange: {
-      color: ['#e0f2fe', '#0ea5e9']
-    }
-  },
-  series: []
-}));
+const { domRef, updateOptions } = useEcharts(
+  (): ECOption => ({
+    tooltip: {
+      show: true,
+      formatter: '{b}: {c}'
+    },
+    visualMap: {
+      min: 0,
+      max: 200,
+      left: 'left',
+      top: 'bottom',
+      text: ['高', '低'],
+      calculable: true,
+      inRange: {
+        color: ['#e0f2fe', '#0ea5e9']
+      }
+    },
+    series: []
+  })
+);
 
 const visualMax = computed(() => {
   const values = props.data.map(item => item.value);
@@ -72,12 +74,12 @@ watch(
 <template>
   <NCard title="访问地理分布" class="h-full rounded-2xl border-none shadow-sm">
     <div ref="domRef" class="h-400px w-full"></div>
-    <div class="absolute bottom-4 right-4 bg-white/80 p-4 rounded-xl backdrop-blur-sm border border-gray-100">
-      <div class="text-sm font-bold mb-2">Top 区域</div>
+    <div class="absolute bottom-4 right-4 border border-gray-100 rounded-xl bg-white/80 p-4 backdrop-blur-sm">
+      <div class="mb-2 text-sm font-bold">Top 区域</div>
       <div class="flex flex-col gap-2">
         <div v-for="item in data" :key="item.name" class="flex items-center justify-between gap-8">
           <span class="flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full bg-primary"></span>
+            <span class="h-2 w-2 rounded-full bg-primary"></span>
             {{ item.name }}
           </span>
           <span class="font-bold">{{ item.value }}</span>

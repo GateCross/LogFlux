@@ -1,30 +1,3 @@
-<template>
-  <n-card size="small" :bordered="false">
-    <template #header>
-      <div class="flex items-center justify-between">
-        <span class="font-semibold">上游池</span>
-        <n-button size="tiny" type="primary" @click="addUpstream">新增</n-button>
-      </div>
-    </template>
-    <n-empty v-if="upstreams.length === 0" description="暂无上游" />
-    <div v-else class="flex flex-col gap-2">
-      <div v-for="up in upstreams" :key="up.name" class="rounded border p-2">
-        <div class="flex items-center gap-2">
-          <n-input v-model:value="up.name" placeholder="名称" class="flex-1" />
-          <n-select v-model:value="up.lbPolicy" :options="lbOptions" size="small" class="w-32" />
-          <n-button size="tiny" type="error" @click="removeUpstream(up.name)">删除</n-button>
-        </div>
-        <div class="mt-2">
-          <n-dynamic-tags v-model:value="up.targets" />
-        </div>
-        <div v-if="!up.name" class="text-xs text-red-500 mt-1">名称不能为空</div>
-        <div v-else-if="isDuplicateName(up.name)" class="text-xs text-red-500 mt-1">名称重复</div>
-        <div v-if="up.targets.length === 0" class="text-xs text-red-500 mt-1">至少配置一个目标</div>
-      </div>
-    </div>
-  </n-card>
-</template>
-
 <script setup lang="ts">
 import type { Upstream } from '../types';
 
@@ -55,3 +28,30 @@ function removeUpstream(name: string) {
   if (idx >= 0) props.upstreams.splice(idx, 1);
 }
 </script>
+
+<template>
+  <NCard size="small" :bordered="false">
+    <template #header>
+      <div class="flex items-center justify-between">
+        <span class="font-semibold">上游池</span>
+        <NButton size="tiny" type="primary" @click="addUpstream">新增</NButton>
+      </div>
+    </template>
+    <NEmpty v-if="upstreams.length === 0" description="暂无上游" />
+    <div v-else class="flex flex-col gap-2">
+      <div v-for="up in upstreams" :key="up.name" class="border rounded p-2">
+        <div class="flex items-center gap-2">
+          <NInput v-model:value="up.name" placeholder="名称" class="flex-1" />
+          <NSelect v-model:value="up.lbPolicy" :options="lbOptions" size="small" class="w-32" />
+          <NButton size="tiny" type="error" @click="removeUpstream(up.name)">删除</NButton>
+        </div>
+        <div class="mt-2">
+          <NDynamicTags v-model:value="up.targets" />
+        </div>
+        <div v-if="!up.name" class="mt-1 text-xs text-red-500">名称不能为空</div>
+        <div v-else-if="isDuplicateName(up.name)" class="mt-1 text-xs text-red-500">名称重复</div>
+        <div v-if="up.targets.length === 0" class="mt-1 text-xs text-red-500">至少配置一个目标</div>
+      </div>
+    </div>
+  </NCard>
+</template>

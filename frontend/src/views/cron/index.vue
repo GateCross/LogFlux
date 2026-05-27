@@ -1,230 +1,23 @@
-<template>
-  <div class="h-full overflow-hidden flex flex-col">
-    <n-card title="定时任务" class="h-full flex-1" content-style="display: flex; flex-direction: column; overflow: hidden;">
-      <template #header-extra>
-        <n-space>
-          <n-button tertiary @click="handleRefresh">
-            <template #icon>
-              <SvgIcon icon="ic:round-refresh" />
-            </template>
-            刷新
-          </n-button>
-          <n-button type="primary" @click="handleAdd">
-            <template #icon>
-              <SvgIcon icon="ic:round-plus" />
-            </template>
-            新增任务
-          </n-button>
-        </n-space>
-      </template>
-
-      <div class="mb-4 flex flex-wrap items-end gap-3">
-        <n-input
-          v-model:value="searchName"
-          clearable
-          placeholder="按任务名称搜索"
-          class="w-72"
-          @keyup.enter="handleSearch"
-        >
-          <template #prefix>
-            <SvgIcon icon="carbon:search" />
-          </template>
-        </n-input>
-        <n-space>
-          <n-button tertiary @click="handleSearch">搜索</n-button>
-          <n-button tertiary @click="handleReset">重置</n-button>
-        </n-space>
-      </div>
-
-      <n-data-table
-        :columns="columns"
-        :data="tableData"
-        :loading="loading"
-        :pagination="pagination"
-        remote
-        class="flex-1"
-        flex-height
-        :scroll-x="1180"
-        @update:page="handlePageChange"
-        @update:page-size="handlePageSizeChange"
-      />
-    </n-card>
-
-    <n-modal v-model:show="showTaskModal" preset="card" :title="taskModalTitle" class="w-760px">
-      <n-form ref="taskFormRef" :model="taskForm" :rules="taskRules" label-placement="left" label-width="96">
-        <n-grid cols="2" x-gap="16">
-          <n-form-item-gi label="任务名称" path="name">
-            <n-input v-model:value="taskForm.name" placeholder="请输入任务名称" />
-          </n-form-item-gi>
-          <n-form-item-gi label="状态" path="status">
-            <n-switch
-              v-model:value="taskForm.status"
-              :checked-value="1"
-              :unchecked-value="0"
-              :disabled="isTaskStatusSwitchDisabled"
-            >
-              <template #checked>启用</template>
-              <template #unchecked>禁用</template>
-            </n-switch>
-          </n-form-item-gi>
-          <n-form-item-gi label="Cron 表达式" path="schedule" :span="2">
-            <n-input v-model:value="taskForm.schedule" placeholder="例如：0/5 * * * * ?" />
-          </n-form-item-gi>
-          <n-form-item-gi label="脚本来源" path="scriptMode" :span="2">
-            <n-radio-group v-model:value="taskForm.scriptMode" name="script-mode">
-              <n-space>
-                <n-radio-button value="inline">手写脚本</n-radio-button>
-                <n-radio-button value="file">上传脚本</n-radio-button>
-              </n-space>
-            </n-radio-group>
-          </n-form-item-gi>
-          <n-form-item-gi v-if="taskForm.scriptMode === 'inline'" label="执行脚本" path="script" :span="2">
-            <n-input
-              v-model:value="taskForm.script"
-              type="textarea"
-              placeholder="请输入 Shell 脚本"
-              :autosize="{ minRows: 6, maxRows: 14 }"
-            />
-          </n-form-item-gi>
-          <n-form-item-gi v-else label="文件模式" :span="2">
-            <div class="flex flex-col w-full">
-              <n-upload
-                v-if="taskModalMode === 'add'"
-                :key="taskUploadKey"
-                :default-upload="false"
-                :max="1"
-                accept=".sh"
-                :show-file-list="true"
-                :multiple="false"
-                @before-upload="handleBeforeTaskScriptUpload"
-                @remove="handleRemoveTaskScriptUpload"
-              >
-                <n-button>
-                  <template #icon>
-                    <SvgIcon icon="carbon:cloud-upload" />
-                  </template>
-                  选择脚本文件
-                </n-button>
-              </n-upload>
-              <n-alert type="info" :bordered="false" class="mt-3">
-                {{ taskModalMode === 'add' ? '请选择首个脚本文件，提交后会随任务一起上传。' : '如需上传新版本，请在脚本管理中操作。' }}
-              </n-alert>
-              <div v-if="editingTaskInfo?.currentFileName" class="mt-3 text-12px text-neutral-500">
-                当前脚本：v{{ editingTaskInfo.currentFileVersion }} · {{ editingTaskInfo.currentFileName }}
-              </div>
-            </div>
-          </n-form-item-gi>
-          <n-form-item-gi label="超时时间" path="timeout">
-            <n-input-number v-model:value="taskForm.timeout" :min="1" placeholder="秒" class="w-full" />
-          </n-form-item-gi>
-        </n-grid>
-      </n-form>
-
-      <template #footer>
-        <div class="flex justify-end gap-2">
-          <n-button @click="showTaskModal = false">取消</n-button>
-          <n-button type="primary" :loading="submitLoading" @click="handleSubmitTask">确定</n-button>
-        </div>
-      </template>
-    </n-modal>
-
-    <n-modal v-model:show="showScriptModal" preset="card" :title="scriptModalTitle" class="w-960px">
-      <div v-if="currentScriptTask" class="space-y-4">
-        <n-descriptions bordered size="small" :column="2" label-placement="left">
-          <n-descriptions-item label="任务名称">{{ currentScriptTask.name }}</n-descriptions-item>
-          <n-descriptions-item label="脚本来源">{{ currentScriptTask.scriptMode === 'file' ? '上传脚本' : '手写脚本' }}</n-descriptions-item>
-          <n-descriptions-item label="当前脚本">
-            <span v-if="currentScriptTask.scriptMode === 'file'">
-              <span v-if="currentScriptTask.currentFileName">v{{ currentScriptTask.currentFileVersion }} · {{ currentScriptTask.currentFileName }}</span>
-              <span v-else>尚未上传</span>
-            </span>
-            <span v-else>内联脚本</span>
-          </n-descriptions-item>
-          <n-descriptions-item label="脚本路径">
-            <span v-if="currentScriptTask.currentFilePath">{{ currentScriptTask.currentFilePath }}</span>
-            <span v-else>-</span>
-          </n-descriptions-item>
-        </n-descriptions>
-
-        <div class="rounded-6px border border-neutral-200 p-4 dark:border-neutral-700">
-          <div class="mb-2">
-            <div class="text-14px font-medium">上传新版本</div>
-            <div class="text-12px text-neutral-500">仅支持 1 MiB 以内的 .sh 脚本文件。</div>
-          </div>
-
-          <div class="mb-2 flex items-center justify-between gap-3">
-            <n-upload
-              :key="scriptUploadKey"
-              :default-upload="false"
-              :max="1"
-              accept=".sh"
-              :show-file-list="true"
-              :multiple="false"
-              @before-upload="handleBeforeScriptUpload"
-              @remove="handleRemoveScriptUpload"
-            >
-              <n-button>
-                <template #icon>
-                  <SvgIcon icon="carbon:cloud-upload" />
-                </template>
-                选择脚本文件
-              </n-button>
-            </n-upload>
-            <n-space>
-              <n-button tertiary @click="handleReloadScriptHistory">
-                <template #icon>
-                  <SvgIcon icon="ic:round-refresh" />
-                </template>
-                刷新历史
-              </n-button>
-              <n-button type="primary" :loading="scriptUploadLoading" @click="handleUploadScript">
-                <template #icon>
-                  <SvgIcon icon="carbon:cloud-upload" />
-                </template>
-                上传脚本
-              </n-button>
-            </n-space>
-          </div>
-
-          <div class="text-12px text-neutral-500">
-            上传后会切换为文件脚本模式，并保留历史版本。
-          </div>
-        </div>
-
-        <n-data-table
-          :columns="scriptHistoryColumns"
-          :data="scriptHistoryData"
-          :loading="scriptHistoryLoading"
-          :pagination="scriptHistoryPagination"
-          remote
-          size="small"
-          class="h-[360px]"
-          flex-height
-          :scroll-x="980"
-          @update:page="handleScriptHistoryPageChange"
-          @update:page-size="handleScriptHistoryPageSizeChange"
-        />
-      </div>
-
-      <template #footer>
-        <div class="flex justify-end">
-          <n-button @click="showScriptModal = false">关闭</n-button>
-        </div>
-      </template>
-    </n-modal>
-
-    <n-drawer v-model:show="showLogDrawer" width="960" placement="right">
-      <n-drawer-content title="执行日志">
-        <cron-log-list :task-id="currentTaskId" />
-      </n-drawer-content>
-    </n-drawer>
-  </div>
-</template>
-
 <script setup lang="ts">
 import { computed, h, onMounted, reactive, ref, watch } from 'vue';
-import { useMessage, NButton, NPopconfirm, NRadioButton, NRadioGroup, NTag, NSpace, type DataTableColumns, type FormInst, type FormRules, type PaginationProps, type UploadFileInfo } from 'naive-ui';
 import {
+  type DataTableColumns,
+  type FormInst,
+  type FormRules,
+  NButton,
+  NPopconfirm,
+  NRadioButton,
+  NRadioGroup,
+  NSpace,
+  NTag,
+  type PaginationProps,
+  type UploadFileInfo,
+  useMessage
+} from 'naive-ui';
+import {
+  type CronScriptMode,
+  type CronTaskFileItem,
+  type CronTaskItem,
   activateCronTaskScript,
   createCronTask,
   createCronTaskWithFile,
@@ -233,10 +26,7 @@ import {
   fetchCronTaskScriptHistory,
   triggerCronTask,
   updateCronTask,
-  uploadCronTaskScript,
-  type CronScriptMode,
-  type CronTaskFileItem,
-  type CronTaskItem
+  uploadCronTaskScript
 } from '@/service/api/cron';
 import ButtonIcon from '@/components/custom/button-icon.vue';
 import SvgIcon from '@/components/custom/svg-icon.vue';
@@ -316,8 +106,8 @@ const triggeringTaskIds = ref<Set<number>>(new Set());
 const deletingTaskIds = ref<Set<number>>(new Set());
 const activatingScriptIds = ref<Set<number>>(new Set());
 
-const hasTaskFileForSubmit = computed(() =>
-  taskForm.scriptMode !== 'file' || Boolean(taskUploadFile.value || editingTaskInfo.value?.currentFileId)
+const hasTaskFileForSubmit = computed(
+  () => taskForm.scriptMode !== 'file' || Boolean(taskUploadFile.value || editingTaskInfo.value?.currentFileId)
 );
 const isTaskStatusSwitchDisabled = computed(() => taskForm.scriptMode === 'file' && !hasTaskFileForSubmit.value);
 
@@ -387,55 +177,59 @@ const columns: DataTableColumns<CronTaskItem> = [
     width: 210,
     fixed: 'right',
     render: row =>
-      h(NSpace, { size: 6 }, {
-        default: () => [
-          h(ButtonIcon, {
-            icon: 'carbon:play',
-            tooltipContent: getTaskTriggerTooltip(row),
-            loading: isTaskTriggering(row.id),
-            disabled: isTaskTriggerDisabled(row),
-            onClick: () => handleTrigger(row)
-          }),
-          h(ButtonIcon, {
-            icon: 'carbon:script',
-            tooltipContent: '脚本管理',
-            onClick: () => openScriptManager(row)
-          }),
-          h(ButtonIcon, {
-            icon: 'carbon:edit',
-            tooltipContent: '编辑',
-            onClick: () => handleEdit(row)
-          }),
-          h(ButtonIcon, {
-            icon: 'carbon:list',
-            tooltipContent: '执行日志',
-            onClick: () => openLogDrawer(row.id)
-          }),
-          h(
-            NPopconfirm,
-            {
-              placement: 'left',
-              onPositiveClick: () => handleDelete(row.id)
-            },
-            {
-              trigger: () =>
-                h(
-                  NButton,
-                  {
-                    quaternary: true,
-                    class: 'h-[36px] text-icon',
-                    loading: isTaskDeleting(row.id),
-                    disabled: isTaskDeleting(row.id),
-                    title: '删除',
-                    'aria-label': '删除'
-                  },
-                  { icon: () => h(SvgIcon, { icon: 'carbon:trash-can' }) }
-                ),
-              default: () => '确认删除该任务吗？'
-            }
-          )
-        ]
-      })
+      h(
+        NSpace,
+        { size: 6 },
+        {
+          default: () => [
+            h(ButtonIcon, {
+              icon: 'carbon:play',
+              tooltipContent: getTaskTriggerTooltip(row),
+              loading: isTaskTriggering(row.id),
+              disabled: isTaskTriggerDisabled(row),
+              onClick: () => handleTrigger(row)
+            }),
+            h(ButtonIcon, {
+              icon: 'carbon:script',
+              tooltipContent: '脚本管理',
+              onClick: () => openScriptManager(row)
+            }),
+            h(ButtonIcon, {
+              icon: 'carbon:edit',
+              tooltipContent: '编辑',
+              onClick: () => handleEdit(row)
+            }),
+            h(ButtonIcon, {
+              icon: 'carbon:list',
+              tooltipContent: '执行日志',
+              onClick: () => openLogDrawer(row.id)
+            }),
+            h(
+              NPopconfirm,
+              {
+                placement: 'left',
+                onPositiveClick: () => handleDelete(row.id)
+              },
+              {
+                trigger: () =>
+                  h(
+                    NButton,
+                    {
+                      quaternary: true,
+                      class: 'h-[36px] text-icon',
+                      loading: isTaskDeleting(row.id),
+                      disabled: isTaskDeleting(row.id),
+                      title: '删除',
+                      'aria-label': '删除'
+                    },
+                    { icon: () => h(SvgIcon, { icon: 'carbon:trash-can' }) }
+                  ),
+                default: () => '确认删除该任务吗？'
+              }
+            )
+          ]
+        }
+      )
   }
 ];
 
@@ -928,3 +722,236 @@ onMounted(() => {
   void getData();
 });
 </script>
+
+<template>
+  <div class="h-full flex flex-col overflow-hidden">
+    <NCard
+      title="定时任务"
+      class="h-full flex-1"
+      content-style="display: flex; flex-direction: column; overflow: hidden;"
+    >
+      <template #header-extra>
+        <NSpace>
+          <NButton tertiary @click="handleRefresh">
+            <template #icon>
+              <SvgIcon icon="ic:round-refresh" />
+            </template>
+            刷新
+          </NButton>
+          <NButton type="primary" @click="handleAdd">
+            <template #icon>
+              <SvgIcon icon="ic:round-plus" />
+            </template>
+            新增任务
+          </NButton>
+        </NSpace>
+      </template>
+
+      <div class="mb-4 flex flex-wrap items-end gap-3">
+        <NInput
+          v-model:value="searchName"
+          clearable
+          placeholder="按任务名称搜索"
+          class="w-72"
+          @keyup.enter="handleSearch"
+        >
+          <template #prefix>
+            <SvgIcon icon="carbon:search" />
+          </template>
+        </NInput>
+        <NSpace>
+          <NButton tertiary @click="handleSearch">搜索</NButton>
+          <NButton tertiary @click="handleReset">重置</NButton>
+        </NSpace>
+      </div>
+
+      <NDataTable
+        :columns="columns"
+        :data="tableData"
+        :loading="loading"
+        :pagination="pagination"
+        remote
+        class="flex-1"
+        flex-height
+        :scroll-x="1180"
+        @update:page="handlePageChange"
+        @update:page-size="handlePageSizeChange"
+      />
+    </NCard>
+
+    <NModal v-model:show="showTaskModal" preset="card" :title="taskModalTitle" class="w-760px">
+      <NForm ref="taskFormRef" :model="taskForm" :rules="taskRules" label-placement="left" label-width="96">
+        <NGrid cols="2" x-gap="16">
+          <NFormItemGi label="任务名称" path="name">
+            <NInput v-model:value="taskForm.name" placeholder="请输入任务名称" />
+          </NFormItemGi>
+          <NFormItemGi label="状态" path="status">
+            <NSwitch
+              v-model:value="taskForm.status"
+              :checked-value="1"
+              :unchecked-value="0"
+              :disabled="isTaskStatusSwitchDisabled"
+            >
+              <template #checked>启用</template>
+              <template #unchecked>禁用</template>
+            </NSwitch>
+          </NFormItemGi>
+          <NFormItemGi label="Cron 表达式" path="schedule" :span="2">
+            <NInput v-model:value="taskForm.schedule" placeholder="例如：0/5 * * * * ?" />
+          </NFormItemGi>
+          <NFormItemGi label="脚本来源" path="scriptMode" :span="2">
+            <NRadioGroup v-model:value="taskForm.scriptMode" name="script-mode">
+              <NSpace>
+                <NRadioButton value="inline">手写脚本</NRadioButton>
+                <NRadioButton value="file">上传脚本</NRadioButton>
+              </NSpace>
+            </NRadioGroup>
+          </NFormItemGi>
+          <NFormItemGi v-if="taskForm.scriptMode === 'inline'" label="执行脚本" path="script" :span="2">
+            <NInput
+              v-model:value="taskForm.script"
+              type="textarea"
+              placeholder="请输入 Shell 脚本"
+              :autosize="{ minRows: 6, maxRows: 14 }"
+            />
+          </NFormItemGi>
+          <NFormItemGi v-else label="文件模式" :span="2">
+            <div class="w-full flex flex-col">
+              <NUpload
+                v-if="taskModalMode === 'add'"
+                :key="taskUploadKey"
+                :default-upload="false"
+                :max="1"
+                accept=".sh"
+                :show-file-list="true"
+                :multiple="false"
+                @before-upload="handleBeforeTaskScriptUpload"
+                @remove="handleRemoveTaskScriptUpload"
+              >
+                <NButton>
+                  <template #icon>
+                    <SvgIcon icon="carbon:cloud-upload" />
+                  </template>
+                  选择脚本文件
+                </NButton>
+              </NUpload>
+              <NAlert type="info" :bordered="false" class="mt-3">
+                {{
+                  taskModalMode === 'add'
+                    ? '请选择首个脚本文件，提交后会随任务一起上传。'
+                    : '如需上传新版本，请在脚本管理中操作。'
+                }}
+              </NAlert>
+              <div v-if="editingTaskInfo?.currentFileName" class="mt-3 text-12px text-neutral-500">
+                当前脚本：v{{ editingTaskInfo.currentFileVersion }} · {{ editingTaskInfo.currentFileName }}
+              </div>
+            </div>
+          </NFormItemGi>
+          <NFormItemGi label="超时时间" path="timeout">
+            <NInputNumber v-model:value="taskForm.timeout" :min="1" placeholder="秒" class="w-full" />
+          </NFormItemGi>
+        </NGrid>
+      </NForm>
+
+      <template #footer>
+        <div class="flex justify-end gap-2">
+          <NButton @click="showTaskModal = false">取消</NButton>
+          <NButton type="primary" :loading="submitLoading" @click="handleSubmitTask">确定</NButton>
+        </div>
+      </template>
+    </NModal>
+
+    <NModal v-model:show="showScriptModal" preset="card" :title="scriptModalTitle" class="w-960px">
+      <div v-if="currentScriptTask" class="space-y-4">
+        <NDescriptions bordered size="small" :column="2" label-placement="left">
+          <NDescriptionsItem label="任务名称">{{ currentScriptTask.name }}</NDescriptionsItem>
+          <NDescriptionsItem label="脚本来源">
+            {{ currentScriptTask.scriptMode === 'file' ? '上传脚本' : '手写脚本' }}
+          </NDescriptionsItem>
+          <NDescriptionsItem label="当前脚本">
+            <span v-if="currentScriptTask.scriptMode === 'file'">
+              <span v-if="currentScriptTask.currentFileName">
+                v{{ currentScriptTask.currentFileVersion }} · {{ currentScriptTask.currentFileName }}
+              </span>
+              <span v-else>尚未上传</span>
+            </span>
+            <span v-else>内联脚本</span>
+          </NDescriptionsItem>
+          <NDescriptionsItem label="脚本路径">
+            <span v-if="currentScriptTask.currentFilePath">{{ currentScriptTask.currentFilePath }}</span>
+            <span v-else>-</span>
+          </NDescriptionsItem>
+        </NDescriptions>
+
+        <div class="border border-neutral-200 rounded-6px p-4 dark:border-neutral-700">
+          <div class="mb-2">
+            <div class="text-14px font-medium">上传新版本</div>
+            <div class="text-12px text-neutral-500">仅支持 1 MiB 以内的 .sh 脚本文件。</div>
+          </div>
+
+          <div class="mb-2 flex items-center justify-between gap-3">
+            <NUpload
+              :key="scriptUploadKey"
+              :default-upload="false"
+              :max="1"
+              accept=".sh"
+              :show-file-list="true"
+              :multiple="false"
+              @before-upload="handleBeforeScriptUpload"
+              @remove="handleRemoveScriptUpload"
+            >
+              <NButton>
+                <template #icon>
+                  <SvgIcon icon="carbon:cloud-upload" />
+                </template>
+                选择脚本文件
+              </NButton>
+            </NUpload>
+            <NSpace>
+              <NButton tertiary @click="handleReloadScriptHistory">
+                <template #icon>
+                  <SvgIcon icon="ic:round-refresh" />
+                </template>
+                刷新历史
+              </NButton>
+              <NButton type="primary" :loading="scriptUploadLoading" @click="handleUploadScript">
+                <template #icon>
+                  <SvgIcon icon="carbon:cloud-upload" />
+                </template>
+                上传脚本
+              </NButton>
+            </NSpace>
+          </div>
+
+          <div class="text-12px text-neutral-500">上传后会切换为文件脚本模式，并保留历史版本。</div>
+        </div>
+
+        <NDataTable
+          :columns="scriptHistoryColumns"
+          :data="scriptHistoryData"
+          :loading="scriptHistoryLoading"
+          :pagination="scriptHistoryPagination"
+          remote
+          size="small"
+          class="h-[360px]"
+          flex-height
+          :scroll-x="980"
+          @update:page="handleScriptHistoryPageChange"
+          @update:page-size="handleScriptHistoryPageSizeChange"
+        />
+      </div>
+
+      <template #footer>
+        <div class="flex justify-end">
+          <NButton @click="showScriptModal = false">关闭</NButton>
+        </div>
+      </template>
+    </NModal>
+
+    <NDrawer v-model:show="showLogDrawer" width="960" placement="right">
+      <NDrawerContent title="执行日志">
+        <CronLogList :task-id="currentTaskId" />
+      </NDrawerContent>
+    </NDrawer>
+  </div>
+</template>

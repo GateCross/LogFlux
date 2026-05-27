@@ -4,7 +4,7 @@ import { request } from '../request';
  * Get role list
  */
 export function fetchGetRoleList() {
-    return request<Api.Role.RoleListResp>({ url: '/api/role/list' });
+  return request<Api.Role.RoleListResp>({ url: '/api/role/list' });
 }
 
 /**
@@ -13,9 +13,9 @@ export function fetchGetRoleList() {
  * @param permissions Permission list
  */
 export function fetchUpdateRolePermissions(id: number, permissions: string[]) {
-    return request<void>({
-        url: `/api/role/${id}/permissions`,
-        method: 'put',
-        data: { id, permissions }
-    });
+  return request<void>({
+    url: `/api/role/${id}/permissions`,
+    method: 'put',
+    data: { id, permissions }
+  });
 }

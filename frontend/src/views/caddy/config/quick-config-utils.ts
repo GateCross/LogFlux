@@ -324,4 +324,3 @@ export function mergeQuickConfigDrafts(formModel: CaddyFormModel, drafts: QuickS
   next.sites = mergedSites;
   return next;
 }
-

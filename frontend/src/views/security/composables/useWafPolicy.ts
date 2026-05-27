@@ -1,6 +1,11 @@
-import { computed, reactive, ref, type Ref } from 'vue';
+import { type Ref, computed, reactive, ref } from 'vue';
 import type { FormInst, PaginationProps } from 'naive-ui';
 import {
+  type WafPolicyAuditEngine,
+  type WafPolicyAuditLogFormat,
+  type WafPolicyEngineMode,
+  type WafPolicyItem,
+  type WafPolicyRevisionItem,
   createWafPolicy,
   deleteWafPolicy,
   fetchWafPolicyList,
@@ -9,12 +14,7 @@ import {
   publishWafPolicy,
   rollbackWafPolicy,
   updateWafPolicy,
-  validateWafPolicy,
-  type WafPolicyAuditEngine,
-  type WafPolicyAuditLogFormat,
-  type WafPolicyEngineMode,
-  type WafPolicyItem,
-  type WafPolicyRevisionItem
+  validateWafPolicy
 } from '@/service/api/caddy-policy';
 
 type MessageApi = {

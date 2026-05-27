@@ -1,51 +1,49 @@
 import { request } from '../request';
 
 export interface LogSourceItem {
-    id: number;
-    name: string;
-    path: string;
-    type: string;
-    enabled: boolean;
-    scanInterval: number;
-    createdAt: string;
+  id: number;
+  name: string;
+  path: string;
+  type: string;
+  enabled: boolean;
+  scanInterval: number;
+  createdAt: string;
 }
 
 export interface LogSourceListResp {
-    list: LogSourceItem[];
-    total: number;
+  list: LogSourceItem[];
+  total: number;
 }
 
 export function fetchLogSourceList(params: { page: number; pageSize: number }) {
-    return request<LogSourceListResp>({
-        url: '/api/source',
-        params
-    });
+  return request<LogSourceListResp>({
+    url: '/api/source',
+    params
+  });
 }
 
-export function createLogSource(
-    data: { name?: string; path: string; type?: string; scanInterval?: number }
-) {
-    return request<void>({
-        url: '/api/source',
-        method: 'post',
-        data
-    });
+export function createLogSource(data: { name?: string; path: string; type?: string; scanInterval?: number }) {
+  return request<void>({
+    url: '/api/source',
+    method: 'post',
+    data
+  });
 }
 
 export function updateLogSource(
-    id: number,
-    data: { name?: string; path?: string; enabled?: boolean; scanInterval?: number }
+  id: number,
+  data: { name?: string; path?: string; enabled?: boolean; scanInterval?: number }
 ) {
-    return request<void>({
-        url: `/api/source/${id}`,
-        method: 'put',
-        data
-    });
+  return request<void>({
+    url: `/api/source/${id}`,
+    method: 'put',
+    data
+  });
 }
 
 export function deleteLogSource(id: number) {
-    return request<void>({
-        url: `/api/source/${id}`,
-        method: 'delete'
-    });
+  return request<void>({
+    url: `/api/source/${id}`,
+    method: 'delete'
+  });
 }

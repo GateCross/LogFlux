@@ -1,4 +1,9 @@
-import type { WafPolicyCrsTemplate, WafPolicyEngineMode, WafPolicyRevisionStatus, WafPolicyScopeType } from '@/service/api/caddy-policy';
+import type {
+  WafPolicyCrsTemplate,
+  WafPolicyEngineMode,
+  WafPolicyRevisionStatus,
+  WafPolicyScopeType
+} from '@/service/api/caddy-policy';
 
 export function mapPolicyEngineModeLabel(mode: WafPolicyEngineMode) {
   switch (mode) {
@@ -80,10 +85,18 @@ export function buildPolicyWorkspaceActions(options: {
     actions.push(`当前在基础设置区，可直接对策略 ${options.selectedPolicyName || '-'} 执行预览、校验和发布。`);
   }
   if (options.activeSection === 'crs') {
-    actions.push(options.hasPendingCrsTuningChanges ? '当前 CRS 调优存在未保存改动，发布前会要求先保存。' : '当前 CRS 调优参数已与策略持久化状态一致。');
+    actions.push(
+      options.hasPendingCrsTuningChanges
+        ? '当前 CRS 调优存在未保存改动，发布前会要求先保存。'
+        : '当前 CRS 调优参数已与策略持久化状态一致。'
+    );
   }
   if (options.activeSection === 'binding') {
-    actions.push(options.bindingConflictCount > 0 ? `当前存在 ${options.bindingConflictCount} 组绑定冲突，发布前需先处理。` : '当前未发现绑定冲突，可继续发布验证。');
+    actions.push(
+      options.bindingConflictCount > 0
+        ? `当前存在 ${options.bindingConflictCount} 组绑定冲突，发布前需先处理。`
+        : '当前未发现绑定冲突，可继续发布验证。'
+    );
   }
   if (options.activeSection === 'exclusion') {
     actions.push('规则例外会直接影响误报治理效果，建议在观测结果确认后再新增或调整。');

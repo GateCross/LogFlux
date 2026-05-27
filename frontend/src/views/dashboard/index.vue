@@ -1,16 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useDebounceFn } from '@vueuse/core';
+import { type DashboardSummaryResp, fetchDashboardSummary } from '@/service/api/dashboard';
 import HeaderBanner from './modules/header-banner.vue';
 import StatCard from './modules/stat-card.vue';
 import TrendChart from './modules/trend-chart.vue';
 import MapChart from './modules/map-chart.vue';
 import RecentLogs from './modules/recent-logs.vue';
 import type { StatCard as StatCardItem } from './data';
-import {
-  fetchDashboardSummary,
-  type DashboardSummaryResp
-} from '@/service/api/dashboard';
 
 const summary = ref<DashboardSummaryResp | null>(null);
 const refreshTimer = ref<number | null>(null);
@@ -29,9 +26,7 @@ const intervalOptions = [
   { key: '5m', label: '5分钟', seconds: 300 }
 ];
 const activeRangeKey = ref<string>(localStorage.getItem('logflux:dashboard.range') || timeRanges[0].key);
-const activeIntervalKey = ref<string>(
-  localStorage.getItem('logflux:dashboard.interval') || intervalOptions[1].key
-);
+const activeIntervalKey = ref<string>(localStorage.getItem('logflux:dashboard.interval') || intervalOptions[1].key);
 
 const activeRange = computed(() => timeRanges.find(item => item.key === activeRangeKey.value) ?? timeRanges[0]);
 const activeInterval = computed(
@@ -186,19 +181,22 @@ onUnmounted(() => {
 
     <NGrid :x-gap="16" :y-gap="16" responsive="screen" item-responsive>
       <NGridItem v-for="item in errorStats" :key="item.title" span="24 s:12 m:8">
-        <NCard :border="false" class="rounded-2xl shadow-sm h-full">
-           <div class="flex flex-col gap-2">
+        <NCard :border="false" class="h-full rounded-2xl shadow-sm">
+          <div class="flex flex-col gap-2">
             <div class="flex items-center justify-between">
               <span class="text-gray-500">{{ item.title }}</span>
-              <div :class="['i-carbon:warning-filled', item.type === 'error' ? 'text-red-500' : 'text-orange-500']"></div>
+              <div
+                class="i-carbon:warning-filled"
+                :class="[item.type === 'error' ? 'text-red-500' : 'text-orange-500']"
+              ></div>
             </div>
             <div class="flex items-end gap-2">
               <span class="text-2xl font-bold">{{ item.value }}</span>
-              <span class="text-xs text-gray-500 flex items-center bg-gray-100 px-1 rounded">
+              <span class="flex items-center rounded bg-gray-100 px-1 text-xs text-gray-500">
                 {{ item.rate }}
               </span>
             </div>
-           </div>
+          </div>
         </NCard>
       </NGridItem>
     </NGrid>
@@ -208,12 +206,11 @@ onUnmounted(() => {
         <MapChart :data="geoData" />
       </NGridItem>
       <NGridItem span="24 l:8">
-         <NSpace vertical :size="16" class="h-full">
-            <TrendChart :times="trendTimes" :values="trendValues" />
-            <RecentLogs :logs="recentLogs" />
-         </NSpace>
+        <NSpace vertical :size="16" class="h-full">
+          <TrendChart :times="trendTimes" :values="trendValues" />
+          <RecentLogs :logs="recentLogs" />
+        </NSpace>
       </NGridItem>
     </NGrid>
   </NSpace>
 </template>
-

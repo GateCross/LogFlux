@@ -1,6 +1,17 @@
 <script setup lang="tsx">
 import { onMounted, ref } from 'vue';
-import { NButton, NCard, NDataTable, NModal, NCheckboxGroup, NCheckbox, NSpace, NForm, NFormItem, useMessage } from 'naive-ui';
+import {
+  NButton,
+  NCard,
+  NCheckbox,
+  NCheckboxGroup,
+  NDataTable,
+  NForm,
+  NFormItem,
+  NModal,
+  NSpace,
+  useMessage
+} from 'naive-ui';
 import { fetchGetRoleList, fetchUpdateRolePermissions } from '@/service/api/role';
 import { $t } from '@/locales';
 
@@ -18,9 +29,7 @@ const submitLoading = ref(false);
 const permissionGroups = [
   {
     label: '仪表盘',
-    options: [
-      { label: '仪表盘', value: 'dashboard' }
-    ]
+    options: [{ label: '仪表盘', value: 'dashboard' }]
   },
   {
     label: '日志管理',
@@ -117,7 +126,7 @@ onMounted(() => {
         <NFormItem label="权限列表">
           <NCheckboxGroup v-model:value="currentPermissions">
             <div v-for="group in permissionGroups" :key="group.label" class="mb-4">
-              <div class="text-sm font-medium mb-2 text-gray-700">{{ group.label }}</div>
+              <div class="mb-2 text-sm text-gray-700 font-medium">{{ group.label }}</div>
               <NSpace vertical>
                 <NCheckbox
                   v-for="opt in group.options"

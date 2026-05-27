@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import { computed, ref, reactive } from 'vue';
+import { computed, reactive, ref } from 'vue';
 import type { VNode } from 'vue';
 import { useMessage } from 'naive-ui';
+import { request } from '@/service/request';
 import { useAuthStore } from '@/store/modules/auth';
 import { useRouterPush } from '@/hooks/common/router';
 import { useSvgIcon } from '@/hooks/common/icon';
-import { $t } from '@/locales';
-import { request } from '@/service/request';
 import { encrypt } from '@/utils/crypto';
+import { $t } from '@/locales';
 
 defineOptions({
   name: 'UserAvatar'
@@ -156,25 +156,40 @@ function handleDropdown(key: DropdownKey) {
     </div>
   </NDropdown>
 
-  <n-modal v-model:show="showModal" :title="$t('common.changePassword')" preset="card" class="w-400px">
-    <n-form ref="formRef" :model="formModel" :rules="rules" label-placement="left" label-width="80">
-      <n-form-item :label="$t('common.oldPassword')" path="oldPassword">
-        <n-input v-model:value="formModel.oldPassword" type="password" show-password-on="mousedown" placeholder="请输入旧密码" />
-      </n-form-item>
-      <n-form-item :label="$t('common.newPassword')" path="newPassword">
-        <n-input v-model:value="formModel.newPassword" type="password" show-password-on="mousedown" placeholder="请输入新密码" />
-      </n-form-item>
-      <n-form-item :label="$t('common.confirmPassword')" path="confirmPassword">
-        <n-input v-model:value="formModel.confirmPassword" type="password" show-password-on="mousedown" placeholder="请再次输入新密码" />
-      </n-form-item>
-    </n-form>
+  <NModal v-model:show="showModal" :title="$t('common.changePassword')" preset="card" class="w-400px">
+    <NForm ref="formRef" :model="formModel" :rules="rules" label-placement="left" label-width="80">
+      <NFormItem :label="$t('common.oldPassword')" path="oldPassword">
+        <NInput
+          v-model:value="formModel.oldPassword"
+          type="password"
+          show-password-on="mousedown"
+          placeholder="请输入旧密码"
+        />
+      </NFormItem>
+      <NFormItem :label="$t('common.newPassword')" path="newPassword">
+        <NInput
+          v-model:value="formModel.newPassword"
+          type="password"
+          show-password-on="mousedown"
+          placeholder="请输入新密码"
+        />
+      </NFormItem>
+      <NFormItem :label="$t('common.confirmPassword')" path="confirmPassword">
+        <NInput
+          v-model:value="formModel.confirmPassword"
+          type="password"
+          show-password-on="mousedown"
+          placeholder="请再次输入新密码"
+        />
+      </NFormItem>
+    </NForm>
     <template #footer>
-      <n-space justify="end">
-        <n-button @click="showModal = false">取消</n-button>
-        <n-button type="primary" :loading="submitLoading" @click="handlePasswordSubmit">确定</n-button>
-      </n-space>
+      <NSpace justify="end">
+        <NButton @click="showModal = false">取消</NButton>
+        <NButton type="primary" :loading="submitLoading" @click="handlePasswordSubmit">确定</NButton>
+      </NSpace>
     </template>
-  </n-modal>
+  </NModal>
 </template>
 
 <style scoped></style>

@@ -1,61 +1,6 @@
-<template>
-  <div class="h-full">
-    <n-card title="日志源管理" :bordered="false" class="h-full rounded-8px shadow-sm">
-      <template #header-extra>
-        <n-button type="primary" @click="handleAdd">
-          <template #icon>
-            <icon-ic-round-plus />
-          </template>
-          新增日志源
-        </n-button>
-      </template>
-
-      <n-data-table
-        remote
-        :columns="columns"
-        :data="tableData"
-        :loading="loading"
-        :pagination="pagination"
-        :row-key="row => row.id"
-        class="h-full"
-        flex-height
-        @update:page="handlePageChange"
-        @update:page-size="handlePageSizeChange"
-      />
-    </n-card>
-
-    <n-modal v-model:show="showModal" preset="card" :title="modalTitle" class="w-600px">
-      <n-form ref="formRef" :model="formModel" :rules="rules" label-placement="left" label-width="100">
-        <n-form-item label="名称" path="name">
-          <n-input v-model:value="formModel.name" placeholder="例如：本地 Caddy 日志" />
-        </n-form-item>
-        <n-form-item label="路径" path="path">
-          <n-input v-model:value="formModel.path" placeholder="/var/log/caddy/access.log 或 /var/log/caddy" />
-        </n-form-item>
-        <n-form-item label="类型" path="type">
-          <n-select v-model:value="formModel.type" :options="typeOptions" :disabled="isEdit" />
-        </n-form-item>
-        <n-form-item label="扫描间隔(秒)" path="scanInterval">
-          <n-input-number v-model:value="formModel.scanInterval" :min="1" :max="3600" :step="1" />
-          <div class="text-xs text-gray-500 mt-1">默认 60 秒</div>
-        </n-form-item>
-        <n-form-item label="启用" path="enabled">
-          <n-switch v-model:value="formModel.enabled" />
-        </n-form-item>
-      </n-form>
-      <template #footer>
-        <div class="flex justify-end gap-2">
-          <n-button @click="showModal = false">取消</n-button>
-          <n-button type="primary" :loading="submitting" @click="handleSubmit">保存</n-button>
-        </div>
-      </template>
-    </n-modal>
-  </div>
-</template>
-
 <script setup lang="ts">
-import { ref, reactive, onMounted, h, computed } from 'vue';
-import { NButton, NTag, NSwitch, useMessage, useDialog } from 'naive-ui';
+import { computed, h, onMounted, reactive, ref } from 'vue';
+import { NButton, NSwitch, NTag, useDialog, useMessage } from 'naive-ui';
 import type { DataTableColumns, FormInst, FormRules, PaginationProps } from 'naive-ui';
 import { createLogSource, deleteLogSource, fetchLogSourceList, updateLogSource } from '@/service/api/log-source';
 import type { LogSourceItem } from '@/service/api/log-source';
@@ -272,3 +217,58 @@ onMounted(() => {
   fetchData();
 });
 </script>
+
+<template>
+  <div class="h-full">
+    <NCard title="日志源管理" :bordered="false" class="h-full rounded-8px shadow-sm">
+      <template #header-extra>
+        <NButton type="primary" @click="handleAdd">
+          <template #icon>
+            <icon-ic-round-plus />
+          </template>
+          新增日志源
+        </NButton>
+      </template>
+
+      <NDataTable
+        remote
+        :columns="columns"
+        :data="tableData"
+        :loading="loading"
+        :pagination="pagination"
+        :row-key="row => row.id"
+        class="h-full"
+        flex-height
+        @update:page="handlePageChange"
+        @update:page-size="handlePageSizeChange"
+      />
+    </NCard>
+
+    <NModal v-model:show="showModal" preset="card" :title="modalTitle" class="w-600px">
+      <NForm ref="formRef" :model="formModel" :rules="rules" label-placement="left" label-width="100">
+        <NFormItem label="名称" path="name">
+          <NInput v-model:value="formModel.name" placeholder="例如：本地 Caddy 日志" />
+        </NFormItem>
+        <NFormItem label="路径" path="path">
+          <NInput v-model:value="formModel.path" placeholder="/var/log/caddy/access.log 或 /var/log/caddy" />
+        </NFormItem>
+        <NFormItem label="类型" path="type">
+          <NSelect v-model:value="formModel.type" :options="typeOptions" :disabled="isEdit" />
+        </NFormItem>
+        <NFormItem label="扫描间隔(秒)" path="scanInterval">
+          <NInputNumber v-model:value="formModel.scanInterval" :min="1" :max="3600" :step="1" />
+          <div class="mt-1 text-xs text-gray-500">默认 60 秒</div>
+        </NFormItem>
+        <NFormItem label="启用" path="enabled">
+          <NSwitch v-model:value="formModel.enabled" />
+        </NFormItem>
+      </NForm>
+      <template #footer>
+        <div class="flex justify-end gap-2">
+          <NButton @click="showModal = false">取消</NButton>
+          <NButton type="primary" :loading="submitting" @click="handleSubmit">保存</NButton>
+        </div>
+      </template>
+    </NModal>
+  </div>
+</template>

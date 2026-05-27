@@ -34,17 +34,13 @@ function formatMeta(item: DashboardRecentItem) {
   <NCard title="实时日志" class="flex-1 rounded-2xl shadow-sm">
     <div v-if="logs.length === 0" class="text-xs text-gray-400">暂无日志</div>
     <div v-else class="flex flex-col gap-3 text-xs">
-      <div
-        v-for="item in logs"
-        :key="item.id"
-        class="log-row border-b border-gray-100 pb-2"
-      >
+      <div v-for="item in logs" :key="item.id" class="log-row border-b border-gray-100 pb-2">
         <div class="log-method">
-          <span :class="['px-1 rounded', methodClass(item.method)]">{{ item.method || 'N/A' }}</span>
+          <span class="rounded px-1" :class="[methodClass(item.method)]">{{ item.method || 'N/A' }}</span>
         </div>
         <NTooltip placement="top-start" :show-arrow="false">
           <template #trigger>
-            <div class="log-path text-gray-600 truncate">{{ item.uri || '-' }}</div>
+            <div class="log-path truncate text-gray-600">{{ item.uri || '-' }}</div>
           </template>
           {{ item.uri || '-' }}
         </NTooltip>

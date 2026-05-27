@@ -30,14 +30,12 @@ const props = withDefaults(defineProps<Props>(), {
     <NGrid :x-gap="gap" :y-gap="16" responsive="screen" item-responsive>
       <NGridItem span="24 s:24 m:18">
         <div class="flex-y-center">
-          <div class="shrink-0 w-72px h-72px rd-50% flex-center bg-primary:10">
+          <div class="h-72px w-72px flex-center shrink-0 rd-50% bg-primary:10">
             <div class="i-carbon:user-avatar text-40px text-primary"></div>
           </div>
           <div class="pl-12px">
-            <h3 class="text-18px font-semibold">
-              欢迎回来，{{ authStore.userInfo.username }} 👋
-            </h3>
-            <p class="leading-30px text-[#999]">统计范围：{{ props.rangeText }}</p>
+            <h3 class="text-18px font-semibold">欢迎回来，{{ authStore.userInfo.username }} 👋</h3>
+            <p class="text-[#999] leading-30px">统计范围：{{ props.rangeText }}</p>
           </div>
         </div>
       </NGridItem>

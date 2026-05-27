@@ -1,15 +1,15 @@
 import { computed, reactive, ref } from 'vue';
 import type { FormInst, FormRules, PaginationProps } from 'naive-ui';
 import {
+  type WafAuthType,
+  type WafKind,
+  type WafMode,
+  type WafSourceItem,
   createWafSource,
   deleteWafSource,
   fetchWafSourceList,
   syncWafSource,
-  updateWafSource,
-  type WafAuthType,
-  type WafKind,
-  type WafMode,
-  type WafSourceItem
+  updateWafSource
 } from '@/service/api/caddy-source';
 
 type MessageApi = {
@@ -247,7 +247,8 @@ export function useWafSource(options: UseWafSourceOptions) {
         meta: sourceForm.meta.trim()
       };
 
-      const request = sourceModalMode.value === 'add' ? createWafSource(payload) : updateWafSource(sourceForm.id, payload);
+      const request =
+        sourceModalMode.value === 'add' ? createWafSource(payload) : updateWafSource(sourceForm.id, payload);
       const { error } = await request;
       if (!error) {
         message.success(sourceModalMode.value === 'add' ? '新增更新源成功' : '更新更新源成功');
@@ -269,7 +270,9 @@ export function useWafSource(options: UseWafSourceOptions) {
   }
 
   function handleSyncSource(row: WafSourceItem, activateNow: boolean) {
-    const content = activateNow ? '将下载、校验并立即激活该源对应版本，确认继续？' : '将下载并校验该源对应版本，确认继续？';
+    const content = activateNow
+      ? '将下载、校验并立即激活该源对应版本，确认继续？'
+      : '将下载并校验该源对应版本，确认继续？';
 
     dialog.warning({
       title: activateNow ? '同步并激活确认' : '同步确认',

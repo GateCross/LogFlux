@@ -1,92 +1,10 @@
-<template>
-  <div class="h-full overflow-hidden">
-    <n-card :title="$t('route.manage_menu')" :bordered="false" class="h-full rounded-8px shadow-sm">
-      <div class="flex flex-col h-full">
-        <n-space class="pb-12px" justify="space-between">
-          <n-space>
-            <n-button type="primary" @click="fetchData">
-              <template #icon>
-                <icon-ic-round-refresh />
-              </template>
-              {{ $t('common.refresh') }}
-            </n-button>
-            <n-button type="primary" ghost @click="handleAddRoot">
-              <template #icon>
-                <icon-ic-round-plus />
-              </template>
-              {{ $t('common.add') + '一级菜单' }}
-            </n-button>
-          </n-space>
-        </n-space>
-        
-        <n-data-table
-          flex-height
-          :columns="columns"
-          :data="tableData"
-          :loading="loading"
-          :row-key="row => row.id"
-          class="flex-1-hidden"
-          default-expand-all
-          expand-column-key="expander"
-        />
-      </div>
-    </n-card>
-
-    <n-modal v-model:show="showModal" :title="modalTitle" preset="card" class="w-600px">
-      <n-form ref="formRef" :model="formModel" :rules="rules" label-placement="left" label-width="100">
-        <n-form-item label="上级菜单" path="parentId">
-          <n-tree-select
-            v-model:value="formModel.parentId"
-            :options="menuSelectOptions"
-            placeholder="请选择上级菜单（留空为一级菜单）"
-            clearable
-          />
-        </n-form-item>
-        <n-form-item label="菜单名称" path="name">
-          <n-input v-model:value="formModel.name" placeholder="请输入菜单唯一标识 (e.g. dashboard)" />
-        </n-form-item>
-        <n-form-item label="路径" path="path">
-          <n-input v-model:value="formModel.path" placeholder="请输入路径 (e.g. /dashboard)" />
-        </n-form-item>
-        <n-form-item label="组件" path="component">
-          <n-input v-model:value="formModel.component" placeholder="请输入组件路径 (e.g. view.dashboard)" />
-        </n-form-item>
-        <n-form-item label="排序" path="order">
-          <n-input-number v-model:value="formModel.order" class="w-full" />
-        </n-form-item>
-        <n-form-item label="I18nKey" path="meta.i18nKey">
-          <n-input v-model:value="formModel.meta.i18nKey" placeholder="请输入国际化Key (e.g. route.dashboard)" />
-        </n-form-item>
-        <n-form-item label="图标" path="meta.icon">
-          <n-input v-model:value="formModel.meta.icon" placeholder="请输入图标Key (e.g. mdi:home)" />
-        </n-form-item>
-        <n-form-item label="本地图标" path="meta.localIcon">
-          <n-input v-model:value="formModel.meta.localIcon" placeholder="请输入本地图标名称" />
-        </n-form-item>
-        <n-form-item label="隐藏菜单" path="meta.hideInMenu">
-          <n-switch v-model:value="formModel.meta.hideInMenu" />
-        </n-form-item>
-        <n-form-item label="所需角色" path="roles">
-          <n-select v-model:value="formModel.roles" multiple :options="roleOptions" placeholder="请选择可见角色（留空为公开）" />
-        </n-form-item>
-      </n-form>
-      <template #footer>
-        <n-space justify="end">
-          <n-button @click="closeModal">{{ $t('common.cancel') }}</n-button>
-          <n-button type="primary" :loading="submitLoading" @click="handleSubmit">{{ $t('common.confirm') }}</n-button>
-        </n-space>
-      </template>
-    </n-modal>
-  </div>
-</template>
-
 <script setup lang="ts">
-import { ref, reactive, onMounted, h, computed } from 'vue';
-import { NButton, NPopconfirm, NTag, NIcon, useMessage } from 'naive-ui';
+import { computed, h, onMounted, reactive, ref } from 'vue';
+import { NButton, NIcon, NPopconfirm, NTag, useMessage } from 'naive-ui';
 import type { DataTableColumns, FormRules } from 'naive-ui';
 import { request } from '@/service/request';
-import { $t } from '@/locales';
 import { useSvgIcon } from '@/hooks/common/icon';
+import { $t } from '@/locales';
 
 interface MenuItem {
   id: number;
@@ -126,10 +44,10 @@ const columns: DataTableColumns<MenuItem> = [
     width: 60,
     align: 'center',
     render: (row, index) => {
-        if (row.parentId && row.parentId > 0) {
-            return '';
-        }
-        return index + 1;
+      if (row.parentId && row.parentId > 0) {
+        return '';
+      }
+      return index + 1;
     }
   },
   {
@@ -146,10 +64,7 @@ const columns: DataTableColumns<MenuItem> = [
       const { icon, localIcon, i18nKey, title } = row.meta;
       const label = i18nKey ? $t(i18nKey) : title || row.name;
       const iconVNode = SvgIconVNode({ icon, localIcon, fontSize: 18 });
-      return h('div', { class: 'flex items-center gap-2' }, [
-        iconVNode?.(),
-        h('span', null, label)
-      ]);
+      return h('div', { class: 'flex items-center gap-2' }, [iconVNode?.(), h('span', null, label)]);
     }
   },
   { title: '路径', key: 'path', width: 180 },
@@ -173,9 +88,11 @@ const columns: DataTableColumns<MenuItem> = [
     title: '所需角色',
     key: 'roles',
     render(row) {
-      const roles = row.requiredRoles && row.requiredRoles.length > 0 ? row.requiredRoles : (row.meta?.roles || []);
+      const roles = row.requiredRoles && row.requiredRoles.length > 0 ? row.requiredRoles : row.meta?.roles || [];
       if (!roles || roles.length === 0) return h(NTag, { size: 'small', bordered: false }, { default: () => '公开' });
-      return roles.map(role => h(NTag, { size: 'small', type: 'info', bordered: false, class: 'mr-1' }, { default: () => role }));
+      return roles.map(role =>
+        h(NTag, { size: 'small', type: 'info', bordered: false, class: 'mr-1' }, { default: () => role })
+      );
     }
   },
   {
@@ -184,7 +101,11 @@ const columns: DataTableColumns<MenuItem> = [
     width: 240,
     render(row) {
       return h('div', { class: 'flex gap-2' }, [
-        h(NButton, { size: 'small', type: 'primary', ghost: true, onClick: () => handleAddChild(row) }, { default: () => '新增子级' }),
+        h(
+          NButton,
+          { size: 'small', type: 'primary', ghost: true, onClick: () => handleAddChild(row) },
+          { default: () => '新增子级' }
+        ),
         h(NButton, { size: 'small', type: 'primary', onClick: () => handleEdit(row) }, { default: () => '编辑' }),
         h(
           NPopconfirm,
@@ -275,7 +196,7 @@ function handleAddRoot() {
 function handleAddChild(row: MenuItem) {
   handleAddRoot();
   formModel.parentId = row.id;
-  formModel.path = row.path + '/';
+  formModel.path = `${row.path}/`;
   formModel.component = 'view.';
 }
 
@@ -317,7 +238,7 @@ async function handleSubmit() {
     if (!errors) {
       submitLoading.value = true;
       try {
-        const payload = { 
+        const payload = {
           name: formModel.name,
           path: formModel.path,
           component: formModel.component,
@@ -332,11 +253,11 @@ async function handleSubmit() {
             roles: formModel.roles // Sync roles to meta for compatibility if needed
           },
           requiredRoles: formModel.roles,
-          parentId: formModel.parentId || 0 
+          parentId: formModel.parentId || 0
         };
         const url = modalType.value === 'add' ? '/api/menu' : `/api/menu/${formModel.id}`;
         const method = modalType.value === 'add' ? 'post' : 'put';
-        
+
         const { error } = await request({ url, method, data: payload });
         if (!error) {
           message.success('操作成功');
@@ -355,5 +276,92 @@ onMounted(() => {
   fetchData();
 });
 </script>
+
+<template>
+  <div class="h-full overflow-hidden">
+    <NCard :title="$t('route.manage_menu')" :bordered="false" class="h-full rounded-8px shadow-sm">
+      <div class="h-full flex flex-col">
+        <NSpace class="pb-12px" justify="space-between">
+          <NSpace>
+            <NButton type="primary" @click="fetchData">
+              <template #icon>
+                <icon-ic-round-refresh />
+              </template>
+              {{ $t('common.refresh') }}
+            </NButton>
+            <NButton type="primary" ghost @click="handleAddRoot">
+              <template #icon>
+                <icon-ic-round-plus />
+              </template>
+              {{ $t('common.add') + '一级菜单' }}
+            </NButton>
+          </NSpace>
+        </NSpace>
+
+        <NDataTable
+          flex-height
+          :columns="columns"
+          :data="tableData"
+          :loading="loading"
+          :row-key="row => row.id"
+          class="flex-1-hidden"
+          default-expand-all
+          expand-column-key="expander"
+        />
+      </div>
+    </NCard>
+
+    <NModal v-model:show="showModal" :title="modalTitle" preset="card" class="w-600px">
+      <NForm ref="formRef" :model="formModel" :rules="rules" label-placement="left" label-width="100">
+        <NFormItem label="上级菜单" path="parentId">
+          <NTreeSelect
+            v-model:value="formModel.parentId"
+            :options="menuSelectOptions"
+            placeholder="请选择上级菜单（留空为一级菜单）"
+            clearable
+          />
+        </NFormItem>
+        <NFormItem label="菜单名称" path="name">
+          <NInput v-model:value="formModel.name" placeholder="请输入菜单唯一标识 (e.g. dashboard)" />
+        </NFormItem>
+        <NFormItem label="路径" path="path">
+          <NInput v-model:value="formModel.path" placeholder="请输入路径 (e.g. /dashboard)" />
+        </NFormItem>
+        <NFormItem label="组件" path="component">
+          <NInput v-model:value="formModel.component" placeholder="请输入组件路径 (e.g. view.dashboard)" />
+        </NFormItem>
+        <NFormItem label="排序" path="order">
+          <NInputNumber v-model:value="formModel.order" class="w-full" />
+        </NFormItem>
+        <NFormItem label="I18nKey" path="meta.i18nKey">
+          <NInput v-model:value="formModel.meta.i18nKey" placeholder="请输入国际化Key (e.g. route.dashboard)" />
+        </NFormItem>
+        <NFormItem label="图标" path="meta.icon">
+          <NInput v-model:value="formModel.meta.icon" placeholder="请输入图标Key (e.g. mdi:home)" />
+        </NFormItem>
+        <NFormItem label="本地图标" path="meta.localIcon">
+          <NInput v-model:value="formModel.meta.localIcon" placeholder="请输入本地图标名称" />
+        </NFormItem>
+        <NFormItem label="隐藏菜单" path="meta.hideInMenu">
+          <NSwitch v-model:value="formModel.meta.hideInMenu" />
+        </NFormItem>
+        <NFormItem label="所需角色" path="roles">
+          <NSelect
+            v-model:value="formModel.roles"
+            multiple
+            :options="roleOptions"
+            placeholder="请选择可见角色（留空为公开）"
+          />
+        </NFormItem>
+      </NForm>
+      <template #footer>
+        <NSpace justify="end">
+          <NButton @click="closeModal">{{ $t('common.cancel') }}</NButton>
+          <NButton type="primary" :loading="submitLoading" @click="handleSubmit">{{ $t('common.confirm') }}</NButton>
+        </NSpace>
+      </template>
+    </NModal>
+  </div>
+</template>
 
 <style scoped></style>

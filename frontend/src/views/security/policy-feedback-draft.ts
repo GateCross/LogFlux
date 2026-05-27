@@ -107,4 +107,3 @@ export function mergePolicyFeedbackCheckedRowKeys(
 
   return Array.from(selectedKeySet);
 }
-

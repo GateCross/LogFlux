@@ -17,20 +17,16 @@ const iconStyle = computed(() => {
 </script>
 
 <template>
-  <NCard class="h-full rounded-2xl border-none shadow-sm hover:shadow-md transition-shadow">
+  <NCard class="h-full rounded-2xl border-none shadow-sm transition-shadow hover:shadow-md">
     <div class="flex items-center justify-between">
       <div class="flex flex-col gap-2">
-        <span class="text-gray-500 text-sm font-medium">{{ data.title }}</span>
+        <span class="text-sm text-gray-500 font-medium">{{ data.title }}</span>
         <div class="flex items-baseline gap-1">
-          <span class="text-2xl font-bold font-number">{{ data.value }}</span>
+          <span class="font-number text-2xl font-bold">{{ data.value }}</span>
           <span v-if="data.unit" class="text-xs text-gray-400">{{ data.unit }}</span>
         </div>
       </div>
-      <div 
-        v-if="data.icon" 
-        class="flex items-center justify-center w-12 h-12 rounded-xl text-xl"
-        :style="iconStyle"
-      >
+      <div v-if="data.icon" class="h-12 w-12 flex items-center justify-center rounded-xl text-xl" :style="iconStyle">
         <div :class="data.icon || 'i-carbon:unknown'"></div>
       </div>
     </div>

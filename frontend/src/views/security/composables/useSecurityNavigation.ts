@@ -2,6 +2,8 @@ import { computed, ref, watch } from 'vue';
 import type { RouteLocationNormalizedLoaded, Router } from 'vue-router';
 import {
   SECURITY_OBSERVE_QUERY_KEYS,
+  type SecurityMenuKey,
+  type SecurityTabKey,
   getSecurityDefaultTab,
   getSecurityMenuByTab,
   getSecurityMenuRouteName,
@@ -10,9 +12,7 @@ import {
   isSecurityTabVisible,
   pickRouteQueryValue,
   resolveSecurityMenuFromRoute,
-  resolveSecurityTabFromRoute,
-  type SecurityMenuKey,
-  type SecurityTabKey
+  resolveSecurityTabFromRoute
 } from '../navigation';
 
 interface UseSecurityNavigationOptions {

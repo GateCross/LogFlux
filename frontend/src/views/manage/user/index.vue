@@ -1,74 +1,7 @@
-<template>
-  <div class="h-full overflow-hidden">
-    <n-card title="用户管理" :bordered="false" class="h-full rounded-8px shadow-sm">
-      <div class="flex-col h-full">
-        <n-space class="mb-4" justify="space-between">
-          <n-input v-model:value="searchParams.username" placeholder="搜索用户名" clearable @keyup.enter="handleSearch">
-            <template #prefix>
-              <icon-ic-round-search class="text-16px" />
-            </template>
-          </n-input>
-          <n-space>
-            <n-button type="primary" @click="handleSearch">
-              <template #icon>
-                <icon-ic-round-search />
-              </template>
-              搜索
-            </n-button>
-            <n-button type="primary" ghost @click="handleAdd">
-              <template #icon>
-                <icon-ic-round-plus />
-              </template>
-              新增用户
-            </n-button>
-          </n-space>
-        </n-space>
-        
-        <n-data-table
-          remote
-          :columns="columns"
-          :data="tableData"
-          :loading="loading"
-          :pagination="pagination"
-          :row-key="row => row.id"
-          class="flex-1-hidden"
-          @update:page="handlePageChange"
-          @update:page-size="handlePageSizeChange"
-        />
-      </div>
-    </n-card>
-
-    <n-modal v-model:show="showModal" :title="modalType === 'add' ? '新增用户' : '编辑用户'" preset="card" class="w-600px">
-      <n-form ref="formRef" :model="formModel" :rules="rules" label-placement="left" label-width="80">
-        <n-form-item label="用户名" path="username">
-          <n-input v-model:value="formModel.username" :disabled="modalType === 'edit'" placeholder="请输入用户名" />
-        </n-form-item>
-        <n-form-item label="密码" path="password">
-          <n-input
-            v-model:value="formModel.password"
-            type="password"
-            show-password-on="mousedown"
-            :placeholder="modalType === 'add' ? '请输入密码' : '留空则不修改密码'"
-          />
-        </n-form-item>
-        <n-form-item label="角色" path="roles">
-          <n-select v-model:value="formModel.roles" multiple :options="roleOptions" placeholder="请选择角色" />
-        </n-form-item>
-      </n-form>
-      <template #footer>
-        <n-space justify="end">
-          <n-button @click="closeModal">取消</n-button>
-          <n-button type="primary" :loading="submitLoading" @click="handleSubmit">确定</n-button>
-        </n-space>
-      </template>
-    </n-modal>
-  </div>
-</template>
-
 <script setup lang="ts">
-import { ref, reactive, onMounted, h } from 'vue';
+import { h, onMounted, reactive, ref } from 'vue';
 import { NButton, NPopconfirm, NTag, useMessage } from 'naive-ui';
-import type { DataTableColumns, PaginationProps, FormRules } from 'naive-ui';
+import type { DataTableColumns, FormRules, PaginationProps } from 'naive-ui';
 import { request } from '@/service/request';
 
 interface User {
@@ -149,51 +82,47 @@ const columns: DataTableColumns<User> = [
     key: 'actions',
     width: 200,
     render(row) {
-      return h(
-        'div',
-        { class: 'flex gap-2' },
-        [
-          h(
-            NButton,
-            {
-              size: 'small',
-              type: 'primary',
-              secondary: true,
-              onClick: () => handleEdit(row)
-            },
-            { default: () => '编辑' }
-          ),
-          h(
-            NButton,
-            {
-              size: 'small',
-              type: row.status === 1 ? 'warning' : 'success',
-              secondary: true,
-              onClick: () => handleToggleStatus(row)
-            },
-            { default: () => (row.status === 1 ? '冻结' : '解冻') }
-          ),
-          h(
-            NPopconfirm,
-            {
-              onPositiveClick: () => handleDelete(row.id)
-            },
-            {
-              default: () => '确认永久删除该用户吗？此操作无法恢复！',
-              trigger: () =>
-                h(
-                  NButton,
-                  {
-                    size: 'small',
-                    type: 'error',
-                    secondary: true
-                  },
-                  { default: () => '删除' }
-                )
-            }
-          )
-        ]
-      );
+      return h('div', { class: 'flex gap-2' }, [
+        h(
+          NButton,
+          {
+            size: 'small',
+            type: 'primary',
+            secondary: true,
+            onClick: () => handleEdit(row)
+          },
+          { default: () => '编辑' }
+        ),
+        h(
+          NButton,
+          {
+            size: 'small',
+            type: row.status === 1 ? 'warning' : 'success',
+            secondary: true,
+            onClick: () => handleToggleStatus(row)
+          },
+          { default: () => (row.status === 1 ? '冻结' : '解冻') }
+        ),
+        h(
+          NPopconfirm,
+          {
+            onPositiveClick: () => handleDelete(row.id)
+          },
+          {
+            default: () => '确认永久删除该用户吗？此操作无法恢复！',
+            trigger: () =>
+              h(
+                NButton,
+                {
+                  size: 'small',
+                  type: 'error',
+                  secondary: true
+                },
+                { default: () => '删除' }
+              )
+          }
+        )
+      ]);
     }
   }
 ];
@@ -248,13 +177,13 @@ async function fetchData() {
       url: '/api/user/list',
       params
     });
-    
+
     if (data) {
       tableData.value = data.list || [];
       pagination.itemCount = data.total || 0;
     }
     if (error) {
-      message.error('加载失败: ' + JSON.stringify(error));
+      message.error(`加载失败: ${JSON.stringify(error)}`);
     }
   } finally {
     loading.value = false;
@@ -331,7 +260,7 @@ async function handleSubmit() {
         message.error('请输入密码');
         return;
       }
-      
+
       submitLoading.value = true;
       try {
         let resp;
@@ -355,7 +284,7 @@ async function handleSubmit() {
             }
           });
         }
-        
+
         // Check if request was successful
         if (resp && !resp.error) {
           message.success(modalType.value === 'add' ? '新增成功' : '编辑成功');
@@ -379,5 +308,77 @@ onMounted(() => {
   fetchData();
 });
 </script>
+
+<template>
+  <div class="h-full overflow-hidden">
+    <NCard title="用户管理" :bordered="false" class="h-full rounded-8px shadow-sm">
+      <div class="h-full flex-col">
+        <NSpace class="mb-4" justify="space-between">
+          <NInput v-model:value="searchParams.username" placeholder="搜索用户名" clearable @keyup.enter="handleSearch">
+            <template #prefix>
+              <icon-ic-round-search class="text-16px" />
+            </template>
+          </NInput>
+          <NSpace>
+            <NButton type="primary" @click="handleSearch">
+              <template #icon>
+                <icon-ic-round-search />
+              </template>
+              搜索
+            </NButton>
+            <NButton type="primary" ghost @click="handleAdd">
+              <template #icon>
+                <icon-ic-round-plus />
+              </template>
+              新增用户
+            </NButton>
+          </NSpace>
+        </NSpace>
+
+        <NDataTable
+          remote
+          :columns="columns"
+          :data="tableData"
+          :loading="loading"
+          :pagination="pagination"
+          :row-key="row => row.id"
+          class="flex-1-hidden"
+          @update:page="handlePageChange"
+          @update:page-size="handlePageSizeChange"
+        />
+      </div>
+    </NCard>
+
+    <NModal
+      v-model:show="showModal"
+      :title="modalType === 'add' ? '新增用户' : '编辑用户'"
+      preset="card"
+      class="w-600px"
+    >
+      <NForm ref="formRef" :model="formModel" :rules="rules" label-placement="left" label-width="80">
+        <NFormItem label="用户名" path="username">
+          <NInput v-model:value="formModel.username" :disabled="modalType === 'edit'" placeholder="请输入用户名" />
+        </NFormItem>
+        <NFormItem label="密码" path="password">
+          <NInput
+            v-model:value="formModel.password"
+            type="password"
+            show-password-on="mousedown"
+            :placeholder="modalType === 'add' ? '请输入密码' : '留空则不修改密码'"
+          />
+        </NFormItem>
+        <NFormItem label="角色" path="roles">
+          <NSelect v-model:value="formModel.roles" multiple :options="roleOptions" placeholder="请选择角色" />
+        </NFormItem>
+      </NForm>
+      <template #footer>
+        <NSpace justify="end">
+          <NButton @click="closeModal">取消</NButton>
+          <NButton type="primary" :loading="submitLoading" @click="handleSubmit">确定</NButton>
+        </NSpace>
+      </template>
+    </NModal>
+  </div>
+</template>
 
 <style scoped></style>

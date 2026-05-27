@@ -1,9 +1,6 @@
-import { ref, type Ref } from 'vue';
-import type { Router, RouteLocationNormalizedLoaded } from 'vue-router';
-import type {
-  WafPolicyStatsDimensionItem,
-  WafPolicyStatsItem
-} from '@/service/api/caddy-observe';
+import { type Ref, ref } from 'vue';
+import type { RouteLocationNormalizedLoaded, Router } from 'vue-router';
+import type { WafPolicyStatsDimensionItem, WafPolicyStatsItem } from '@/service/api/caddy-observe';
 import type { PolicyStatsSnapshot } from './useWafObserve';
 
 type MessageApi = {
@@ -74,16 +71,22 @@ function escapeCsvCell(value: unknown) {
   return text;
 }
 
-function buildDimensionCsvRows(section: string, rows: WafPolicyStatsDimensionItem[], formatRatePercent: (value: number) => string) {
+function buildDimensionCsvRows(
+  section: string,
+  rows: WafPolicyStatsDimensionItem[],
+  formatRatePercent: (value: number) => string
+) {
   const lines: string[] = [escapeCsvCell(section), '维度值,命中,拦截,放行,拦截率'];
   rows.forEach(row => {
-    lines.push([
-      escapeCsvCell(row.key || '-'),
-      row.hitCount,
-      row.blockedCount,
-      row.allowedCount,
-      escapeCsvCell(formatRatePercent(row.blockRate))
-    ].join(','));
+    lines.push(
+      [
+        escapeCsvCell(row.key || '-'),
+        row.hitCount,
+        row.blockedCount,
+        row.allowedCount,
+        escapeCsvCell(formatRatePercent(row.blockRate))
+      ].join(',')
+    );
   });
   lines.push('');
   return lines;
@@ -95,7 +98,10 @@ function buildDimensionCompareCsvRows(
   previousRows: WafPolicyStatsDimensionItem[],
   formatRatePercent: (value: number) => string
 ) {
-  const lines: string[] = [escapeCsvCell(section), '维度值,当前命中,基线命中,命中变化,当前拦截,基线拦截,拦截变化,当前放行,基线放行,放行变化,当前拦截率,基线拦截率,拦截率变化(pp)'];
+  const lines: string[] = [
+    escapeCsvCell(section),
+    '维度值,当前命中,基线命中,命中变化,当前拦截,基线拦截,拦截变化,当前放行,基线放行,放行变化,当前拦截率,基线拦截率,拦截率变化(pp)'
+  ];
   const currentMap = new Map<string, WafPolicyStatsDimensionItem>();
   const previousMap = new Map<string, WafPolicyStatsDimensionItem>();
   currentRows.forEach(item => currentMap.set(String(item.key || '-'), item));
@@ -112,21 +118,23 @@ function buildDimensionCompareCsvRows(
     const previousAllowed = Number(previous?.allowedCount || 0);
     const currentRate = Number(current?.blockRate || 0);
     const previousRate = Number(previous?.blockRate || 0);
-    lines.push([
-      escapeCsvCell(key || '-'),
-      currentHit,
-      previousHit,
-      currentHit - previousHit,
-      currentBlocked,
-      previousBlocked,
-      currentBlocked - previousBlocked,
-      currentAllowed,
-      previousAllowed,
-      currentAllowed - previousAllowed,
-      escapeCsvCell(formatRatePercent(currentRate)),
-      escapeCsvCell(formatRatePercent(previousRate)),
-      `${((currentRate - previousRate) * 100).toFixed(2)}pp`
-    ].join(','));
+    lines.push(
+      [
+        escapeCsvCell(key || '-'),
+        currentHit,
+        previousHit,
+        currentHit - previousHit,
+        currentBlocked,
+        previousBlocked,
+        currentBlocked - previousBlocked,
+        currentAllowed,
+        previousAllowed,
+        currentAllowed - previousAllowed,
+        escapeCsvCell(formatRatePercent(currentRate)),
+        escapeCsvCell(formatRatePercent(previousRate)),
+        `${((currentRate - previousRate) * 100).toFixed(2)}pp`
+      ].join(',')
+    );
   });
   lines.push('');
   return lines;
@@ -297,27 +305,31 @@ export function useWafObserveExport(options: UseWafObserveExportOptions) {
 
     lines.push('总览');
     lines.push('策略,命中,拦截,放行,疑似误报,拦截率');
-    lines.push([
-      escapeCsvCell(policyStatsSummary.value.policyName || '-'),
-      policyStatsSummary.value.hitCount,
-      policyStatsSummary.value.blockedCount,
-      policyStatsSummary.value.allowedCount,
-      policyStatsSummary.value.suspectedFalsePositiveCount,
-      escapeCsvCell(formatRatePercent(policyStatsSummary.value.blockRate))
-    ].join(','));
+    lines.push(
+      [
+        escapeCsvCell(policyStatsSummary.value.policyName || '-'),
+        policyStatsSummary.value.hitCount,
+        policyStatsSummary.value.blockedCount,
+        policyStatsSummary.value.allowedCount,
+        policyStatsSummary.value.suspectedFalsePositiveCount,
+        escapeCsvCell(formatRatePercent(policyStatsSummary.value.blockRate))
+      ].join(',')
+    );
     lines.push('');
 
     lines.push('策略统计');
     lines.push('策略,命中,拦截,放行,疑似误报,拦截率');
     policyStatsTable.value.forEach(row => {
-      lines.push([
-        escapeCsvCell(row.policyName || `#${row.policyId}`),
-        row.hitCount,
-        row.blockedCount,
-        row.allowedCount,
-        row.suspectedFalsePositiveCount,
-        escapeCsvCell(formatRatePercent(row.blockRate))
-      ].join(','));
+      lines.push(
+        [
+          escapeCsvCell(row.policyName || `#${row.policyId}`),
+          row.hitCount,
+          row.blockedCount,
+          row.allowedCount,
+          row.suspectedFalsePositiveCount,
+          escapeCsvCell(formatRatePercent(row.blockRate))
+        ].join(',')
+      );
     });
     lines.push('');
 
@@ -332,7 +344,7 @@ export function useWafObserveExport(options: UseWafObserveExportOptions) {
     lines.push(...buildDimensionCsvRows('Top Path', policyStatsTopPaths.value, formatRatePercent));
     lines.push(...buildDimensionCsvRows('Top Method', policyStatsTopMethods.value, formatRatePercent));
 
-    const content = `\ufeff${lines.join('\n')}`;
+    const content = `\uFEFF${lines.join('\n')}`;
     const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -371,21 +383,46 @@ export function useWafObserveExport(options: UseWafObserveExportOptions) {
 
     lines.push('总览对比');
     lines.push('指标,当前,基线,变化');
-    lines.push(['命中', current.summary.hitCount, previous.summary.hitCount, delta(current.summary.hitCount, previous.summary.hitCount)].join(','));
-    lines.push(['拦截', current.summary.blockedCount, previous.summary.blockedCount, delta(current.summary.blockedCount, previous.summary.blockedCount)].join(','));
-    lines.push(['放行', current.summary.allowedCount, previous.summary.allowedCount, delta(current.summary.allowedCount, previous.summary.allowedCount)].join(','));
-    lines.push([
-      '疑似误报',
-      current.summary.suspectedFalsePositiveCount,
-      previous.summary.suspectedFalsePositiveCount,
-      delta(current.summary.suspectedFalsePositiveCount, previous.summary.suspectedFalsePositiveCount)
-    ].join(','));
-    lines.push([
-      '拦截率',
-      escapeCsvCell(formatRatePercent(current.summary.blockRate)),
-      escapeCsvCell(formatRatePercent(previous.summary.blockRate)),
-      `${(delta(current.summary.blockRate, previous.summary.blockRate) * 100).toFixed(2)}pp`
-    ].join(','));
+    lines.push(
+      [
+        '命中',
+        current.summary.hitCount,
+        previous.summary.hitCount,
+        delta(current.summary.hitCount, previous.summary.hitCount)
+      ].join(',')
+    );
+    lines.push(
+      [
+        '拦截',
+        current.summary.blockedCount,
+        previous.summary.blockedCount,
+        delta(current.summary.blockedCount, previous.summary.blockedCount)
+      ].join(',')
+    );
+    lines.push(
+      [
+        '放行',
+        current.summary.allowedCount,
+        previous.summary.allowedCount,
+        delta(current.summary.allowedCount, previous.summary.allowedCount)
+      ].join(',')
+    );
+    lines.push(
+      [
+        '疑似误报',
+        current.summary.suspectedFalsePositiveCount,
+        previous.summary.suspectedFalsePositiveCount,
+        delta(current.summary.suspectedFalsePositiveCount, previous.summary.suspectedFalsePositiveCount)
+      ].join(',')
+    );
+    lines.push(
+      [
+        '拦截率',
+        escapeCsvCell(formatRatePercent(current.summary.blockRate)),
+        escapeCsvCell(formatRatePercent(previous.summary.blockRate)),
+        `${(delta(current.summary.blockRate, previous.summary.blockRate) * 100).toFixed(2)}pp`
+      ].join(',')
+    );
     lines.push('');
 
     lines.push('策略维度对比');
@@ -403,23 +440,31 @@ export function useWafObserveExport(options: UseWafObserveExportOptions) {
       const previousHit = Number(previousItem?.hitCount || 0);
       const currentBlocked = Number(currentItem?.blockedCount || 0);
       const previousBlocked = Number(previousItem?.blockedCount || 0);
-      lines.push([
-        escapeCsvCell(policyName),
-        currentHit,
-        previousHit,
-        delta(currentHit, previousHit),
-        currentBlocked,
-        previousBlocked,
-        delta(currentBlocked, previousBlocked)
-      ].join(','));
+      lines.push(
+        [
+          escapeCsvCell(policyName),
+          currentHit,
+          previousHit,
+          delta(currentHit, previousHit),
+          currentBlocked,
+          previousBlocked,
+          delta(currentBlocked, previousBlocked)
+        ].join(',')
+      );
     });
     lines.push('');
 
-    lines.push(...buildDimensionCompareCsvRows('Top Host 对比', current.topHosts, previous.topHosts, formatRatePercent));
-    lines.push(...buildDimensionCompareCsvRows('Top Path 对比', current.topPaths, previous.topPaths, formatRatePercent));
-    lines.push(...buildDimensionCompareCsvRows('Top Method 对比', current.topMethods, previous.topMethods, formatRatePercent));
+    lines.push(
+      ...buildDimensionCompareCsvRows('Top Host 对比', current.topHosts, previous.topHosts, formatRatePercent)
+    );
+    lines.push(
+      ...buildDimensionCompareCsvRows('Top Path 对比', current.topPaths, previous.topPaths, formatRatePercent)
+    );
+    lines.push(
+      ...buildDimensionCompareCsvRows('Top Method 对比', current.topMethods, previous.topMethods, formatRatePercent)
+    );
 
-    const content = `\ufeff${lines.join('\n')}`;
+    const content = `\uFEFF${lines.join('\n')}`;
     const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');

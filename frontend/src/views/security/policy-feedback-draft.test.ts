@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-
 import {
   buildExclusionCandidateKey,
   collectExclusionCandidatesFromFeedbackSuggestion,
@@ -26,7 +25,9 @@ test('collectExclusionCandidatesFromFeedbackSuggestion supports multi templates 
   const candidates = collectExclusionCandidatesFromFeedbackSuggestion(suggestion);
 
   assert.deepEqual(
-    [...candidates].sort((a, b) => a.removeType.localeCompare(b.removeType) || a.removeValue.localeCompare(b.removeValue)),
+    [...candidates].sort(
+      (a, b) => a.removeType.localeCompare(b.removeType) || a.removeValue.localeCompare(b.removeValue)
+    ),
     [
       { removeType: 'id', removeValue: '920350' },
       { removeType: 'tag', removeValue: 'attack-rce' },
@@ -44,15 +45,15 @@ test('parseExclusionFromFeedbackSuggestion returns first candidate or empty defa
 });
 
 test('collectExclusionCandidatesFromFeedbackSuggestion supports quoted values and chinese punctuation', () => {
-  const suggestion = [
-    '建议：移除标签："attack-xss"，',
-    '按ID移除：\'942100\'；',
-    'ruleRemoveByTag=`attack-lfi`'
-  ].join(' ');
+  const suggestion = ['建议：移除标签："attack-xss"，', "按ID移除：'942100'；", 'ruleRemoveByTag=`attack-lfi`'].join(
+    ' '
+  );
   const candidates = collectExclusionCandidatesFromFeedbackSuggestion(suggestion);
 
   assert.deepEqual(
-    [...candidates].sort((a, b) => a.removeType.localeCompare(b.removeType) || a.removeValue.localeCompare(b.removeValue)),
+    [...candidates].sort(
+      (a, b) => a.removeType.localeCompare(b.removeType) || a.removeValue.localeCompare(b.removeValue)
+    ),
     [
       { removeType: 'id', removeValue: '942100' },
       { removeType: 'tag', removeValue: 'attack-lfi' },
@@ -73,7 +74,9 @@ test('collectExclusionCandidatesFromFeedbackSuggestion tolerates dirty fragments
 
   const candidates = collectExclusionCandidatesFromFeedbackSuggestion(suggestion);
   assert.deepEqual(
-    [...candidates].sort((a, b) => a.removeType.localeCompare(b.removeType) || a.removeValue.localeCompare(b.removeValue)),
+    [...candidates].sort(
+      (a, b) => a.removeType.localeCompare(b.removeType) || a.removeValue.localeCompare(b.removeValue)
+    ),
     [
       { removeType: 'id', removeValue: '949110' },
       { removeType: 'id', removeValue: '950001' },
@@ -95,5 +98,8 @@ test('mergePolicyFeedbackCheckedRowKeys keeps cross-page selections and updates 
   const currentPageIDs = [1, 2, 3];
   const nextPageChecked = [2, 3];
   const merged = mergePolicyFeedbackCheckedRowKeys(previous, currentPageIDs, nextPageChecked);
-  assert.deepEqual(merged.sort((a, b) => a - b), [2, 3, 8]);
+  assert.deepEqual(
+    merged.sort((a, b) => a - b),
+    [2, 3, 8]
+  );
 });

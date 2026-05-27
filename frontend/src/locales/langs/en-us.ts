@@ -390,7 +390,8 @@ const local: App.I18n.Schema = {
             headers: 'Request Headers',
             body: 'Request Body Fields'
           },
-          bodyHint: 'Define request body fields here. Each field can map to title, rendered content, level, or a fixed value.',
+          bodyHint:
+            'Define request body fields here. Each field can map to title, rendered content, level, or a fixed value.',
           bodySources: {
             title: 'Notification Title',
             content: 'Rendered Content',
@@ -417,8 +418,8 @@ const local: App.I18n.Schema = {
             customValue: 'Fixed value content'
           },
           validation: {
-	          urlRequired: 'Webhook URL is required',
-	          bodyFieldsRequired: 'At least one body field is required'
+            urlRequired: 'Webhook URL is required',
+            bodyFieldsRequired: 'At least one body field is required'
           }
         },
         testDialog: {
@@ -522,15 +523,15 @@ const local: App.I18n.Schema = {
           succeeded: 'Succeeded',
           failed: 'Failed'
         },
-	        actions: {
-	          delete: 'Delete',
-	          clear: 'Clear',
-	          clearConfirm: 'Are you sure you want to clear all records?',
-	          deleteConfirm: 'Are you sure you want to delete this record?',
-	          batchDeleteConfirm: 'Are you sure you want to delete {count} selected records?'
-	        }
-	      }
-	    },
+        actions: {
+          delete: 'Delete',
+          clear: 'Clear',
+          clearConfirm: 'Are you sure you want to clear all records?',
+          deleteConfirm: 'Are you sure you want to delete this record?',
+          batchDeleteConfirm: 'Are you sure you want to delete {count} selected records?'
+        }
+      }
+    },
     userCenter: {
       profile: 'Profile',
       preferences: 'Preferences',
@@ -539,7 +540,8 @@ const local: App.I18n.Schema = {
       selectMinLevel: 'Select Minimum Level',
       savePreferences: 'Save Preferences',
       note: 'Note',
-      noteContent: 'Only notifications with a level equal to or higher than the selected level will be shown in the global header.',
+      noteContent:
+        'Only notifications with a level equal to or higher than the selected level will be shown in the global header.',
       saveSuccess: 'Preferences saved successfully',
       saveFailed: 'Failed to save preferences',
       levels: {

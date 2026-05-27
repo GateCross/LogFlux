@@ -1,4 +1,4 @@
-import { addIcon, addAPIProvider } from '@iconify/vue';
+import { addAPIProvider, addIcon } from '@iconify/vue';
 
 // MDI
 import MonitorDashboard from '@iconify/icons-mdi/monitor-dashboard';
@@ -64,7 +64,6 @@ import HdrAuto from '@iconify/icons-material-symbols/hdr-auto';
 
 export function setupIconifyOffline() {
   const { VITE_ICONIFY_URL } = import.meta.env;
-
 
   if (VITE_ICONIFY_URL) {
     addAPIProvider('', { resources: [VITE_ICONIFY_URL] });

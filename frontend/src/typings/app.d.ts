@@ -404,17 +404,17 @@ declare namespace App {
             apply: string;
             applySuccess: string;
             [key: string]:
-            | {
-              name: string;
-              desc: string;
-            }
-            | string;
+              | {
+                  name: string;
+                  desc: string;
+                }
+              | string;
           };
         };
         layout: {
           layoutMode: { title: string } & Record<UnionKey.ThemeLayoutMode, string> & {
-            [K in `${UnionKey.ThemeLayoutMode}_detail`]: string;
-          };
+              [K in `${UnionKey.ThemeLayoutMode}_detail`]: string;
+            };
           tab: {
             title: string;
             visible: string;
@@ -712,42 +712,42 @@ declare namespace App {
               mockData: string;
             };
           };
-	          log: {
-	            title: string;
-	            status: string;
-	            channel: string;
-	            refresh: string;
-	            id: string;
-	            eventTitle: string;
-	            eventType: string;
-	            level: string;
-	            sentAt: string;
-	            message: string;
-	            error: string;
-	            job: string;
-	            jobStatus: string;
-	            nextRunAt: string;
-	            statuses: {
-	              pending: string;
-	              sending: string;
-	              success: string;
-	              failed: string;
-	            };
-	            jobStatuses: {
-	              queued: string;
-	              processing: string;
-	              succeeded: string;
-	              failed: string;
-	            };
-	            actions: {
-	              delete: string;
-	              clear: string;
-	              clearConfirm: string;
-	              deleteConfirm: string;
-	              batchDeleteConfirm: string;
-	            };
-	          };
-	        };
+          log: {
+            title: string;
+            status: string;
+            channel: string;
+            refresh: string;
+            id: string;
+            eventTitle: string;
+            eventType: string;
+            level: string;
+            sentAt: string;
+            message: string;
+            error: string;
+            job: string;
+            jobStatus: string;
+            nextRunAt: string;
+            statuses: {
+              pending: string;
+              sending: string;
+              success: string;
+              failed: string;
+            };
+            jobStatuses: {
+              queued: string;
+              processing: string;
+              succeeded: string;
+              failed: string;
+            };
+            actions: {
+              delete: string;
+              clear: string;
+              clearConfirm: string;
+              deleteConfirm: string;
+              batchDeleteConfirm: string;
+            };
+          };
+        };
         userCenter: {
           profile: string;
           preferences: string;
@@ -803,8 +803,8 @@ declare namespace App {
 
     type GetI18nKey<T extends Record<string, unknown>, K extends keyof T = keyof T> = K extends string
       ? T[K] extends Record<string, unknown>
-      ? `${K}.${GetI18nKey<T[K]>}`
-      : K
+        ? `${K}.${GetI18nKey<T[K]>}`
+        : K
       : never;
 
     type I18nKey = GetI18nKey<Schema>;

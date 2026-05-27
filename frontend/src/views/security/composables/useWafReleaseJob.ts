@@ -1,16 +1,16 @@
 import { reactive, ref } from 'vue';
 import type { FormInst, PaginationProps } from 'naive-ui';
 import {
+  type WafJobItem,
+  type WafJobStatus,
+  type WafReleaseItem,
+  type WafReleaseStatus,
   activateWafRelease,
   clearWafJobs,
   clearWafReleases,
   fetchWafJobList,
   fetchWafReleaseList,
-  rollbackWafRelease,
-  type WafJobItem,
-  type WafJobStatus,
-  type WafReleaseItem,
-  type WafReleaseStatus
+  rollbackWafRelease
 } from '@/service/api/caddy-release-job';
 
 type MessageApi = {

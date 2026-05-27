@@ -6,7 +6,7 @@ const props = defineProps<{ readOnly?: boolean }>();
 </script>
 
 <template>
-  <div class="h-full relative">
+  <div class="relative h-full">
     <VueMonacoEditor
       v-model:value="content"
       language="shell"

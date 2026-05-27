@@ -1,190 +1,5 @@
-<template>
-  <div class="flex flex-col gap-4">
-    <div class="flex items-center justify-between">
-      <div class="font-semibold">路由列表</div>
-      <n-button size="small" type="primary" @click="addRoute">新增路由</n-button>
-    </div>
-    <n-empty v-if="routes.length === 0" description="暂无路由" />
-    <VueDraggable v-else v-model="routes" item-key="id" :animation="150" handle=".drag-handle">
-      <div
-        v-for="route in routes"
-        :key="route.id"
-        class="rounded border border-gray-200 p-3"
-        :data-route-id="route.id"
-      >
-        <div class="flex items-center justify-between gap-2">
-          <div class="flex items-center gap-2">
-            <icon-mdi-drag class="drag-handle cursor-move text-icon" />
-            <span class="font-medium">{{ route.name || '未命名路由' }}</span>
-          </div>
-          <div class="flex items-center gap-2">
-            <n-switch v-model:value="route.enabled" size="small" />
-            <n-button size="tiny" @click="toggleRoute(route.id)">
-              {{ isExpanded(route.id) ? '收起' : '展开' }}
-            </n-button>
-          </div>
-        </div>
-        <div class="mt-1 text-xs text-gray-500">{{ routeSummary(route) }}</div>
-        <n-collapse-transition :show="isExpanded(route.id)">
-          <div class="mt-3 flex flex-col gap-3">
-            <n-input v-model:value="route.name" placeholder="路由名称" />
-            <div class="rounded-md border border-gray-200 p-3">
-              <div class="font-medium mb-2">Matchers</div>
-              <div class="grid grid-cols-2 gap-3">
-                <div>
-                  <div class="text-xs text-gray-500 mb-1">Host</div>
-                  <n-dynamic-tags v-model:value="route.match.host" />
-                  <div v-if="invalidHosts(route.match.host).length" class="text-xs text-red-500 mt-1">
-                    Host 格式不合法: {{ invalidHosts(route.match.host).join(', ') }}
-                  </div>
-                </div>
-                <div>
-                  <div class="text-xs text-gray-500 mb-1">Path</div>
-                  <n-dynamic-tags v-model:value="route.match.path" />
-                  <div v-if="invalidPaths(route.match.path).length" class="text-xs text-red-500 mt-1">
-                    Path 需以 / 开头: {{ invalidPaths(route.match.path).join(', ') }}
-                  </div>
-                </div>
-                <div>
-                  <div class="text-xs text-gray-500 mb-1">Method</div>
-                  <n-dynamic-tags v-model:value="route.match.method" />
-                  <div v-if="invalidMethods(route.match.method).length" class="text-xs text-red-500 mt-1">
-                    Method 非法: {{ invalidMethods(route.match.method).join(', ') }}
-                  </div>
-                </div>
-                <div>
-                  <div class="text-xs text-gray-500 mb-1">Expression</div>
-                  <n-input v-model:value="route.match.expression" placeholder="expression {expr}" />
-                </div>
-              </div>
-              <div class="mt-3 grid grid-cols-2 gap-3">
-                <div>
-                  <div class="text-xs text-gray-500 mb-1">Header</div>
-                  <n-dynamic-input v-model:value="route.match.header" :on-create="createKeyValue">
-                    <template #default="{ value }">
-                      <div class="flex gap-2 w-full">
-                        <n-input v-model:value="value.key" placeholder="Key" />
-                        <n-input v-model:value="value.value" placeholder="Value" />
-                      </div>
-                    </template>
-                  </n-dynamic-input>
-                </div>
-                <div>
-                  <div class="text-xs text-gray-500 mb-1">Query</div>
-                  <n-dynamic-input v-model:value="route.match.query" :on-create="createKeyValue">
-                    <template #default="{ value }">
-                      <div class="flex gap-2 w-full">
-                        <n-input v-model:value="value.key" placeholder="Key" />
-                        <n-input v-model:value="value.value" placeholder="Value" />
-                      </div>
-                    </template>
-                  </n-dynamic-input>
-                </div>
-              </div>
-            </div>
-
-            <div class="rounded-md border border-gray-200 p-3">
-              <div class="flex items-center justify-between mb-2">
-                <div class="font-medium">Handlers</div>
-                <n-button size="tiny" @click="addHandle(route.id)">新增 Handler</n-button>
-              </div>
-              <VueDraggable v-model="route.handles" item-key="id" :animation="150" handle=".handle-drag">
-                <div v-for="handle in route.handles" :key="handle.id" class="rounded border p-2">
-                  <div class="flex items-center gap-2">
-                    <icon-mdi-drag class="handle-drag cursor-move text-icon" />
-                    <n-select
-                      :value="handle.type"
-                      :options="handleOptions"
-                      size="small"
-                      class="w-48"
-                      @update:value="value => handleTypeChange(handle, value as HandleType)"
-                    />
-                    <n-switch v-model:value="handle.enabled" size="small" />
-                    <n-button size="tiny" type="error" @click="removeHandle(route.id, handle.id)">删除</n-button>
-                  </div>
-
-                  <div class="mt-2">
-                  <template v-if="handle.type === 'reverse_proxy'">
-                    <n-input v-model:value="handle.upstream" placeholder="上游名称或目标地址（host:port / https://host:port）" />
-                    <div v-if="!handle.upstream" class="text-xs text-red-500 mt-1">必须填写上游名称或目标地址</div>
-                    <n-select
-                      v-model:value="handle.lbPolicy"
-                      size="small"
-                      class="mt-2 w-48"
-                      :options="lbOptions"
-                        placeholder="负载策略"
-                      />
-                    <n-select
-                      v-model:value="handle.transportProtocol"
-                      size="small"
-                      class="mt-2 w-48"
-                      :options="transportOptions"
-                      placeholder="传输协议"
-                    />
-                    <div class="mt-2">
-                      <n-switch v-model:value="handle.tlsInsecureSkipVerify" size="small" />
-                      <span class="ml-2 text-sm">TLS 跳过校验</span>
-                    </div>
-                    </template>
-                    <template v-else-if="handle.type === 'file_server'">
-                      <n-input v-model:value="handle.root" placeholder="Root 路径" />
-                      <div class="mt-2">
-                        <n-switch v-model:value="handle.browse" size="small" />
-                        <span class="ml-2 text-sm">目录浏览</span>
-                      </div>
-                    </template>
-                    <template v-else-if="handle.type === 'respond'">
-                      <n-input-number v-model:value="handle.status" placeholder="Status" :min="100" :max="599" />
-                      <n-input v-model:value="handle.body" placeholder="Body" class="mt-2" />
-                    </template>
-                    <template v-else-if="handle.type === 'redirect'">
-                      <n-input v-model:value="handle.to" placeholder="跳转地址" />
-                      <n-input-number v-model:value="handle.code" placeholder="状态码" class="mt-2" :min="300" :max="399" />
-                    </template>
-                    <template v-else-if="handle.type === 'header'">
-                      <n-dynamic-input v-model:value="handle.rules" :on-create="createHeaderRule">
-                        <template #default="{ value }">
-                          <div class="flex gap-2 w-full">
-                            <n-select v-model:value="value.op" :options="headerOpOptions" size="small" class="w-24" />
-                            <n-input v-model:value="value.key" placeholder="Key" />
-                            <n-input v-model:value="value.value" placeholder="Value" />
-                          </div>
-                        </template>
-                      </n-dynamic-input>
-                    </template>
-                    <template v-else-if="handle.type === 'rewrite'">
-                      <n-input v-model:value="handle.uri" placeholder="Rewrite URI" />
-                    </template>
-                  </div>
-                </div>
-              </VueDraggable>
-            </div>
-
-            <div class="rounded-md border border-gray-200 p-3">
-              <div class="font-medium mb-2">Log Append</div>
-              <n-dynamic-input v-model:value="route.logAppend" :on-create="createKeyValue">
-                <template #default="{ value }">
-                  <div class="flex gap-2 w-full">
-                    <n-input v-model:value="value.key" placeholder="Key" />
-                    <n-input v-model:value="value.value" placeholder="Value" />
-                  </div>
-                </template>
-              </n-dynamic-input>
-            </div>
-
-            <div class="flex gap-2">
-              <n-button size="tiny" @click="duplicateRoute(route.id)">复制路由</n-button>
-              <n-button size="tiny" type="error" @click="removeRoute(route.id)">删除路由</n-button>
-            </div>
-          </div>
-        </n-collapse-transition>
-      </div>
-    </VueDraggable>
-  </div>
-</template>
-
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue';
+import { nextTick, ref, watch } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
 import type { Handle, HandleType, HeaderRule, KeyValue, Route } from '../types';
 
@@ -348,7 +163,7 @@ function handleTypeChange(handle: Handle, value: HandleType) {
 
 watch(
   () => props.focusRouteId,
-  async (id) => {
+  async id => {
     if (!id) return;
     if (!expanded.value.includes(id)) {
       expanded.value = [...expanded.value, id];
@@ -361,3 +176,192 @@ watch(
   }
 );
 </script>
+
+<template>
+  <div class="flex flex-col gap-4">
+    <div class="flex items-center justify-between">
+      <div class="font-semibold">路由列表</div>
+      <NButton size="small" type="primary" @click="addRoute">新增路由</NButton>
+    </div>
+    <NEmpty v-if="routes.length === 0" description="暂无路由" />
+    <VueDraggable v-else v-model="routes" item-key="id" :animation="150" handle=".drag-handle">
+      <div v-for="route in routes" :key="route.id" class="border border-gray-200 rounded p-3" :data-route-id="route.id">
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <icon-mdi-drag class="drag-handle cursor-move text-icon" />
+            <span class="font-medium">{{ route.name || '未命名路由' }}</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <NSwitch v-model:value="route.enabled" size="small" />
+            <NButton size="tiny" @click="toggleRoute(route.id)">
+              {{ isExpanded(route.id) ? '收起' : '展开' }}
+            </NButton>
+          </div>
+        </div>
+        <div class="mt-1 text-xs text-gray-500">{{ routeSummary(route) }}</div>
+        <NCollapseTransition :show="isExpanded(route.id)">
+          <div class="mt-3 flex flex-col gap-3">
+            <NInput v-model:value="route.name" placeholder="路由名称" />
+            <div class="border border-gray-200 rounded-md p-3">
+              <div class="mb-2 font-medium">Matchers</div>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <div class="mb-1 text-xs text-gray-500">Host</div>
+                  <NDynamicTags v-model:value="route.match.host" />
+                  <div v-if="invalidHosts(route.match.host).length" class="mt-1 text-xs text-red-500">
+                    Host 格式不合法: {{ invalidHosts(route.match.host).join(', ') }}
+                  </div>
+                </div>
+                <div>
+                  <div class="mb-1 text-xs text-gray-500">Path</div>
+                  <NDynamicTags v-model:value="route.match.path" />
+                  <div v-if="invalidPaths(route.match.path).length" class="mt-1 text-xs text-red-500">
+                    Path 需以 / 开头: {{ invalidPaths(route.match.path).join(', ') }}
+                  </div>
+                </div>
+                <div>
+                  <div class="mb-1 text-xs text-gray-500">Method</div>
+                  <NDynamicTags v-model:value="route.match.method" />
+                  <div v-if="invalidMethods(route.match.method).length" class="mt-1 text-xs text-red-500">
+                    Method 非法: {{ invalidMethods(route.match.method).join(', ') }}
+                  </div>
+                </div>
+                <div>
+                  <div class="mb-1 text-xs text-gray-500">Expression</div>
+                  <NInput v-model:value="route.match.expression" placeholder="expression {expr}" />
+                </div>
+              </div>
+              <div class="grid grid-cols-2 mt-3 gap-3">
+                <div>
+                  <div class="mb-1 text-xs text-gray-500">Header</div>
+                  <NDynamicInput v-model:value="route.match.header" :on-create="createKeyValue">
+                    <template #default="{ value }">
+                      <div class="w-full flex gap-2">
+                        <NInput v-model:value="value.key" placeholder="Key" />
+                        <NInput v-model:value="value.value" placeholder="Value" />
+                      </div>
+                    </template>
+                  </NDynamicInput>
+                </div>
+                <div>
+                  <div class="mb-1 text-xs text-gray-500">Query</div>
+                  <NDynamicInput v-model:value="route.match.query" :on-create="createKeyValue">
+                    <template #default="{ value }">
+                      <div class="w-full flex gap-2">
+                        <NInput v-model:value="value.key" placeholder="Key" />
+                        <NInput v-model:value="value.value" placeholder="Value" />
+                      </div>
+                    </template>
+                  </NDynamicInput>
+                </div>
+              </div>
+            </div>
+
+            <div class="border border-gray-200 rounded-md p-3">
+              <div class="mb-2 flex items-center justify-between">
+                <div class="font-medium">Handlers</div>
+                <NButton size="tiny" @click="addHandle(route.id)">新增 Handler</NButton>
+              </div>
+              <VueDraggable v-model="route.handles" item-key="id" :animation="150" handle=".handle-drag">
+                <div v-for="handle in route.handles" :key="handle.id" class="border rounded p-2">
+                  <div class="flex items-center gap-2">
+                    <icon-mdi-drag class="handle-drag cursor-move text-icon" />
+                    <NSelect
+                      :value="handle.type"
+                      :options="handleOptions"
+                      size="small"
+                      class="w-48"
+                      @update:value="value => handleTypeChange(handle, value as HandleType)"
+                    />
+                    <NSwitch v-model:value="handle.enabled" size="small" />
+                    <NButton size="tiny" type="error" @click="removeHandle(route.id, handle.id)">删除</NButton>
+                  </div>
+
+                  <div class="mt-2">
+                    <template v-if="handle.type === 'reverse_proxy'">
+                      <NInput
+                        v-model:value="handle.upstream"
+                        placeholder="上游名称或目标地址（host:port / https://host:port）"
+                      />
+                      <div v-if="!handle.upstream" class="mt-1 text-xs text-red-500">必须填写上游名称或目标地址</div>
+                      <NSelect
+                        v-model:value="handle.lbPolicy"
+                        size="small"
+                        class="mt-2 w-48"
+                        :options="lbOptions"
+                        placeholder="负载策略"
+                      />
+                      <NSelect
+                        v-model:value="handle.transportProtocol"
+                        size="small"
+                        class="mt-2 w-48"
+                        :options="transportOptions"
+                        placeholder="传输协议"
+                      />
+                      <div class="mt-2">
+                        <NSwitch v-model:value="handle.tlsInsecureSkipVerify" size="small" />
+                        <span class="ml-2 text-sm">TLS 跳过校验</span>
+                      </div>
+                    </template>
+                    <template v-else-if="handle.type === 'file_server'">
+                      <NInput v-model:value="handle.root" placeholder="Root 路径" />
+                      <div class="mt-2">
+                        <NSwitch v-model:value="handle.browse" size="small" />
+                        <span class="ml-2 text-sm">目录浏览</span>
+                      </div>
+                    </template>
+                    <template v-else-if="handle.type === 'respond'">
+                      <NInputNumber v-model:value="handle.status" placeholder="Status" :min="100" :max="599" />
+                      <NInput v-model:value="handle.body" placeholder="Body" class="mt-2" />
+                    </template>
+                    <template v-else-if="handle.type === 'redirect'">
+                      <NInput v-model:value="handle.to" placeholder="跳转地址" />
+                      <NInputNumber
+                        v-model:value="handle.code"
+                        placeholder="状态码"
+                        class="mt-2"
+                        :min="300"
+                        :max="399"
+                      />
+                    </template>
+                    <template v-else-if="handle.type === 'header'">
+                      <NDynamicInput v-model:value="handle.rules" :on-create="createHeaderRule">
+                        <template #default="{ value }">
+                          <div class="w-full flex gap-2">
+                            <NSelect v-model:value="value.op" :options="headerOpOptions" size="small" class="w-24" />
+                            <NInput v-model:value="value.key" placeholder="Key" />
+                            <NInput v-model:value="value.value" placeholder="Value" />
+                          </div>
+                        </template>
+                      </NDynamicInput>
+                    </template>
+                    <template v-else-if="handle.type === 'rewrite'">
+                      <NInput v-model:value="handle.uri" placeholder="Rewrite URI" />
+                    </template>
+                  </div>
+                </div>
+              </VueDraggable>
+            </div>
+
+            <div class="border border-gray-200 rounded-md p-3">
+              <div class="mb-2 font-medium">Log Append</div>
+              <NDynamicInput v-model:value="route.logAppend" :on-create="createKeyValue">
+                <template #default="{ value }">
+                  <div class="w-full flex gap-2">
+                    <NInput v-model:value="value.key" placeholder="Key" />
+                    <NInput v-model:value="value.value" placeholder="Value" />
+                  </div>
+                </template>
+              </NDynamicInput>
+            </div>
+
+            <div class="flex gap-2">
+              <NButton size="tiny" @click="duplicateRoute(route.id)">复制路由</NButton>
+              <NButton size="tiny" type="error" @click="removeRoute(route.id)">删除路由</NButton>
+            </div>
+          </div>
+        </NCollapseTransition>
+      </div>
+    </VueDraggable>
+  </div>
+</template>

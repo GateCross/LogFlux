@@ -1,13 +1,13 @@
-import { reactive, ref, type Ref } from 'vue';
+import { type Ref, reactive, ref } from 'vue';
 import type { FormInst } from 'naive-ui';
 import {
-  batchUpdateWafPolicyFalsePositiveFeedbackStatus,
-  createWafPolicyFalsePositiveFeedback,
-  updateWafPolicyFalsePositiveFeedbackStatus,
   type WafPolicyFalsePositiveFeedbackBatchStatusUpdatePayload,
   type WafPolicyFalsePositiveFeedbackItem,
   type WafPolicyFalsePositiveFeedbackPayload,
-  type WafPolicyFalsePositiveFeedbackStatusUpdatePayload
+  type WafPolicyFalsePositiveFeedbackStatusUpdatePayload,
+  batchUpdateWafPolicyFalsePositiveFeedbackStatus,
+  createWafPolicyFalsePositiveFeedback,
+  updateWafPolicyFalsePositiveFeedbackStatus
 } from '@/service/api/caddy-observe';
 
 type MessageApi = {
@@ -99,7 +99,10 @@ export function useWafObserveFeedback(options: UseWafObserveFeedbackOptions) {
 
   function openPolicyFeedbackProcessModal(row: WafPolicyFalsePositiveFeedbackItem) {
     policyFeedbackProcessForm.id = Number(row.id || 0);
-    policyFeedbackProcessForm.feedbackStatus = (row.feedbackStatus || 'pending') as 'pending' | 'confirmed' | 'resolved';
+    policyFeedbackProcessForm.feedbackStatus = (row.feedbackStatus || 'pending') as
+      | 'pending'
+      | 'confirmed'
+      | 'resolved';
     policyFeedbackProcessForm.processNote = row.processNote || '';
     policyFeedbackProcessForm.assignee = row.assignee || '';
     policyFeedbackProcessForm.dueAt = row.dueAt || '';
@@ -187,9 +190,10 @@ export function useWafObserveFeedback(options: UseWafObserveFeedbackOptions) {
         policyId: policyFeedbackForm.policyId || undefined,
         host: policyFeedbackForm.host.trim() || undefined,
         path: policyFeedbackForm.path.trim() || undefined,
-        method: String(policyFeedbackForm.method || '')
-          .trim()
-          .toUpperCase() || undefined,
+        method:
+          String(policyFeedbackForm.method || '')
+            .trim()
+            .toUpperCase() || undefined,
         status: Number(policyFeedbackForm.status || 403),
         assignee: policyFeedbackForm.assignee.trim() || undefined,
         dueAt: policyFeedbackForm.dueAt.trim() || undefined,

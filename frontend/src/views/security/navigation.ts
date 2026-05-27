@@ -10,7 +10,15 @@ export interface SecurityMenuSchemaItem {
   defaultTab: SecurityTabKey;
 }
 
-export const SECURITY_OBSERVE_QUERY_KEYS = ['policyId', 'window', 'intervalSec', 'topN', 'host', 'path', 'method'] as const;
+export const SECURITY_OBSERVE_QUERY_KEYS = [
+  'policyId',
+  'window',
+  'intervalSec',
+  'topN',
+  'host',
+  'path',
+  'method'
+] as const;
 
 export const SECURITY_MENU_SCHEMA: Record<SecurityMenuKey, SecurityMenuSchemaItem> = {
   source: {

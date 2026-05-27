@@ -10,37 +10,39 @@ interface Props {
 
 const props = defineProps<Props>();
 
-const { domRef, updateOptions } = useEcharts((): ECOption => ({
-  tooltip: {
-    trigger: 'axis',
-    axisPointer: { type: 'line' }
-  },
-  grid: {
-    left: '2%',
-    right: '2%',
-    top: '10%',
-    bottom: '2%',
-    containLabel: true
-  },
-  xAxis: {
-    type: 'category',
-    data: [],
-    boundaryGap: false,
-    axisLine: { show: false },
-    axisTick: { show: false },
-    splitLine: { show: false }
-  },
-  yAxis: {
-    type: 'value',
-    axisLine: { show: false },
-    axisTick: { show: false },
-    splitLine: { 
-      show: true, 
-      lineStyle: { type: 'dashed', color: '#eeeeee' } 
-    }
-  },
-  series: []
-}));
+const { domRef, updateOptions } = useEcharts(
+  (): ECOption => ({
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'line' }
+    },
+    grid: {
+      left: '2%',
+      right: '2%',
+      top: '10%',
+      bottom: '2%',
+      containLabel: true
+    },
+    xAxis: {
+      type: 'category',
+      data: [],
+      boundaryGap: false,
+      axisLine: { show: false },
+      axisTick: { show: false },
+      splitLine: { show: false }
+    },
+    yAxis: {
+      type: 'value',
+      axisLine: { show: false },
+      axisTick: { show: false },
+      splitLine: {
+        show: true,
+        lineStyle: { type: 'dashed', color: '#eeeeee' }
+      }
+    },
+    series: []
+  })
+);
 
 const syncChart = () => {
   updateOptions(opts => {
@@ -55,7 +57,10 @@ const syncChart = () => {
         areaStyle: {
           color: {
             type: 'linear',
-            x: 0, y: 0, x2: 0, y2: 1,
+            x: 0,
+            y: 0,
+            x2: 0,
+            y2: 1,
             colorStops: [
               { offset: 0, color: 'rgba(6, 182, 212, 0.4)' },
               { offset: 1, color: 'rgba(6, 182, 212, 0.05)' }

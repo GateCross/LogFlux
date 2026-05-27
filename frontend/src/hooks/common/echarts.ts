@@ -1,7 +1,16 @@
 import { computed, effectScope, nextTick, onScopeDispose, shallowRef, watch } from 'vue';
 import { useElementSize } from '@vueuse/core';
 import * as echarts from 'echarts/core';
-import { BarChart, GaugeChart, LineChart, MapChart, PictorialBarChart, PieChart, RadarChart, ScatterChart } from 'echarts/charts';
+import {
+  BarChart,
+  GaugeChart,
+  LineChart,
+  MapChart,
+  PictorialBarChart,
+  PieChart,
+  RadarChart,
+  ScatterChart
+} from 'echarts/charts';
 import type {
   BarSeriesOption,
   GaugeSeriesOption,
@@ -19,8 +28,8 @@ import {
   TitleComponent,
   ToolboxComponent,
   TooltipComponent,
-  VisualMapComponent,
-  TransformComponent
+  TransformComponent,
+  VisualMapComponent
 } from 'echarts/components';
 import type {
   DatasetComponentOption,

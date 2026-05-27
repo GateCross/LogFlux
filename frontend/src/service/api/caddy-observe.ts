@@ -124,18 +124,26 @@ export function fetchWafPolicyFalsePositiveFeedbackList(params: {
   assignee?: string;
   slaStatus?: 'all' | 'normal' | 'overdue' | 'resolved';
 }) {
-  return request<WafPolicyFalsePositiveFeedbackListResp>({ url: '/api/caddy/waf/policy/false-positive-feedback', params });
+  return request<WafPolicyFalsePositiveFeedbackListResp>({
+    url: '/api/caddy/waf/policy/false-positive-feedback',
+    params
+  });
 }
 
 export function createWafPolicyFalsePositiveFeedback(data: WafPolicyFalsePositiveFeedbackPayload) {
   return request<void>({ url: '/api/caddy/waf/policy/false-positive-feedback', method: 'post', data });
 }
 
-export function updateWafPolicyFalsePositiveFeedbackStatus(id: number, data: WafPolicyFalsePositiveFeedbackStatusUpdatePayload) {
+export function updateWafPolicyFalsePositiveFeedbackStatus(
+  id: number,
+  data: WafPolicyFalsePositiveFeedbackStatusUpdatePayload
+) {
   return request<void>({ url: `/api/caddy/waf/policy/false-positive-feedback/${id}/status`, method: 'put', data });
 }
 
-export function batchUpdateWafPolicyFalsePositiveFeedbackStatus(data: WafPolicyFalsePositiveFeedbackBatchStatusUpdatePayload) {
+export function batchUpdateWafPolicyFalsePositiveFeedbackStatus(
+  data: WafPolicyFalsePositiveFeedbackBatchStatusUpdatePayload
+) {
   return request<WafPolicyFalsePositiveFeedbackBatchStatusUpdateResp>({
     url: '/api/caddy/waf/policy/false-positive-feedback/batch-status',
     method: 'put',
