@@ -1,17 +1,10 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { type FormInst, type FormRules, NSelect, NSwitch, type UploadFileInfo, useDialog, useMessage } from 'naive-ui';
+import { type FormInst, type FormRules, type UploadFileInfo, useDialog, useMessage } from 'naive-ui';
 import { type WafKind, type WafSourceItem, fetchWafSourceList, uploadWafPackage } from '@/service/api/caddy-source';
-import {
-  type WafPolicyCrsTemplate,
-  type WafPolicyEngineMode,
-  type WafPolicyRemoveType,
-  type WafPolicyRevisionStatus,
-  type WafPolicyScopeType
-} from '@/service/api/caddy-policy';
-import { type WafPolicyFalsePositiveFeedbackItem } from '@/service/api/caddy-observe';
-import { type WafJobItem, type WafJobStatus, type WafReleaseStatus } from '@/service/api/caddy-release-job';
+import { type WafPolicyRemoveType, type WafPolicyScopeType } from '@/service/api/caddy-policy';
+import { type WafJobItem } from '@/service/api/caddy-release-job';
 import { request } from '@/service/request';
 import {
   buildPolicyWorkspaceActions,
@@ -21,6 +14,32 @@ import {
   mapPolicyRevisionStatusLabel,
   mapScopeTypeLabel
 } from './security-policy-utils';
+import {
+  formatDateTime,
+  formatRatePercent,
+  mapJobActionLabel,
+  mapJobMessage,
+  mapJobStatusLabel,
+  mapJobStatusType,
+  mapJobTriggerModeLabel,
+  mapPolicyEngineModeType,
+  mapPolicyFeedbackSLAStatusLabel,
+  mapPolicyFeedbackSLAStatusTagType,
+  mapPolicyFeedbackStatusLabel,
+  mapPolicyFeedbackStatusTagType,
+  mapPolicyRevisionStatusType,
+  mapReleaseStatusType
+} from './security-mappers';
+import {
+  crsTemplatePresetMap,
+  jobActionOptions,
+  jobStatusOptions,
+  methodOptions,
+  policyFeedbackSLAStatusOptions,
+  policyFeedbackStatusFilterOptions,
+  releaseStatusOptions,
+  scopeTypeOptions
+} from './security-options';
 import {
   createBindingColumns,
   createBindingEffectiveColumns,
@@ -40,6 +59,16 @@ import SecuritySourcePage from './pages/SecuritySourcePage.vue';
 import SecurityPolicyPage from './pages/SecurityPolicyPage.vue';
 import SecurityObservePage from './pages/SecurityObservePage.vue';
 import SecurityOpsPage from './pages/SecurityOpsPage.vue';
+import SourceFormModal from './modals/SourceFormModal.vue';
+import PolicyFormModal from './modals/PolicyFormModal.vue';
+import UploadPackageModal from './modals/UploadPackageModal.vue';
+import ExclusionFormModal from './modals/ExclusionFormModal.vue';
+import BindingFormModal from './modals/BindingFormModal.vue';
+import FeedbackFormModal from './modals/FeedbackFormModal.vue';
+import FeedbackProcessModal from './modals/FeedbackProcessModal.vue';
+import FeedbackBatchProcessModal from './modals/FeedbackBatchProcessModal.vue';
+import ExclusionDraftModal from './modals/ExclusionDraftModal.vue';
+import RollbackModal from './modals/RollbackModal.vue';
 import { useSecurityNavigation } from './composables/useSecurityNavigation';
 import { useWafPolicy } from './composables/useWafPolicy';
 import { useWafObserve } from './composables/useWafObserve';
@@ -89,121 +118,6 @@ const activeOpsSection = computed(() => (activeTab.value === 'job' ? 'job' : 're
 const observeActiveView = ref<'analysis' | 'feedback'>('analysis');
 
 const tableFixedHeight = 480;
-
-const modeOptions = [
-  { label: '远程同步 (remote)', value: 'remote' },
-  { label: '手动管理 (manual)', value: 'manual' }
-];
-
-const authTypeOptions = [
-  { label: '无鉴权', value: 'none' },
-  { label: 'Token', value: 'token' },
-  { label: 'Basic', value: 'basic' }
-];
-
-const policyEngineModeOptions = [
-  { label: 'On（阻断）', value: 'on' },
-  { label: 'Off（关闭）', value: 'off' },
-  { label: 'DetectionOnly（仅检测）', value: 'detectiononly' }
-];
-
-const policyAuditEngineOptions = [
-  { label: 'RelevantOnly（推荐）', value: 'relevantonly' },
-  { label: 'On（全量）', value: 'on' },
-  { label: 'Off（关闭）', value: 'off' }
-];
-
-const policyAuditLogFormatOptions = [
-  { label: 'JSON', value: 'json' },
-  { label: 'Native', value: 'native' }
-];
-
-const scopeTypeOptions = [
-  { label: '全局', value: 'global' as WafPolicyScopeType },
-  { label: '站点', value: 'site' as WafPolicyScopeType },
-  { label: '路由', value: 'route' as WafPolicyScopeType }
-];
-
-const removeTypeOptions = [
-  { label: 'removeById', value: 'id' as WafPolicyRemoveType },
-  { label: 'removeByTag', value: 'tag' as WafPolicyRemoveType }
-];
-
-const methodOptions = [
-  { label: 'GET', value: 'GET' },
-  { label: 'POST', value: 'POST' },
-  { label: 'PUT', value: 'PUT' },
-  { label: 'PATCH', value: 'PATCH' },
-  { label: 'DELETE', value: 'DELETE' },
-  { label: 'OPTIONS', value: 'OPTIONS' },
-  { label: 'HEAD', value: 'HEAD' }
-];
-
-const policyFeedbackStatusOptions = [
-  { label: '待确认', value: 'pending' as const },
-  { label: '已确认', value: 'confirmed' as const },
-  { label: '已处理', value: 'resolved' as const }
-];
-
-const policyFeedbackStatusFilterOptions = [{ label: '全部状态', value: '' }, ...policyFeedbackStatusOptions];
-
-const policyFeedbackSLAStatusOptions = [
-  { label: '全部SLA', value: 'all' as const },
-  { label: '正常', value: 'normal' as const },
-  { label: '已超时', value: 'overdue' as const },
-  { label: '已解决', value: 'resolved' as const }
-];
-
-const crsTemplatePresetMap: Record<
-  Exclude<WafPolicyCrsTemplate, 'custom'>,
-  {
-    crsParanoiaLevel: number;
-    crsInboundAnomalyThreshold: number;
-    crsOutboundAnomalyThreshold: number;
-  }
-> = {
-  low_fp: {
-    crsParanoiaLevel: 1,
-    crsInboundAnomalyThreshold: 10,
-    crsOutboundAnomalyThreshold: 8
-  },
-  balanced: {
-    crsParanoiaLevel: 2,
-    crsInboundAnomalyThreshold: 5,
-    crsOutboundAnomalyThreshold: 4
-  },
-  high_blocking: {
-    crsParanoiaLevel: 3,
-    crsInboundAnomalyThreshold: 3,
-    crsOutboundAnomalyThreshold: 2
-  }
-};
-
-const releaseStatusOptions = [
-  { label: '全部', value: '' },
-  { label: 'downloaded', value: 'downloaded' },
-  { label: 'verified', value: 'verified' },
-  { label: 'active', value: 'active' },
-  { label: 'failed', value: 'failed' },
-  { label: 'rolled_back', value: 'rolled_back' }
-];
-
-const jobStatusOptions = [
-  { label: '全部', value: '' },
-  { label: 'running', value: 'running' },
-  { label: 'success', value: 'success' },
-  { label: 'failed', value: 'failed' }
-];
-
-const jobActionOptions = [
-  { label: '全部', value: '' },
-  { label: '检查', value: 'check' },
-  { label: '下载', value: 'download' },
-  { label: '校验', value: 'verify' },
-  { label: '激活', value: 'activate' },
-  { label: '回滚', value: 'rollback' },
-  { label: '引擎检查', value: 'engine_check' }
-];
 
 const jobSourceNameMap = ref<Record<number, string>>({});
 const userNameMap = ref<Record<string, string>>({});
@@ -531,7 +445,6 @@ const {
   exclusionModalMode,
   exclusionSubmitting,
   exclusionFormRef,
-  exclusionRemoveValueInputRef,
   shouldFocusExclusionRemoveValue,
   exclusionForm,
   exclusionModalTitle,
@@ -741,50 +654,6 @@ const policyStatsDimensionColumns = createPolicyStatsDimensionColumns({
   formatRatePercent
 });
 
-function mapPolicyFeedbackStatusLabel(status: string) {
-  switch (
-    String(status || '')
-      .trim()
-      .toLowerCase()
-  ) {
-    case 'confirmed':
-      return '已确认';
-    case 'resolved':
-      return '已处理';
-    default:
-      return '待确认';
-  }
-}
-
-function mapPolicyFeedbackStatusTagType(status: string): 'default' | 'warning' | 'success' {
-  switch (
-    String(status || '')
-      .trim()
-      .toLowerCase()
-  ) {
-    case 'confirmed':
-      return 'warning';
-    case 'resolved':
-      return 'success';
-    default:
-      return 'default';
-  }
-}
-
-function mapPolicyFeedbackSLAStatusLabel(row: WafPolicyFalsePositiveFeedbackItem) {
-  if ((row.feedbackStatus || '') === 'resolved') {
-    return '已解决';
-  }
-  return row.isOverdue ? '已超时' : '正常';
-}
-
-function mapPolicyFeedbackSLAStatusTagType(row: WafPolicyFalsePositiveFeedbackItem): 'default' | 'warning' | 'success' {
-  if ((row.feedbackStatus || '') === 'resolved') {
-    return 'success';
-  }
-  return row.isOverdue ? 'warning' : 'default';
-}
-
 const policyFeedbackColumns = createPolicyFeedbackColumns({
   displayOperatorName,
   mapPolicyFeedbackStatusTagType,
@@ -827,105 +696,6 @@ const jobColumns = createJobColumns({
   displayOperatorName,
   mapJobMessage
 });
-
-function mapReleaseStatusType(status: WafReleaseStatus) {
-  switch (status) {
-    case 'active':
-      return 'success';
-    case 'verified':
-      return 'info';
-    case 'failed':
-      return 'error';
-    case 'rolled_back':
-      return 'warning';
-    default:
-      return 'default';
-  }
-}
-
-function mapPolicyEngineModeType(mode: WafPolicyEngineMode) {
-  switch (mode) {
-    case 'on':
-      return 'error';
-    case 'detectiononly':
-      return 'warning';
-    case 'off':
-      return 'default';
-    default:
-      return 'default';
-  }
-}
-
-function mapPolicyRevisionStatusType(status: WafPolicyRevisionStatus) {
-  switch (status) {
-    case 'published':
-      return 'success';
-    case 'rolled_back':
-      return 'warning';
-    default:
-      return 'default';
-  }
-}
-
-function mapJobStatusType(status: WafJobStatus) {
-  switch (status) {
-    case 'success':
-      return 'success';
-    case 'failed':
-      return 'error';
-    default:
-      return 'warning';
-  }
-}
-
-function mapJobStatusLabel(status: string) {
-  switch (status) {
-    case 'running':
-      return '执行中';
-    case 'success':
-      return '成功';
-    case 'failed':
-      return '失败';
-    default:
-      return status || '-';
-  }
-}
-
-function mapJobActionLabel(action: string) {
-  switch (action) {
-    case 'check':
-      return '检查';
-    case 'download':
-      return '下载';
-    case 'verify':
-      return '校验';
-    case 'activate':
-      return '激活';
-    case 'rollback':
-      return '回滚';
-    case 'engine_check':
-      return '引擎检查';
-    default:
-      return action || '-';
-  }
-}
-
-function mapJobTriggerModeLabel(triggerMode: string) {
-  switch (triggerMode) {
-    case 'manual':
-      return '手动';
-    case 'upload':
-      return '上传';
-    case 'schedule':
-      return '定时';
-    case 'auto':
-      return '自动';
-    case 'system':
-      return '系统';
-    default:
-      return triggerMode || '-';
-  }
-}
 
 function mapSourceNameById(sourceId: number) {
   if (!sourceId || sourceId <= 0) {
@@ -1039,70 +809,6 @@ async function ensureSourceNamesByIds(sourceIds: number[]) {
   };
 
   await loadNextPage();
-}
-
-function mapJobMessage(rawMessage: string) {
-  const messageText = String(rawMessage || '').trim();
-  if (!messageText) {
-    return '-';
-  }
-
-  const exactMap: Record<string, string> = {
-    'check success': '检查成功',
-    'sync success': '同步成功',
-    'upload success': '上传成功',
-    'activate success': '激活成功',
-    'rollback success': '回滚成功',
-    'engine source check success': '引擎源检查成功'
-  };
-
-  if (exactMap[messageText]) {
-    return exactMap[messageText];
-  }
-
-  const replacementRules: Array<[RegExp, string]> = [
-    [/context deadline exceeded/gi, '请求超时'],
-    [/i\/o timeout/gi, '网络超时'],
-    [/invalid proxy url:/gi, '代理地址不合法：'],
-    [/invalid url:/gi, '无效地址：'],
-    [/only https url is allowed/gi, '仅支持 HTTPS 地址'],
-    [/only https scheme is allowed/gi, '仅允许 HTTPS 协议'],
-    [/proxy url scheme must be http or https/gi, '代理地址协议仅支持 http/https'],
-    [/source not found/gi, '未找到更新源'],
-    [/source is disabled/gi, '更新源已禁用'],
-    [/source mode is not remote/gi, '更新源模式不是 remote'],
-    [/source url is empty/gi, '更新源地址为空'],
-    [/move package failed:/gi, '移动安装包失败：'],
-    [/create release dir failed:/gi, '创建版本目录失败：'],
-    [/create release failed:/gi, '创建版本记录失败：'],
-    [/fetch failed:/gi, '下载失败：'],
-    [/host not allowed:/gi, '源域名不在允许列表：'],
-    [/unexpected status code:/gi, '下载返回异常状态码：'],
-    [/write temp file failed:/gi, '写入临时文件失败：'],
-    [/close temp file failed:/gi, '关闭临时文件失败：'],
-    [/move temp file failed:/gi, '移动临时文件失败：'],
-    [/prepare waf store failed:/gi, '准备 Waf 存储目录失败：']
-  ];
-
-  let localizedMessage = messageText;
-  for (const [pattern, replacement] of replacementRules) {
-    localizedMessage = localizedMessage.replace(pattern, replacement);
-  }
-
-  return localizedMessage;
-}
-
-function formatRatePercent(value: number) {
-  const numeric = Number(value || 0);
-  if (!Number.isFinite(numeric) || numeric <= 0) {
-    return '0%';
-  }
-  return `${(numeric * 100).toFixed(2)}%`;
-}
-
-function formatDateTime(date: Date) {
-  const pad = (num: number) => String(num).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
 function isNumericUserId(value: unknown) {
@@ -1560,575 +1266,111 @@ const { refreshCurrentDomain } = useSecurityRefresh({
       :handle-job-page-size-change="handleJobPageSizeChange"
     />
 
-    <NModal v-model:show="sourceModalVisible" preset="card" :title="sourceModalTitle" class="w-720px">
-      <NForm ref="sourceFormRef" :model="sourceForm" :rules="sourceRules" label-placement="left" label-width="120">
-        <NGrid cols="2" x-gap="12">
-          <NFormItemGi label="名称" path="name">
-            <NInput v-model:value="sourceForm.name" placeholder="例如：official-crs" />
-          </NFormItemGi>
-          <NFormItemGi label="类型" path="kind">
-            <NInput value="crs" disabled />
-          </NFormItemGi>
-          <NFormItemGi label="模式" path="mode">
-            <NSelect v-model:value="sourceForm.mode" :options="modeOptions" />
-          </NFormItemGi>
-          <NFormItemGi label="鉴权类型" path="authType">
-            <NSelect v-model:value="sourceForm.authType" :options="authTypeOptions" />
-          </NFormItemGi>
-        </NGrid>
+    <SourceFormModal
+      v-model:show="sourceModalVisible"
+      :form="sourceForm"
+      :form-ref="sourceFormRef"
+      :rules="sourceRules"
+      :submitting="sourceSubmitting"
+      :title="sourceModalTitle"
+      :handle-submit-source="handleSubmitSource"
+      :apply-default-source="applyDefaultSource"
+    />
 
-        <NFormItem label="默认源">
-          <div class="flex flex-wrap gap-2">
-            <NButton size="small" secondary @click="applyDefaultSource">应用 CRS 默认源</NButton>
-          </div>
-        </NFormItem>
+    <PolicyFormModal
+      v-model:show="policyModalVisible"
+      :form="policyForm"
+      :form-ref="policyFormRef"
+      :rules="policyRules"
+      :submitting="policySubmitting"
+      :title="policyModalTitle"
+      :handle-submit-policy="handleSubmitPolicy"
+    />
 
-        <NFormItem v-if="sourceForm.mode === 'remote'" label="源地址" path="url">
-          <NInput
-            v-model:value="sourceForm.url"
-            placeholder="https://api.github.com/repos/coreruleset/coreruleset/releases/latest"
-          />
-        </NFormItem>
+    <UploadPackageModal
+      v-model:show="uploadModalVisible"
+      :form="uploadForm"
+      :form-ref="uploadFormRef"
+      :rules="uploadRules"
+      :submitting="uploadSubmitting"
+      :handle-submit-upload="handleSubmitUpload"
+      :handle-before-upload="handleBeforeUpload"
+      :handle-remove-upload="handleRemoveUpload"
+    />
 
-        <NFormItem v-if="sourceForm.mode === 'remote'" label="校验地址" path="checksumUrl">
-          <NInput v-model:value="sourceForm.checksumUrl" placeholder="可选，SHA256 清单地址" />
-        </NFormItem>
+    <ExclusionFormModal
+      v-model:show="exclusionModalVisible"
+      :form="exclusionForm"
+      :form-ref="exclusionFormRef"
+      :rules="exclusionRules"
+      :submitting="exclusionSubmitting"
+      :title="exclusionModalTitle"
+      :crs-policy-options="crsPolicyOptions"
+      :should-focus-remove-value="shouldFocusExclusionRemoveValue"
+      :handle-submit-exclusion="handleSubmitExclusion"
+      @focused-remove-value="shouldFocusExclusionRemoveValue = false"
+    />
 
-        <NFormItem v-if="sourceForm.mode === 'remote'" label="代理地址" path="proxyUrl">
-          <NInput v-model:value="sourceForm.proxyUrl" placeholder="可选，例如：http://127.0.0.1:7890" />
-        </NFormItem>
+    <BindingFormModal
+      v-model:show="bindingModalVisible"
+      :form="bindingForm"
+      :form-ref="bindingFormRef"
+      :rules="bindingRules"
+      :submitting="bindingSubmitting"
+      :title="bindingModalTitle"
+      :crs-policy-options="crsPolicyOptions"
+      :handle-submit-binding="handleSubmitBinding"
+    />
 
-        <NFormItem v-if="sourceForm.authType !== 'none'" label="鉴权密钥" path="authSecret">
-          <NInput
-            v-model:value="sourceForm.authSecret"
-            type="password"
-            show-password-on="mousedown"
-            placeholder="Token 或 user:password"
-          />
-        </NFormItem>
+    <FeedbackFormModal
+      v-model:show="policyFeedbackModalVisible"
+      :form="policyFeedbackForm"
+      :form-ref="policyFeedbackFormRef"
+      :rules="policyFeedbackRules"
+      :submitting="policyFeedbackSubmitting"
+      :crs-policy-options="crsPolicyOptions"
+      :handle-submit-policy-feedback="handleSubmitPolicyFeedback"
+    />
 
-        <NFormItem label="调度表达式" path="schedule">
-          <NInput v-model:value="sourceForm.schedule" placeholder="例如：0 0 */6 * * *" />
-        </NFormItem>
+    <FeedbackProcessModal
+      v-model:show="policyFeedbackProcessModalVisible"
+      :form="policyFeedbackProcessForm"
+      :form-ref="policyFeedbackProcessFormRef"
+      :rules="policyFeedbackProcessRules"
+      :submitting="policyFeedbackProcessSubmitting"
+      :handle-submit-policy-feedback-process="handleSubmitPolicyFeedbackProcess"
+    />
 
-        <NFormItem label="附加元数据" path="meta">
-          <NInput
-            v-model:value="sourceForm.meta"
-            type="textarea"
-            :autosize="{ minRows: 2, maxRows: 5 }"
-            placeholder="JSON 字符串，可选"
-          />
-        </NFormItem>
-
-        <NGrid cols="2" x-gap="12">
-          <NFormItemGi label="启用">
-            <NSwitch v-model:value="sourceForm.enabled" />
-          </NFormItemGi>
-          <NFormItemGi label="自动检查">
-            <NSwitch v-model:value="sourceForm.autoCheck" />
-          </NFormItemGi>
-          <NFormItemGi label="自动下载">
-            <NSwitch v-model:value="sourceForm.autoDownload" />
-          </NFormItemGi>
-          <NFormItemGi label="自动激活">
-            <NSwitch v-model:value="sourceForm.autoActivate" />
-          </NFormItemGi>
-        </NGrid>
-      </NForm>
-
-      <template #footer>
-        <div class="flex justify-end gap-2">
-          <NButton @click="sourceModalVisible = false">取消</NButton>
-          <NButton type="primary" :loading="sourceSubmitting" @click="handleSubmitSource">保存</NButton>
-        </div>
-      </template>
-    </NModal>
-
-    <NModal v-model:show="policyModalVisible" preset="card" :title="policyModalTitle" class="w-760px">
-      <NForm ref="policyFormRef" :model="policyForm" :rules="policyRules" label-placement="left" label-width="150">
-        <NGrid cols="2" x-gap="12">
-          <NFormItemGi label="策略名称" path="name">
-            <NInput v-model:value="policyForm.name" placeholder="例如：default-runtime-policy" />
-          </NFormItemGi>
-          <NFormItemGi label="是否默认策略">
-            <NSwitch v-model:value="policyForm.isDefault" />
-          </NFormItemGi>
-          <NFormItemGi label="引擎模式" path="engineMode">
-            <NSelect v-model:value="policyForm.engineMode" :options="policyEngineModeOptions" />
-          </NFormItemGi>
-          <NFormItemGi label="审计模式" path="auditEngine">
-            <NSelect v-model:value="policyForm.auditEngine" :options="policyAuditEngineOptions" />
-          </NFormItemGi>
-          <NFormItemGi label="审计日志格式" path="auditLogFormat">
-            <NSelect v-model:value="policyForm.auditLogFormat" :options="policyAuditLogFormatOptions" />
-          </NFormItemGi>
-          <NFormItemGi label="请求体访问">
-            <NSwitch v-model:value="policyForm.requestBodyAccess" />
-          </NFormItemGi>
-          <NFormItemGi label="启用策略">
-            <NSwitch v-model:value="policyForm.enabled" />
-          </NFormItemGi>
-        </NGrid>
-
-        <NFormItem label="描述" path="description">
-          <NInput v-model:value="policyForm.description" placeholder="可选，记录策略用途与变更说明" />
-        </NFormItem>
-
-        <NFormItem label="审计状态匹配" path="auditRelevantStatus">
-          <NInput v-model:value="policyForm.auditRelevantStatus" placeholder="例如：^(?:5|4(?!04))" />
-        </NFormItem>
-
-        <NGrid cols="2" x-gap="12">
-          <NFormItemGi label="请求体限制（字节）" path="requestBodyLimit">
-            <NInputNumber
-              v-model:value="policyForm.requestBodyLimit"
-              :show-button="false"
-              :min="1"
-              :max="1024 * 1024 * 1024"
-              class="w-full"
-            />
-          </NFormItemGi>
-          <NFormItemGi label="无文件请求体限制（字节）" path="requestBodyNoFilesLimit">
-            <NInputNumber
-              v-model:value="policyForm.requestBodyNoFilesLimit"
-              :show-button="false"
-              :min="1"
-              :max="1024 * 1024 * 1024"
-              class="w-full"
-            />
-          </NFormItemGi>
-        </NGrid>
-
-        <NFormItem label="扩展配置(JSON)" path="config">
-          <NInput
-            v-model:value="policyForm.config"
-            type="textarea"
-            :autosize="{ minRows: 2, maxRows: 6 }"
-            placeholder='可选，例如：{"custom_tag":"runtime"}'
-          />
-        </NFormItem>
-      </NForm>
-
-      <template #footer>
-        <div class="flex justify-end gap-2">
-          <NButton @click="policyModalVisible = false">取消</NButton>
-          <NButton type="primary" :loading="policySubmitting" @click="handleSubmitPolicy">保存</NButton>
-        </div>
-      </template>
-    </NModal>
-
-    <NModal v-model:show="uploadModalVisible" preset="card" title="上传规则包" class="w-640px">
-      <NForm ref="uploadFormRef" :model="uploadForm" :rules="uploadRules" label-placement="left" label-width="110">
-        <NFormItem label="类型" path="kind">
-          <NInput value="crs" disabled />
-        </NFormItem>
-        <NFormItem label="版本号" path="version">
-          <NInput v-model:value="uploadForm.version" placeholder="例如：v4.23.0-custom.1" />
-        </NFormItem>
-        <NFormItem label="SHA256" path="checksum">
-          <NInput v-model:value="uploadForm.checksum" placeholder="可选，建议填写" />
-        </NFormItem>
-        <NFormItem label="立即激活" path="activateNow">
-          <NSwitch v-model:value="uploadForm.activateNow" />
-        </NFormItem>
-        <NFormItem label="规则包" path="file">
-          <NUpload
-            :default-upload="false"
-            :max="1"
-            :show-file-list="true"
-            accept=".zip,.tar.gz"
-            @before-upload="handleBeforeUpload"
-            @remove="handleRemoveUpload"
-          >
-            <NButton>选择文件</NButton>
-          </NUpload>
-        </NFormItem>
-      </NForm>
-
-      <template #footer>
-        <div class="flex justify-end gap-2">
-          <NButton @click="uploadModalVisible = false">取消</NButton>
-          <NButton type="primary" :loading="uploadSubmitting" @click="handleSubmitUpload">上传并入库</NButton>
-        </div>
-      </template>
-    </NModal>
-
-    <NModal v-model:show="exclusionModalVisible" preset="card" :title="exclusionModalTitle" class="w-760px">
-      <NForm
-        ref="exclusionFormRef"
-        :model="exclusionForm"
-        :rules="exclusionRules"
-        label-placement="left"
-        label-width="140"
-      >
-        <NGrid cols="2" x-gap="12">
-          <NFormItemGi label="规则名称" path="name">
-            <NInput v-model:value="exclusionForm.name" placeholder="例如：ignore-login-fp" />
-          </NFormItemGi>
-          <NFormItemGi label="关联策略" path="policyId">
-            <NSelect v-model:value="exclusionForm.policyId" :options="crsPolicyOptions" />
-          </NFormItemGi>
-          <NFormItemGi label="作用域" path="scopeType">
-            <NSelect v-model:value="exclusionForm.scopeType" :options="scopeTypeOptions" />
-          </NFormItemGi>
-          <NFormItemGi label="移除类型" path="removeType">
-            <NSelect v-model:value="exclusionForm.removeType" :options="removeTypeOptions" />
-          </NFormItemGi>
-          <NFormItemGi v-if="exclusionForm.scopeType !== 'global'" label="Host" path="host">
-            <NInput v-model:value="exclusionForm.host" placeholder="例如：app.example.com" />
-          </NFormItemGi>
-          <NFormItemGi v-if="exclusionForm.scopeType === 'route'" label="Path" path="path">
-            <NInput v-model:value="exclusionForm.path" placeholder="例如：/api/login" />
-          </NFormItemGi>
-          <NFormItemGi v-if="exclusionForm.scopeType === 'route'" label="Method" path="method">
-            <NSelect v-model:value="exclusionForm.method" :options="methodOptions" clearable placeholder="可选" />
-          </NFormItemGi>
-          <NFormItemGi label="是否启用">
-            <NSwitch v-model:value="exclusionForm.enabled" />
-          </NFormItemGi>
-        </NGrid>
-
-        <NFormItem label="移除值" path="removeValue">
-          <NInput
-            ref="exclusionRemoveValueInputRef"
-            v-model:value="exclusionForm.removeValue"
-            :placeholder="exclusionForm.removeType === 'id' ? '例如：920350' : '例如：attack-sqli'"
-          />
-        </NFormItem>
-        <NFormItem label="描述" path="description">
-          <NInput v-model:value="exclusionForm.description" placeholder="可选，记录误报场景与原因" />
-        </NFormItem>
-      </NForm>
-      <template #footer>
-        <div class="flex justify-end gap-2">
-          <NButton @click="exclusionModalVisible = false">取消</NButton>
-          <NButton type="primary" :loading="exclusionSubmitting" @click="handleSubmitExclusion">保存</NButton>
-        </div>
-      </template>
-    </NModal>
-
-    <NModal v-model:show="bindingModalVisible" preset="card" :title="bindingModalTitle" class="w-760px">
-      <NForm ref="bindingFormRef" :model="bindingForm" :rules="bindingRules" label-placement="left" label-width="140">
-        <NGrid cols="2" x-gap="12">
-          <NFormItemGi label="绑定名称" path="name">
-            <NInput v-model:value="bindingForm.name" placeholder="例如：site-main-binding" />
-          </NFormItemGi>
-          <NFormItemGi label="关联策略" path="policyId">
-            <NSelect v-model:value="bindingForm.policyId" :options="crsPolicyOptions" />
-          </NFormItemGi>
-          <NFormItemGi label="作用域" path="scopeType">
-            <NSelect v-model:value="bindingForm.scopeType" :options="scopeTypeOptions" />
-          </NFormItemGi>
-          <NFormItemGi label="优先级" path="priority">
-            <NInputNumber
-              v-model:value="bindingForm.priority"
-              :show-button="false"
-              :min="1"
-              :max="1000"
-              class="w-full"
-            />
-          </NFormItemGi>
-          <NFormItemGi v-if="bindingForm.scopeType !== 'global'" label="Host" path="host">
-            <NInput v-model:value="bindingForm.host" placeholder="例如：app.example.com" />
-          </NFormItemGi>
-          <NFormItemGi v-if="bindingForm.scopeType === 'route'" label="Path" path="path">
-            <NInput v-model:value="bindingForm.path" placeholder="例如：/api" />
-          </NFormItemGi>
-          <NFormItemGi v-if="bindingForm.scopeType === 'route'" label="Method" path="method">
-            <NSelect v-model:value="bindingForm.method" :options="methodOptions" clearable placeholder="可选" />
-          </NFormItemGi>
-          <NFormItemGi label="是否启用">
-            <NSwitch v-model:value="bindingForm.enabled" />
-          </NFormItemGi>
-        </NGrid>
-
-        <NFormItem label="描述" path="description">
-          <NInput v-model:value="bindingForm.description" placeholder="可选，记录生效范围和意图" />
-        </NFormItem>
-      </NForm>
-      <template #footer>
-        <div class="flex justify-end gap-2">
-          <NButton @click="bindingModalVisible = false">取消</NButton>
-          <NButton type="primary" :loading="bindingSubmitting" @click="handleSubmitBinding">保存</NButton>
-        </div>
-      </template>
-    </NModal>
-
-    <NModal v-model:show="policyFeedbackModalVisible" preset="card" title="标记误报反馈" class="w-760px">
-      <NForm
-        ref="policyFeedbackFormRef"
-        :model="policyFeedbackForm"
-        :rules="policyFeedbackRules"
-        label-placement="left"
-        label-width="130"
-      >
-        <NGrid cols="2" x-gap="12">
-          <NFormItemGi label="关联策略" path="policyId">
-            <NSelect
-              v-model:value="policyFeedbackForm.policyId"
-              :options="crsPolicyOptions"
-              clearable
-              placeholder="可选，不填表示全部策略"
-            />
-          </NFormItemGi>
-          <NFormItemGi label="状态码" path="status">
-            <NInputNumber
-              v-model:value="policyFeedbackForm.status"
-              :show-button="false"
-              :min="100"
-              :max="599"
-              class="w-full"
-            />
-          </NFormItemGi>
-          <NFormItemGi label="责任人" path="assignee">
-            <NInput v-model:value="policyFeedbackForm.assignee" placeholder="可选，例如 alice" />
-          </NFormItemGi>
-          <NFormItemGi label="截止时间" path="dueAt">
-            <NInput v-model:value="policyFeedbackForm.dueAt" placeholder="可选，YYYY-MM-DD HH:mm:ss" />
-          </NFormItemGi>
-          <NFormItemGi label="Host" path="host">
-            <NInput v-model:value="policyFeedbackForm.host" placeholder="可选，例如 app.example.com" />
-          </NFormItemGi>
-          <NFormItemGi label="Path" path="path">
-            <NInput v-model:value="policyFeedbackForm.path" placeholder="可选，例如 /api/login" />
-          </NFormItemGi>
-          <NFormItemGi label="Method" path="method">
-            <NSelect v-model:value="policyFeedbackForm.method" :options="methodOptions" clearable placeholder="可选" />
-          </NFormItemGi>
-          <NFormItemGi label="示例 URI" path="sampleUri">
-            <NInput v-model:value="policyFeedbackForm.sampleUri" placeholder="可选，记录原始 URI 便于复盘" />
-          </NFormItemGi>
-        </NGrid>
-        <NFormItem label="误报原因" path="reason">
-          <NInput
-            v-model:value="policyFeedbackForm.reason"
-            type="textarea"
-            :autosize="{ minRows: 2, maxRows: 4 }"
-            placeholder="必填：为何判断为误报"
-          />
-        </NFormItem>
-        <NFormItem label="建议动作" path="suggestion">
-          <NInput
-            v-model:value="policyFeedbackForm.suggestion"
-            type="textarea"
-            :autosize="{ minRows: 2, maxRows: 4 }"
-            placeholder="可选：例如建议添加 removeById、放宽阈值或补白名单"
-          />
-        </NFormItem>
-      </NForm>
-      <template #footer>
-        <div class="flex justify-end gap-2">
-          <NButton @click="policyFeedbackModalVisible = false">取消</NButton>
-          <NButton type="warning" :loading="policyFeedbackSubmitting" @click="handleSubmitPolicyFeedback">
-            提交反馈
-          </NButton>
-        </div>
-      </template>
-    </NModal>
-
-    <NModal v-model:show="policyFeedbackProcessModalVisible" preset="card" title="处理误报反馈" class="w-640px">
-      <NForm
-        ref="policyFeedbackProcessFormRef"
-        :model="policyFeedbackProcessForm"
-        :rules="policyFeedbackProcessRules"
-        label-placement="left"
-        label-width="120"
-      >
-        <NFormItem label="处理状态" path="feedbackStatus">
-          <NSelect v-model:value="policyFeedbackProcessForm.feedbackStatus" :options="policyFeedbackStatusOptions" />
-        </NFormItem>
-        <NFormItem label="责任人" path="assignee">
-          <NInput v-model:value="policyFeedbackProcessForm.assignee" placeholder="可选，例如 alice" />
-        </NFormItem>
-        <NFormItem label="截止时间" path="dueAt">
-          <NInput v-model:value="policyFeedbackProcessForm.dueAt" placeholder="可选，YYYY-MM-DD HH:mm:ss" />
-        </NFormItem>
-        <NFormItem label="处理备注" path="processNote">
-          <NInput
-            v-model:value="policyFeedbackProcessForm.processNote"
-            type="textarea"
-            :autosize="{ minRows: 2, maxRows: 4 }"
-            placeholder="可选，记录确认依据或处理结果"
-          />
-        </NFormItem>
-      </NForm>
-      <template #footer>
-        <div class="flex justify-end gap-2">
-          <NButton @click="policyFeedbackProcessModalVisible = false">取消</NButton>
-          <NButton type="warning" :loading="policyFeedbackProcessSubmitting" @click="handleSubmitPolicyFeedbackProcess">
-            保存状态
-          </NButton>
-        </div>
-      </template>
-    </NModal>
-
-    <NModal
+    <FeedbackBatchProcessModal
       v-model:show="policyFeedbackBatchProcessModalVisible"
-      preset="card"
-      title="批量处理误报反馈"
-      class="w-640px"
-    >
-      <div class="mb-3 text-sm text-gray-600">已选择 {{ policyFeedbackCheckedRowKeys.length }} 条反馈记录</div>
-      <NForm
-        ref="policyFeedbackBatchProcessFormRef"
-        :model="policyFeedbackBatchProcessForm"
-        :rules="policyFeedbackProcessRules"
-        label-placement="left"
-        label-width="120"
-      >
-        <NFormItem label="处理状态" path="feedbackStatus">
-          <NSelect
-            v-model:value="policyFeedbackBatchProcessForm.feedbackStatus"
-            :options="policyFeedbackStatusOptions"
-          />
-        </NFormItem>
-        <NFormItem label="责任人" path="assignee">
-          <NInput v-model:value="policyFeedbackBatchProcessForm.assignee" placeholder="可选，例如 alice" />
-        </NFormItem>
-        <NFormItem label="截止时间" path="dueAt">
-          <NInput v-model:value="policyFeedbackBatchProcessForm.dueAt" placeholder="可选，YYYY-MM-DD HH:mm:ss" />
-        </NFormItem>
-        <NFormItem label="处理备注" path="processNote">
-          <NInput
-            v-model:value="policyFeedbackBatchProcessForm.processNote"
-            type="textarea"
-            :autosize="{ minRows: 2, maxRows: 4 }"
-            placeholder="可选，批量处理说明"
-          />
-        </NFormItem>
-      </NForm>
-      <template #footer>
-        <div class="flex justify-end gap-2">
-          <NButton @click="policyFeedbackBatchProcessModalVisible = false">取消</NButton>
-          <NButton
-            type="warning"
-            :loading="policyFeedbackBatchProcessSubmitting"
-            @click="handleSubmitPolicyFeedbackBatchProcess"
-          >
-            批量保存
-          </NButton>
-        </div>
-      </template>
-    </NModal>
+      :form="policyFeedbackBatchProcessForm"
+      :form-ref="policyFeedbackBatchProcessFormRef"
+      :rules="policyFeedbackProcessRules"
+      :submitting="policyFeedbackBatchProcessSubmitting"
+      :checked-row-keys="policyFeedbackCheckedRowKeys"
+      :handle-submit-policy-feedback-batch-process="handleSubmitPolicyFeedbackBatchProcess"
+    />
 
-    <NModal
+    <ExclusionDraftModal
       v-model:show="policyFeedbackExclusionDraftModalVisible"
-      preset="card"
-      title="确认生成例外草稿"
-      class="w-760px"
-    >
-      <div v-if="policyFeedbackExclusionDraft" class="space-y-3">
-        <div class="text-sm text-gray-600">来源反馈 #{{ policyFeedbackExclusionDraft.feedbackId }}</div>
-        <NForm :model="policyFeedbackExclusionDraft" label-placement="left" label-width="120">
-          <NGrid cols="2" x-gap="12">
-            <NFormItemGi label="关联策略">
-              <NSelect v-model:value="policyFeedbackExclusionDraft.policyId" :options="crsPolicyOptions" />
-            </NFormItemGi>
-            <NFormItemGi label="作用域">
-              <NSelect
-                v-model:value="policyFeedbackExclusionDraft.scopeType"
-                :options="scopeTypeOptions"
-                @update:value="handlePolicyFeedbackExclusionDraftScopeChange"
-              />
-            </NFormItemGi>
-            <NFormItemGi v-if="policyFeedbackExclusionDraft.scopeType !== 'global'" label="Host">
-              <NInput v-model:value="policyFeedbackExclusionDraft.host" placeholder="例如：app.example.com" />
-            </NFormItemGi>
-            <NFormItemGi v-if="policyFeedbackExclusionDraft.scopeType === 'route'" label="Path">
-              <NInput v-model:value="policyFeedbackExclusionDraft.path" placeholder="例如：/api/login" />
-            </NFormItemGi>
-            <NFormItemGi v-if="policyFeedbackExclusionDraft.scopeType === 'route'" label="Method">
-              <NSelect
-                v-model:value="policyFeedbackExclusionDraft.method"
-                :options="methodOptions"
-                clearable
-                placeholder="可选"
-              />
-            </NFormItemGi>
-            <NFormItemGi label="移除类型">
-              <NSelect v-model:value="policyFeedbackExclusionDraft.removeType" :options="removeTypeOptions" />
-            </NFormItemGi>
-          </NGrid>
-          <NFormItem label="规则名称">
-            <NInput v-model:value="policyFeedbackExclusionDraft.name" />
-          </NFormItem>
-        </NForm>
-        <NAlert type="info" :show-icon="false">
-          <template #header>草稿差异对比</template>
-          <div v-if="policyFeedbackExclusionDraftDiffItems.length === 0" class="text-xs text-gray-500">
-            当前草稿与原反馈关键字段一致
-          </div>
-          <ul v-else class="text-xs text-gray-600 leading-6">
-            <li v-for="item in policyFeedbackExclusionDraftDiffItems" :key="item.field">
-              {{ item.field }}：{{ item.before || '空' }} ->
-              {{ item.after || '空' }}
-            </li>
-          </ul>
-        </NAlert>
-        <div v-if="policyFeedbackExclusionCandidateOptions.length > 1">
-          <div class="mb-1 text-xs text-gray-500">候选移除值（建议文本匹配到多个候选）</div>
-          <NSelect
-            v-model:value="policyFeedbackExclusionDraftCandidateKey"
-            :options="policyFeedbackExclusionCandidateOptions"
-            placeholder="请选择 remove 值候选"
-            @update:value="handlePolicyFeedbackExclusionCandidateChange"
-          />
-        </div>
-        <div>
-          <div class="text-xs text-gray-500">移除值</div>
-          <NInput
-            v-model:value="policyFeedbackExclusionDraft.removeValue"
-            :placeholder="policyFeedbackExclusionDraft.removeType === 'id' ? '例如：920350' : '例如：attack-sqli'"
-          />
-        </div>
-        <div>
-          <div class="text-xs text-gray-500">描述草稿</div>
-          <NInput
-            v-model:value="policyFeedbackExclusionDraft.description"
-            type="textarea"
-            :autosize="{ minRows: 2, maxRows: 4 }"
-          />
-        </div>
-        <NAlert v-if="!policyFeedbackExclusionDraft.removeValue" type="warning" :show-icon="true">
-          建议文本未解析到可用的 remove 值，请在下一步表单中补充后再保存。
-        </NAlert>
-      </div>
-      <template #footer>
-        <div class="flex justify-end gap-2">
-          <NButton @click="policyFeedbackExclusionDraftModalVisible = false">取消</NButton>
-          <NButton type="primary" @click="handleConfirmPolicyFeedbackExclusionDraft">确认生成</NButton>
-        </div>
-      </template>
-    </NModal>
+      :draft="policyFeedbackExclusionDraft"
+      :crs-policy-options="crsPolicyOptions"
+      :draft-candidate-key="policyFeedbackExclusionDraftCandidateKey"
+      :candidate-options="policyFeedbackExclusionCandidateOptions"
+      :diff-items="policyFeedbackExclusionDraftDiffItems"
+      :handle-confirm-policy-feedback-exclusion-draft="handleConfirmPolicyFeedbackExclusionDraft"
+      :handle-policy-feedback-exclusion-candidate-change="handlePolicyFeedbackExclusionCandidateChange"
+      :handle-policy-feedback-exclusion-draft-scope-change="handlePolicyFeedbackExclusionDraftScopeChange"
+    />
 
-    <NModal v-model:show="rollbackModalVisible" preset="card" title="回滚版本" class="w-520px">
-      <NForm
-        ref="rollbackFormRef"
-        :model="rollbackForm"
-        :rules="rollbackRules"
-        label-placement="left"
-        label-width="110"
-      >
-        <NFormItem label="回滚目标" path="target">
-          <NRadioGroup v-model:value="rollbackForm.target">
-            <NSpace>
-              <NRadio value="last_good">last_good</NRadio>
-              <NRadio value="version">指定版本</NRadio>
-            </NSpace>
-          </NRadioGroup>
-        </NFormItem>
-        <NFormItem v-if="rollbackForm.target === 'version'" label="版本号" path="version">
-          <NInput v-model:value="rollbackForm.version" placeholder="例如：v4.23.0" />
-        </NFormItem>
-      </NForm>
-
-      <template #footer>
-        <div class="flex justify-end gap-2">
-          <NButton @click="rollbackModalVisible = false">取消</NButton>
-          <NButton type="warning" :loading="rollbackSubmitting" @click="handleSubmitRollback">确认回滚</NButton>
-        </div>
-      </template>
-    </NModal>
+    <RollbackModal
+      v-model:show="rollbackModalVisible"
+      :form="rollbackForm"
+      :form-ref="rollbackFormRef"
+      :rules="rollbackRules"
+      :submitting="rollbackSubmitting"
+      :handle-submit-rollback="handleSubmitRollback"
+    />
   </div>
 </template>
 

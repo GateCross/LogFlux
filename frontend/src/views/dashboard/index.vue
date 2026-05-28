@@ -197,7 +197,7 @@ onUnmounted(() => {
     <NGrid :x-gap="16" :y-gap="16" responsive="screen" item-responsive>
       <NGridItem v-for="item in errorStats" :key="item.title" span="24 s:12 m:8">
         <div
-          class="error-card group relative overflow-hidden rounded-2xl p-5 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg"
+          class="error-card group relative overflow-hidden rounded-2xl p-5 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5"
           :style="{ background: item.bg, borderLeft: `3px solid ${item.border}` }"
         >
           <div class="flex items-start justify-between">
@@ -214,7 +214,7 @@ onUnmounted(() => {
               </div>
             </div>
             <div
-              class="icon-wrap relative flex h-12 w-12 items-center justify-center rounded-full text-xl transition-transform duration-300 group-hover:scale-110"
+              class="icon-wrap relative h-12 w-12 flex items-center justify-center rounded-full text-xl transition-transform duration-300 group-hover:scale-110"
               :style="{
                 color: item.color,
                 background: `linear-gradient(135deg, ${item.color}20, ${item.color}08)`,

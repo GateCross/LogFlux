@@ -1,5 +1,5 @@
-import { computed, nextTick, reactive, ref, watch } from 'vue';
-import type { FormInst, FormRules, InputInst, PaginationProps } from 'naive-ui';
+import { computed, reactive, ref, watch } from 'vue';
+import type { FormInst, FormRules, PaginationProps } from 'naive-ui';
 import {
   type WafPolicyRemoveType,
   type WafPolicyScopeType,
@@ -43,7 +43,6 @@ export function useWafExclusion(options: UseWafExclusionOptions) {
   const exclusionModalMode = ref<'add' | 'edit'>('add');
   const exclusionSubmitting = ref(false);
   const exclusionFormRef = ref<FormInst | null>(null);
-  const exclusionRemoveValueInputRef = ref<InputInst | null>(null);
   const shouldFocusExclusionRemoveValue = ref(false);
   const exclusionForm = reactive({
     id: 0,
@@ -227,16 +226,6 @@ export function useWafExclusion(options: UseWafExclusionOptions) {
     }
   );
 
-  watch(exclusionModalVisible, value => {
-    if (!value || !shouldFocusExclusionRemoveValue.value) {
-      return;
-    }
-    nextTick(() => {
-      exclusionRemoveValueInputRef.value?.focus();
-      shouldFocusExclusionRemoveValue.value = false;
-    });
-  });
-
   return {
     exclusionQuery,
     exclusionLoading,
@@ -246,7 +235,6 @@ export function useWafExclusion(options: UseWafExclusionOptions) {
     exclusionModalMode,
     exclusionSubmitting,
     exclusionFormRef,
-    exclusionRemoveValueInputRef,
     shouldFocusExclusionRemoveValue,
     exclusionForm,
     exclusionModalTitle,
