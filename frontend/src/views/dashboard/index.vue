@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useDebounceFn } from '@vueuse/core';
+import { Icon } from '@iconify/vue';
 import { type DashboardSummaryResp, fetchDashboardSummary } from '@/service/api/dashboard';
 import HeaderBanner from './modules/header-banner.vue';
 import StatCard from './modules/stat-card.vue';
@@ -44,33 +45,47 @@ const headerStats = computed(() => {
   const stats = summary.value?.stats;
   const errorStats = summary.value?.errorStats;
   return [
-    { id: 0, label: '请求数', value: stats?.requests ?? 0 },
-    { id: 1, label: '4xx', value: errorStats?.error4xx ?? 0 },
-    { id: 2, label: '5xx', value: errorStats?.error5xx ?? 0 }
+    { id: 0, label: '请求数', value: stats?.requests ?? 0, color: '#3b82f6', icon: 'mdi:arrow-decision-outline' },
+    { id: 1, label: '4xx', value: errorStats?.error4xx ?? 0, color: '#f59e0b', icon: 'mdi:alert-outline' },
+    { id: 2, label: '5xx', value: errorStats?.error5xx ?? 0, color: '#ef4444', icon: 'mdi:server-network-off' }
   ];
 });
 
 const statCards = computed<StatCardItem[]>(() => {
   const stats = summary.value?.stats;
   return [
-    { id: 'req', title: '请求次数', value: stats?.requests ?? 0, icon: 'carbon:http', color: '#3b82f6' },
-    { id: 'pv', title: '访问次数 (PV)', value: stats?.pv ?? 0, icon: 'carbon:view', color: '#10b981' },
-    { id: 'uv', title: '独立访客 (UV)', value: stats?.uv ?? 0, icon: 'carbon:user', color: '#8b5cf6' },
-    { id: 'ip', title: '独立 IP', value: stats?.uniqueIp ?? 0, icon: 'carbon:nacl', color: '#f59e0b' },
-    { id: 'block', title: '拦截次数', value: stats?.blocked ?? 0, icon: 'carbon:security', color: '#ef4444' },
-    { id: 'attack', title: '攻击 IP', value: stats?.attackIp ?? 0, icon: 'carbon:warning-alt', color: '#f97316' }
+    { id: 'req', title: '请求次数', value: stats?.requests ?? 0, icon: 'mdi:arrow-decision-outline', color: '#3b82f6' },
+    { id: 'pv', title: '访问次数 (PV)', value: stats?.pv ?? 0, icon: 'mdi:eye-outline', color: '#10b981' },
+    { id: 'uv', title: '独立访客 (UV)', value: stats?.uv ?? 0, icon: 'mdi:account-group-outline', color: '#8b5cf6' },
+    { id: 'ip', title: '独立 IP', value: stats?.uniqueIp ?? 0, icon: 'mdi:ip-network-outline', color: '#f59e0b' },
+    { id: 'block', title: '拦截次数', value: stats?.blocked ?? 0, icon: 'mdi:shield-check-outline', color: '#ef4444' },
+    { id: 'attack', title: '攻击 IP', value: stats?.attackIp ?? 0, icon: 'mdi:bug-outline', color: '#f97316' }
   ];
 });
+
+const ERROR_CARD_META = [
+  { title: '4xx 错误数', icon: 'mdi:alert-outline', color: '#f59e0b' },
+  { title: '4xx 拦截数', icon: 'mdi:shield-lock-outline', color: '#3b82f6' },
+  { title: '5xx 错误数', icon: 'mdi:server-network-off', color: '#ef4444' }
+] as const;
 
 const errorStats = computed(() => {
   const errors = summary.value?.errorStats;
   const total = summary.value?.stats.requests ?? 0;
-  const rateText = (value: number) => (total > 0 ? `${((value / total) * 100).toFixed(2)}%` : '0%');
-  return [
-    { title: '4xx 错误数', value: errors?.error4xx ?? 0, rate: rateText(errors?.error4xx ?? 0), type: 'error' },
-    { title: '4xx 拦截数', value: errors?.blocked4xx ?? 0, rate: rateText(errors?.blocked4xx ?? 0), type: 'info' },
-    { title: '5xx 错误数', value: errors?.error5xx ?? 0, rate: rateText(errors?.error5xx ?? 0), type: 'error' }
-  ];
+  const rateValue = (value: number) => (total > 0 ? (value / total) * 100 : 0);
+  const rateText = (value: number) => {
+    const r = rateValue(value);
+    return r < 0.01 && r > 0 ? '<0.01%' : `${r.toFixed(2)}%`;
+  };
+  const values = [errors?.error4xx ?? 0, errors?.blocked4xx ?? 0, errors?.error5xx ?? 0];
+  return ERROR_CARD_META.map((meta, i) => ({
+    ...meta,
+    value: values[i],
+    rate: rateText(values[i]),
+    rateNum: rateValue(values[i]),
+    bg: `linear-gradient(135deg, ${meta.color}14 0%, ${meta.color}05 100%)`,
+    border: meta.color
+  }));
 });
 
 const trendTimes = computed(() => summary.value?.trend?.map(item => item.time) ?? []);
@@ -181,23 +196,41 @@ onUnmounted(() => {
 
     <NGrid :x-gap="16" :y-gap="16" responsive="screen" item-responsive>
       <NGridItem v-for="item in errorStats" :key="item.title" span="24 s:12 m:8">
-        <NCard :border="false" class="h-full rounded-2xl shadow-sm">
-          <div class="flex flex-col gap-2">
-            <div class="flex items-center justify-between">
-              <span class="text-gray-500">{{ item.title }}</span>
-              <div
-                class="i-carbon:warning-filled"
-                :class="[item.type === 'error' ? 'text-red-500' : 'text-orange-500']"
-              ></div>
+        <div
+          class="error-card group relative overflow-hidden rounded-2xl p-5 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg"
+          :style="{ background: item.bg, borderLeft: `3px solid ${item.border}` }"
+        >
+          <div class="flex items-start justify-between">
+            <div class="flex flex-col gap-1">
+              <span class="text-sm text-gray-500 font-medium">{{ item.title }}</span>
+              <div class="flex items-baseline gap-2">
+                <span class="font-number text-3xl font-bold" :style="{ color: item.color }">{{ item.value }}</span>
+                <span
+                  class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
+                  :style="{ color: item.color, backgroundColor: `${item.color}1a` }"
+                >
+                  {{ item.rate }}
+                </span>
+              </div>
             </div>
-            <div class="flex items-end gap-2">
-              <span class="text-2xl font-bold">{{ item.value }}</span>
-              <span class="flex items-center rounded bg-gray-100 px-1 text-xs text-gray-500">
-                {{ item.rate }}
-              </span>
+            <div
+              class="icon-wrap relative flex h-12 w-12 items-center justify-center rounded-full text-xl transition-transform duration-300 group-hover:scale-110"
+              :style="{
+                color: item.color,
+                background: `linear-gradient(135deg, ${item.color}20, ${item.color}08)`,
+                boxShadow: `0 0 20px ${item.color}18`
+              }"
+            >
+              <Icon :icon="item.icon" />
             </div>
           </div>
-        </NCard>
+          <div class="mt-3 h-1.5 w-full overflow-hidden rounded-full" :style="{ backgroundColor: `${item.color}12` }">
+            <div
+              class="rate-bar h-full rounded-full transition-all duration-700"
+              :style="{ width: `${Math.min(item.rateNum, 100)}%`, backgroundColor: item.color }"
+            ></div>
+          </div>
+        </div>
       </NGridItem>
     </NGrid>
 
@@ -214,3 +247,13 @@ onUnmounted(() => {
     </NGrid>
   </NSpace>
 </template>
+
+<style scoped>
+.error-card {
+  border: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.rate-bar {
+  min-width: 2px;
+}
+</style>
