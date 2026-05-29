@@ -39,23 +39,8 @@ func NewIPRegionMiddleware(enabled bool, allowCountries []string, db *gorm.DB) *
 		logModel = caddymodel.NewCaddyLogModel(db)
 	}
 
-	if !enabled {
-		return &IPRegionMiddleware{enabled: false, logModel: logModel}
-	}
-
-	logx.Infof("ip2region xdb 数据大小: v4=%d v6=%d", len(ipv4XdbData), len(ipv6XdbData))
-
-	v4Searcher, err := xdb.NewWithBuffer(xdb.IPv4, ipv4XdbData)
-	if err != nil {
-		logx.Errorf("ip2region IPv4 初始化失败: %v", err)
-		return &IPRegionMiddleware{enabled: false, logModel: logModel}
-	}
-
-	v6Searcher, err := xdb.NewWithBuffer(xdb.IPv6, ipv6XdbData)
-	if err != nil {
-		logx.Errorf("ip2region IPv6 初始化失败: %v", err)
-		return &IPRegionMiddleware{enabled: false, logModel: logModel}
-	}
+	m := &IPRegionMiddleware{enabled: enabled, logModel: logModel}
+	m.initSearchers()
 
 	allow := make(map[string]struct{}, len(allowCountries))
 	for _, c := range allowCountries {
@@ -67,15 +52,38 @@ func NewIPRegionMiddleware(enabled bool, allowCountries []string, db *gorm.DB) *
 	if len(allow) == 0 {
 		allow["中国"] = struct{}{}
 	}
+	m.allowList = allow
 
-	logx.Infof("IP 区域中间件已启用，允许访问的地区: %v", allowCountries)
-	return &IPRegionMiddleware{
-		v4Searcher: v4Searcher,
-		v6Searcher: v6Searcher,
-		enabled:    true,
-		allowList:  allow,
-		logModel:   logModel,
+	if enabled {
+		logx.Infof("IP 区域中间件已启用，允许访问的地区: %v", allowCountries)
+	} else {
+		logx.Info("IP 区域中间件已初始化（拦截未启用，日志记录正常）")
 	}
+	return m
+}
+
+// initSearchers 初始化 ip2region xdb 搜索器（始终初始化，用于日志地理信息查询）
+func (m *IPRegionMiddleware) initSearchers() {
+	if m.v4Searcher != nil && m.v6Searcher != nil {
+		return
+	}
+
+	logx.Infof("ip2region xdb 数据大小: v4=%d v6=%d", len(ipv4XdbData), len(ipv6XdbData))
+
+	v4Searcher, err := xdb.NewWithBuffer(xdb.IPv4, ipv4XdbData)
+	if err != nil {
+		logx.Errorf("ip2region IPv4 初始化失败: %v", err)
+		return
+	}
+
+	v6Searcher, err := xdb.NewWithBuffer(xdb.IPv6, ipv6XdbData)
+	if err != nil {
+		logx.Errorf("ip2region IPv6 初始化失败: %v", err)
+		return
+	}
+
+	m.v4Searcher = v4Searcher
+	m.v6Searcher = v6Searcher
 }
 
 // Reload 热更新 IP 区域配置（并发安全）
@@ -84,6 +92,7 @@ func (m *IPRegionMiddleware) Reload(enabled bool, allowCountries []string) {
 	defer m.mu.Unlock()
 
 	m.enabled = enabled
+	m.initSearchers()
 	allow := make(map[string]struct{}, len(allowCountries))
 	for _, c := range allowCountries {
 		c = strings.TrimSpace(c)
