@@ -205,15 +205,17 @@ func parseCountry(region string) string {
 }
 
 func parseRegionParts(region string) (country, province, city string) {
+	// ip2region 标准格式: 国家|区域|省份|城市|运营商（5 段）
+	// 部分 IP 返回 4 段: 国家|区域|城市|运营商（缺省份），此时不误取
 	parts := strings.Split(region, "|")
 	if len(parts) >= 1 {
 		country = parts[0]
 	}
-	if len(parts) >= 3 {
+	if len(parts) >= 5 {
 		province = parts[2]
-	}
-	if len(parts) >= 4 {
 		city = parts[3]
+	} else if len(parts) >= 4 {
+		city = parts[2]
 	}
 	return
 }
