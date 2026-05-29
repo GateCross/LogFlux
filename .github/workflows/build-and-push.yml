@@ -31,15 +31,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 24
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           version: 9.15.4
           run_install: false
@@ -49,7 +49,7 @@ jobs:
         run: echo "STORE_PATH=$(pnpm store path)" >> "$GITHUB_OUTPUT"
 
       - name: Cache pnpm store
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ steps.pnpm-store.outputs.STORE_PATH }}
           key: pnpm-${{ runner.os }}-${{ hashFiles('frontend/pnpm-lock.yaml') }}
@@ -65,7 +65,7 @@ jobs:
         run: pnpm -C frontend run build
 
       - name: Upload dist
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: frontend-dist
           path: frontend/dist
@@ -78,10 +78,10 @@ jobs:
         arch: [amd64, arm64]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: backend/go.mod
           cache: true
@@ -106,7 +106,7 @@ jobs:
           go build -a -installsuffix cgo -ldflags="-w -s" -o ../build-artifacts/backend/${{ matrix.arch }}/logflux-api .
 
       - name: Upload backend
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: backend-${{ matrix.arch }}
           path: build-artifacts/backend/${{ matrix.arch }}/logflux-api
@@ -117,22 +117,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download frontend
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: frontend-dist
           path: build-artifacts/frontend/dist
 
       - name: Download backend (amd64)
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: backend-amd64
           path: build-artifacts/backend/amd64
 
       - name: Download backend (arm64)
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: backend-arm64
           path: build-artifacts/backend/arm64
@@ -157,7 +157,7 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: docker/runtime.Dockerfile
@@ -179,7 +179,7 @@ jobs:
       packages: write
     steps:
       - name: Cleanup old image versions
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
         with:

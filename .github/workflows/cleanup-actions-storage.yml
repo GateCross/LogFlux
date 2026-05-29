@@ -27,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Cleanup caches/artifacts
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           TARGET: ${{ github.event.inputs.target }}
           DRY_RUN: ${{ github.event.inputs.dry_run }}
