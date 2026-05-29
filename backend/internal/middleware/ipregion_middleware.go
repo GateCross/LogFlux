@@ -146,7 +146,7 @@ func (m *IPRegionMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
 		allowList := m.allowList
 		m.mu.RUnlock()
 
-		if enabled && ip != "" && ip != "127.0.0.1" && ip != "::1" {
+		if enabled && !isPrivateIP(ip) {
 			country := parseCountry(region)
 			if country == "" {
 				// ip2region 查询无结果，拒绝访问
@@ -277,4 +277,16 @@ func getRealIP(r *http.Request) string {
 		return r.RemoteAddr
 	}
 	return host
+}
+
+// isPrivateIP 判断 IP 是否为内网/本地地址，内网 IP 不做区域拦截
+func isPrivateIP(ip string) bool {
+	parsed := net.ParseIP(ip)
+	if parsed == nil {
+		return false
+	}
+	if parsed.IsLoopback() || parsed.IsPrivate() || parsed.IsLinkLocalUnicast() || parsed.IsLinkLocalMulticast() {
+		return true
+	}
+	return false
 }
