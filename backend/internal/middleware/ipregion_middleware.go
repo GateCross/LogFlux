@@ -88,6 +88,12 @@ func (m *IPRegionMiddleware) Reload(enabled bool, allowCountries []string) {
 
 func (m *IPRegionMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// forward_auth 端点自身不检查，避免循环拦截
+		if r.URL.Path == "/api/internal/geo-check" {
+			next(w, r)
+			return
+		}
+
 		m.mu.RLock()
 		enabled := m.enabled
 		allowList := m.allowList
