@@ -240,7 +240,7 @@ const local: App.I18n.Schema = {
     dashboard: '仪表盘',
     caddy: 'Caddy管理',
     caddy_config: 'Caddy配置',
-    caddy_log: 'Caddy代理日志',
+    caddy_log: '代理日志',
     'caddy_system-log': '系统日志',
     caddy_access: '访问控制',
     security: '安全管理',

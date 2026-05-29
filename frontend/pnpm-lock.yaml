@@ -32,6 +32,9 @@ importers:
       '@sa/utils':
         specifier: workspace:*
         version: link:packages/utils
+      '@surbowl/world-geo-json-zh':
+        specifier: ^2.1.5
+        version: 2.1.5
       '@types/crypto-js':
         specifier: 4.2.2
         version: 4.2.2
@@ -1218,6 +1221,9 @@ packages:
         optional: true
       vue-eslint-parser:
         optional: true
+
+  '@surbowl/world-geo-json-zh@2.1.5':
+    resolution: {integrity: sha512-w9Cf4uE+1RkD9gaFzHrlxL4zlTXnFaGJ9fZYsee8jr0lp2++yIBc1PMRJEvrALKFxk2LARNDssoYQdso2aEFIA==}
 
   '@trysound/sax@0.2.0':
     resolution: {integrity: sha512-L7z9BgrNEcYyUYtF+HaEfiS5ebkh9jXqbszz7pC0hRBPaatV0XjSD3+eHrpqFemQfgwiFF0QPIarnIihIDn7OA==}
@@ -5029,6 +5035,8 @@ snapshots:
       - '@typescript-eslint/utils'
       - eslint-import-resolver-node
       - supports-color
+
+  '@surbowl/world-geo-json-zh@2.1.5': {}
 
   '@trysound/sax@0.2.0': {}
 

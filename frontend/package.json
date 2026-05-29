@@ -56,6 +56,7 @@
     "@sa/hooks": "workspace:*",
     "@sa/materials": "workspace:*",
     "@sa/utils": "workspace:*",
+    "@surbowl/world-geo-json-zh": "^2.1.5",
     "@types/crypto-js": "4.2.2",
     "@vueuse/core": "14.1.0",
     "clipboard": "2.0.11",

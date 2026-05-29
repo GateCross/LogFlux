@@ -81,6 +81,10 @@ func (s *DashboardService) GetSummary(req *types.DashboardSummaryReq) (*types.Da
 	if err != nil {
 		return nil, xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "查询地域数据失败", err)
 	}
+	geoProvince, err := s.loadGeoProvinceStats(startTime, endTime, topN)
+	if err != nil {
+		return nil, xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "查询省份数据失败", err)
+	}
 	recent, err := s.loadRecentLogs(startTime, endTime, recentLimit)
 	if err != nil {
 		return nil, xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "查询最近日志失败", err)
@@ -100,9 +104,10 @@ func (s *DashboardService) GetSummary(req *types.DashboardSummaryReq) (*types.Da
 			Blocked4xx: blocked,
 			Error5xx:   err5xx,
 		},
-		Trend:  trend,
-		Geo:    geo,
-		Recent: recent,
+		Trend:       trend,
+		Geo:         geo,
+		GeoProvince: geoProvince,
+		Recent:      recent,
 		Range: types.DashboardRange{
 			StartTime:   startTime.Format("2006-01-02 15:04:05"),
 			EndTime:     endTime.Format("2006-01-02 15:04:05"),
@@ -170,6 +175,18 @@ func (s *DashboardService) loadTrendSeries(startTime, endTime time.Time, interva
 
 func (s *DashboardService) loadGeoStats(startTime, endTime time.Time, topN int) ([]types.DashboardGeoItem, error) {
 	rows, err := s.caddyLogModel().GeoRows(s.ctx, startTime, endTime, topN)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]types.DashboardGeoItem, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, types.DashboardGeoItem{Name: row.Name, Value: row.Value})
+	}
+	return items, nil
+}
+
+func (s *DashboardService) loadGeoProvinceStats(startTime, endTime time.Time, topN int) ([]types.DashboardGeoItem, error) {
+	rows, err := s.caddyLogModel().ProvinceRows(s.ctx, startTime, endTime, topN)
 	if err != nil {
 		return nil, err
 	}

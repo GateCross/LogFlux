@@ -90,7 +90,8 @@ const errorStats = computed(() => {
 
 const trendTimes = computed(() => summary.value?.trend?.map(item => item.time) ?? []);
 const trendValues = computed(() => summary.value?.trend?.map(item => item.value) ?? []);
-const geoData = computed(() => summary.value?.geo ?? []);
+const geoWorldData = computed(() => summary.value?.geo ?? []);
+const geoChinaData = computed(() => summary.value?.geoProvince ?? []);
 const recentLogs = computed(() => summary.value?.recent ?? []);
 
 function formatDateTime(value: Date) {
@@ -236,7 +237,7 @@ onUnmounted(() => {
 
     <NGrid :x-gap="16" :y-gap="16" responsive="screen" item-responsive>
       <NGridItem span="24 l:16">
-        <MapChart :data="geoData" />
+        <MapChart :china-data="geoChinaData" :world-data="geoWorldData" />
       </NGridItem>
       <NGridItem span="24 l:8">
         <NSpace vertical :size="16" class="h-full">

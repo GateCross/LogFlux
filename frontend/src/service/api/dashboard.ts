@@ -46,6 +46,7 @@ export interface DashboardSummaryResp {
   errorStats: DashboardErrorStats;
   trend: DashboardTrendItem[];
   geo: DashboardGeoItem[];
+  geoProvince: DashboardGeoItem[];
   recent: DashboardRecentItem[];
   range: DashboardRange;
 }

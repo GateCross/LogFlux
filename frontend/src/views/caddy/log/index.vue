@@ -254,32 +254,34 @@ onMounted(() => {
     <NCard title="Caddy 访问日志" :bordered="false" class="h-full rounded-8px shadow-sm">
       <div class="h-full min-h-0 flex-col">
         <div class="mb-4 flex flex-wrap items-end gap-3">
-          <NInput
-            v-model:value="searchParams.keyword"
-            placeholder="搜索 域名/URI/IP"
-            clearable
-            class="w-56"
-            @keyup.enter="handleSearch"
-          >
-            <template #prefix>
-              <icon-ic-round-search class="text-16px" />
-            </template>
-          </NInput>
-          <NSelect v-model:value="searchParams.status" :options="statusOptions" class="w-36" />
-          <NDatePicker
-            v-model:formatted-value="searchParams.timeRange"
-            type="datetimerange"
-            value-format="yyyy-MM-dd HH:mm:ss"
-            clearable
-            class="w-72"
-          />
-          <NSpace>
+          <NInputGroup>
+            <NInput
+              v-model:value="searchParams.keyword"
+              placeholder="搜索 域名/URI/IP"
+              clearable
+              style="width: 7rem"
+              @keyup.enter="handleSearch"
+            >
+              <template #prefix>
+                <icon-ic-round-search class="text-16px" />
+              </template>
+            </NInput>
+            <NSelect v-model:value="searchParams.status" :options="statusOptions" class="w-28" />
+            <NDatePicker
+              v-model:formatted-value="searchParams.timeRange"
+              type="datetimerange"
+              value-format="yyyy-MM-dd HH:mm:ss"
+              clearable
+              class="w-72"
+            />
             <NButton type="primary" @click="handleSearch">
               <template #icon>
                 <icon-ic-round-search />
               </template>
               搜索
             </NButton>
+          </NInputGroup>
+          <NSpace>
             <NButton @click="handleRefresh">
               <template #icon>
                 <icon-ic-round-refresh />

@@ -356,12 +356,13 @@ type DashboardSummaryReq struct {
 }
 
 type DashboardSummaryResp struct {
-	Stats      DashboardStats        `json:"stats"`
-	ErrorStats DashboardErrorStats   `json:"errorStats"`
-	Trend      []DashboardTrendItem  `json:"trend"`
-	Geo        []DashboardGeoItem    `json:"geo"`
-	Recent     []DashboardRecentItem `json:"recent"`
-	Range      DashboardRange        `json:"range"`
+	Stats       DashboardStats        `json:"stats"`
+	ErrorStats  DashboardErrorStats   `json:"errorStats"`
+	Trend       []DashboardTrendItem  `json:"trend"`
+	Geo         []DashboardGeoItem    `json:"geo"`
+	GeoProvince []DashboardGeoItem    `json:"geoProvince"`
+	Recent      []DashboardRecentItem `json:"recent"`
+	Range       DashboardRange        `json:"range"`
 }
 
 type DashboardTrendItem struct {

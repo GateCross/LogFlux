@@ -44,6 +44,7 @@ type CaddyLogModel interface {
 	CountAttackIP(ctx context.Context, start, end time.Time, statuses []int) (int64, error)
 	TrendRows(ctx context.Context, start, end time.Time, intervalSec int) ([]DashboardTrendRow, error)
 	GeoRows(ctx context.Context, start, end time.Time, limit int) ([]DashboardGeoRow, error)
+	ProvinceRows(ctx context.Context, start, end time.Time, limit int) ([]DashboardGeoRow, error)
 	Recent(ctx context.Context, start, end time.Time, limit int) ([]CaddyLog, error)
 }
 
@@ -165,6 +166,20 @@ func (m *defaultCaddyLogModel) GeoRows(ctx context.Context, start, end time.Time
 	rows := make([]DashboardGeoRow, 0)
 	err := conn(m.db, ctx).Raw(
 		`SELECT COALESCE(NULLIF(country, ''), '未知') AS name, COUNT(*) AS value
+		 FROM caddy_logs
+		 WHERE log_time BETWEEN ? AND ?
+		 GROUP BY name
+		 ORDER BY value DESC
+		 LIMIT ?`,
+		start, end, limit,
+	).Scan(&rows).Error
+	return rows, err
+}
+
+func (m *defaultCaddyLogModel) ProvinceRows(ctx context.Context, start, end time.Time, limit int) ([]DashboardGeoRow, error) {
+	rows := make([]DashboardGeoRow, 0)
+	err := conn(m.db, ctx).Raw(
+		`SELECT COALESCE(NULLIF(province, ''), '未知') AS name, COUNT(*) AS value
 		 FROM caddy_logs
 		 WHERE log_time BETWEEN ? AND ?
 		 GROUP BY name
