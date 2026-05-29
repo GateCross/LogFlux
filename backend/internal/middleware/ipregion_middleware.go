@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	_ "embed"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	caddymodel "logflux/model/caddy"
+	ingestmodel "logflux/model/ingest"
 
 	"github.com/lionsoul2014/ip2region/binding/golang/xdb"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -30,6 +32,7 @@ type IPRegionMiddleware struct {
 	mu         sync.RWMutex
 	enabled    bool
 	allowList  map[string]struct{} // 允许的国家/地区集合
+	db         *gorm.DB
 	logModel   caddymodel.CaddyLogModel
 }
 
@@ -39,7 +42,7 @@ func NewIPRegionMiddleware(enabled bool, allowCountries []string, db *gorm.DB) *
 		logModel = caddymodel.NewCaddyLogModel(db)
 	}
 
-	m := &IPRegionMiddleware{enabled: enabled, logModel: logModel}
+	m := &IPRegionMiddleware{enabled: enabled, db: db, logModel: logModel}
 	m.initSearchers()
 
 	allow := make(map[string]struct{}, len(allowCountries))
@@ -216,7 +219,7 @@ func parseRegionParts(region string) (country, province, city string) {
 }
 
 func (m *IPRegionMiddleware) logAccess(r *http.Request, ip, region string, status int, size int64) {
-	if m.logModel == nil {
+	if m.db == nil {
 		return
 	}
 
@@ -234,6 +237,16 @@ func (m *IPRegionMiddleware) logAccess(r *http.Request, ip, region string, statu
 	method := r.Header.Get("X-Forwarded-Method")
 	if method == "" {
 		method = r.Method
+	}
+
+	// 内网 IP → system_logs，外网 IP → caddy_logs
+	if isPrivateIP(ip) {
+		m.logInternalAccess(ip, host, method, uri, r.Proto, status, size, r.UserAgent(), r.RemoteAddr, country, province, city)
+		return
+	}
+
+	if m.logModel == nil {
+		return
 	}
 
 	entry := &caddymodel.CaddyLog{
@@ -256,7 +269,40 @@ func (m *IPRegionMiddleware) logAccess(r *http.Request, ip, region string, statu
 
 	go func() {
 		if err := m.logModel.Create(context.Background(), entry); err != nil {
-			logx.Errorf("写入访问日志失败: %v", err)
+			logx.Errorf("写入代理访问日志失败: %v", err)
+		}
+	}()
+}
+
+func (m *IPRegionMiddleware) logInternalAccess(ip, host, method, uri, proto string, status int, size int64, userAgent, remoteAddr, country, province, city string) {
+	extraData := "{}"
+	if data, err := json.Marshal(map[string]any{
+		"clientIP": ip, "host": host, "method": method, "uri": uri, "proto": proto,
+		"status": status, "size": size, "userAgent": userAgent, "remoteIP": remoteAddr,
+		"country": country, "province": province, "city": city,
+	}); err == nil {
+		extraData = string(data)
+	}
+
+	level := "info"
+	if status >= 500 {
+		level = "error"
+	} else if status >= 400 {
+		level = "warn"
+	}
+
+	entry := &ingestmodel.SystemLog{
+		LogTime:   time.Now(),
+		Level:     level,
+		Message:   fmt.Sprintf("Caddy 内网访问 %s %s %d host=%s client=%s", method, uri, status, host, ip),
+		Source:    "caddy_internal",
+		RawLog:    "{}",
+		ExtraData: extraData,
+	}
+
+	go func() {
+		if err := m.db.Create(entry).Error; err != nil {
+			logx.Errorf("写入内网访问日志失败: %v", err)
 		}
 	}()
 }
