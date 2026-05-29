@@ -2,6 +2,7 @@ package middleware
 
 import (
 	_ "embed"
+	"fmt"
 	"net"
 	"net/http"
 	"strings"
@@ -33,6 +34,8 @@ func NewIPRegionMiddleware(enabled bool, allowCountries []string) *IPRegionMiddl
 	if !enabled {
 		return &IPRegionMiddleware{enabled: false}
 	}
+
+	logx.Infof("ip2region xdb 数据大小: v4=%d v6=%d", len(ipv4XdbData), len(ipv6XdbData))
 
 	v4Searcher, err := xdb.NewWithBuffer(xdb.IPv4, ipv4XdbData)
 	if err != nil {
@@ -94,6 +97,13 @@ func (m *IPRegionMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
+		defer func() {
+			if rec := recover(); rec != nil {
+				logx.Errorf("IPRegionCheck panic: %v, 放行请求: %s", rec, r.URL.Path)
+				next(w, r)
+			}
+		}()
+
 		m.mu.RLock()
 		enabled := m.enabled
 		allowList := m.allowList
@@ -138,7 +148,13 @@ func (m *IPRegionMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func (m *IPRegionMiddleware) search(ip string) (string, error) {
+func (m *IPRegionMiddleware) search(ip string) (region string, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("ip2region search panic: %v", r)
+		}
+	}()
+
 	ipBytes, err := xdb.ParseIP(ip)
 	if err != nil {
 		return "", err
