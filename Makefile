@@ -24,7 +24,7 @@ download-xdb:
 
 build-backend: download-xdb
 	@echo "构建后端..."
-	cd backend && go build -o logflux-api .
+	cd backend && go build -tags embed_ipregion -o logflux-api .
 
 build-docker:
 	@echo "构建 Docker 镜像..."

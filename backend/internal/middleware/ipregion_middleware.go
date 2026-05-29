@@ -2,15 +2,17 @@ package middleware
 
 import (
 	"context"
-	_ "embed"
 	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
+	"logflux/internal/utils/safego"
 	caddymodel "logflux/model/caddy"
 	ingestmodel "logflux/model/ingest"
 
@@ -18,12 +20,6 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 	"gorm.io/gorm"
 )
-
-//go:embed data/ip2region_v4.xdb
-var ipv4XdbData []byte
-
-//go:embed data/ip2region_v6.xdb
-var ipv6XdbData []byte
 
 // IPRegionMiddleware 基于 ip2region 的 IP 区域访问控制中间件
 type IPRegionMiddleware struct {
@@ -71,7 +67,13 @@ func (m *IPRegionMiddleware) initSearchers() {
 		return
 	}
 
+	ipv4XdbData := loadXdbData("ip2region_v4.xdb")
+	ipv6XdbData := loadXdbData("ip2region_v6.xdb")
 	logx.Infof("ip2region xdb 数据大小: v4=%d v6=%d", len(ipv4XdbData), len(ipv6XdbData))
+	if len(ipv4XdbData) == 0 || len(ipv6XdbData) == 0 {
+		logx.Error("ip2region xdb 数据文件缺失")
+		return
+	}
 
 	v4Searcher, err := xdb.NewWithBuffer(xdb.IPv4, ipv4XdbData)
 	if err != nil {
@@ -87,6 +89,27 @@ func (m *IPRegionMiddleware) initSearchers() {
 
 	m.v4Searcher = v4Searcher
 	m.v6Searcher = v6Searcher
+}
+
+func loadXdbData(filename string) []byte {
+	switch filename {
+	case "ip2region_v4.xdb":
+		if len(embeddedIPv4XdbData) > 0 {
+			return embeddedIPv4XdbData
+		}
+	case "ip2region_v6.xdb":
+		if len(embeddedIPv6XdbData) > 0 {
+			return embeddedIPv6XdbData
+		}
+	}
+
+	// 本地开发允许先编译后下载 xdb，运行时从源码目录兜底读取。
+	diskPath := filepath.Join("internal", "middleware", "data", filename)
+	data, err := os.ReadFile(diskPath)
+	if err != nil {
+		return nil
+	}
+	return data
 }
 
 // Reload 热更新 IP 区域配置（并发安全）
@@ -136,41 +159,11 @@ func (r *statusRecorder) Flush() {
 
 func (m *IPRegionMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// forward_auth 端点：跳过 IP 区域拦截，但记录日志
-		isGeoCheck := r.URL.Path == "/api/internal/geo-check"
-
-		if !isGeoCheck {
-			defer func() {
-				if rec := recover(); rec != nil {
-					logx.Errorf("IPRegionCheck panic: %v, 放行请求: %s", rec, r.URL.Path)
-					next(w, r)
-				}
-			}()
-		}
-
-		ip := getRealIP(r)
-		region := m.lookupRegion(ip)
-
-		// IP 区域访问控制（geo-check 跳过拦截，仅记录日志）
-		if !isGeoCheck {
-			m.mu.RLock()
-			enabled := m.enabled
-			allowList := m.allowList
-			m.mu.RUnlock()
-
-			if enabled && !isPrivateIP(ip) {
-				country := parseCountry(region)
-				if country == "" {
-					m.logAccess(r, ip, region, http.StatusForbidden, 0)
-					http.Error(w, "Forbidden", http.StatusForbidden)
-					return
-				}
-				if _, ok := allowList[country]; !ok {
-					m.logAccess(r, ip, region, http.StatusForbidden, 0)
-					http.Error(w, "Forbidden", http.StatusForbidden)
-					return
-				}
-			}
+		ip, region, blocked := m.prepareAccess(r)
+		if blocked {
+			m.logAccess(r, ip, region, http.StatusForbidden, 0)
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
 		}
 
 		// 包装 ResponseWriter 捕获状态码和大小
@@ -179,6 +172,39 @@ func (m *IPRegionMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
 
 		m.logAccess(r, ip, region, rec.statusCode, rec.written)
 	}
+}
+
+func (m *IPRegionMiddleware) prepareAccess(r *http.Request) (ip, region string, blocked bool) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			logx.Errorf("IPRegionCheck panic: %v, 放行请求: %s", rec, r.URL.Path)
+			blocked = false
+		}
+	}()
+
+	ip = getRealIP(r)
+	region = m.lookupRegion(ip)
+	if m.isAllowed(ip, region) {
+		return ip, region, false
+	}
+	return ip, region, true
+}
+
+func (m *IPRegionMiddleware) isAllowed(ip, region string) bool {
+	m.mu.RLock()
+	enabled := m.enabled
+	allowList := m.allowList
+	m.mu.RUnlock()
+
+	if !enabled || isPrivateIP(ip) {
+		return true
+	}
+	country := parseCountry(region)
+	if country == "" {
+		return false
+	}
+	_, ok := allowList[country]
+	return ok
 }
 
 // lookupRegion 查询 IP 地理信息，失败返回空串
@@ -267,11 +293,11 @@ func (m *IPRegionMiddleware) logAccess(r *http.Request, ip, region string, statu
 		ExtraData: "{}",
 	}
 
-	go func() {
+	safego.New(context.Background(), "写入代理访问日志").Go(func() {
 		if err := m.logModel.Create(context.Background(), entry); err != nil {
 			logx.Errorf("写入代理访问日志失败: %v", err)
 		}
-	}()
+	})
 }
 
 func (m *IPRegionMiddleware) logInternalAccess(ip, host, method, uri, proto string, status int, size int64, userAgent, remoteAddr, country, province, city string) {
@@ -300,11 +326,11 @@ func (m *IPRegionMiddleware) logInternalAccess(ip, host, method, uri, proto stri
 		ExtraData: extraData,
 	}
 
-	go func() {
+	safego.New(context.Background(), "写入内网访问日志").Go(func() {
 		if err := m.db.Create(entry).Error; err != nil {
 			logx.Errorf("写入内网访问日志失败: %v", err)
 		}
-	}()
+	})
 }
 
 func (m *IPRegionMiddleware) search(ip string) (region string, err error) {
@@ -320,7 +346,13 @@ func (m *IPRegionMiddleware) search(ip string) (region string, err error) {
 	}
 
 	if len(ipBytes) == 4 {
+		if m.v4Searcher == nil {
+			return "", fmt.Errorf("ip2region IPv4 searcher 未初始化")
+		}
 		return m.v4Searcher.Search(ipBytes)
+	}
+	if m.v6Searcher == nil {
+		return "", fmt.Errorf("ip2region IPv6 searcher 未初始化")
 	}
 	return m.v6Searcher.Search(ipBytes)
 }

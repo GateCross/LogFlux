@@ -62,7 +62,7 @@ RUN bash scripts/download-xdb.sh
 
 # 构建后端
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} \
-    go build -trimpath -buildvcs=false -a -installsuffix cgo -ldflags="-w -s" -o logflux-api .
+    go build -tags embed_ipregion -trimpath -buildvcs=false -a -installsuffix cgo -ldflags="-w -s" -o logflux-api .
 
 # ==========================================
 # Stage 4: Final Production Image

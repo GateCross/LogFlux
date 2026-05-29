@@ -134,7 +134,9 @@ func (m *defaultCaddyLogModel) CountUniqueVisitor(ctx context.Context, start, en
 func (m *defaultCaddyLogModel) CountUniqueRemoteIP(ctx context.Context, start, end time.Time) (int64, error) {
 	var total int64
 	err := conn(m.db, ctx).Raw(
-		"SELECT COUNT(DISTINCT remote_ip) FROM caddy_logs WHERE log_time BETWEEN ? AND ? AND remote_ip <> ''",
+		`SELECT COUNT(DISTINCT COALESCE(NULLIF(client_ip, ''), remote_ip))
+		 FROM caddy_logs
+		 WHERE log_time BETWEEN ? AND ? AND (client_ip <> '' OR remote_ip <> '')`,
 		start, end,
 	).Scan(&total).Error
 	return total, err
@@ -143,7 +145,9 @@ func (m *defaultCaddyLogModel) CountUniqueRemoteIP(ctx context.Context, start, e
 func (m *defaultCaddyLogModel) CountAttackIP(ctx context.Context, start, end time.Time, statuses []int) (int64, error) {
 	var total int64
 	err := conn(m.db, ctx).Raw(
-		"SELECT COUNT(DISTINCT remote_ip) FROM caddy_logs WHERE log_time BETWEEN ? AND ? AND status IN ? AND remote_ip <> ''",
+		`SELECT COUNT(DISTINCT COALESCE(NULLIF(client_ip, ''), remote_ip))
+		 FROM caddy_logs
+		 WHERE log_time BETWEEN ? AND ? AND status IN ? AND (client_ip <> '' OR remote_ip <> '')`,
 		start, end, statuses,
 	).Scan(&total).Error
 	return total, err

@@ -40,16 +40,19 @@ func TestGetDashboardSummary_StatusCountsUseIndependentFilters(t *testing.T) {
 	mock.ExpectQuery(`SELECT COUNT\(DISTINCT COALESCE\(NULLIF\(client_ip, ''\), remote_ip\)\)`).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(7))
 
-	mock.ExpectQuery(`SELECT COUNT\(DISTINCT remote_ip\) FROM caddy_logs WHERE log_time BETWEEN \$1 AND \$2 AND remote_ip <> ''`).
+	mock.ExpectQuery(`SELECT COUNT\(DISTINCT COALESCE\(NULLIF\(client_ip, ''\), remote_ip\)\)`).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(6))
 
-	mock.ExpectQuery(`SELECT COUNT\(DISTINCT remote_ip\) FROM caddy_logs WHERE log_time BETWEEN \$1 AND \$2 AND status IN \(\$3,\$4\) AND remote_ip <> ''`).
+	mock.ExpectQuery(`SELECT COUNT\(DISTINCT COALESCE\(NULLIF\(client_ip, ''\), remote_ip\)\)`).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
 
 	mock.ExpectQuery(`SELECT floor\(extract\(epoch from log_time\) / \$1\) \* \$2 AS bucket, COUNT\(\*\) AS count`).
 		WillReturnRows(sqlmock.NewRows([]string{"bucket", "count"}))
 
 	mock.ExpectQuery(`SELECT COALESCE\(NULLIF\(country, ''\), '未知'\) AS name, COUNT\(\*\) AS value`).
+		WillReturnRows(sqlmock.NewRows([]string{"name", "value"}))
+
+	mock.ExpectQuery(`SELECT COALESCE\(NULLIF\(province, ''\), '未知'\) AS name, COUNT\(\*\) AS value`).
 		WillReturnRows(sqlmock.NewRows([]string{"name", "value"}))
 
 	mock.ExpectQuery(`SELECT \* FROM "caddy_logs" WHERE \(?log_time >= \$1 AND log_time <= \$2\)? ORDER BY log_time desc, ?id desc LIMIT \$3`).

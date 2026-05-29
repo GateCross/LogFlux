@@ -103,7 +103,7 @@ jobs:
           GOARCH: ${{ matrix.arch }}
         run: |
           mkdir -p ../build-artifacts/backend/${{ matrix.arch }}
-          go build -a -installsuffix cgo -ldflags="-w -s" -o ../build-artifacts/backend/${{ matrix.arch }}/logflux-api .
+          go build -tags embed_ipregion -a -installsuffix cgo -ldflags="-w -s" -o ../build-artifacts/backend/${{ matrix.arch }}/logflux-api .
 
       - name: Upload backend
         uses: actions/upload-artifact@v7

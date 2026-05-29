@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue';
 import * as echarts from 'echarts/core';
+import type { MapSeriesOption } from 'echarts/charts';
 import { useEcharts } from '@/hooks/common/echarts';
 import type { ECOption } from '@/hooks/common/echarts';
 import { registerChinaMap, registerWorldMap } from '@/utils/map-register';
@@ -44,7 +45,7 @@ const { domRef, chart } = useEcharts(
         color: ['#e0f2fe', '#0ea5e9']
       }
     },
-    series: []
+    series: [buildMapSeries()]
   }),
   {
     onUpdated(instance) {
@@ -67,8 +68,22 @@ function applyData(instance?: echarts.ECharts | null) {
   if (!target) return;
   target.setOption({
     visualMap: { max: visualMax.value },
-    series: [{ data: activeData.value }]
+    series: [buildMapSeries()]
   });
+}
+
+function buildMapSeries(): MapSeriesOption {
+  return {
+    name: '访问来源',
+    type: 'map',
+    map: mode.value,
+    roam: true,
+    emphasis: {
+      label: { show: true },
+      itemStyle: { areaColor: '#38bdf8' }
+    },
+    data: activeData.value
+  };
 }
 
 function getFullOptions(): ECOption {
@@ -83,19 +98,7 @@ function getFullOptions(): ECOption {
       calculable: true,
       inRange: { color: ['#e0f2fe', '#0ea5e9'] }
     },
-    series: [
-      {
-        name: '访问来源',
-        type: 'map',
-        map: mode.value,
-        roam: true,
-        emphasis: {
-          label: { show: true },
-          itemStyle: { areaColor: '#38bdf8' }
-        },
-        data: activeData.value
-      }
-    ]
+    series: [buildMapSeries()]
   };
 }
 

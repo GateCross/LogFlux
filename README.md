@@ -84,8 +84,12 @@ pnpm run dev
 ```bash
 cd backend
 go mod download
+bash scripts/download-xdb.sh
 go run logflux.go -f etc/config.yaml
 ```
+
+`ip2region` 的 `.xdb` 数据文件不提交到仓库；本地首次启动或编译前需要先执行 `bash scripts/download-xdb.sh`，也可以在仓库根目录使用 `make download-xdb`。
+`make build-backend`、Docker 与 CI 会在下载后使用 `embed_ipregion` 构建标签把 xdb 嵌入二进制；普通 `go run` / `go build` 会在运行时从 `backend/internal/middleware/data/` 读取。
 
 ## 开发约定
 
