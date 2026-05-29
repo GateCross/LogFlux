@@ -9,6 +9,7 @@ import (
 	"logflux/common/logging"
 	"logflux/internal/config"
 	"logflux/internal/handler"
+	authhandler "logflux/internal/handler/auth"
 	caddylogic "logflux/internal/logic/caddy"
 	"logflux/internal/middleware"
 	"logflux/internal/response"
@@ -45,6 +46,16 @@ func main() {
 	}
 
 	ctx := svc.NewServiceContext(c)
+
+	// Geo-check endpoint for Caddy forward_auth (no JWT, no Permission)
+	server.AddRoutes([]rest.Route{
+		{
+			Method:  http.MethodGet,
+			Path:    "/api/internal/geo-check",
+			Handler: authhandler.GeoCheckHandler(),
+		},
+	})
+
 	if ctx.WafScheduler != nil {
 		ctx.WafScheduler.SetExecutor(&wafScheduleExecutor{svcCtx: ctx})
 		ctx.WafScheduler.Start()
@@ -54,7 +65,8 @@ func main() {
 
 	// Global Middlewares
 	server.Use(middleware.ResponseMiddleware)
-	server.Use(ctx.RateLimit) // 登录接口速率限制
+	server.Use(ctx.RateLimit)      // 登录接口速率限制
+	server.Use(ctx.IPRegionCheck) // IP 区域访问控制
 
 	// Global Error Handler (still needed for business errors)
 

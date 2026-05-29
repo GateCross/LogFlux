@@ -22,6 +22,7 @@ type Config struct {
 	Archive             ArchiveConf
 	Waf                 WafConf
 	Notification        NotificationConf `json:",optional"`
+	IPRegion            IPRegionConf     `json:",optional"`
 }
 
 type DatabaseConf struct {
@@ -68,6 +69,12 @@ type WafConf struct {
 	CorazaReleaseAPI      string `json:",optional"`
 	CorazaCurrentVersion  string `json:",optional"`
 	CorazaCheckProxy      string `json:",optional"`
+}
+
+// IPRegionConf IP 区域访问控制配置
+type IPRegionConf struct {
+	Enabled   bool     `json:",default=true"`
+	AllowList []string `json:",default=[中国]"` // 允许访问的国家/地区列表
 }
 
 // NotificationConf 通知配置

@@ -373,6 +373,16 @@ type IDReq struct {
 	ID uint `path:"id"`
 }
 
+type IPRegionConfigResp struct {
+	Enabled   bool     `json:"enabled"`
+	AllowList []string `json:"allowList"`
+}
+
+type IPRegionConfigUpdateReq struct {
+	Enabled   bool     `json:"enabled"`
+	AllowList []string `json:"allowList"`
+}
+
 type IsRouteExistReq struct {
 	RouteName string `form:"routeName"`
 }

@@ -36,3 +36,8 @@ Waf:
   CorazaReleaseAPI: "https://api.github.com/repos/corazawaf/coraza-caddy/releases/latest"
   CorazaCurrentVersion: ""
   CorazaCheckProxy: ""
+
+IPRegion:
+  Enabled: true
+  AllowList:
+    - "中国"

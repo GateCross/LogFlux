@@ -1,0 +1,29 @@
+syntax = "v1"
+
+import "base.api"
+
+type (
+	// IP Region Access Control
+	IPRegionConfigResp {
+		Enabled   bool     `json:"enabled"`
+		AllowList []string `json:"allowList"`
+	}
+	IPRegionConfigUpdateReq {
+		Enabled   bool     `json:"enabled"`
+		AllowList []string `json:"allowList"`
+	}
+)
+
+@server (
+	prefix: /api
+	group:  caddy
+	jwt:    Auth
+	middleware: Permission
+)
+service logflux-api {
+	@handler GetIpRegionConfig
+	get /caddy/ip-region returns (IPRegionConfigResp)
+
+	@handler UpdateIpRegionConfig
+	put /caddy/ip-region (IPRegionConfigUpdateReq) returns (IPRegionConfigResp)
+}

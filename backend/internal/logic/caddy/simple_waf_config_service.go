@@ -180,7 +180,7 @@ func (s *simpleWafConfigService) buildCandidate(req *types.SimpleWafConfigUpdate
 		modules = emptyModulesJSON
 	}
 
-	nextConfig, actions, snapshot, err := buildSimpleWafCandidateConfig(config, directives, normalized)
+	nextConfig, actions, snapshot, err := buildSimpleWafCandidateConfig(s.svcCtx.DB, config, directives, normalized)
 	if err != nil {
 		return nil, err
 	}
@@ -473,7 +473,7 @@ func normalizeSimpleWafStrength(template string, paranoiaLevel, inboundThreshold
 	}
 }
 
-func buildSimpleWafCandidateConfig(currentConfig, directives string, config simpleWafNormalizedConfig) (string, []string, *wafIntegrationSnapshot, error) {
+func buildSimpleWafCandidateConfig(db *gorm.DB, currentConfig, directives string, config simpleWafNormalizedConfig) (string, []string, *wafIntegrationSnapshot, error) {
 	if strings.TrimSpace(directives) == "" {
 		return "", nil, nil, fmt.Errorf("WAF 指令为空")
 	}
@@ -481,13 +481,14 @@ func buildSimpleWafCandidateConfig(currentConfig, directives string, config simp
 	actions := make([]string, 0)
 	if strings.TrimSpace(currentConfig) == "" {
 		rendered, err := renderManagedCaddyfile(managedCaddyfileOptions{
-			SiteAddress:   managedCaddyDefaultSiteAddress,
-			Backend:       managedCaddyDefaultBackend,
-			FrontendRoot:  managedCaddyDefaultFrontend,
-			AccessLogPath: managedCaddyDefaultAccessLog,
-			WafAuditLog:   managedCaddyDefaultWafAuditLog,
-			WafEnabled:    config.Enabled,
-			Directives:    directives,
+			SiteAddress:        managedCaddyDefaultSiteAddress,
+			Backend:            managedCaddyDefaultBackend,
+			FrontendRoot:       managedCaddyDefaultFrontend,
+			AccessLogPath:      managedCaddyDefaultAccessLog,
+			WafAuditLog:        managedCaddyDefaultWafAuditLog,
+			WafEnabled:         config.Enabled,
+			ForwardAuthEnabled: isIPRegionEnabled(db),
+			Directives:         directives,
 		})
 		if err != nil {
 			return "", nil, nil, err

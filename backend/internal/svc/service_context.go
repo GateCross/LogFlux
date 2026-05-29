@@ -2,6 +2,7 @@ package svc
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	cronutil "logflux/common/cron"
@@ -23,6 +24,7 @@ import (
 	menumodel "logflux/model/menu"
 	notificationmodel "logflux/model/notification"
 	rolemodel "logflux/model/role"
+	systemmodel "logflux/model/system"
 	usermodel "logflux/model/user"
 	wafmodel "logflux/model/waf"
 	"os"
@@ -47,6 +49,9 @@ type ServiceContext struct {
 	NotificationMgr   notification.NotificationManager
 	Permission        rest.Middleware
 	RateLimit         rest.Middleware
+	IPRegionCheck     rest.Middleware
+	IPRegionMgr       *middleware.IPRegionMiddleware
+	SystemConfigModel *systemmodel.SystemConfigModel
 	UserModel         usermodel.UserModel
 	RoleModel         rolemodel.RoleModel
 	MenuModel         menumodel.MenuModel
@@ -91,6 +96,8 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		&wafmodel.WafRuleExclusion{},
 		&wafmodel.WafPolicyBinding{},
 		&wafmodel.WafPolicyFalsePositiveFeedback{},
+		// 系统配置
+		&systemmodel.SystemConfig{},
 	)
 
 	ensureCronTaskLogRetentionConstraints(db)
@@ -189,6 +196,21 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	// 初始化 WAF 更新调度器（执行器在 main 中注入）
 	wafScheduler := tasks.NewWafScheduler(db)
 
+	// 初始化系统配置模型
+	systemConfigModel := systemmodel.NewSystemConfigModel(db)
+
+	// 初始化 IP 区域中间件（支持从 DB 加载配置热重载）
+	ipRegionMgr := middleware.NewIPRegionMiddleware(c.IPRegion.Enabled, c.IPRegion.AllowList)
+	if cfg, err := systemConfigModel.GetByKey("ip_region"); err == nil {
+		var ipCfg struct {
+			Enabled   bool     `json:"enabled"`
+			AllowList []string `json:"allowList"`
+		}
+		if json.Unmarshal([]byte(cfg.Value), &ipCfg) == nil {
+			ipRegionMgr.Reload(ipCfg.Enabled, ipCfg.AllowList)
+		}
+	}
+
 	return &ServiceContext{
 		Config:            c,
 		DB:                db,
@@ -200,6 +222,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		NotificationMgr:   notificationMgr,
 		Permission:        middleware.NewPermissionMiddleware(db).Handle,
 		RateLimit:         middleware.NewRateLimitMiddleware(5, time.Minute, "/api/login", "/api/refreshToken").Handle, // 登录接口 5 次/分钟
+		IPRegionCheck:     ipRegionMgr.Handle,
+		IPRegionMgr:       ipRegionMgr,
+		SystemConfigModel: systemConfigModel,
 		UserModel:         usermodel.NewUserModel(db),
 		RoleModel:         rolemodel.NewRoleModel(db),
 		MenuModel:         menumodel.NewMenuModel(db),
@@ -585,6 +610,13 @@ func initRBACData(db *gorm2.DB) {
 			RequiredRoles: []string{"admin", "analyst"},
 		},
 		{
+			Name:          "caddy_access",
+			Path:          "/caddy/access",
+			Component:     "view.caddy_access",
+			Meta:          `{"title":"caddy_access","i18nKey":"route.caddy_access","icon":"carbon:network-4"}`,
+			RequiredRoles: []string{"admin"},
+		},
+		{
 			Name:          "manage_user",
 			Path:          "/manage/user",
 			Component:     "view.manage_user",
@@ -713,6 +745,7 @@ func initRBACData(db *gorm2.DB) {
 	setParent("notification_log", "notification")
 	setParent("user_center", "user")
 	setParentForce("caddy_system_log", "manage")
+	setParentForce("caddy_access", "caddy")
 	// setParent("cron", "manage") // moved to top level
 
 	// 清理遗留数据
@@ -721,6 +754,10 @@ func initRBACData(db *gorm2.DB) {
 	db.Where("component = ?", "home").Delete(&menumodel.Menu{})
 	db.Where("name = ?", "caddy_waf").Delete(&menumodel.Menu{})
 	db.Where("name in ?", []string{"waf", "crs"}).Delete(&menumodel.Menu{})
+	// 清理已废弃的 security_access 菜单（已迁移到 caddy_access）
+	db.Where("name = ?", "security_access").Delete(&menumodel.Menu{})
+	// 修复被误改 name 的 caddy_access 菜单（name 必须是路由 key，不是中文标题）
+	db.Model(&menumodel.Menu{}).Where("path = ? AND name != ?", "/caddy/access", "caddy_access").Delete(&menumodel.Menu{})
 }
 
 // createArchiveFunction 创建归档存储过程

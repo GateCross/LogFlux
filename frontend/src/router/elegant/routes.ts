@@ -49,6 +49,15 @@ export const generatedRoutes = [
     },
     children: [
       {
+        name: 'caddy_access',
+        path: '/caddy/access',
+        component: 'view.caddy_access',
+        meta: {
+          title: 'caddy_access',
+          i18nKey: 'route.caddy_access'
+        }
+      },
+      {
         name: 'caddy_config',
         path: '/caddy/config',
         component: 'view.caddy_config',

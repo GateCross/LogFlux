@@ -1,4 +1,4 @@
-.PHONY: help build-frontend build-docker deploy up down restart logs status clean
+.PHONY: help build-frontend build-backend build-docker deploy up down restart logs status clean download-xdb
 
 help:
 	@echo "LogFlux 部署管理"
@@ -17,6 +17,14 @@ help:
 build-frontend:
 	@echo "构建前端..."
 	cd frontend && pnpm install && pnpm run build
+
+download-xdb:
+	@echo "下载 ip2region xdb 数据..."
+	cd backend && bash scripts/download-xdb.sh
+
+build-backend: download-xdb
+	@echo "构建后端..."
+	cd backend && go build -o logflux-api .
 
 build-docker:
 	@echo "构建 Docker 镜像..."

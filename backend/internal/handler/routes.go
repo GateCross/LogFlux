@@ -329,6 +329,26 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 			[]rest.Route{
 				{
 					Method:  http.MethodGet,
+					Path:    "/caddy/ip-region",
+					Handler: caddy.GetIpRegionConfigHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPut,
+					Path:    "/caddy/ip-region",
+					Handler: caddy.UpdateIpRegionConfigHandler(serverCtx),
+				},
+			}...,
+		),
+		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
+		rest.WithPrefix("/api"),
+	)
+
+	server.AddRoutes(
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.Permission},
+			[]rest.Route{
+				{
+					Method:  http.MethodGet,
 					Path:    "/cron/log",
 					Handler: cron.GetCronLogListHandler(serverCtx),
 				},
@@ -403,36 +423,6 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 			[]rest.Middleware{serverCtx.Permission},
 			[]rest.Route{
 				{
-					Method:  http.MethodGet,
-					Path:    "/system/logs",
-					Handler: log.GetSystemLogsHandler(serverCtx),
-				},
-			}...,
-		),
-		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
-		rest.WithPrefix("/api"),
-	)
-
-	server.AddRoutes(
-		rest.WithMiddlewares(
-			[]rest.Middleware{serverCtx.Permission},
-			[]rest.Route{
-				{
-					Method:  http.MethodGet,
-					Path:    "/caddy/logs",
-					Handler: log.GetCaddyLogsHandler(serverCtx),
-				},
-			}...,
-		),
-		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
-		rest.WithPrefix("/api"),
-	)
-
-	server.AddRoutes(
-		rest.WithMiddlewares(
-			[]rest.Middleware{serverCtx.Permission},
-			[]rest.Route{
-				{
 					Method:  http.MethodPost,
 					Path:    "/source",
 					Handler: log.AddLogSourceHandler(serverCtx),
@@ -451,6 +441,36 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					Method:  http.MethodDelete,
 					Path:    "/source/:id",
 					Handler: log.DeleteLogSourceHandler(serverCtx),
+				},
+			}...,
+		),
+		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
+		rest.WithPrefix("/api"),
+	)
+
+	server.AddRoutes(
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.Permission},
+			[]rest.Route{
+				{
+					Method:  http.MethodGet,
+					Path:    "/system/logs",
+					Handler: log.GetSystemLogsHandler(serverCtx),
+				},
+			}...,
+		),
+		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
+		rest.WithPrefix("/api"),
+	)
+
+	server.AddRoutes(
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.Permission},
+			[]rest.Route{
+				{
+					Method:  http.MethodGet,
+					Path:    "/caddy/logs",
+					Handler: log.GetCaddyLogsHandler(serverCtx),
 				},
 			}...,
 		),

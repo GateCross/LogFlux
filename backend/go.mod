@@ -8,6 +8,7 @@ require (
 	github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.5.1
 	github.com/golang-jwt/jwt/v4 v4.5.2
 	github.com/lib/pq v1.10.9
+	github.com/lionsoul2014/ip2region/binding/golang v0.0.0-20260524121429-fac3d0376a7c
 	github.com/nxadm/tail v1.4.11
 	github.com/redis/go-redis/v9 v9.17.3
 	github.com/robfig/cron/v3 v3.0.1

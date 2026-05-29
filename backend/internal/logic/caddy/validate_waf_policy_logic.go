@@ -49,7 +49,8 @@ func (l *ValidateWafPolicyLogic) ValidateWafPolicy(req *types.WafPolicyActionReq
 		return nil, err
 	}
 
-	candidateConfig, err := buildPolicyCandidateCaddyConfig(server.Config, directives, policy.Enabled)
+	forwardAuth := isIPRegionEnabled(l.svcCtx.DB)
+	candidateConfig, err := buildPolicyCandidateCaddyConfig(server.Config, directives, policy.Enabled, forwardAuth)
 	if err != nil {
 		return nil, err
 	}

@@ -1,8 +1,13 @@
 package caddy
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
+
+	systemmodel "logflux/model/system"
+
+	"gorm.io/gorm"
 )
 
 const (
@@ -16,18 +21,19 @@ const (
 )
 
 type managedCaddyfileOptions struct {
-	SiteAddress   string
-	Backend       string
-	FrontendRoot  string
-	AccessLogPath string
-	WafAuditLog   string
-	WafEnabled    bool
-	Directives    string
+	SiteAddress        string
+	Backend            string
+	FrontendRoot       string
+	AccessLogPath      string
+	WafAuditLog        string
+	WafEnabled         bool
+	ForwardAuthEnabled bool
+	Directives         string
 }
 
-func buildPolicyCandidateCaddyConfig(currentConfig, directives string, wafEnabled bool) (string, error) {
+func buildPolicyCandidateCaddyConfig(currentConfig, directives string, wafEnabled, forwardAuthEnabled bool) (string, error) {
 	if shouldRenderManagedCaddyfile(currentConfig) {
-		return renderManagedCaddyfile(defaultManagedCaddyfileOptions(currentConfig, directives, wafEnabled))
+		return renderManagedCaddyfile(defaultManagedCaddyfileOptions(currentConfig, directives, wafEnabled, forwardAuthEnabled))
 	}
 	return applyWafPolicyToCaddyConfig(currentConfig, directives)
 }
@@ -46,15 +52,16 @@ func shouldRenderManagedCaddyfile(config string) bool {
 	return strings.Contains(trimmed, "root * /app/frontend") && strings.Contains(trimmed, "reverse_proxy localhost:8888")
 }
 
-func defaultManagedCaddyfileOptions(currentConfig, directives string, wafEnabled bool) managedCaddyfileOptions {
+func defaultManagedCaddyfileOptions(currentConfig, directives string, wafEnabled, forwardAuthEnabled bool) managedCaddyfileOptions {
 	return managedCaddyfileOptions{
-		SiteAddress:   selectManagedCaddySiteAddress(currentConfig),
-		Backend:       managedCaddyDefaultBackend,
-		FrontendRoot:  managedCaddyDefaultFrontend,
-		AccessLogPath: managedCaddyDefaultAccessLog,
-		WafAuditLog:   managedCaddyDefaultWafAuditLog,
-		WafEnabled:    wafEnabled,
-		Directives:    directives,
+		SiteAddress:        selectManagedCaddySiteAddress(currentConfig),
+		Backend:            managedCaddyDefaultBackend,
+		FrontendRoot:       managedCaddyDefaultFrontend,
+		AccessLogPath:      managedCaddyDefaultAccessLog,
+		WafAuditLog:        managedCaddyDefaultWafAuditLog,
+		WafEnabled:         wafEnabled,
+		ForwardAuthEnabled: forwardAuthEnabled,
+		Directives:         directives,
 	}
 }
 
@@ -115,6 +122,11 @@ func renderManagedCaddyfile(options managedCaddyfileOptions) (string, error) {
 	builder.WriteString("    format json\n")
 	builder.WriteString("  }\n\n")
 	builder.WriteString("  encode gzip\n\n")
+	if options.ForwardAuthEnabled {
+		builder.WriteString(fmt.Sprintf("  forward_auth %s {\n", options.Backend))
+		builder.WriteString("    uri /api/internal/geo-check\n")
+		builder.WriteString("  }\n\n")
+	}
 	builder.WriteString("  handle /api/health {\n")
 	builder.WriteString("    respond \"OK\" 200\n")
 	builder.WriteString("  }\n\n")
@@ -226,4 +238,20 @@ func indentManagedCorazaDirectives(directives string) string {
 		lines[idx] = "      " + strings.TrimSpace(line)
 	}
 	return strings.Join(lines, "\n")
+}
+
+// isIPRegionEnabled 从 DB 检查 IP 区域限制是否启用
+func isIPRegionEnabled(db *gorm.DB) bool {
+	model := systemmodel.NewSystemConfigModel(db)
+	cfg, err := model.GetByKey("ip_region")
+	if err != nil {
+		return false
+	}
+	var ipCfg struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := json.Unmarshal([]byte(cfg.Value), &ipCfg); err != nil {
+		return false
+	}
+	return ipCfg.Enabled
 }

@@ -57,6 +57,9 @@ RUN go mod download
 # 复制后端源码
 COPY backend/ ./
 
+# 下载 ip2region xdb 数据文件（构建时获取最新版本）
+RUN bash scripts/download-xdb.sh
+
 # 构建后端
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} \
     go build -trimpath -buildvcs=false -a -installsuffix cgo -ldflags="-w -s" -o logflux-api .

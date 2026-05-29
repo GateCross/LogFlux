@@ -167,6 +167,7 @@ const routeMap: RouteMap = {
   "404": "/404",
   "500": "/500",
   "caddy": "/caddy",
+  "caddy_access": "/caddy/access",
   "caddy_config": "/caddy/config",
   "caddy_log": "/caddy/log",
   "caddy_source": "/caddy/source",

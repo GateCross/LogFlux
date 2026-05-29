@@ -57,7 +57,8 @@ func (s *PolicyPublishService) BuildPublishCandidate(policyID uint) (*PolicyPubl
 		return nil, err
 	}
 
-	candidateConfig, err := buildPolicyCandidateCaddyConfig(server.Config, directives, policy.Enabled)
+	forwardAuth := isIPRegionEnabled(s.svcCtx.DB)
+	candidateConfig, err := buildPolicyCandidateCaddyConfig(server.Config, directives, policy.Enabled, forwardAuth)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +108,8 @@ func (s *PolicyPublishService) BuildRollbackCandidate(revisionID uint) (*PolicyP
 		return nil, nil, err
 	}
 
-	candidateConfig, err := buildPolicyCandidateCaddyConfig(server.Config, directives, policy.Enabled)
+	forwardAuth := isIPRegionEnabled(s.svcCtx.DB)
+	candidateConfig, err := buildPolicyCandidateCaddyConfig(server.Config, directives, policy.Enabled, forwardAuth)
 	if err != nil {
 		return nil, nil, err
 	}

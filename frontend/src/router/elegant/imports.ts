@@ -20,6 +20,7 @@ export const views: Record<LastLevelRouteKey, RouteComponent | (() => Promise<Ro
   500: () => import("@/views/_builtin/500/index.vue"),
   "iframe-page": () => import("@/views/_builtin/iframe-page/[url].vue"),
   login: () => import("@/views/_builtin/login/index.vue"),
+  caddy_access: () => import("@/views/caddy/access/index.vue"),
   caddy_config: () => import("@/views/caddy/config/index.vue"),
   caddy_log: () => import("@/views/caddy/log/index.vue"),
   caddy_source: () => import("@/views/caddy/source/index.vue"),

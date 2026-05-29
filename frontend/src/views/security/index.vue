@@ -1235,7 +1235,7 @@ const { refreshCurrentDomain } = useSecurityRefresh({
     />
 
     <SecurityOpsPage
-      v-else
+      v-else-if="activeMenu === 'ops'"
       :active-section="activeOpsSection"
       :navigate-to-tab="handleNavigateToOpsSection"
       :release-query="releaseQuery"

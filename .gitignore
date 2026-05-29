@@ -15,6 +15,7 @@ backend/logflux
 backend/logs
 backend/etc/*.yaml
 !backend/etc/*.sample.yaml
+backend/internal/middleware/data/*.xdb
 
 # Docker
 docker/.env
