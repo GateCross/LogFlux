@@ -124,40 +124,40 @@ func (r *statusRecorder) Flush() {
 
 func (m *IPRegionMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// forward_auth 端点自身不检查，避免循环拦截
-		if r.URL.Path == "/api/internal/geo-check" {
-			next(w, r)
-			return
-		}
+		// forward_auth 端点：跳过 IP 区域拦截，但记录日志
+		isGeoCheck := r.URL.Path == "/api/internal/geo-check"
 
-		defer func() {
-			if rec := recover(); rec != nil {
-				logx.Errorf("IPRegionCheck panic: %v, 放行请求: %s", rec, r.URL.Path)
-				next(w, r)
-			}
-		}()
+		if !isGeoCheck {
+			defer func() {
+				if rec := recover(); rec != nil {
+					logx.Errorf("IPRegionCheck panic: %v, 放行请求: %s", rec, r.URL.Path)
+					next(w, r)
+				}
+			}()
+		}
 
 		ip := getRealIP(r)
 		region := m.lookupRegion(ip)
 
-		// IP 区域访问控制
-		m.mu.RLock()
-		enabled := m.enabled
-		allowList := m.allowList
-		m.mu.RUnlock()
+		// IP 区域访问控制（geo-check 跳过拦截，仅记录日志）
+		if !isGeoCheck {
+			m.mu.RLock()
+			enabled := m.enabled
+			allowList := m.allowList
+			m.mu.RUnlock()
 
-		if enabled && !isPrivateIP(ip) {
-			country := parseCountry(region)
-			if country == "" {
-				// ip2region 查询无结果，拒绝访问
-				m.logAccess(r, ip, region, http.StatusForbidden, 0)
-				http.Error(w, "Forbidden", http.StatusForbidden)
-				return
-			}
-			if _, ok := allowList[country]; !ok {
-				m.logAccess(r, ip, region, http.StatusForbidden, 0)
-				http.Error(w, "Forbidden", http.StatusForbidden)
-				return
+			if enabled && !isPrivateIP(ip) {
+				country := parseCountry(region)
+				if country == "" {
+					m.logAccess(r, ip, region, http.StatusForbidden, 0)
+					http.Error(w, "Forbidden", http.StatusForbidden)
+					return
+				}
+				if _, ok := allowList[country]; !ok {
+					m.logAccess(r, ip, region, http.StatusForbidden, 0)
+					http.Error(w, "Forbidden", http.StatusForbidden)
+					return
+				}
 			}
 		}
 
@@ -213,14 +213,28 @@ func (m *IPRegionMiddleware) logAccess(r *http.Request, ip, region string, statu
 
 	country, province, city := parseRegionParts(region)
 
+	// 优先使用 Caddy forward_auth 传递的原始请求信息
+	host := r.Header.Get("X-Forwarded-Host")
+	if host == "" {
+		host = r.Host
+	}
+	uri := r.Header.Get("X-Forwarded-Uri")
+	if uri == "" {
+		uri = r.URL.RequestURI()
+	}
+	method := r.Header.Get("X-Forwarded-Method")
+	if method == "" {
+		method = r.Method
+	}
+
 	entry := &caddymodel.CaddyLog{
 		LogTime:   time.Now(),
 		Country:   country,
 		Province:  province,
 		City:      city,
-		Host:      r.Host,
-		Method:    r.Method,
-		Uri:       r.URL.RequestURI(),
+		Host:      host,
+		Method:    method,
+		Uri:       uri,
 		Proto:     r.Proto,
 		Status:    status,
 		Size:      size,
