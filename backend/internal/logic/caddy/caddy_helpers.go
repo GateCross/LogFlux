@@ -14,7 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"logflux/common/ingest"
 	"logflux/internal/svc"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -118,7 +117,6 @@ func syncCaddyLogSources(svcCtx *svc.ServiceContext, server *caddymodel.CaddySer
 	for _, source := range autoSources {
 		if _, ok := pathSet[source.Path]; !ok {
 			svcCtx.DB.Model(&ingestmodel.LogSource{}).Where("id = ?", source.ID).Update("enabled", false)
-			svcCtx.Ingestor.Stop(source.Path, source.Type)
 		}
 	}
 
@@ -127,15 +125,13 @@ func syncCaddyLogSources(svcCtx *svc.ServiceContext, server *caddymodel.CaddySer
 		err := svcCtx.DB.Where("path = ?", path).First(&source).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			newSource := ingestmodel.LogSource{
-				Name:         fmt.Sprintf("Caddy 自动: %s", path),
-				Path:         path,
-				Type:         "caddy",
-				Enabled:      true,
-				ScanInterval: ingest.DefaultScanIntervalSec(),
+				Name:    fmt.Sprintf("Caddy 自动: %s", path),
+				Path:    path,
+				Type:    "caddy",
+				Enabled: true,
 			}
 			if err := svcCtx.DB.Create(&newSource).Error; err == nil {
 				logger.Infof("自动添加日志源: %s", path)
-				svcCtx.Ingestor.StartWithInterval(path, newSource.ScanInterval, newSource.Type)
 			}
 			continue
 		}
@@ -146,7 +142,6 @@ func syncCaddyLogSources(svcCtx *svc.ServiceContext, server *caddymodel.CaddySer
 		if !source.Enabled {
 			svcCtx.DB.Model(&ingestmodel.LogSource{}).Where("id = ?", source.ID).Update("enabled", true)
 		}
-		svcCtx.Ingestor.StartWithInterval(path, source.ScanInterval, source.Type)
 	}
 }
 

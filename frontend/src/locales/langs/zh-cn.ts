@@ -242,7 +242,6 @@ const local: App.I18n.Schema = {
     caddy_config: 'Caddy配置',
     caddy_log: 'Caddy代理日志',
     'caddy_system-log': '系统日志',
-    caddy_source: '日志源管理',
     caddy_access: '访问控制',
     security: '安全管理',
     security_source: '更新源配置',

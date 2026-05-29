@@ -34,6 +34,7 @@ type DashboardGeoRow struct {
 }
 
 type CaddyLogModel interface {
+	Create(ctx context.Context, log *CaddyLog) error
 	List(ctx context.Context, query CaddyLogQuery) ([]CaddyLog, int64, error)
 	CountRange(ctx context.Context, start, end time.Time) (int64, error)
 	CountStatuses(ctx context.Context, start, end time.Time, statuses []int) (int64, error)
@@ -52,6 +53,10 @@ type defaultCaddyLogModel struct {
 
 func NewCaddyLogModel(db *gorm.DB) CaddyLogModel {
 	return &defaultCaddyLogModel{db: db}
+}
+
+func (m *defaultCaddyLogModel) Create(ctx context.Context, log *CaddyLog) error {
+	return conn(m.db, ctx).Create(log).Error
 }
 
 func conn(db *gorm.DB, ctx context.Context) *gorm.DB {

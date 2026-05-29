@@ -7,7 +7,6 @@ import (
 	"fmt"
 	cronutil "logflux/common/cron"
 	"logflux/common/gorm"
-	"logflux/common/ingest"
 	"logflux/common/logging"
 	redisClient "logflux/common/redis"
 	"logflux/internal/config"
@@ -42,7 +41,6 @@ type ServiceContext struct {
 	Config            config.Config
 	DB                *gorm2.DB
 	Redis             *redis.Client
-	Ingestor          *ingest.IngestManager
 	ArchiveTask       *tasks.ArchiveTask
 	CronScheduler     *tasks.CronScheduler
 	WafScheduler      *tasks.WafScheduler
@@ -57,7 +55,6 @@ type ServiceContext struct {
 	MenuModel         menumodel.MenuModel
 	CronTaskModel     cronmodel.CronTaskModel
 	CronTaskFileModel cronmodel.CronTaskFileModel
-	LogSourceModel    ingestmodel.LogSourceModel
 	CaddyLogModel     caddymodel.CaddyLogModel
 	SystemLogModel    ingestmodel.SystemLogModel
 }
@@ -134,49 +131,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	// 初始化默认管理员账号（自动生成随机复杂密码并仅在首次初始化时明文输出）
 	ensureAdminUser(db)
 
-	// Init Ingestor
-	ingestor := ingest.NewIngestManager(db)
-
-	// Load enabled sources from DB
-	var sources []ingestmodel.LogSource
-	db.Where("enabled = ?", true).Find(&sources)
-	for _, source := range sources {
-		ingestor.StartSource(source)
-	}
-
-	// Legacy config support (migration)
-	if c.CaddyLogPath != "" {
-		// Check if exists in DB, if not add it
-		var cnt int64
-		db.Model(&ingestmodel.LogSource{}).Where("path = ?", c.CaddyLogPath).Count(&cnt)
-		if cnt == 0 {
-			db.Create(&ingestmodel.LogSource{
-				Name:         "Default Config",
-				Path:         c.CaddyLogPath,
-				Type:         "caddy",
-				Enabled:      true,
-				ScanInterval: ingest.DefaultScanIntervalSec(),
-			})
-			ingestor.StartWithInterval(c.CaddyLogPath, ingest.DefaultScanIntervalSec(), "caddy")
-		}
-	}
-
-	caddyRuntimeLogPath := strings.TrimSpace(c.CaddyRuntimeLogPath)
-	if caddyRuntimeLogPath != "" {
-		var cnt int64
-		db.Model(&ingestmodel.LogSource{}).Where("path = ?", caddyRuntimeLogPath).Count(&cnt)
-		if cnt == 0 {
-			db.Create(&ingestmodel.LogSource{
-				Name:         "Caddy Runtime",
-				Path:         caddyRuntimeLogPath,
-				Type:         "caddy_runtime",
-				Enabled:      true,
-				ScanInterval: ingest.DefaultScanIntervalSec(),
-			})
-			ingestor.StartWithInterval(caddyRuntimeLogPath, ingest.DefaultScanIntervalSec(), "caddy_runtime")
-		}
-	}
-
 	// 初始化通知管理器（仅依赖数据库配置）
 	notificationMgr := initNotificationManager(db, rdb)
 
@@ -199,8 +153,8 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	// 初始化系统配置模型
 	systemConfigModel := systemmodel.NewSystemConfigModel(db)
 
-	// 初始化 IP 区域中间件（支持从 DB 加载配置热重载）
-	ipRegionMgr := middleware.NewIPRegionMiddleware(c.IPRegion.Enabled, c.IPRegion.AllowList)
+	// 初始化 IP 区域中间件（支持从 DB 加载配置热重载 + 访问日志写入）
+	ipRegionMgr := middleware.NewIPRegionMiddleware(c.IPRegion.Enabled, c.IPRegion.AllowList, db)
 	if cfg, err := systemConfigModel.GetByKey("ip_region"); err == nil {
 		var ipCfg struct {
 			Enabled   bool     `json:"enabled"`
@@ -215,7 +169,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		Config:            c,
 		DB:                db,
 		Redis:             rdb,
-		Ingestor:          ingestor,
 		ArchiveTask:       archiveTask,
 		CronScheduler:     cronScheduler,
 		WafScheduler:      wafScheduler,
@@ -230,7 +183,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		MenuModel:         menumodel.NewMenuModel(db),
 		CronTaskModel:     cronmodel.NewCronTaskModel(db),
 		CronTaskFileModel: cronmodel.NewCronTaskFileModel(db),
-		LogSourceModel:    ingestmodel.NewLogSourceModel(db),
 		CaddyLogModel:     caddymodel.NewCaddyLogModel(db),
 		SystemLogModel:    ingestmodel.NewSystemLogModel(db),
 	}
@@ -603,13 +555,6 @@ func initRBACData(db *gorm2.DB) {
 			RequiredRoles: []string{"admin", "analyst"},
 		},
 		{
-			Name:          "caddy_source",
-			Path:          "/caddy/source",
-			Component:     "view.caddy_source",
-			Meta:          `{"title":"caddy_source","i18nKey":"route.caddy_source","icon":"carbon:data-base"}`,
-			RequiredRoles: []string{"admin", "analyst"},
-		},
-		{
 			Name:          "caddy_access",
 			Path:          "/caddy/access",
 			Component:     "view.caddy_access",
@@ -735,7 +680,6 @@ func initRBACData(db *gorm2.DB) {
 
 	setParent("caddy_config", "caddy")
 	setParent("caddy_log", "caddy")
-	setParent("caddy_source", "caddy")
 	setParent("manage_user", "manage")
 	setParent("manage_role", "manage")
 	setParent("manage_menu", "manage")

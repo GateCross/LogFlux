@@ -1,18 +1,20 @@
 package middleware
 
 import (
+	"context"
 	_ "embed"
 	"fmt"
 	"net"
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
-	"logflux/internal/response"
+	caddymodel "logflux/model/caddy"
 
 	"github.com/lionsoul2014/ip2region/binding/golang/xdb"
 	"github.com/zeromicro/go-zero/core/logx"
-	"github.com/zeromicro/go-zero/rest/httpx"
+	"gorm.io/gorm"
 )
 
 //go:embed data/ip2region_v4.xdb
@@ -28,11 +30,17 @@ type IPRegionMiddleware struct {
 	mu         sync.RWMutex
 	enabled    bool
 	allowList  map[string]struct{} // 允许的国家/地区集合
+	logModel   caddymodel.CaddyLogModel
 }
 
-func NewIPRegionMiddleware(enabled bool, allowCountries []string) *IPRegionMiddleware {
+func NewIPRegionMiddleware(enabled bool, allowCountries []string, db *gorm.DB) *IPRegionMiddleware {
+	var logModel caddymodel.CaddyLogModel
+	if db != nil {
+		logModel = caddymodel.NewCaddyLogModel(db)
+	}
+
 	if !enabled {
-		return &IPRegionMiddleware{enabled: false}
+		return &IPRegionMiddleware{enabled: false, logModel: logModel}
 	}
 
 	logx.Infof("ip2region xdb 数据大小: v4=%d v6=%d", len(ipv4XdbData), len(ipv6XdbData))
@@ -40,13 +48,13 @@ func NewIPRegionMiddleware(enabled bool, allowCountries []string) *IPRegionMiddl
 	v4Searcher, err := xdb.NewWithBuffer(xdb.IPv4, ipv4XdbData)
 	if err != nil {
 		logx.Errorf("ip2region IPv4 初始化失败: %v", err)
-		return &IPRegionMiddleware{enabled: false}
+		return &IPRegionMiddleware{enabled: false, logModel: logModel}
 	}
 
 	v6Searcher, err := xdb.NewWithBuffer(xdb.IPv6, ipv6XdbData)
 	if err != nil {
 		logx.Errorf("ip2region IPv6 初始化失败: %v", err)
-		return &IPRegionMiddleware{enabled: false}
+		return &IPRegionMiddleware{enabled: false, logModel: logModel}
 	}
 
 	allow := make(map[string]struct{}, len(allowCountries))
@@ -66,6 +74,7 @@ func NewIPRegionMiddleware(enabled bool, allowCountries []string) *IPRegionMiddl
 		v6Searcher: v6Searcher,
 		enabled:    true,
 		allowList:  allow,
+		logModel:   logModel,
 	}
 }
 
@@ -89,6 +98,30 @@ func (m *IPRegionMiddleware) Reload(enabled bool, allowCountries []string) {
 	logx.Infof("IP 区域配置已更新: enabled=%v allowList=%v", enabled, allowCountries)
 }
 
+// statusRecorder 包装 ResponseWriter，捕获状态码和响应大小
+type statusRecorder struct {
+	http.ResponseWriter
+	statusCode int
+	written    int64
+}
+
+func (r *statusRecorder) WriteHeader(code int) {
+	r.statusCode = code
+	r.ResponseWriter.WriteHeader(code)
+}
+
+func (r *statusRecorder) Write(b []byte) (int, error) {
+	n, err := r.ResponseWriter.Write(b)
+	r.written += int64(n)
+	return n, err
+}
+
+func (r *statusRecorder) Flush() {
+	if f, ok := r.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
 func (m *IPRegionMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// forward_auth 端点自身不检查，避免循环拦截
@@ -104,48 +137,103 @@ func (m *IPRegionMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
 			}
 		}()
 
+		ip := getRealIP(r)
+		region := m.lookupRegion(ip)
+
+		// IP 区域访问控制
 		m.mu.RLock()
 		enabled := m.enabled
 		allowList := m.allowList
 		m.mu.RUnlock()
 
-		if !enabled {
-			next(w, r)
-			return
+		if enabled && ip != "" && ip != "127.0.0.1" && ip != "::1" {
+			country := parseCountry(region)
+			if country == "" {
+				// ip2region 查询无结果，拒绝访问
+				m.logAccess(r, ip, region, http.StatusForbidden, 0)
+				http.Error(w, "Forbidden", http.StatusForbidden)
+				return
+			}
+			if _, ok := allowList[country]; !ok {
+				m.logAccess(r, ip, region, http.StatusForbidden, 0)
+				http.Error(w, "Forbidden", http.StatusForbidden)
+				return
+			}
 		}
 
-		ip := getRealIP(r)
-		if ip == "" || ip == "127.0.0.1" || ip == "::1" {
-			next(w, r)
-			return
-		}
+		// 包装 ResponseWriter 捕获状态码和大小
+		rec := &statusRecorder{ResponseWriter: w, statusCode: http.StatusOK}
+		next(rec, r)
 
-		region, err := m.search(ip)
-		if err != nil {
-			// fail-open: 查询失败时放行，避免数据库异常导致全站不可用
-			logx.Errorf("ip2region 查询失败: ip=%s err=%v", ip, err)
-			next(w, r)
-			return
-		}
-
-		if region == "" {
-			httpx.WriteJson(w, http.StatusForbidden, response.Error(403, "禁止访问"))
-			return
-		}
-
-		// region 格式: "中国|0|广东省|深圳市|电信"
-		country := region
-		if idx := strings.IndexByte(region, '|'); idx > 0 {
-			country = region[:idx]
-		}
-
-		if _, ok := allowList[country]; !ok {
-			httpx.WriteJson(w, http.StatusForbidden, response.Error(403, "禁止访问"))
-			return
-		}
-
-		next(w, r)
+		m.logAccess(r, ip, region, rec.statusCode, rec.written)
 	}
+}
+
+// lookupRegion 查询 IP 地理信息，失败返回空串
+func (m *IPRegionMiddleware) lookupRegion(ip string) string {
+	if ip == "" || ip == "127.0.0.1" || ip == "::1" {
+		return ""
+	}
+	region, err := m.search(ip)
+	if err != nil {
+		logx.Errorf("ip2region 查询失败: ip=%s err=%v", ip, err)
+		return ""
+	}
+	return region
+}
+
+func parseCountry(region string) string {
+	if region == "" {
+		return ""
+	}
+	if idx := strings.IndexByte(region, '|'); idx > 0 {
+		return region[:idx]
+	}
+	return region
+}
+
+func parseRegionParts(region string) (country, province, city string) {
+	parts := strings.Split(region, "|")
+	if len(parts) >= 1 {
+		country = parts[0]
+	}
+	if len(parts) >= 3 {
+		province = parts[2]
+	}
+	if len(parts) >= 4 {
+		city = parts[3]
+	}
+	return
+}
+
+func (m *IPRegionMiddleware) logAccess(r *http.Request, ip, region string, status int, size int64) {
+	if m.logModel == nil {
+		return
+	}
+
+	country, province, city := parseRegionParts(region)
+
+	entry := &caddymodel.CaddyLog{
+		LogTime:   time.Now(),
+		Country:   country,
+		Province:  province,
+		City:      city,
+		Host:      r.Host,
+		Method:    r.Method,
+		Uri:       r.URL.RequestURI(),
+		Proto:     r.Proto,
+		Status:    status,
+		Size:      size,
+		UserAgent: r.UserAgent(),
+		RemoteIP:  r.RemoteAddr,
+		ClientIP:  ip,
+	}
+
+	go func() {
+		if err := m.logModel.Create(context.Background(), entry); err != nil {
+			logx.Errorf("写入访问日志失败: %v", err)
+		}
+	}()
 }
 
 func (m *IPRegionMiddleware) search(ip string) (region string, err error) {
@@ -168,6 +256,11 @@ func (m *IPRegionMiddleware) search(ip string) (region string, err error) {
 
 // getRealIP 获取客户端真实 IP，支持 IPv4 和 IPv6
 func getRealIP(r *http.Request) string {
+	// Cloudflare 环境优先使用 CF-Connecting-IP
+	if ip := r.Header.Get("CF-Connecting-IP"); ip != "" {
+		return strings.TrimSpace(ip)
+	}
+
 	if ip := r.Header.Get("X-Forwarded-For"); ip != "" {
 		if idx := strings.IndexByte(ip, ','); idx > 0 {
 			return strings.TrimSpace(ip[:idx])

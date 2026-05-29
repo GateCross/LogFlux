@@ -423,36 +423,6 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 			[]rest.Middleware{serverCtx.Permission},
 			[]rest.Route{
 				{
-					Method:  http.MethodPost,
-					Path:    "/source",
-					Handler: log.AddLogSourceHandler(serverCtx),
-				},
-				{
-					Method:  http.MethodGet,
-					Path:    "/source",
-					Handler: log.ListLogSourcesHandler(serverCtx),
-				},
-				{
-					Method:  http.MethodPut,
-					Path:    "/source/:id",
-					Handler: log.UpdateLogSourceHandler(serverCtx),
-				},
-				{
-					Method:  http.MethodDelete,
-					Path:    "/source/:id",
-					Handler: log.DeleteLogSourceHandler(serverCtx),
-				},
-			}...,
-		),
-		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
-		rest.WithPrefix("/api"),
-	)
-
-	server.AddRoutes(
-		rest.WithMiddlewares(
-			[]rest.Middleware{serverCtx.Permission},
-			[]rest.Route{
-				{
 					Method:  http.MethodGet,
 					Path:    "/system/logs",
 					Handler: log.GetSystemLogsHandler(serverCtx),

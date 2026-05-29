@@ -76,15 +76,6 @@ export const generatedRoutes = [
         }
       },
       {
-        name: 'caddy_source',
-        path: '/caddy/source',
-        component: 'view.caddy_source',
-        meta: {
-          title: 'caddy_source',
-          i18nKey: 'route.caddy_source'
-        }
-      },
-      {
         name: 'caddy_system-log',
         path: '/caddy/system-log',
         component: 'view.caddy_system-log',
