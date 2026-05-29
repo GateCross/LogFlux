@@ -250,6 +250,8 @@ func (m *IPRegionMiddleware) logAccess(r *http.Request, ip, region string, statu
 		UserAgent: r.UserAgent(),
 		RemoteIP:  r.RemoteAddr,
 		ClientIP:  ip,
+		RawLog:    "{}",
+		ExtraData: "{}",
 	}
 
 	go func() {
