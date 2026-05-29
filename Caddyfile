@@ -20,13 +20,18 @@
     root * ./frontend/dist
     file_server
 
-    # 2. API 反向代理 (转发给 LogFlux 后端)
+    # 2. IP 区域访问控制（启用时取消注释）
+    # forward_auth 127.0.0.1:8888 {
+    #   uri /api/internal/geo-check
+    # }
+
+    # 3. API 反向代理 (转发给 LogFlux 后端)
     reverse_proxy /api/* 127.0.0.1:8888
 
-    # 3. SPA 单页应用路由支持
+    # 4. SPA 单页应用路由支持
     # 如果请求的文件不存在，则返回 index.html，交给前端路由处理
     try_files {path} /index.html
 
-    # 4. Gzip 压缩 (可选，提高加载速度)
+    # 5. Gzip 压缩 (可选，提高加载速度)
     encode gzip
 }

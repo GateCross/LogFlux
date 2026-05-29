@@ -49,6 +49,11 @@
     respond "OK" 200
   }
 
+  # IP 区域访问控制（启用时取消注释）
+  # forward_auth localhost:8888 {
+  #   uri /api/internal/geo-check
+  # }
+
   handle /api/* {
     reverse_proxy localhost:8888
   }

@@ -91,6 +91,10 @@ jobs:
         working-directory: backend
         run: go mod download
 
+      - name: Download xdb files
+        working-directory: backend
+        run: bash scripts/download-xdb.sh
+
       - name: Build backend
         working-directory: backend
         env:
