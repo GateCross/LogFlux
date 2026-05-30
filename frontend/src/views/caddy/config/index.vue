@@ -18,6 +18,7 @@ import GlobalSnippetBlock from './components/GlobalSnippetBlock.vue';
 import WafBlock from './components/WafBlock.vue';
 import RawConfigBlock from './components/RawConfigBlock.vue';
 import PreviewPublishBlock from './components/PreviewPublishBlock.vue';
+import SavePreviewModal from './components/SavePreviewModal.vue';
 import HistoryBlock from './components/HistoryBlock.vue';
 
 const VueMonacoDiffEditor = defineAsyncComponent(() =>
@@ -336,11 +337,7 @@ onMounted(() => {
           <!-- 预览 -->
           <PreviewPublishBlock
             v-else
-            v-model:save-preview="publish.savePreview.value"
             :config-content="draft.formattedConfigContent.value"
-            :saving="publish.saving.value"
-            @confirm="publish.confirmSavePreview"
-            @close="publish.closeSavePreview"
           />
         </NSpin>
       </div>
@@ -424,6 +421,13 @@ onMounted(() => {
     <HistoryBlock
       :history="history"
       :history-compare-right="draft.formattedConfigContent.value"
+    />
+
+    <SavePreviewModal
+      v-model:save-preview="publish.savePreview.value"
+      :saving="publish.saving.value"
+      @confirm="publish.confirmSavePreview"
+      @close="publish.closeSavePreview"
     />
   </div>
 </template>
