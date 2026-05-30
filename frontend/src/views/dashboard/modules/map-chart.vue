@@ -65,6 +65,82 @@ const CHINA_REGION_NAME_MAP: Record<string, string> = {
   澳门: '澳门特别行政区'
 };
 
+/** 英文国家名 → 中文（world.zh.json 使用中文名） */
+const WORLD_COUNTRY_NAME_MAP: Record<string, string> = {
+  'United States': '美国',
+  'United States of America': '美国',
+  'United Kingdom': '英国',
+  'South Korea': '韩国',
+  'North Korea': '朝鲜',
+  'Russia': '俄罗斯',
+  'Japan': '日本',
+  'Germany': '德国',
+  'France': '法国',
+  'Italy': '意大利',
+  'Spain': '西班牙',
+  'Portugal': '葡萄牙',
+  'Netherlands': '荷兰',
+  'Belgium': '比利时',
+  'Switzerland': '瑞士',
+  'Austria': '奥地利',
+  'Sweden': '瑞典',
+  'Norway': '挪威',
+  'Denmark': '丹麦',
+  'Finland': '芬兰',
+  'Poland': '波兰',
+  'Czech Republic': '捷克',
+  'Czechia': '捷克',
+  'Hungary': '匈牙利',
+  'Greece': '希腊',
+  'Turkey': '土耳其',
+  'Australia': '澳大利亚',
+  'New Zealand': '新西兰',
+  'Canada': '加拿大',
+  'Brazil': '巴西',
+  'Argentina': '阿根廷',
+  'Mexico': '墨西哥',
+  'India': '印度',
+  'Indonesia': '印度尼西亚',
+  'Thailand': '泰国',
+  'Vietnam': '越南',
+  'Philippines': '菲律宾',
+  'Malaysia': '马来西亚',
+  'Singapore': '新加坡',
+  'Egypt': '埃及',
+  'South Africa': '南非',
+  'Nigeria': '尼日利亚',
+  'Kenya': '肯尼亚',
+  'Saudi Arabia': '沙特阿拉伯',
+  'Iran': '伊朗',
+  'Iraq': '伊拉克',
+  'Israel': '以色列',
+  'Pakistan': '巴基斯坦',
+  'Bangladesh': '孟加拉国',
+  'Sri Lanka': '斯里兰卡',
+  'Myanmar': '缅甸',
+  'Cambodia': '柬埔寨',
+  'Laos': '老挝',
+  'Mongolia': '蒙古',
+  'Korea': '韩国',
+  'Taiwan': '台湾',
+  'Hong Kong': '香港',
+  'Macau': '澳门',
+  'Ireland': '爱尔兰',
+  'Iceland': '冰岛',
+  'Ukraine': '乌克兰',
+  'Belarus': '白俄罗斯',
+  'Romania': '罗马尼亚',
+  'Bulgaria': '保加利亚',
+  'Croatia': '克罗地亚',
+  'Serbia': '塞尔维亚',
+  'Colombia': '哥伦比亚',
+  'Chile': '智利',
+  'Peru': '秘鲁',
+  'Venezuela': '委内瑞拉',
+  'Cuba': '古巴',
+  'Jamaica': '牙买加'
+};
+
 const activeData = computed(() => {
   const raw = mode.value === 'china' ? props.chinaData : props.worldData;
   const regionValueMap = new Map<string, number>();
@@ -138,7 +214,7 @@ function buildMapSeries(): MapSeriesOption {
 
 function normalizeRegionName(name: string) {
   if (mode.value !== 'china') {
-    return name;
+    return WORLD_COUNTRY_NAME_MAP[name] ?? name;
   }
   return CHINA_REGION_NAME_MAP[name] ?? name;
 }
