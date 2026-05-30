@@ -12,7 +12,7 @@ const isValidPathPattern = (value: string) => {
   return false;
 };
 
-export function validateStructuredConfig(model: CaddyFormModel): string[] {
+export function validateStructuredConfig(model: CaddyFormModel, hasPreservedContent?: boolean): string[] {
   const errors: string[] = [];
   const pushError = (errorMessage: string) => {
     errors.push(errorMessage);
@@ -21,7 +21,7 @@ export function validateStructuredConfig(model: CaddyFormModel): string[] {
   const enabledSites = model.sites.filter(s => s.enabled);
   const hasSites = enabledSites.length > 0;
   const hasGlobalRaw = Boolean(model.global?.raw?.trim());
-  if (!hasSites && !hasGlobalRaw) {
+  if (!hasSites && !hasGlobalRaw && !hasPreservedContent) {
     pushError('至少需要一个站点或全局配置');
   }
 

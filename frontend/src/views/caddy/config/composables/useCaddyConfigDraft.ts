@@ -4,7 +4,6 @@ import { fetchCaddyConfig } from '@/service/api/caddy';
 import type { CaddyBlockDraft, CaddyFormModel, CaddyPageMode } from '../types';
 import {
   type DiffRow,
-  buildCaddyfile,
   buildLineDiff,
   formatCaddyfile,
   normalizeModules,
@@ -50,10 +49,7 @@ export function useCaddyConfigDraft(currentServerId: Ref<number | null>) {
   });
 
   const mergedQuickFormModel = computed(() => mergeQuickConfigDrafts(formModel.value, quickSiteDrafts.value));
-  const generatedQuickCaddyfile = computed(() => buildCaddyfile(mergedQuickFormModel.value));
-  const effectiveConfigContent = computed(() =>
-    lastEditMode.value === 'raw' ? configContent.value : generatedQuickCaddyfile.value
-  );
+  const effectiveConfigContent = computed(() => configContent.value);
   const formattedConfigContent = computed(() => formatCaddyfile(effectiveConfigContent.value));
 
   const globalDiffRows = computed<DiffRow[]>(() => {
@@ -65,7 +61,7 @@ export function useCaddyConfigDraft(currentServerId: Ref<number | null>) {
     if (!structuredReady.value && configContent.value.trim()) {
       return [];
     }
-    return validateStructuredConfig(mergedQuickFormModel.value);
+    return validateStructuredConfig(mergedQuickFormModel.value, preservedBlocks.value.length > 0);
   });
 
   function syncQuickStateFromForm(model: CaddyFormModel) {
@@ -237,7 +233,6 @@ export function useCaddyConfigDraft(currentServerId: Ref<number | null>) {
     initialGlobalRaw,
     structuredReady,
     mergedQuickFormModel,
-    generatedQuickCaddyfile,
     effectiveConfigContent,
     formattedConfigContent,
     globalDiffRows,

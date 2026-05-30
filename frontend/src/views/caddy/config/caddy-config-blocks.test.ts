@@ -262,3 +262,38 @@ test('createPreservedBlock 生成正确标题', () => {
   assert.equal(block.reason, '测试原因');
   assert.ok(block.title.includes('example.com'));
 });
+
+test('parseCaddyfileToBlocks: 独立 snippet 在保存-重载后不丢失', () => {
+  // 模拟一个典型的 Caddyfile：全局块 + 独立 snippet + 站点
+  const config = `{
+  order coraza_waf first
+}
+
+(common_headers) {
+  header X-Frame-Options SAMEORIGIN
+  header X-Content-Type-Options nosniff
+}
+
+example.com {
+  reverse_proxy 127.0.0.1:8080
+}`;
+
+  const draft = parseCaddyfileToBlocks(config);
+
+  // 站点应可编辑
+  assert.equal(draft.sites.length, 1);
+  assert.equal(draft.sites[0].domains[0], 'example.com');
+
+  // 独立 snippet 必须在 preservedBlocks 中
+  const snippetBlocks = draft.preservedBlocks.filter(b => b.kind === 'snippet');
+  assert.ok(snippetBlocks.length >= 1, '独立 snippet 应被保留');
+  assert.ok(snippetBlocks.some(b => b.raw.includes('common_headers')), 'preservedBlocks 应包含 common_headers');
+  assert.ok(snippetBlocks.some(b => b.raw.includes('X-Frame-Options')), 'preservedBlocks 应包含 snippet 内容');
+
+  // 构建 Caddyfile 后 snippet 内容不丢失
+  const caddyfile = buildCaddyfileFromBlocks(draft);
+  assert.ok(caddyfile.includes('common_headers'), '生成的 Caddyfile 应包含 snippet');
+  assert.ok(caddyfile.includes('X-Frame-Options'), '生成的 Caddyfile 应包含 snippet 内容');
+  assert.ok(caddyfile.includes('example.com'), '生成的 Caddyfile 应包含站点');
+  assert.ok(caddyfile.includes('reverse_proxy'), '生成的 Caddyfile 应包含站点配置');
+});

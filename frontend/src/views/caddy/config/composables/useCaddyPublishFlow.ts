@@ -59,10 +59,14 @@ export function useCaddyPublishFlow(opts: {
 
   /** 分块模式保存 */
   async function saveBlocksConfig() {
-    if (!opts.currentServerId.value) return;
+    if (!opts.currentServerId.value) {
+      message.warning('请先选择 Caddy 服务器');
+      return;
+    }
 
     const nextFormModel = opts.mergedQuickFormModel.value;
-    const errors = validateStructuredConfig(nextFormModel);
+    const hasPreservedContent = opts.preservedBlocks.value.some(b => b.raw.trim().length > 0);
+    const errors = validateStructuredConfig(nextFormModel, hasPreservedContent);
     if (errors.length > 0) {
       message.error(`校验失败：${errors[0]}`);
       return;
@@ -74,8 +78,12 @@ export function useCaddyPublishFlow(opts: {
       preservedBlocks: opts.preservedBlocks.value
     };
     const content = buildCaddyfileFromBlocks(draftForBuild);
-    if (!content) {
-      message.error('快速配置为空，无法保存');
+    const hasRealContent = content.split('\n').some(line => {
+      const t = line.trim();
+      return t && !t.startsWith('#');
+    });
+    if (!hasRealContent) {
+      message.warning('当前无有效配置内容，请先添加站点或编辑全局配置');
       return;
     }
 

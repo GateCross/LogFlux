@@ -100,6 +100,15 @@ export function parseCaddyfileToBlocks(config: string): CaddyBlockDraft {
     }
   }
 
+  // 独立 snippet（不在全局块内，如 (common_headers)）也必须保留
+  const standaloneSnippets = extractStandaloneSnippets(config);
+  const existingRawSet = new Set(preservedBlocks.map(b => b.raw.trim()));
+  for (const block of standaloneSnippets) {
+    if (!existingRawSet.has(block.raw.trim())) {
+      preservedBlocks.push(block);
+    }
+  }
+
   const normalized = normalizeModules({
     schemaVersion: 1,
     global: { ...modules.global, raw: strippedGlobalRaw },
@@ -260,6 +269,59 @@ function stripExtractedBlocks(globalRaw: string, _extracted: PreservedCaddyBlock
   }
 
   return kept.join('\n').trim();
+}
+
+/**
+ * 从完整 Caddyfile 中提取独立 snippet 块（不在全局选项块内，也不在站点块内）。
+ * 例如出现在全局块和站点块之间的 (common_headers) { ... }。
+ */
+function extractStandaloneSnippets(config: string): PreservedCaddyBlock[] {
+  const blocks: PreservedCaddyBlock[] = [];
+  const lines = config.split('\n');
+  let depth = 0;
+  let currentBlock: string[] = [];
+  let inBlock = false;
+  let isSnippet = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const openCount = (line.match(/{/g) || []).length;
+    const closeCount = (line.match(/}/g) || []).length;
+
+    if (depth === 0 && openCount > 0) {
+      // 判断是否为 snippet 块（以 ( 开头）
+      if (trimmed.startsWith('(')) {
+        inBlock = true;
+        isSnippet = true;
+        currentBlock = [line];
+        depth += openCount - closeCount;
+        continue;
+      }
+      // 非 snippet 块（站点或全局），跳过整块
+      inBlock = true;
+      isSnippet = false;
+      currentBlock = [];
+      depth += openCount - closeCount;
+      continue;
+    }
+
+    if (inBlock) {
+      if (isSnippet) currentBlock.push(line);
+      depth += openCount - closeCount;
+      if (depth <= 0) {
+        depth = 0;
+        inBlock = false;
+        if (isSnippet && currentBlock.length > 0) {
+          const raw = currentBlock.join('\n');
+          blocks.push(createPreservedBlock(raw, '独立 snippet 片段', 'snippet'));
+        }
+        isSnippet = false;
+        currentBlock = [];
+      }
+    }
+  }
+
+  return blocks;
 }
 
 /** 将 Site 对象转回简化 Caddyfile 文本（兜底用） */
