@@ -100,3 +100,23 @@ export type KeyValue = {
   key: string;
   value: string;
 };
+
+/** 分块工作台模式（用于保存接口 mode 字段） */
+export type CaddyConfigBlockMode = 'blocks' | 'raw';
+
+/** 页面展示模式（UI 切换用，比 BlockMode 多出 waf / preview） */
+export type CaddyPageMode = CaddyConfigBlockMode | 'waf' | 'preview';
+
+/** 无法结构化编辑的 Caddyfile 块，只读保留 */
+export interface PreservedCaddyBlock {
+  id: string;
+  kind: 'global' | 'snippet' | 'site' | 'unknown';
+  title: string;
+  raw: string;
+  reason: string;
+}
+
+/** 分块草稿，包含可编辑表单和只读保留块 */
+export type CaddyBlockDraft = CaddyFormModel & {
+  preservedBlocks: PreservedCaddyBlock[];
+};

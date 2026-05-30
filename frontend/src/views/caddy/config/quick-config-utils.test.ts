@@ -185,3 +185,94 @@ test('mergeQuickConfigDrafts updates simple sites and preserves complex sites', 
   assert.equal(merged.sites[1].routes[0].match.path[0], '/api/*');
   assert.equal(merged.sites[2].routes[0].handles[0].type, 'redirect');
 });
+
+test('mergeQuickConfigDrafts: 复杂站点不被 merge 改写', () => {
+  const complexSite = createProxySite({
+    id: 'complex-1',
+    name: 'complex-1',
+    domains: ['complex.example.com'],
+    routes: [
+      {
+        id: 'route-c1',
+        name: '默认路由',
+        enabled: true,
+        match: { host: [], path: ['/api/*'], method: ['GET'], header: [], query: [], expression: '' },
+        logAppend: [],
+        handles: [
+          {
+            id: 'handle-c1',
+            type: 'reverse_proxy',
+            enabled: true,
+            upstream: '127.0.0.1:3000',
+            lbPolicy: 'round_robin',
+            transportProtocol: '',
+            tlsInsecureSkipVerify: false
+          }
+        ]
+      }
+    ]
+  });
+  const formModel = createFormModel([complexSite]);
+
+  // 在空草稿列表上调用 merge
+  const merged = mergeQuickConfigDrafts(formModel, []);
+
+  // 复杂站点应原样保留
+  assert.equal(merged.sites.length, 1);
+  assert.equal(merged.sites[0].id, 'complex-1');
+  assert.equal(merged.sites[0].routes[0].match.path[0], '/api/*');
+  assert.equal(merged.sites[0].routes[0].match.method[0], 'GET');
+  assert.equal(merged.sites[0].routes[0].handles[0].upstream, '127.0.0.1:3000');
+});
+
+test('mergeQuickConfigDrafts: 新增草稿站点不影响已有复杂站点', () => {
+  const complexSite = createProxySite({
+    id: 'complex-2',
+    name: 'complex-2',
+    routes: [
+      {
+        id: 'route-c2',
+        name: '默认路由',
+        enabled: true,
+        match: { host: [], path: ['/ws/*'], method: [], header: [], query: [], expression: '' },
+        logAppend: [],
+        handles: [
+          {
+            id: 'handle-c2',
+            type: 'reverse_proxy',
+            enabled: true,
+            upstream: '127.0.0.1:4000',
+            lbPolicy: 'round_robin',
+            transportProtocol: '',
+            tlsInsecureSkipVerify: false
+          }
+        ]
+      }
+    ]
+  });
+  const formModel = createFormModel([complexSite]);
+
+  const merged = mergeQuickConfigDrafts(formModel, [
+    {
+      id: 'new-simple',
+      name: 'new-simple',
+      enabled: true,
+      domains: ['new.example.com'],
+      tlsMode: 'auto',
+      mode: 'reverse_proxy',
+      upstream: '127.0.0.1:5000',
+      root: '',
+      browse: false,
+      redirectTo: '',
+      redirectCode: 302
+    }
+  ]);
+
+  assert.equal(merged.sites.length, 2);
+  // 复杂站点不受影响
+  assert.equal(merged.sites[0].id, 'complex-2');
+  assert.equal(merged.sites[0].routes[0].match.path[0], '/ws/*');
+  // 新增简单站点
+  assert.equal(merged.sites[1].id, 'new-simple');
+  assert.equal(merged.sites[1].routes[0].handles[0].upstream, '127.0.0.1:5000');
+});
