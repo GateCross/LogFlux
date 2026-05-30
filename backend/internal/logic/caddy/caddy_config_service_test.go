@@ -91,6 +91,61 @@ func TestCaddyConfigServicePrepareQuick(t *testing.T) {
 	}
 }
 
+func TestCaddyConfigServicePrepareQuickUsesMergedConfig(t *testing.T) {
+	modules := mustCaddyModules(t, caddyFormModel{
+		SchemaVersion: 1,
+		Global:        caddyGlobal{Raw: "# 通用配置片段（Snippets）"},
+		Upstreams:     []caddyUpstream{},
+		Sites: []caddySite{
+			{
+				ID:      "site-1",
+				Name:    "app",
+				Enabled: true,
+				Domains: []string{"example.com"},
+				Routes: []caddyRoute{
+					{
+						ID:      "r1",
+						Name:    "默认路由",
+						Enabled: true,
+						Handles: []caddyHandle{
+							{ID: "h1", Type: "reverse_proxy", Enabled: true, Upstream: "localhost:8888"},
+						},
+					},
+				},
+			},
+		},
+	})
+	mergedConfig := `# 通用配置片段（Snippets）
+
+(waf_protect) {
+  header X-Test preserved
+}
+
+example.com {
+  import waf_protect
+  reverse_proxy localhost:8888
+}`
+
+	result, err := newCaddyConfigService().Prepare(caddyConfigPrepareInput{
+		Mode:    caddyConfigModeQuick,
+		Config:  mergedConfig,
+		Modules: modules,
+	})
+	if err != nil {
+		t.Fatalf("Prepare() error = %v", err)
+	}
+	for _, expected := range []string{
+		"(waf_protect)",
+		"header X-Test preserved",
+		"import waf_protect",
+		"reverse_proxy localhost:8888",
+	} {
+		if !strings.Contains(result.Config, expected) {
+			t.Fatalf("expected merged config to contain %q, got:\n%s", expected, result.Config)
+		}
+	}
+}
+
 func TestCaddyConfigServiceValidateQuick(t *testing.T) {
 	modules := mustCaddyModules(t, caddyFormModel{
 		SchemaVersion: 1,

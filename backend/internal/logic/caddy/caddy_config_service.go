@@ -135,7 +135,7 @@ func (s *caddyConfigService) Prepare(input caddyConfigPrepareInput) (*caddyConfi
 	mode := normalizeCaddyConfigMode(input.Mode, input.Modules)
 	switch mode {
 	case caddyConfigModeQuick:
-		return s.prepareQuick(input.Modules)
+		return s.prepareQuick(input.Config, input.Modules)
 	case caddyConfigModeRaw:
 		return s.prepareRaw(input.Config, input.Modules)
 	default:
@@ -143,7 +143,7 @@ func (s *caddyConfigService) Prepare(input caddyConfigPrepareInput) (*caddyConfi
 	}
 }
 
-func (s *caddyConfigService) prepareQuick(modules string) (*caddyConfigPrepareResult, error) {
+func (s *caddyConfigService) prepareQuick(config, modules string) (*caddyConfigPrepareResult, error) {
 	model, normalizedModules, err := decodeCaddyModules(modules)
 	if err != nil {
 		return nil, err
@@ -151,12 +151,18 @@ func (s *caddyConfigService) prepareQuick(modules string) (*caddyConfigPrepareRe
 	if errs := validateCaddyFormModel(model); len(errs) > 0 {
 		return nil, errors.New(strings.Join(errs, "；"))
 	}
-	config := renderCaddyFormModel(model)
-	if strings.TrimSpace(config) == "" {
+
+	// quick 模式下，前端会把结构化站点和只读保留块合并成完整 Caddyfile。
+	// 后端只用 modules 重新渲染会丢失 snippet/复杂保留块，因此优先使用请求中的完整 config。
+	caddyfile := config
+	if strings.TrimSpace(caddyfile) == "" {
+		caddyfile = renderCaddyFormModel(model)
+	}
+	if strings.TrimSpace(caddyfile) == "" {
 		return nil, fmt.Errorf("结构化配置生成结果为空")
 	}
 	return &caddyConfigPrepareResult{
-		Config:  formatCaddyfile(config),
+		Config:  formatCaddyfile(caddyfile),
 		Modules: normalizedModules,
 		Actions: []string{
 			"根据结构化配置生成 Caddyfile",
