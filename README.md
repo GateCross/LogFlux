@@ -2,16 +2,29 @@
 
 LogFlux 是一个日志流量分析、Caddy 图形化配置与 Coraza WAF 管理系统。
 
-它基于 **go-zero + GORM + PostgreSQL** 构建后端，前端采用 **Soybean Admin / Vue 3 / Vite / Naive UI**，默认通过 **Caddy** 对外提供统一入口。
+它基于 **go-zero + GORM + PostgreSQL** 构建后端，前端采用 **Vue 3 / Vite / Naive UI / UnoCSS**，默认通过 **Caddy** 对外提供统一入口。
+
+## 技术栈
+
+| 层级 | 技术 |
+|------|------|
+| 后端 | Go, go-zero, GORM, PostgreSQL, Redis(可选) |
+| 前端 | Vue 3, Vite, TypeScript, Naive UI, UnoCSS, Pinia |
+| 反代/WAF | Caddy, Coraza, OWASP CRS |
+| IP 定位 | ip2region |
+| 部署 | Docker Compose, Makefile |
 
 ## 核心能力
 
-- Caddy 配置管理、预览、热加载、历史与回滚
+- **Caddy 配置分块工作台**：可视化编辑简单站点、全局配置、上游池，复杂 Caddyfile 块只读保留不丢失
+- Caddy 配置预览、热加载、历史版本与回滚
 - Caddy 访问日志、系统日志采集与查询
-- Coraza + OWASP CRS 简单 WAF 管理
+- **仪表盘数据可视化**：请求趋势、状态码分布、Top 站点、国内/国际地理分布地图
+- **IP 区域访问控制**：基于 ip2region 的国家/省份粒度访问限制
+- Coraza + OWASP CRS 简单 WAF 管理（检测/阻断/关闭模式、强度调节、审计日志）
 - WAF 更新源、发布、绑定、误报反馈与任务审计
 - RBAC 权限、用户、角色、菜单管理
-- 通知渠道、规则、模板、站内通知与日志
+- 通知渠道（Telegram 等）、规则、模板、站内通知与日志
 - Cron 定时任务管理
 - 日志归档与后台调度
 
@@ -116,6 +129,22 @@ goctl api go -api api/logflux.api -dir . -style go_zero
 - `internal/types/types.go` 和 `internal/handler/routes.go` 为生成文件，禁止手改
 - 业务逻辑优先下沉到 `internal/service/`
 - 详细规范见 [`contexts/context.md`](contexts/context.md)
+
+## 前端结构说明
+
+前端基于 [SoybeanAdmin](https://github.com/soybeanjs/soybean-admin) 模板改造，`frontend/README.md` 为模板原始内容。主要业务页面位于 `frontend/src/views/`：
+
+```
+views/
+  dashboard/    # 仪表盘（趋势图、状态码分布、地理分布地图）
+  caddy/        # Caddy 管理
+    config/     # 配置分块工作台（composables/ + components/）
+    log/        # 访问日志
+  manage/       # 系统管理（用户、角色、菜单）
+  notification/ # 通知管理
+  cron/         # 定时任务
+  user/         # 个人中心
+```
 
 ## 文档入口
 
