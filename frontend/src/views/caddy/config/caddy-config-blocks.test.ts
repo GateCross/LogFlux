@@ -167,6 +167,36 @@ test('buildCaddyfileFromBlocks: preserved blocks 内容不变', () => {
   assert.ok(caddyfile.includes('unknown_directive test'));
 });
 
+test('buildCaddyfileFromBlocks: snippet 保留块排在引用它的站点前', () => {
+  const siteRaw = `example.com {
+  import waf_protect
+  reverse_proxy 127.0.0.1:9090
+}`;
+  const snippetRaw = `(waf_protect) {
+  header X-Test preserved
+}`;
+
+  const draft: CaddyBlockDraft = {
+    schemaVersion: 1,
+    global: { raw: '# snippets' },
+    upstreams: [],
+    sites: [],
+    preservedBlocks: [
+      createPreservedBlock(siteRaw, '复杂站点', 'site'),
+      createPreservedBlock(snippetRaw, '测试 snippet', 'snippet')
+    ]
+  };
+
+  const caddyfile = buildCaddyfileFromBlocks(draft);
+
+  assert.ok(caddyfile.includes('(waf_protect)'));
+  assert.ok(caddyfile.includes('import waf_protect'));
+  assert.ok(
+    caddyfile.indexOf('(waf_protect)') < caddyfile.indexOf('import waf_protect'),
+    'snippet 定义应排在 import 前'
+  );
+});
+
 test('isEditableSite: 简单反代站点返回 true', () => {
   const site: Site = {
     id: 's1',

@@ -134,15 +134,29 @@ export function buildCaddyfileFromBlocks(draft: CaddyBlockDraft): string {
 
   const parts: string[] = [];
 
-  // 可编辑站点生成 Caddyfile
-  const structuredCaddyfile = buildCaddyfile(model);
+  const globalRaw = model.global?.raw?.trim();
+  if (globalRaw) {
+    parts.push(globalRaw);
+  }
+
+  // snippet 必须位于引用它的站点之前，否则 Caddy 会把 import 当作文件导入。
+  if (draft.preservedBlocks?.length) {
+    for (const block of draft.preservedBlocks.filter(item => item.kind !== 'site')) {
+      if (block.raw.trim()) {
+        parts.push(block.raw.trim());
+      }
+    }
+  }
+
+  // 可编辑站点生成 Caddyfile（不重复输出 global.raw）
+  const structuredCaddyfile = buildCaddyfile({ ...model, global: { ...model.global, raw: '' } });
   if (structuredCaddyfile && structuredCaddyfile !== '# No sites defined' && structuredCaddyfile !== '# No routes defined') {
     parts.push(structuredCaddyfile);
   }
 
-  // 保留块原样拼接
+  // 复杂站点最后拼接，保证它们 import 的片段已先定义。
   if (draft.preservedBlocks?.length) {
-    for (const block of draft.preservedBlocks) {
+    for (const block of draft.preservedBlocks.filter(item => item.kind === 'site')) {
       if (block.raw.trim()) {
         parts.push(block.raw.trim());
       }

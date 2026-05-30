@@ -161,14 +161,62 @@ func (s *caddyConfigService) prepareQuick(config, modules string) (*caddyConfigP
 	if strings.TrimSpace(caddyfile) == "" {
 		return nil, fmt.Errorf("结构化配置生成结果为空")
 	}
+	caddyfile, wafActions, err := ensureQuickWafImportDependencies(caddyfile)
+	if err != nil {
+		return nil, err
+	}
+	actions := []string{
+		"根据结构化配置生成 Caddyfile",
+		"复杂自定义片段保留在全局配置或站点 import 中",
+	}
+	actions = append(actions, wafActions...)
 	return &caddyConfigPrepareResult{
 		Config:  formatCaddyfile(caddyfile),
 		Modules: normalizedModules,
-		Actions: []string{
-			"根据结构化配置生成 Caddyfile",
-			"复杂自定义片段保留在全局配置或站点 import 中",
-		},
+		Actions: actions,
 	}, nil
+}
+
+func ensureQuickWafImportDependencies(config string) (string, []string, error) {
+	snapshot, err := inspectWafIntegration(config)
+	if err != nil {
+		return "", nil, err
+	}
+	if len(snapshot.ImportedSites) == 0 {
+		return config, nil, nil
+	}
+
+	nextConfig := config
+	actions := make([]string, 0, 2)
+	if !snapshot.OrderReady {
+		var changed bool
+		nextConfig, changed, err = ensureCorazaOrder(nextConfig)
+		if err != nil {
+			return "", nil, err
+		}
+		if changed {
+			actions = append(actions, "补齐全局 order coraza_waf first")
+		}
+	}
+	if !snapshot.SnippetReady || !snapshot.DirectiveReady {
+		var changed bool
+		nextConfig, changed, err = ensureWafProtectSnippet(nextConfig)
+		if err != nil {
+			return "", nil, err
+		}
+		if changed {
+			actions = append(actions, "补齐 waf_protect 统一片段")
+		}
+	}
+	var changed bool
+	nextConfig, changed, err = ensureWafProtectSnippetBeforeSites(nextConfig)
+	if err != nil {
+		return "", nil, err
+	}
+	if changed {
+		actions = append(actions, "调整 waf_protect 片段到站点之前")
+	}
+	return nextConfig, actions, nil
 }
 
 func (s *caddyConfigService) prepareRaw(config, modules string) (*caddyConfigPrepareResult, error) {

@@ -117,11 +117,61 @@ func TestCaddyConfigServicePrepareQuickUsesMergedConfig(t *testing.T) {
 	})
 	mergedConfig := `# 通用配置片段（Snippets）
 
-(waf_protect) {
+(common_headers) {
   header X-Test preserved
 }
 
 example.com {
+  import common_headers
+  reverse_proxy localhost:8888
+}`
+
+	result, err := newCaddyConfigService().Prepare(caddyConfigPrepareInput{
+		Mode:    caddyConfigModeQuick,
+		Config:  mergedConfig,
+		Modules: modules,
+	})
+	if err != nil {
+		t.Fatalf("Prepare() error = %v", err)
+	}
+	for _, expected := range []string{
+		"(common_headers)",
+		"header X-Test preserved",
+		"import common_headers",
+		"reverse_proxy localhost:8888",
+	} {
+		if !strings.Contains(result.Config, expected) {
+			t.Fatalf("expected merged config to contain %q, got:\n%s", expected, result.Config)
+		}
+	}
+}
+
+func TestCaddyConfigServicePrepareQuickCompletesWafProtectSnippet(t *testing.T) {
+	modules := mustCaddyModules(t, caddyFormModel{
+		SchemaVersion: 1,
+		Global:        caddyGlobal{},
+		Upstreams:     []caddyUpstream{},
+		Sites: []caddySite{
+			{
+				ID:      "site-1",
+				Name:    "app",
+				Enabled: true,
+				Domains: []string{"example.com"},
+				Imports: []string{"waf_protect"},
+				Routes: []caddyRoute{
+					{
+						ID:      "r1",
+						Name:    "默认路由",
+						Enabled: true,
+						Handles: []caddyHandle{
+							{ID: "h1", Type: "reverse_proxy", Enabled: true, Upstream: "localhost:8888"},
+						},
+					},
+				},
+			},
+		},
+	})
+	mergedConfig := `example.com {
   import waf_protect
   reverse_proxy localhost:8888
 }`
@@ -135,13 +185,15 @@ example.com {
 		t.Fatalf("Prepare() error = %v", err)
 	}
 	for _, expected := range []string{
+		"order coraza_waf first",
 		"(waf_protect)",
-		"header X-Test preserved",
+		"coraza_waf",
+		"directives `",
 		"import waf_protect",
 		"reverse_proxy localhost:8888",
 	} {
 		if !strings.Contains(result.Config, expected) {
-			t.Fatalf("expected merged config to contain %q, got:\n%s", expected, result.Config)
+			t.Fatalf("expected completed WAF config to contain %q, got:\n%s", expected, result.Config)
 		}
 	}
 }

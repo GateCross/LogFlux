@@ -85,3 +85,30 @@ func TestEnsureAndRemoveSiteImport(t *testing.T) {
 		t.Fatalf("expected import removed from example.com block")
 	}
 }
+
+func TestEnsureWafProtectSnippetBeforeSites(t *testing.T) {
+	config := `example.com {
+  import waf_protect
+  reverse_proxy localhost:8080
+}
+
+(waf_protect) {
+  coraza_waf {
+    directives ` + "`" + `
+    SecRuleEngine Off
+    ` + "`" + `
+  }
+}
+`
+
+	updated, changed, err := ensureWafProtectSnippetBeforeSites(config)
+	if err != nil {
+		t.Fatalf("ensureWafProtectSnippetBeforeSites() error = %v", err)
+	}
+	if !changed {
+		t.Fatalf("expected snippet move")
+	}
+	if strings.Index(updated, "(waf_protect)") > strings.Index(updated, "import waf_protect") {
+		t.Fatalf("expected waf_protect snippet before import, got:\n%s", updated)
+	}
+}

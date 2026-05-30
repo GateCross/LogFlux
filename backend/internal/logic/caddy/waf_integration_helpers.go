@@ -156,6 +156,52 @@ func ensureWafProtectSnippet(config string) (string, bool, error) {
 	return strings.Join(updated, ""), true, nil
 }
 
+func ensureWafProtectSnippetBeforeSites(config string) (string, bool, error) {
+	blocks, lines, err := parseTopLevelCaddyBlocks(config)
+	if err != nil {
+		return "", false, err
+	}
+
+	snippetIndex := -1
+	firstSiteIndex := -1
+	for idx, block := range blocks {
+		if firstSiteIndex < 0 && block.Kind == "site" {
+			firstSiteIndex = idx
+		}
+		if block.Kind == "snippet" && block.Name == "waf_protect" {
+			snippetIndex = idx
+		}
+	}
+	if snippetIndex < 0 || firstSiteIndex < 0 || snippetIndex < firstSiteIndex {
+		return config, false, nil
+	}
+
+	snippet := blocks[snippetIndex]
+	firstSite := blocks[firstSiteIndex]
+	snippetLines := append([]string{}, lines[snippet.StartLine:snippet.EndLine+1]...)
+	if snippet.EndLine+1 < len(lines) && strings.TrimSpace(strings.TrimRight(lines[snippet.EndLine+1], "\r\n")) == "" {
+		snippetLines = append(snippetLines, lines[snippet.EndLine+1])
+	}
+
+	nextLines := make([]string, 0, len(lines))
+	for idx, line := range lines {
+		if idx >= snippet.StartLine && idx <= snippet.EndLine {
+			continue
+		}
+		if idx == snippet.EndLine+1 && strings.TrimSpace(strings.TrimRight(line, "\r\n")) == "" {
+			continue
+		}
+		if idx == firstSite.StartLine {
+			nextLines = append(nextLines, snippetLines...)
+			if len(snippetLines) > 0 && strings.TrimSpace(strings.TrimRight(snippetLines[len(snippetLines)-1], "\r\n")) != "" {
+				nextLines = append(nextLines, detectCaddyNewline(config))
+			}
+		}
+		nextLines = append(nextLines, line)
+	}
+	return strings.Join(nextLines, ""), true, nil
+}
+
 func ensureSiteImport(config, siteAddress string) (string, bool, error) {
 	block, lines, err := findSiteBlock(config, siteAddress)
 	if err != nil {
