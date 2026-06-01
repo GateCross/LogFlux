@@ -325,7 +325,7 @@ const rawRefreshInstance: AxiosInstance = axios.create({
 });
 
 /** 请求层单例 axios 实例（`timeout: 10000`、构建期基址、含拦截器）。 */
-const instance: AxiosInstance = axios.create({
+export const instance: AxiosInstance = axios.create({
   baseURL: SERVICE_BASE_URL,
   timeout: REQUEST_TIMEOUT,
   headers: { 'Content-Type': 'application/json' },
