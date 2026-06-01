@@ -1,7 +1,7 @@
 {
   "name": "logflux",
   "type": "module",
-  "version": "2.0.2",
+  "version": "2.1.0",
   "description": "LogFlux - 日志流量分析管理系统",
   "author": {
     "name": "Soybean",

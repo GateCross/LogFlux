@@ -10,6 +10,19 @@ export function setupAppErrorHandle(app: App) {
   };
 }
 
+/** 启动时在控制台打印当前应用版本与构建时间 */
+export function printAppVersion() {
+  const version = typeof APP_VERSION === 'string' ? APP_VERSION : '';
+  const buildTime = typeof BUILD_TIME === 'string' ? BUILD_TIME : '';
+  // eslint-disable-next-line no-console
+  console.log(
+    `%c LogFlux %c v${version} %c ${buildTime} `,
+    'background:#0ea5e9;color:#fff;border-radius:3px 0 0 3px;padding:2px 4px;',
+    'background:#1e293b;color:#fff;padding:2px 4px;',
+    'background:#475569;color:#fff;border-radius:0 3px 3px 0;padding:2px 4px;'
+  );
+}
+
 export function setupAppVersionNotification() {
   // Update check interval in milliseconds
   const UPDATE_CHECK_INTERVAL = 3 * 60 * 1000;

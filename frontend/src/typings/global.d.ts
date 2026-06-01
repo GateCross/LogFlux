@@ -16,4 +16,7 @@ declare global {
 
   /** Build time of the project */
   export const BUILD_TIME: string;
+
+  /** App version from package.json */
+  export const APP_VERSION: string;
 }

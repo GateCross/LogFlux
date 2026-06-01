@@ -3,6 +3,7 @@ import { URL, fileURLToPath } from 'node:url';
 import { defineConfig, loadEnv } from 'vite';
 import { setupVitePlugins } from './build/plugins';
 import { createViteProxy, getBuildTime } from './build/config';
+import pkg from './package.json';
 
 export default defineConfig(configEnv => {
   const viteEnv = loadEnv(configEnv.mode, process.cwd()) as unknown as Env.ImportMeta;
@@ -29,7 +30,8 @@ export default defineConfig(configEnv => {
     },
     plugins: setupVitePlugins(viteEnv, buildTime),
     define: {
-      BUILD_TIME: JSON.stringify(buildTime)
+      BUILD_TIME: JSON.stringify(buildTime),
+      APP_VERSION: JSON.stringify(pkg.version)
     },
     server: {
       host: '0.0.0.0',

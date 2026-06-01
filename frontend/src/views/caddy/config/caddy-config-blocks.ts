@@ -4,8 +4,17 @@ import { normalizeModules } from './caddy-config-diff';
 import { analyzeSiteForQuickConfig } from './quick-config-utils';
 import { genId, isSiteToken } from './caddy-config-utils';
 
+/** 块外、紧邻块头且中间无空行的注释行视为该块的前置注释 */
+function isCommentLine(line: string): boolean {
+  return line.trim().startsWith('#');
+}
+
 export function createPreservedBlock(raw: string, reason: string, kind: PreservedCaddyBlock['kind'] = 'unknown'): PreservedCaddyBlock {
-  const firstLine = raw.split('\n').find(line => line.trim().length > 0) ?? '';
+  // 跳过前置注释行，取真正的块头行作为摘要标题
+  const firstLine = raw.split('\n').find(line => {
+    const t = line.trim();
+    return t.length > 0 && !t.startsWith('#');
+  }) ?? '';
   // 取 Caddyfile 块首行作为摘要标题；多域名时只取第一个
   const rawTitle = firstLine.replace(/\{.*$/, '').trim();
   const firstDomain = rawTitle.includes(',') ? rawTitle.split(',')[0].trim() : rawTitle;
@@ -123,8 +132,14 @@ export function parseCaddyfileToBlocks(config: string): CaddyBlockDraft {
  * 将分块草稿合并为完整 Caddyfile：
  * - 可编辑站点生成结构化 Caddyfile
  * - preservedBlocks 原样拼接
+ *
+ * options.sourceOrder 传入原始 Caddyfile 内容时，snippet 与站点块按源文件中的
+ * 出现顺序排版，从而避免保存预览打乱用户原有顺序；未传入时沿用旧的固定顺序。
  */
-export function buildCaddyfileFromBlocks(draft: CaddyBlockDraft): string {
+export function buildCaddyfileFromBlocks(
+  draft: CaddyBlockDraft,
+  options?: { sourceOrder?: string }
+): string {
   const model: CaddyFormModel = {
     schemaVersion: draft.schemaVersion,
     global: draft.global,
@@ -139,6 +154,19 @@ export function buildCaddyfileFromBlocks(draft: CaddyBlockDraft): string {
     parts.push(globalRaw);
   }
 
+  const sourceConfig = options?.sourceOrder?.trim();
+  if (sourceConfig) {
+    appendBlocksInSourceOrder(parts, model, draft, sourceConfig);
+  } else {
+    appendBlocksInFixedOrder(parts, model, draft);
+  }
+
+  const result = parts.join('\n\n').trim();
+  return result || '# No sites defined';
+}
+
+/** 旧的固定顺序：global → snippet/复杂全局块 → 可编辑站点 → 复杂站点 */
+function appendBlocksInFixedOrder(parts: string[], model: CaddyFormModel, draft: CaddyBlockDraft): void {
   // snippet 必须位于引用它的站点之前，否则 Caddy 会把 import 当作文件导入。
   if (draft.preservedBlocks?.length) {
     for (const block of draft.preservedBlocks.filter(item => item.kind !== 'site')) {
@@ -162,9 +190,152 @@ export function buildCaddyfileFromBlocks(draft: CaddyBlockDraft): string {
       }
     }
   }
+}
 
-  const result = parts.join('\n\n').trim();
-  return result || '# No sites defined';
+interface OrderedUnit {
+  key: string;
+  text: string;
+  isSnippet: boolean;
+}
+
+/** 按源文件顺序拼接 snippet 与站点块（复杂全局块仍紧随 global 之后） */
+function appendBlocksInSourceOrder(
+  parts: string[],
+  model: CaddyFormModel,
+  draft: CaddyBlockDraft,
+  sourceConfig: string
+): void {
+  const sourceKeys = scanSourceBlockOrder(sourceConfig);
+  const orderOf = (key: string): number => {
+    const idx = sourceKeys.indexOf(key);
+    return idx < 0 ? Number.POSITIVE_INFINITY : idx;
+  };
+
+  const units: OrderedUnit[] = [];
+  // 复杂全局块（kind='global'）无法可靠定位，沿用旧行为紧随 global 之后输出
+  const globalExtras: string[] = [];
+
+  for (const block of draft.preservedBlocks ?? []) {
+    const raw = block.raw.trim();
+    if (!raw) continue;
+    if (block.kind === 'snippet') {
+      units.push({ key: `snippet:${snippetNameOfRaw(raw)}`, text: raw, isSnippet: true });
+    } else if (block.kind === 'site') {
+      units.push({ key: `site:${firstSiteTokenOfRaw(raw)}`, text: raw, isSnippet: false });
+    } else {
+      globalExtras.push(raw);
+    }
+  }
+
+  // 可编辑站点逐个渲染，便于与 preserved 块按源序交错
+  for (const site of model.sites) {
+    if (!site.domains?.length) continue;
+    const text = buildCaddyfile({ ...model, global: { ...model.global, raw: '' }, sites: [site] }, { includeGlobal: false });
+    if (text && text !== '# No sites defined' && text !== '# No routes defined') {
+      units.push({ key: `site:${site.domains[0]}`, text, isSnippet: false });
+    }
+  }
+
+  // 稳定排序：源文件中出现过的块按源序，未出现（新增）的块保持插入顺序排在末尾
+  const indexed = units.map((unit, i) => ({ unit, i }));
+  indexed.sort((a, b) => {
+    const oa = orderOf(a.unit.key);
+    const ob = orderOf(b.unit.key);
+    if (oa !== ob) return oa - ob;
+    return a.i - b.i;
+  });
+  const ordered = hoistReferencedSnippets(indexed.map(item => item.unit));
+
+  for (const raw of globalExtras) {
+    parts.push(raw);
+  }
+  for (const unit of ordered) {
+    parts.push(unit.text);
+  }
+}
+
+/**
+ * 扫描源配置的顶层块，按出现顺序返回 snippet/站点块的归一化 key。
+ * 全局选项块与顶层指令归入 global，不参与排序（始终最先输出）。
+ */
+function scanSourceBlockOrder(config: string): string[] {
+  const keys: string[] = [];
+  const lines = config.split('\n');
+  let depth = 0;
+
+  for (const line of lines) {
+    const sanitized = line.replace(/#.*/, '');
+    const trimmed = sanitized.trim();
+    const openCount = (sanitized.match(/{/g) || []).length;
+    const closeCount = (sanitized.match(/}/g) || []).length;
+
+    if (depth === 0 && openCount > 0 && !trimmed.startsWith('{')) {
+      const before = trimmed.split('{')[0].trim();
+      if (before.startsWith('(')) {
+        const end = before.indexOf(')');
+        keys.push(`snippet:${before.slice(1, end > 1 ? end : before.length).trim()}`);
+      } else {
+        const tokens = before.replace(/,/g, ' ').split(/\s+/).filter(Boolean);
+        if (tokens.some(t => isSiteToken(t))) {
+          keys.push(`site:${tokens[0]}`);
+        }
+      }
+    }
+
+    depth += openCount - closeCount;
+    if (depth < 0) depth = 0;
+  }
+
+  return keys;
+}
+
+/** 把被 import 引用的 snippet 上移到首个引用它的站点之前，保证 import 有效 */
+function hoistReferencedSnippets(units: OrderedUnit[]): OrderedUnit[] {
+  const result = [...units];
+  for (let s = 0; s < result.length; s += 1) {
+    const unit = result[s];
+    if (!unit.isSnippet) continue;
+    const name = unit.key.slice('snippet:'.length);
+    if (!name) continue;
+    let earliest = -1;
+    for (let i = 0; i < s; i += 1) {
+      if (!result[i].isSnippet && siteImportsSnippet(result[i].text, name)) {
+        earliest = i;
+        break;
+      }
+    }
+    if (earliest >= 0) {
+      const [moved] = result.splice(s, 1);
+      result.splice(earliest, 0, moved);
+    }
+  }
+  return result;
+}
+
+function siteImportsSnippet(siteText: string, name: string): boolean {
+  return siteText.split('\n').some(line => {
+    const trimmed = line.replace(/#.*/, '').trim();
+    return trimmed === `import ${name}` || trimmed.startsWith(`import ${name} `);
+  });
+}
+
+function snippetNameOfRaw(raw: string): string {
+  const first = raw.split('\n').find(line => {
+    const t = line.trim();
+    return t.length > 0 && !t.startsWith('#');
+  })?.trim() ?? '';
+  const match = first.match(/^\(([^)]*)\)/);
+  return match ? match[1].trim() : '';
+}
+
+function firstSiteTokenOfRaw(raw: string): string {
+  const first = raw.split('\n').find(line => {
+    const t = line.trim();
+    return t.length > 0 && !t.startsWith('#');
+  })?.trim() ?? '';
+  const before = first.split('{')[0].trim();
+  const tokens = before.replace(/,/g, ' ').split(/\s+/).filter(Boolean);
+  return tokens[0] ?? '';
 }
 
 /** 从原始 Caddyfile 文本中提取站点块，以首个域名做 key */
@@ -217,16 +388,27 @@ function extractSnippetsAndUnknown(globalRaw: string): PreservedCaddyBlock[] {
   let depth = 0;
   let currentBlock: string[] = [];
   let inBlock = false;
+  // 紧邻块头、中间无空行的注释行作为该块前置注释一并提取
+  let pendingComments: string[] = [];
 
   for (const line of lines) {
-    const trimmed = line.trim();
     const openCount = (line.match(/{/g) || []).length;
     const closeCount = (line.match(/}/g) || []).length;
 
-    if (depth === 0 && openCount > 0) {
-      inBlock = true;
-      currentBlock = [line];
-      depth += openCount - closeCount;
+    if (depth === 0 && !inBlock) {
+      if (openCount > 0) {
+        inBlock = true;
+        currentBlock = [...pendingComments, line];
+        pendingComments = [];
+        depth += openCount - closeCount;
+        continue;
+      }
+      if (isCommentLine(line)) {
+        pendingComments.push(line);
+      } else {
+        // 空行或其他顶层指令会切断注释与块的关联
+        pendingComments = [];
+      }
       continue;
     }
 
@@ -237,8 +419,8 @@ function extractSnippetsAndUnknown(globalRaw: string): PreservedCaddyBlock[] {
         depth = 0;
         inBlock = false;
         const raw = currentBlock.join('\n');
-        const firstLine = currentBlock[0]?.trim() ?? '';
-        const kind: PreservedCaddyBlock['kind'] = firstLine.startsWith('(') ? 'snippet' : 'global';
+        const headerLine = currentBlock.find(l => l.trim() && !l.trim().startsWith('#'))?.trim() ?? '';
+        const kind: PreservedCaddyBlock['kind'] = headerLine.startsWith('(') ? 'snippet' : 'global';
         blocks.push(createPreservedBlock(raw, '全局配置块无法结构化编辑', kind));
         currentBlock = [];
       }
@@ -249,7 +431,7 @@ function extractSnippetsAndUnknown(globalRaw: string): PreservedCaddyBlock[] {
 }
 
 /**
- * 从全局配置文本中移除已被提取的花括号块，
+ * 从全局配置文本中移除已被提取的花括号块（含其前置注释），
  * 保留非块行（如顶层指令 `order` 等）。
  */
 function stripExtractedBlocks(globalRaw: string, _extracted: PreservedCaddyBlock[]): string {
@@ -257,15 +439,31 @@ function stripExtractedBlocks(globalRaw: string, _extracted: PreservedCaddyBlock
   const kept: string[] = [];
   let depth = 0;
   let inBlock = false;
+  // 暂存注释行：若其后紧跟块则随块移除，否则 flush 回 kept
+  let pendingComments: string[] = [];
 
   for (const line of lines) {
     const openCount = (line.match(/{/g) || []).length;
     const closeCount = (line.match(/}/g) || []).length;
 
-    if (depth === 0 && openCount > 0) {
-      // 进入一个花括号块，跳过（已被提取到 preservedBlocks）
-      inBlock = true;
-      depth += openCount - closeCount;
+    if (depth === 0 && !inBlock) {
+      if (openCount > 0) {
+        // 进入一个花括号块，连同其前置注释一起跳过（已提取到 preservedBlocks）
+        inBlock = true;
+        pendingComments = [];
+        depth += openCount - closeCount;
+        continue;
+      }
+      if (isCommentLine(line)) {
+        pendingComments.push(line);
+        continue;
+      }
+      // 普通非块行（如 order 指令）或空行：先 flush 暂存注释再保留本行
+      if (pendingComments.length) {
+        kept.push(...pendingComments);
+        pendingComments = [];
+      }
+      kept.push(line);
       continue;
     }
 
@@ -275,11 +473,12 @@ function stripExtractedBlocks(globalRaw: string, _extracted: PreservedCaddyBlock
         depth = 0;
         inBlock = false;
       }
-      continue;
     }
+  }
 
-    // 非块行保留（如 `order ...` 等顶层指令）
-    kept.push(line);
+  // 末尾残留的注释（后面没有块）应保留
+  if (pendingComments.length) {
+    kept.push(...pendingComments);
   }
 
   return kept.join('\n').trim();
@@ -296,26 +495,36 @@ function extractStandaloneSnippets(config: string): PreservedCaddyBlock[] {
   let currentBlock: string[] = [];
   let inBlock = false;
   let isSnippet = false;
+  // 紧邻块头、中间无空行的注释行作为前置注释
+  let pendingComments: string[] = [];
 
   for (const line of lines) {
     const trimmed = line.trim();
     const openCount = (line.match(/{/g) || []).length;
     const closeCount = (line.match(/}/g) || []).length;
 
-    if (depth === 0 && openCount > 0) {
-      // 判断是否为 snippet 块（以 ( 开头）
-      if (trimmed.startsWith('(')) {
-        inBlock = true;
-        isSnippet = true;
-        currentBlock = [line];
+    if (depth === 0 && !inBlock) {
+      if (openCount > 0) {
+        // 判断是否为 snippet 块（以 ( 开头）
+        if (trimmed.startsWith('(')) {
+          inBlock = true;
+          isSnippet = true;
+          currentBlock = [...pendingComments, line];
+        } else {
+          // 非 snippet 块（站点或全局），跳过整块
+          inBlock = true;
+          isSnippet = false;
+          currentBlock = [];
+        }
+        pendingComments = [];
         depth += openCount - closeCount;
         continue;
       }
-      // 非 snippet 块（站点或全局），跳过整块
-      inBlock = true;
-      isSnippet = false;
-      currentBlock = [];
-      depth += openCount - closeCount;
+      if (isCommentLine(line)) {
+        pendingComments.push(line);
+      } else {
+        pendingComments = [];
+      }
       continue;
     }
 

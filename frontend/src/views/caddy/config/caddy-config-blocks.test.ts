@@ -327,3 +327,141 @@ example.com {
   assert.ok(caddyfile.includes('example.com'), '生成的 Caddyfile 应包含站点');
   assert.ok(caddyfile.includes('reverse_proxy'), '生成的 Caddyfile 应包含站点配置');
 });
+
+test('buildCaddyfileFromBlocks(sourceOrder): 站点与 snippet 按源文件顺序排版', () => {
+  // 源序：站点A → snippet → 站点B（snippet 夹在两个站点之间）
+  const config = `a.example.com {
+  reverse_proxy 127.0.0.1:8081
+}
+
+(common_headers) {
+  header X-Frame-Options SAMEORIGIN
+}
+
+b.example.com {
+  reverse_proxy 127.0.0.1:8082
+}`;
+
+  const draft = parseCaddyfileToBlocks(config);
+  const caddyfile = buildCaddyfileFromBlocks(draft, { sourceOrder: config });
+
+  const idxA = caddyfile.indexOf('a.example.com');
+  const idxSnippet = caddyfile.indexOf('common_headers');
+  const idxB = caddyfile.indexOf('b.example.com');
+
+  assert.ok(idxA >= 0 && idxSnippet >= 0 && idxB >= 0, '三个块都应存在');
+  assert.ok(idxA < idxSnippet, '站点A 应排在 snippet 之前');
+  assert.ok(idxSnippet < idxB, 'snippet 应排在站点B 之前（保持源序）');
+});
+
+test('buildCaddyfileFromBlocks(sourceOrder): 被 import 引用的 snippet 上移到引用站点之前', () => {
+  // 源序里 snippet 排在站点之后，但站点 import 了它 —— 必须上移以保证 import 有效
+  const config = `app.example.com {
+  import waf_protect
+  reverse_proxy 127.0.0.1:8080
+}
+
+(waf_protect) {
+  header X-WAF on
+}`;
+
+  const draft = parseCaddyfileToBlocks(config);
+  const caddyfile = buildCaddyfileFromBlocks(draft, { sourceOrder: config });
+
+  const idxSnippet = caddyfile.indexOf('(waf_protect)');
+  const idxImport = caddyfile.indexOf('import waf_protect');
+
+  assert.ok(idxSnippet >= 0 && idxImport >= 0, 'snippet 与 import 都应存在');
+  assert.ok(idxSnippet < idxImport, '被引用的 snippet 应被上移到 import 之前');
+});
+
+test('buildCaddyfileFromBlocks(sourceOrder): 不传 sourceOrder 时沿用固定顺序', () => {
+  const config = `a.example.com {
+  reverse_proxy 127.0.0.1:8081
+}
+
+(common_headers) {
+  header X-Frame-Options SAMEORIGIN
+}
+
+b.example.com {
+  reverse_proxy 127.0.0.1:8082
+}`;
+
+  const draft = parseCaddyfileToBlocks(config);
+  const caddyfile = buildCaddyfileFromBlocks(draft);
+
+  // 旧固定顺序：snippet 先于所有可编辑站点
+  const idxSnippet = caddyfile.indexOf('common_headers');
+  const idxA = caddyfile.indexOf('a.example.com');
+  assert.ok(idxSnippet >= 0 && idxA >= 0);
+  assert.ok(idxSnippet < idxA, '未传 sourceOrder 时 snippet 仍排在站点之前');
+});
+
+test('parseCaddyfileToBlocks: snippet 前置注释随块一起保留', () => {
+  const config = `# 这是 waf_protect 的说明注释
+(waf_protect) {
+  header X-WAF on
+}
+
+app.example.com {
+  reverse_proxy 127.0.0.1:8080
+}`;
+
+  const draft = parseCaddyfileToBlocks(config);
+  const snippet = draft.preservedBlocks.find(b => b.kind === 'snippet');
+
+  assert.ok(snippet, '应解析出 snippet 块');
+  assert.ok(snippet!.raw.includes('这是 waf_protect 的说明注释'), 'snippet.raw 应包含前置注释');
+  assert.ok(snippet!.raw.includes('(waf_protect)'), 'snippet.raw 应包含块头');
+  // 标题仍取块头而非注释
+  assert.ok(snippet!.title.includes('waf_protect'), '标题应取块头而非注释行');
+});
+
+test('buildCaddyfileFromBlocks(sourceOrder): 前置注释随被引用 snippet 一起上移', () => {
+  // snippet 在源序中位于站点之后，且带前置注释；上移时注释应跟随
+  const config = `app.example.com {
+  import waf_protect
+  reverse_proxy 127.0.0.1:8080
+}
+
+# WAF 统一防护片段
+(waf_protect) {
+  header X-WAF on
+}`;
+
+  const draft = parseCaddyfileToBlocks(config);
+  const out = buildCaddyfileFromBlocks(draft, { sourceOrder: config });
+
+  const idxComment = out.indexOf('WAF 统一防护片段');
+  const idxSnippet = out.indexOf('(waf_protect)');
+  const idxImport = out.indexOf('import waf_protect');
+
+  assert.ok(idxComment >= 0, '前置注释应保留');
+  assert.ok(idxComment < idxSnippet, '注释应紧贴在 snippet 块头之前');
+  assert.ok(idxSnippet < idxImport, 'snippet（含注释）应上移到引用站点之前');
+});
+
+test('parseCaddyfileToBlocks: 全局区域内 snippet 的前置注释不会丢失', () => {
+  // 注意：全局区域的顶层空行在解析早期已被规整，
+  // 因此此处注释会跟随 snippet 块保留（不会被遗弃），这是可接受的行为。
+  const config = `# 这是 snippet 的说明注释
+
+(waf_protect) {
+  header X-WAF on
+}
+
+app.example.com {
+  reverse_proxy 127.0.0.1:8080
+}`;
+
+  const draft = parseCaddyfileToBlocks(config);
+  const out = buildCaddyfileFromBlocks(draft, { sourceOrder: config });
+
+  // 关键诉求：注释不丢失，且仍与 snippet 块相邻
+  assert.ok(out.includes('这是 snippet 的说明注释'), '注释不应丢失');
+  assert.ok(
+    out.indexOf('这是 snippet 的说明注释') < out.indexOf('(waf_protect)'),
+    '注释应保持在 snippet 块之前'
+  );
+});

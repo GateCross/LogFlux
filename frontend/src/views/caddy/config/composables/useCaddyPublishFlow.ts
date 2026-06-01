@@ -72,12 +72,12 @@ export function useCaddyPublishFlow(opts: {
       return;
     }
 
-    // 构建完整 Caddyfile（含 preserved blocks）
+    // 构建完整 Caddyfile（含 preserved blocks），按源文件顺序排版以避免打乱用户原有顺序
     const draftForBuild: CaddyBlockDraft = {
       ...nextFormModel,
       preservedBlocks: opts.preservedBlocks.value
     };
-    const content = buildCaddyfileFromBlocks(draftForBuild);
+    const content = buildCaddyfileFromBlocks(draftForBuild, { sourceOrder: opts.configContent.value });
     const hasRealContent = content.split('\n').some(line => {
       const t = line.trim();
       return t && !t.startsWith('#');
