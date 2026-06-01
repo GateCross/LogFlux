@@ -1,0 +1,9 @@
+node_modules
+/dist
+/src/.umi
+/src/.umi-production
+/src/.umi-test
+.env.local
+.umirc.local.ts
+*.log
+.DS_Store
