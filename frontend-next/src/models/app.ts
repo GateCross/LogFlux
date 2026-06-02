@@ -2,14 +2,15 @@
  * 全局应用模型（偏好更新等）。
  * 任务 3.4 / Req 6.5
  */
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { fetchUpdateUserPreferences } from '@/services/auth';
 import { showErrorMsg } from '@/utils/request/err-msg';
-import { 
-  type UserPreferences, 
+import {
+  type UserPreferences,
   DEFAULT_PREFERENCES,
   serializePreferences,
-  deserializePreferences
+  deserializePreferences,
+  loadPreferences
 } from '@/utils/preferences';
 import { getStorage, setStorage } from '@/utils/storage';
 
@@ -19,9 +20,38 @@ export default function useAppModel() {
   const [preferences, setPreferencesState] = useState<UserPreferences>(() => {
     const saved = getStorage<string>(PREFERENCES_KEY);
     if (!saved) return DEFAULT_PREFERENCES;
-    const { preferences: parsed } = deserializePreferences(saved);
+    const { preferences: parsed } = loadPreferences(saved);
     return parsed;
   });
+
+  /** 标记是否已执行过远端同步，避免重复写入 */
+  const remoteSyncedRef = useRef(false);
+
+  /**
+   * 从远端用户信息同步偏好到本地。
+   * - 仅当远端偏好与本地不同时更新
+   * - 不触发远程写入（避免循环）
+   * - 幂等：仅首次调用生效
+   */
+  const syncFromRemote = useCallback((remotePreferencesStr: string) => {
+    if (remoteSyncedRef.current || !remotePreferencesStr) return;
+
+    try {
+      const remotePrefs = deserializePreferences(remotePreferencesStr);
+      const localSerialized = serializePreferences(preferences);
+      const remoteSerialized = serializePreferences(remotePrefs);
+
+      // 仅当远端与本地不同时更新
+      if (remoteSerialized !== localSerialized) {
+        setPreferencesState(remotePrefs);
+        setStorage(PREFERENCES_KEY, remoteSerialized);
+      }
+    } catch {
+      // 远端偏好解析失败，忽略，保持本地值
+    }
+
+    remoteSyncedRef.current = true;
+  }, [preferences]);
 
   /**
    * 更新偏好设置，执行双写事务（本地 + 远程）。
@@ -37,7 +67,7 @@ export default function useAppModel() {
 
     try {
       const syncRemote = fetchUpdateUserPreferences(serialized);
-      
+
       const persistLocal = new Promise<void>((resolve) => {
         setStorage(PREFERENCES_KEY, serialized);
         resolve();
@@ -67,5 +97,6 @@ export default function useAppModel() {
   return {
     preferences,
     updatePreferences,
+    syncFromRemote,
   };
 }

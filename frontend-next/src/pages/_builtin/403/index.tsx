@@ -1,16 +1,27 @@
+/**
+ * 403 无权限页（任务 9.3），支持 i18n。
+ */
 import { Button, Result } from 'antd';
-import { history } from '@umijs/max';
+import { history, useIntl } from '@umijs/max';
+import { ROUTE_HOME } from '@/constants/app';
 
-/** 403 异常页占位。完整文案/国际化见任务 9.3。 */
 export default function Page403() {
+  const intl = useIntl();
+
   return (
     <Result
       status="403"
       title="403"
-      subTitle="抱歉，您没有权限访问此页面。"
+      subTitle={intl.formatMessage({
+        id: 'page.403.title',
+        defaultMessage: '抱歉，您没有权限访问此页面。',
+      })}
       extra={
-        <Button type="primary" onClick={() => history.push('/dashboard')}>
-          返回首页
+        <Button type="primary" onClick={() => history.push(`/${ROUTE_HOME}`)}>
+          {intl.formatMessage({
+            id: 'common.backToHome',
+            defaultMessage: '返回首页',
+          })}
         </Button>
       }
     />

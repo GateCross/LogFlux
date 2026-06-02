@@ -25,10 +25,12 @@ export default defineConfig({
   /** 内建插件：Ant Design 5 组件库 */
   antd: {},
 
-  /** 内建插件：ProLayout 布局（侧边栏 / 顶栏 / 面包屑） */
-  layout: {
-    title: 'LogFlux',
-  },
+  /**
+   * 不启用 Umi 内置 ProLayout 插件。
+   * 项目使用自定义布局壳 `src/layouts/index.tsx`（ProLayout + 多标签 + 主题切换 + 语言切换），
+   * 开启内置插件会导致双重 ProLayout 嵌套，侧边栏和顶栏重复渲染。
+   */
+  layout: false,
 
   /** 内建插件：RBAC 权限（access.ts 定义权限点） */
   access: {},

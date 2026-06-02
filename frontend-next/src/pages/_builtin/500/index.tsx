@@ -1,16 +1,27 @@
+/**
+ * 500 服务器错误页（任务 9.3），支持 i18n。
+ */
 import { Button, Result } from 'antd';
-import { history } from '@umijs/max';
+import { history, useIntl } from '@umijs/max';
+import { ROUTE_HOME } from '@/constants/app';
 
-/** 500 异常页占位。完整文案/国际化见任务 9.3。 */
 export default function Page500() {
+  const intl = useIntl();
+
   return (
     <Result
       status="500"
       title="500"
-      subTitle="抱歉，服务器出现错误。"
+      subTitle={intl.formatMessage({
+        id: 'page.500.title',
+        defaultMessage: '抱歉，服务器出错了。',
+      })}
       extra={
-        <Button type="primary" onClick={() => history.push('/dashboard')}>
-          返回首页
+        <Button type="primary" onClick={() => history.push(`/${ROUTE_HOME}`)}>
+          {intl.formatMessage({
+            id: 'common.backToHome',
+            defaultMessage: '返回首页',
+          })}
         </Button>
       }
     />

@@ -1,0 +1,28 @@
+/* 全局基础样式 — 确保 ProLayout 撑满视口 */
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* 滚动条美化（可选） */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+/* Ant Design ProLayout 需要的最小高度 */
+.ant-pro-basicLayout {
+  min-height: 100vh;
+}
