@@ -5,9 +5,9 @@
  * Uses fetchGetRoleList() and fetchUpdateRolePermissions() from role service.
  */
 import { useEffect, useState, useCallback } from 'react';
-import { Table, Button, Modal, Space, message, Card, Tag, Form, Input, Checkbox } from 'antd';
+import { Table, Button, Modal, Space, message, Card, Tag, Checkbox } from 'antd';
 import { PageContainer } from '@ant-design/pro-components';
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { EditOutlined } from '@ant-design/icons';
 import { useIntl } from '@umijs/max';
 import type { ColumnsType } from 'antd/es/table';
 import { fetchGetRoleList, fetchUpdateRolePermissions } from '@/services/role';
@@ -34,6 +34,10 @@ const ALL_PERMISSIONS = [
 
 export default function RoleManagementPage() {
   const intl = useIntl();
+  const t = useCallback(
+    (id: string, fb?: string) => intl.formatMessage({ id, defaultMessage: fb }),
+    [intl],
+  );
 
   const [loading, setLoading] = useState(false);
   const [roles, setRoles] = useState<Api.Role.RoleItem[]>([]);
@@ -46,12 +50,12 @@ export default function RoleManagementPage() {
     setLoading(true);
     const { data, error } = await fetchGetRoleList();
     if (error) {
-      message.error(error.message || 'Failed to load roles');
+      message.error(error.message || t('common.error', 'Error'));
     } else if (data) {
       setRoles(data.list || []);
     }
     setLoading(false);
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     loadRoles();
@@ -72,9 +76,9 @@ export default function RoleManagementPage() {
     setSaving(true);
     const { error } = await fetchUpdateRolePermissions(editingRole.id, selectedPermissions);
     if (error) {
-      message.error(error.message || 'Failed to update permissions');
+      message.error(error.message || t('common.updateFailed', 'Update Failed'));
     } else {
-      message.success('Permissions updated successfully');
+      message.success(t('manage.role.permissionsUpdateSuccess', 'Permissions updated successfully'));
       setPermModalVisible(false);
       setEditingRole(null);
       await loadRoles();
@@ -91,59 +95,59 @@ export default function RoleManagementPage() {
   // Permission groups for organized display in the modal
   const permissionGroups = [
     {
-      label: 'Dashboard',
+      label: t('manage.role.permDashboard', 'Dashboard'),
       permissions: ALL_PERMISSIONS.filter(p => p.startsWith('dashboard:')),
     },
     {
-      label: 'User Management',
+      label: t('manage.role.permUserManagement', 'User Management'),
       permissions: ALL_PERMISSIONS.filter(p => p.startsWith('user:')),
     },
     {
-      label: 'Role Management',
+      label: t('manage.role.permRoleManagement', 'Role Management'),
       permissions: ALL_PERMISSIONS.filter(p => p.startsWith('role:')),
     },
     {
-      label: 'Menu Management',
+      label: t('manage.role.permMenuManagement', 'Menu Management'),
       permissions: ALL_PERMISSIONS.filter(p => p.startsWith('menu:')),
     },
     {
-      label: 'Security',
+      label: t('manage.role.permSecurity', 'Security'),
       permissions: ALL_PERMISSIONS.filter(p => p.startsWith('security:')),
     },
     {
-      label: 'System',
+      label: t('manage.role.permSystem', 'System'),
       permissions: ALL_PERMISSIONS.filter(p => p.startsWith('system:') || p.startsWith('notification:')),
     },
   ];
 
   const columns: ColumnsType<Api.Role.RoleItem> = [
     {
-      title: 'ID',
+      title: t('manage.role.id', 'ID'),
       dataIndex: 'id',
       key: 'id',
       width: 80,
     },
     {
-      title: 'Name',
+      title: t('manage.role.name', 'Name'),
       dataIndex: 'name',
       key: 'name',
       width: 150,
       render: (text: string) => <Tag color="blue">{text}</Tag>,
     },
     {
-      title: 'Display Name',
+      title: t('manage.role.displayName', 'Display Name'),
       dataIndex: 'displayName',
       key: 'displayName',
       width: 180,
     },
     {
-      title: 'Description',
+      title: t('manage.role.description', 'Description'),
       dataIndex: 'description',
       key: 'description',
       ellipsis: true,
     },
     {
-      title: 'Permissions',
+      title: t('manage.role.permissions', 'Permissions'),
       dataIndex: 'permissions',
       key: 'permissions',
       width: 300,
@@ -155,20 +159,25 @@ export default function RoleManagementPage() {
             </Tag>
           ))}
           {permissions && permissions.length > 5 && (
-            <Tag>+{permissions.length - 5} more</Tag>
+            <Tag>
+              {intl.formatMessage(
+                { id: 'manage.role.morePermissions', defaultMessage: '+{count} more' },
+                { count: permissions.length - 5 },
+              )}
+            </Tag>
           )}
         </Space>
       ),
     },
     {
-      title: 'Created At',
+      title: t('common.createdAt', 'Created At'),
       dataIndex: 'createdAt',
       key: 'createdAt',
       width: 180,
       render: (text: string) => (text ? new Date(text).toLocaleString() : '-'),
     },
     {
-      title: 'Actions',
+      title: t('common.action', 'Actions'),
       key: 'actions',
       width: 160,
       render: (_: unknown, record: Api.Role.RoleItem) => (
@@ -178,7 +187,7 @@ export default function RoleManagementPage() {
             icon={<EditOutlined />}
             onClick={() => handleEditPermissions(record)}
           >
-            Edit Permissions
+            {t('manage.role.editPermissions', 'Edit Permissions')}
           </Button>
         </Space>
       ),
@@ -186,7 +195,7 @@ export default function RoleManagementPage() {
   ];
 
   return (
-    <PageContainer title="Role Management">
+    <PageContainer title={t('manage.role.title', 'Role Management')}>
       <Card>
         <Table<Api.Role.RoleItem>
           columns={columns}
@@ -200,7 +209,7 @@ export default function RoleManagementPage() {
 
       {/* Permission Editing Modal */}
       <Modal
-        title={`Edit Permissions - ${editingRole?.displayName || ''}`}
+        title={`${t('manage.role.editPermissions', 'Edit Permissions')} - ${editingRole?.displayName || ''}`}
         open={permModalVisible}
         onOk={handleSavePermissions}
         onCancel={handleCancelModal}

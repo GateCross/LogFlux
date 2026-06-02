@@ -4,15 +4,16 @@
  * 展示当前用户名与角色集合；修改偏好调用 `/api/user/preferences` 持久化，
  * 成功后同步本地偏好；失败展示消息并保留修改前本地偏好。
  */
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   Card, Tabs, Descriptions, Tag, Form, Input, Select, Button,
-  message, Space, Alert, ColorPicker, Switch, Row, Col,
+  message, Space, Alert, Switch, Row, Col,
 } from 'antd';
 import { PageContainer } from '@ant-design/pro-components';
 import { useModel, useIntl } from '@umijs/max';
 import useAuthModel from '@/models/auth';
 import useAppModel from '@/models/app';
+import { LANG_OPTIONS } from '@/locales';
 import type { UserPreferences, ThemeScheme, LangType, LayoutMode } from '@/utils/preferences';
 import {
   THEME_SCHEMES, LANGS, LAYOUT_MODES,
@@ -31,7 +32,7 @@ export default function UserCenterPage() {
   const [colorError, setColorError] = useState('');
 
   // Sync form with current preferences
-  useState(() => {
+  useEffect(() => {
     form.setFieldsValue({
       themeScheme: preferences.theme.themeScheme,
       themeColor: preferences.theme.themeColor,
@@ -41,7 +42,7 @@ export default function UserCenterPage() {
       watermarkVisible: preferences.watermark.visible,
       watermarkText: preferences.watermark.text || '',
     });
-  });
+  }, [form, preferences]);
 
   const handleSave = useCallback(async () => {
     const values = form.getFieldsValue();
@@ -49,7 +50,7 @@ export default function UserCenterPage() {
     // Validate theme color (Req 6.3)
     const themeColor = values.themeColor || '';
     if (themeColor && !isValidThemeColor(themeColor)) {
-      setColorError('主色值不合法，请输入合法的 hex 或 rgb 颜色');
+      setColorError(intl.formatMessage({ id: 'page.userCenter.themeColor.invalid', defaultMessage: '主色值不合法，请输入合法的 hex 或 rgb 颜色' }));
       return;
     }
     setColorError('');
@@ -126,7 +127,11 @@ export default function UserCenterPage() {
                       >
                         <Select
                           options={THEME_SCHEMES.map(s => ({
-                            label: s === 'light' ? '明亮' : s === 'dark' ? '暗黑' : '跟随系统',
+                            label: s === 'light'
+                              ? intl.formatMessage({ id: 'page.userCenter.themeScheme.light', defaultMessage: '明亮' })
+                              : s === 'dark'
+                                ? intl.formatMessage({ id: 'page.userCenter.themeScheme.dark', defaultMessage: '暗黑' })
+                                : intl.formatMessage({ id: 'page.userCenter.themeScheme.auto', defaultMessage: '跟随系统' }),
                             value: s,
                           }))}
                         />
@@ -149,10 +154,7 @@ export default function UserCenterPage() {
                         label={intl.formatMessage({ id: 'theme.lang', defaultMessage: '语言' })}
                       >
                         <Select
-                          options={[
-                            { label: '简体中文', value: 'zh-CN' },
-                            { label: 'English', value: 'en-US' },
-                          ]}
+                          options={LANG_OPTIONS.map(o => ({ label: o.label, value: o.value }))}
                         />
                       </Form.Item>
                     </Col>
@@ -169,12 +171,12 @@ export default function UserCenterPage() {
                   </Row>
                   <Row gutter={24}>
                     <Col span={12}>
-                      <Form.Item name="watermarkVisible" label="水印" valuePropName="checked">
+                      <Form.Item name="watermarkVisible" label={intl.formatMessage({ id: 'page.userCenter.watermark', defaultMessage: '水印' })} valuePropName="checked">
                         <Switch />
                       </Form.Item>
                     </Col>
                     <Col span={12}>
-                      <Form.Item name="watermarkText" label="水印文案">
+                      <Form.Item name="watermarkText" label={intl.formatMessage({ id: 'page.userCenter.watermarkText', defaultMessage: '水印文案' })}>
                         <Input placeholder="LogFlux" maxLength={64} />
                       </Form.Item>
                     </Col>

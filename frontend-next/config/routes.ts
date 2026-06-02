@@ -26,8 +26,9 @@ export default [
     path: '/',
     component: '@/layouts/index',
     routes: [
-      // 占位首页，确保壳路由在动态路由注入前即可加载
       { name: 'dashboard', path: '/dashboard', component: '@/pages/dashboard' },
+      // Catch-all: 动态路由兜底，由 DynamicPage 组件根据路由模型解析页面
+      { path: '/*', component: '@/pages/_builtin/dynamic-page' },
     ],
   },
 

@@ -22,6 +22,7 @@ import {
 } from 'antd';
 import { PageContainer } from '@ant-design/pro-components';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { useIntl } from '@umijs/max';
 import type { ColumnsType } from 'antd/es/table';
 import { request } from '@/utils/request';
 
@@ -85,6 +86,12 @@ function flattenMenuTree(tree: MenuItem[], depth = 0): { value: number; label: s
 // ---------------------------------------------------------------------------
 
 export default function MenuManagementPage() {
+  const intl = useIntl();
+  const t = useCallback(
+    (id: string, fb?: string) => intl.formatMessage({ id, defaultMessage: fb }),
+    [intl],
+  );
+
   const [loading, setLoading] = useState(false);
   const [menuTree, setMenuTree] = useState<MenuItem[]>([]);
   const [roles, setRoles] = useState<{ name: string; displayName: string }[]>([]);
@@ -99,12 +106,12 @@ export default function MenuManagementPage() {
     setLoading(true);
     const { data, error } = await fetchMenuTree();
     if (error) {
-      message.error(error.message || 'Failed to load menu tree');
+      message.error(error.message || t('common.error', 'Error'));
     } else if (data) {
       setMenuTree(data.list || []);
     }
     setLoading(false);
-  }, []);
+  }, [t]);
 
   const loadRoles = useCallback(async () => {
     const { data } = await fetchRoleOptions();
@@ -146,9 +153,9 @@ export default function MenuManagementPage() {
   const handleDelete = async (id: number) => {
     const { error } = await fetchDeleteMenu(id);
     if (error) {
-      message.error(error.message || 'Failed to delete menu');
+      message.error(error.message || t('common.deleteFailed', 'Delete Failed'));
     } else {
-      message.success('Menu deleted successfully');
+      message.success(t('common.deleteSuccess', 'Delete Success'));
       loadMenuTree();
     }
   };
@@ -161,18 +168,18 @@ export default function MenuManagementPage() {
       if (editingMenu) {
         const { error } = await fetchUpdateMenu(editingMenu.id, values);
         if (error) {
-          message.error(error.message || 'Failed to update menu');
+          message.error(error.message || t('common.updateFailed', 'Update Failed'));
         } else {
-          message.success('Menu updated successfully');
+          message.success(t('common.updateSuccess', 'Update Success'));
           setModalVisible(false);
           loadMenuTree();
         }
       } else {
         const { error } = await fetchCreateMenu(values);
         if (error) {
-          message.error(error.message || 'Failed to create menu');
+          message.error(error.message || t('common.addFailed', 'Add Failed'));
         } else {
-          message.success('Menu created successfully');
+          message.success(t('common.addSuccess', 'Add Success'));
           setModalVisible(false);
           loadMenuTree();
         }
@@ -196,40 +203,40 @@ export default function MenuManagementPage() {
 
   const columns: ColumnsType<MenuItem> = [
     {
-      title: 'Name',
+      title: t('manage.menu.name', 'Name'),
       dataIndex: 'name',
       key: 'name',
       width: 180,
       render: (text: string) => <strong>{text}</strong>,
     },
     {
-      title: 'Path',
+      title: t('manage.menu.path', 'Path'),
       dataIndex: 'path',
       key: 'path',
       width: 200,
       render: (text: string) => <Tag color="blue">{text}</Tag>,
     },
     {
-      title: 'Component',
+      title: t('manage.menu.component', 'Component'),
       dataIndex: 'component',
       key: 'component',
       width: 180,
       ellipsis: true,
     },
     {
-      title: 'Icon',
+      title: t('manage.menu.icon', 'Icon'),
       dataIndex: 'icon',
       key: 'icon',
       width: 120,
     },
     {
-      title: 'i18n Key',
+      title: t('manage.menu.i18nKey', 'i18n Key'),
       dataIndex: 'i18nKey',
       key: 'i18nKey',
       width: 150,
     },
     {
-      title: 'Roles',
+      title: t('manage.menu.roles', 'Roles'),
       dataIndex: 'roles',
       key: 'roles',
       width: 200,
@@ -244,42 +251,44 @@ export default function MenuManagementPage() {
       ),
     },
     {
-      title: 'Order',
+      title: t('manage.menu.order', 'Order'),
       dataIndex: 'order',
       key: 'order',
       width: 80,
       sorter: (a: MenuItem, b: MenuItem) => (a.order || 0) - (b.order || 0),
     },
     {
-      title: 'Hide',
+      title: t('manage.menu.hideInMenu', 'Hide'),
       dataIndex: 'hideInMenu',
       key: 'hideInMenu',
       width: 80,
       render: (hide: boolean) => (
-        <Tag color={hide ? 'red' : 'green'}>{hide ? 'Yes' : 'No'}</Tag>
+        <Tag color={hide ? 'red' : 'green'}>
+          {hide ? t('common.yesOrNo.yes', 'Yes') : t('common.yesOrNo.no', 'No')}
+        </Tag>
       ),
     },
     {
-      title: 'Actions',
+      title: t('common.action', 'Actions'),
       key: 'actions',
       width: 220,
       render: (_: unknown, record: MenuItem) => (
         <Space>
           <Button type="link" size="small" icon={<PlusOutlined />} onClick={() => handleAdd(record.id)}>
-            Add Child
+            {t('manage.menu.addChild', 'Add Child')}
           </Button>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            Edit
+            {t('common.edit', 'Edit')}
           </Button>
           <Popconfirm
-            title="Are you sure you want to delete this menu item?"
-            description="Child items will also be deleted."
+            title={t('manage.menu.confirmDeleteMenu', 'Are you sure you want to delete this menu item?')}
+            description={t('manage.menu.childDeleteWarning', 'Child items will also be deleted.')}
             onConfirm={() => handleDelete(record.id)}
-            okText="Yes"
-            cancelText="No"
+            okText={t('common.yesOrNo.yes', 'Yes')}
+            cancelText={t('common.yesOrNo.no', 'No')}
           >
             <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-              Delete
+              {t('common.delete', 'Delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -288,12 +297,12 @@ export default function MenuManagementPage() {
   ];
 
   return (
-    <PageContainer title="Menu Management">
+    <PageContainer title={t('manage.menu.title', 'Menu Management')}>
       <Card>
         {/* Toolbar */}
         <Space style={{ marginBottom: 16 }}>
           <Button type="primary" icon={<PlusOutlined />} onClick={() => handleAdd()}>
-            Add Root Menu
+            {t('manage.menu.addRoot', 'Add Root Menu')}
           </Button>
         </Space>
 
@@ -315,7 +324,11 @@ export default function MenuManagementPage() {
 
       {/* Add/Edit Menu Modal */}
       <Modal
-        title={editingMenu ? 'Edit Menu' : 'Add Menu'}
+        title={
+          editingMenu
+            ? t('manage.menu.editMenu', 'Edit Menu')
+            : t('manage.menu.addMenu', 'Add Menu')
+        }
         open={modalVisible}
         onOk={handleSaveMenu}
         onCancel={handleCancelModal}
@@ -324,48 +337,51 @@ export default function MenuManagementPage() {
         width={600}
       >
         <Form form={form} layout="vertical" autoComplete="off">
-          <Form.Item label="Parent Menu" name="parentId">
+          <Form.Item label={t('manage.menu.parent', 'Parent Menu')} name="parentId">
             <Select
-              placeholder="Select parent menu (empty for root)"
+              placeholder={t('manage.menu.selectParent', 'Select parent menu (empty for root)')}
               allowClear
               options={parentOptions}
             />
           </Form.Item>
           <Form.Item
-            label="Name"
+            label={t('manage.menu.name', 'Name')}
             name="name"
-            rules={[{ required: true, message: 'Please enter menu name' }]}
+            rules={[{ required: true, message: t('manage.menu.enterName', 'Please enter menu name') }]}
           >
-            <Input placeholder="Enter menu name" />
+            <Input placeholder={t('manage.menu.name', 'Name')} />
           </Form.Item>
           <Form.Item
-            label="Path"
+            label={t('manage.menu.path', 'Path')}
             name="path"
-            rules={[{ required: true, message: 'Please enter route path' }]}
+            rules={[{ required: true, message: t('manage.menu.enterPath', 'Please enter route path') }]}
           >
-            <Input placeholder="Enter route path (e.g. /manage/user)" />
+            <Input placeholder={t('manage.menu.pathPlaceholder', 'Enter route path (e.g. /manage/user)')} />
           </Form.Item>
-          <Form.Item label="Component" name="component">
-            <Input placeholder="Enter component identifier (e.g. view.manage_user)" />
+          <Form.Item label={t('manage.menu.component', 'Component')} name="component">
+            <Input placeholder={t('manage.menu.componentPlaceholder', 'Enter component identifier (e.g. view.manage_user)')} />
           </Form.Item>
-          <Form.Item label="i18n Key" name="i18nKey">
-            <Input placeholder="Enter i18n key (e.g. route.manage_user)" />
+          <Form.Item label={t('manage.menu.i18nKey', 'i18n Key')} name="i18nKey">
+            <Input placeholder={t('manage.menu.i18nKeyPlaceholder', 'Enter i18n key (e.g. route.manage_user)')} />
           </Form.Item>
-          <Form.Item label="Icon" name="icon">
-            <Input placeholder="Enter icon name (e.g. material-symbols:route)" />
+          <Form.Item label={t('manage.menu.icon', 'Icon')} name="icon">
+            <Input placeholder={t('manage.menu.iconPlaceholder', 'Enter icon name (e.g. material-symbols:route)')} />
           </Form.Item>
-          <Form.Item label="Roles" name="roles">
+          <Form.Item label={t('manage.menu.roles', 'Roles')} name="roles">
             <Select
               mode="multiple"
-              placeholder="Select allowed roles"
+              placeholder={t('manage.menu.selectRoles', 'Select allowed roles')}
               options={roles.map(r => ({ label: r.displayName, value: r.name }))}
             />
           </Form.Item>
-          <Form.Item label="Order" name="order" initialValue={0}>
-            <InputNumber min={0} max={9999} style={{ width: '100%' }} placeholder="Sort order" />
+          <Form.Item label={t('manage.menu.order', 'Order')} name="order" initialValue={0}>
+            <InputNumber min={0} max={9999} style={{ width: '100%' }} placeholder={t('manage.menu.sortOrder', 'Sort order')} />
           </Form.Item>
-          <Form.Item label="Hide in Menu" name="hideInMenu" valuePropName="checked" initialValue={false}>
-            <Switch checkedChildren="Yes" unCheckedChildren="No" />
+          <Form.Item label={t('manage.menu.hideInMenu', 'Hide')} name="hideInMenu" valuePropName="checked" initialValue={false}>
+            <Switch
+              checkedChildren={t('common.yesOrNo.yes', 'Yes')}
+              unCheckedChildren={t('common.yesOrNo.no', 'No')}
+            />
           </Form.Item>
         </Form>
       </Modal>

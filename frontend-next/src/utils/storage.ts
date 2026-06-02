@@ -4,8 +4,7 @@
  * 统一带有 LF_ 前缀的 localStorage 操作，避免与同一域名下其他应用冲突。
  * 支持任意可序列化的 JSON 数据。
  */
-
-const STORAGE_PREFIX = process.env.UMI_APP_STORAGE_PREFIX ?? 'LF_';
+import { STORAGE_PREFIX } from '@/constants/app';
 
 /**
  * 获取带前缀的真实 key。

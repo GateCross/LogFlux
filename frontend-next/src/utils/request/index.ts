@@ -34,7 +34,7 @@
  */
 import axios, { AxiosError } from 'axios';
 import type { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
-import { SERVICE_BASE_URL } from '@/constants/app';
+import { SERVICE_BASE_URL, STORAGE_PREFIX } from '@/constants/app';
 import { EXPIRED_TOKEN_CODES, LOGOUT_CODES, MODAL_LOGOUT_CODES } from '@/constants/service';
 import { classifyResponse } from './classify';
 import { showErrorMsg } from './err-msg';
@@ -128,9 +128,6 @@ export type ModalLogoutHandler = (message: string, onConfirm: () => void) => voi
 function getBackendMessage(data: Partial<BackendResponse> | undefined | null, fallback = ''): string {
   return data?.message || data?.msg || fallback;
 }
-
-/** localStorage 兜底鉴权适配器使用的存储前缀（与 `UMI_APP_STORAGE_PREFIX` 一致）。 */
-const STORAGE_PREFIX = process.env.UMI_APP_STORAGE_PREFIX ?? 'LF_';
 
 /**
  * 创建最小化的 localStorage 兜底鉴权适配器。

@@ -1,33 +1,45 @@
 /**
- * Umi Max runtime configuration (app.tsx) - Task 7.4.
+ * Umi Max runtime configuration (app.tsx).
  *
  * Runtime exports assembled here:
- *  - `locale`           : I18n_Module integration (Task 5.1) -- reads initial language from
+ *  - `locale`           : I18n_Module integration -- reads initial language from
  *                         Preferences_Store, syncs dayjs on language change.
- *  - `getInitialState`  : Restores user info from token (Req 3.2) and loads constant routes
+ *  - `getInitialState`  : Restores user info from token and loads constant routes
  *                         so that the initialState plugin exposes data to the whole app.
- *  - `patchClientRoutes`: After dynamic routes are resolved, injects auth routes into the
- *                         layout shell's children (design.md "Route_Module" dynamic injection).
- *  - `onRouteChange`    : Lightweight route guard (Req 2.4 / 3.10) -- redirects unauthenticated
+ *  - `render`           : Compose hook that fetches auth routes and registers them
+ *                         in Umi's flat route map BEFORE renderClient runs.
+ *                         (patchRoutes is broken: event type without async flag.)
+ *  - `layout`           : ProLayout runtime config (menuDataRender, avatar, actions, etc.).
+ *  - `onRouteChange`    : Lightweight route guard -- redirects unauthenticated
  *                         users to /login and authenticated users away from /login.
  *
- * Note: The `layout` runtime config is intentionally NOT exported because the Umi built-in
- * layout plugin is disabled (layout: false in config.ts). The project uses a custom
- * ProLayout shell in `layouts/index.tsx` instead.
- *
  * Design notes:
- *  - `getInitialState` runs **before** models are available, so all data is fetched via direct
+ *  - `render` is a compose hook (properly awaited) that runs before `renderClient`.
+ *    It fetches auth routes, registers them in the flat route map, then calls `next()`.
+ *  - `getInitialState` runs after `render` completes, so it reuses cached routes
+ *    from `_cachedAuthRoutes` to avoid a duplicate API call.
+ *  - `getInitialState` runs before models are available, so all data is fetched via direct
  *    service / utility imports rather than `useModel`.
- *  - Auth routes are fetched in `getInitialState` (so they are ready when `patchClientRoutes`
- *    fires) and also exposed via `initialState.authRoutes` for downstream consumers.
- *  - A module-level variable (`_cachedAuthRoutes`) bridges `getInitialState` and
- *    `patchClientRoutes` because Umi does not pass `initialState` to `patchClientRoutes`.
- *  - The ProLayout UI is rendered entirely by the custom `layouts/index.tsx` component.
- *    The Umi built-in layout plugin is disabled (layout: false) to avoid double wrapping.
  */
 import type { RuntimeConfig } from '@umijs/max';
-import { history } from '@umijs/max';
-import { getInitialLang, setupI18n } from '@/locales';
+import React from 'react';
+import { history, useIntl, useModel, useNavigate } from '@umijs/max';
+import { Button, Dropdown, Space, App as AntdApp } from 'antd';
+import {
+  GlobalOutlined, SunOutlined, MoonOutlined,
+  UserOutlined, LogoutOutlined, SearchOutlined,
+  DashboardOutlined, SettingOutlined, HomeOutlined,
+  FundOutlined, BarChartOutlined, PieChartOutlined,
+  LineChartOutlined, AreaChartOutlined, DotChartOutlined,
+  ProfileOutlined, ScheduleOutlined, ProjectOutlined,
+  AlertOutlined, TagsOutlined, BranchesOutlined,
+  AppstoreOutlined, MenuOutlined, FileTextOutlined,
+  FormOutlined, CalendarOutlined, ClockCircleOutlined,
+  LockOutlined, SafetyOutlined, AuditOutlined,
+  FundProjectionScreenOutlined, OrderedListOutlined,
+} from '@ant-design/icons';
+import type { MenuProps } from 'antd';
+import { getInitialLang, setupI18n, changeLang, LANG_OPTIONS } from '@/locales';
 import { getToken } from '@/models/auth';
 import { fetchGetUserInfo } from '@/services/auth';
 import { fetchGetConstantRoutes, fetchGetUserRoutes } from '@/services/route';
@@ -52,14 +64,15 @@ export const locale: RuntimeConfig['locale'] = {
 };
 
 // ---------------------------------------------------------------------------
-// Module-level bridge: getInitialState -> patchClientRoutes
+// Module-level bridge: render -> getInitialState
 // ---------------------------------------------------------------------------
 
 /**
- * Cached auth routes populated in `getInitialState` and consumed by `patchClientRoutes`.
+ * Cached auth routes populated in the `render` hook and reused by `getInitialState`.
  *
- * Umi does not pass `initialState` to `patchClientRoutes`, so we use this module-level
- * variable to share the fetched auth routes between the two runtime hooks.
+ * The `render` hook runs before `renderClient` (and thus before `getInitialState`),
+ * so it fetches auth routes and caches them here. `getInitialState` checks this
+ * cache first to avoid a duplicate API call.
  */
 let _cachedAuthRoutes: Api.Route.MenuRoute[] | undefined;
 
@@ -105,33 +118,6 @@ function resolveComponentPath(component: string): string | undefined {
   return `@/pages/${component.replace(/_/g, '/')}`;
 }
 
-/**
- * Convert backend `Api.Route.MenuRoute[]` into Umi client-side route config objects.
- */
-function menuRoutesToUmiRoutes(routes: Api.Route.MenuRoute[]): Record<string, any>[] {
-  return routes.map((route) => {
-    const umiRoute: Record<string, any> = {
-      path: route.path,
-      name: route.name,
-    };
-
-    // Map component identifier to a page file path when present.
-    if (route.component) {
-      const componentPath = resolveComponentPath(route.component);
-      if (componentPath) {
-        umiRoute.component = componentPath;
-      }
-    }
-
-    // Recursively convert nested children.
-    if (route.children?.length) {
-      umiRoute.routes = menuRoutesToUmiRoutes(route.children);
-    }
-
-    return umiRoute;
-  });
-}
-
 // ---------------------------------------------------------------------------
 // getInitialState (Req 3.2 / design.md Route_Module)
 // ---------------------------------------------------------------------------
@@ -171,15 +157,19 @@ export async function getInitialState(): Promise<{
 
   // -- Auth routes (only when user is authenticated) ------------------------
   if (currentUser) {
-    try {
-      const userRoutesResult = await fetchGetUserRoutes();
-      if (!userRoutesResult.error && userRoutesResult.data) {
-        authRoutes = userRoutesResult.data.routes || [];
-        // Cache for patchClientRoutes (module-level bridge).
-        _cachedAuthRoutes = authRoutes;
+    // Reuse cached routes from patchRoutes if available (avoids duplicate API call).
+    if (_cachedAuthRoutes?.length) {
+      authRoutes = _cachedAuthRoutes;
+    } else {
+      try {
+        const userRoutesResult = await fetchGetUserRoutes();
+        if (!userRoutesResult.error && userRoutesResult.data) {
+          authRoutes = userRoutesResult.data.routes || [];
+          _cachedAuthRoutes = authRoutes;
+        }
+      } catch (err) {
+        console.error('[app.tsx] Failed to fetch user routes in getInitialState:', err);
       }
-    } catch (err) {
-      console.error('[app.tsx] Failed to fetch user routes in getInitialState:', err);
     }
   }
 
@@ -192,53 +182,166 @@ export async function getInitialState(): Promise<{
 }
 
 // ---------------------------------------------------------------------------
-// patchClientRoutes (design.md "dynamic route injection")
+// Icon mapping: backend icon identifiers → AntD icon components
 // ---------------------------------------------------------------------------
 
-/**
- * Inject authenticated dynamic routes into the layout shell's children.
- *
- * Umi calls this after `getInitialState` resolves. The layout shell is the route entry
- * declared in `config/routes.ts` with `path: '/'` and `component: '@/layouts/index'`.
- * We append the converted auth routes to its `routes` array so they become accessible
- * under the protected layout.
- */
-export function patchClientRoutes({ routes }: { routes: any[] }): void {
-  if (!_cachedAuthRoutes?.length) return;
+const ICON_MAP: Record<string, React.ReactNode> = {
+  'carbon:dashboard': <DashboardOutlined />,
+  'carbon:settings': <SettingOutlined />,
+  'carbon:global': <GlobalOutlined />,
+  'carbon:user': <UserOutlined />,
+  'carbon:home': <HomeOutlined />,
+  'carbon:fund': <FundOutlined />,
+  'carbon:bar-chart': <BarChartOutlined />,
+  'carbon:pie-chart': <PieChartOutlined />,
+  'carbon:line-chart': <LineChartOutlined />,
+  'carbon:area-chart': <AreaChartOutlined />,
+  'carbon:dot-chart': <DotChartOutlined />,
+  'carbon:ordered-list': <OrderedListOutlined />,
+  'carbon:appstore': <AppstoreOutlined />,
+  'carbon:menu': <MenuOutlined />,
+  'carbon:file-text': <FileTextOutlined />,
+  'carbon:form': <FormOutlined />,
+  'carbon:calendar': <CalendarOutlined />,
+  'carbon:clock': <ClockCircleOutlined />,
+  'carbon:lock': <LockOutlined />,
+  'carbon:safety': <SafetyOutlined />,
+  'carbon:audit': <AuditOutlined />,
+  'carbon:fund-projection-screen': <FundProjectionScreenOutlined />,
+  'carbon:profile': <ProfileOutlined />,
+  'carbon:schedule': <ScheduleOutlined />,
+  'carbon:project': <ProjectOutlined />,
+  'carbon:alert': <AlertOutlined />,
+  'carbon:tags': <TagsOutlined />,
+  'carbon:branches': <BranchesOutlined />,
+  'carbon:search': <SearchOutlined />,
+  'carbon:catalog': <FileTextOutlined />,
+  'carbon:view': <FundProjectionScreenOutlined />,
+  'carbon:time': <ClockCircleOutlined />,
+  'dashboard': <DashboardOutlined />,
+  'setting': <SettingOutlined />,
+  'user': <UserOutlined />,
+  'home': <HomeOutlined />,
+  'profile': <ProfileOutlined />,
+  'alert': <AlertOutlined />,
+};
 
-  // Locate the layout shell (first route with path '/' that has a routes array).
-  const layoutShell = routes.find(
-    (r: any) => r.path === '/' && Array.isArray(r.routes),
-  );
-  if (!layoutShell) return;
-
-  const umiAuthRoutes = menuRoutesToUmiRoutes(_cachedAuthRoutes);
-
-  // Append dynamic routes after the existing placeholder children (e.g. dashboard).
-  layoutShell.routes = [...layoutShell.routes, ...umiAuthRoutes];
+function renderMenuIcon(iconStr: string | undefined): React.ReactNode {
+  if (!iconStr) return undefined;
+  return ICON_MAP[iconStr] || ICON_MAP[iconStr.replace(/^carbon:/, '')] || undefined;
 }
 
 // ---------------------------------------------------------------------------
-// layout (RunTimeLayoutConfig)
-//
-// DISABLED: The Umi built-in layout plugin is turned off (layout: false in
-// config/config.ts) because the project uses a custom ProLayout shell in
-// src/layouts/index.tsx.  Exporting a `layout` runtime config when the plugin
-// is disabled causes "register failed, invalid key layout from plugin app.tsx".
-//
-// Keep the code below as reference in case the layout plugin is re-enabled.
+// layout (RunTimeLayoutConfig) — ProLayout 原生菜单系统集成
 // ---------------------------------------------------------------------------
 
-// export const layout: RunTimeLayoutConfig = (initData) => {
-//   const initialState = (initData as any).initialState as {
-//     settings?: Record<string, any>;
-//   } | undefined;
-//
-//   return {
-//     // Spread any ProLayout-level settings stored in initialState.settings.
-//     ...(initialState?.settings),
-//   };
-// };
+export const layout = (initData: any) => {
+  const { initialState } = initData;
+  const currentUser = initialState?.currentUser as Api.Auth.UserInfo | undefined;
+
+  // Hooks are safe here — the layout plugin renders this as a React component
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const navigate = useNavigate();
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const intl = useIntl();
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const { modal } = AntdApp.useApp();
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const authModel = useModel('auth');
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const themeModel = useModel('theme');
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const routeModel = useModel('route');
+
+  const userInfo = authModel?.userInfo ?? currentUser ?? { username: '', userId: '', roles: [] };
+  const logout = authModel?.logout;
+  const isDark = themeModel?.currentScheme === 'dark';
+  const toggleThemeScheme = themeModel?.toggleThemeScheme;
+  const menus = routeModel?.menus ?? [];
+
+  const t = (id: string, fb?: string) => intl.formatMessage({ id, defaultMessage: fb });
+
+  const langItems: MenuProps['items'] = LANG_OPTIONS.map((o) => ({
+    key: o.value,
+    label: o.label,
+    onClick: () => changeLang(o.value),
+  }));
+
+  const userItems: MenuProps['items'] = [
+    {
+      key: 'center',
+      icon: <UserOutlined />,
+      label: t('common.userCenter'),
+      onClick: () => navigate('/user/center'),
+    },
+    { type: 'divider' as const },
+    {
+      key: 'logout',
+      icon: <LogoutOutlined />,
+      label: t('common.logout'),
+      onClick: () =>
+        modal.confirm({
+          title: t('common.tip'),
+          content: t('common.logoutConfirm'),
+          onOk: () => logout?.(),
+        }),
+    },
+  ];
+
+  // Convert route model menus (from backend) to ProLayout menu format
+  const buildMenuData = (items: any[]): any[] => {
+    if (!items?.length) return [];
+    return items
+      .filter((i: any) => !i.hideInMenu)
+      .map((i: any) => {
+        const children = buildMenuData(i.children);
+        return {
+          path: i.path,
+          name: i.i18nKey ? t(i.i18nKey, i.name) : (i.name || i.path),
+          icon: renderMenuIcon(i.icon),
+          ...(children.length > 0 ? { routes: children } : {}),
+        };
+      });
+  };
+
+  return {
+    navTheme: isDark ? 'realDark' : 'light',
+    // Merge backend dynamic menus into ProLayout's menu data
+    menuDataRender: (menuData: any[]) => {
+      const dynamicMenus = buildMenuData(menus as any[]);
+      if (dynamicMenus.length === 0) return menuData;
+      // Deduplicate: keep dynamic menus, filter out static placeholder routes
+      const dynamicPaths = new Set(dynamicMenus.map((m: any) => m.path));
+      const staticMenus = menuData.filter((m: any) => !dynamicPaths.has(m.path));
+      return [...staticMenus, ...dynamicMenus];
+    },
+    actionsRender: () => [
+      <Button key="search" type="text" icon={<SearchOutlined />} />,
+      <Dropdown key="lang" menu={{ items: langItems }} trigger={['click']}>
+        <Button type="text" icon={<GlobalOutlined />} />
+      </Dropdown>,
+      <Button
+        key="theme"
+        type="text"
+        icon={isDark ? <SunOutlined /> : <MoonOutlined />}
+        onClick={() => toggleThemeScheme?.()}
+      />,
+    ],
+    avatarProps: {
+      title: userInfo.username || 'User',
+      icon: <UserOutlined />,
+      render: (_: any, dom: React.ReactNode) => (
+        <Dropdown menu={{ items: userItems }} trigger={['click']}>
+          {dom}
+        </Dropdown>
+      ),
+    },
+    headerTitleRender: () => (
+      <span style={{ fontWeight: 600, fontSize: 18 }}>LogFlux</span>
+    ),
+    collapsedButtonRender: (_c: boolean, defaultDom: React.ReactNode) => defaultDom,
+  };
+};
 
 // ---------------------------------------------------------------------------
 // onRouteChange -- lightweight route guard (Req 2.4 / 3.10)

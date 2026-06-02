@@ -14,7 +14,7 @@
  *
  * 支撑的需求：3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.10, 2.4
  */
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { history } from '@umijs/max';
 import { fetchLogin, fetchGetUserInfo } from '@/services/auth';
 import { encrypt } from '@/utils/crypto';
@@ -126,9 +126,9 @@ export default function useAuthModel() {
   /** 是否超级角色（Req 4.5） */
   const isSuperRole = userInfo.roles.includes(SUPER_ROLE);
 
-  // 注入鉴权适配器到 Request_Layer
-  // 确保 request 层能读取最新的 token
-  useState(() => {
+  // 注入鉴权适配器到 Request_Layer（仅执行一次）
+  // 使用 useMemo 确保副作用在首次渲染时执行，语义比 useState 初始化器更明确
+  useMemo(() => {
     setRequestAuthAdapter({
       getToken: () => getToken(),
       getRefreshToken: () => getRefreshToken(),
@@ -147,7 +147,7 @@ export default function useAuthModel() {
         setUserInfo({ ...EMPTY_USER_INFO });
       },
     });
-  });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
    * 获取用户信息（Req 3.2）。

@@ -319,37 +319,41 @@ export default function useRouteModel() {
    *
    * 调用 `fetchGetUserRoutes()` 获取当前用户的动态路由，规范化安全路由后
    * 生成菜单树。失败时清空路由与菜单状态。
+   *
+   * @param cachedRoutes 可选的缓存路由（来自 getInitialState），
+   *   传入后跳过 API 调用，避免重复请求。
    */
-  const initAuthRoute = useCallback(async () => {
+  const initAuthRoute = useCallback(async (cachedRoutes?: Api.Route.MenuRoute[]) => {
     // 守卫：已初始化则跳过，防止重复请求
     if (isInitAuthRoute) return;
     try {
-      const { data, error } = await fetchGetUserRoutes();
+      let routes: Api.Route.MenuRoute[];
 
-      if (error || !data) {
-        console.error('[RouteModel] Failed to fetch user routes:', error);
-        setAuthRoutes([]);
-        setMenus([]);
-        setIsInitAuthRoute(true);
-        return;
+      if (cachedRoutes) {
+        // 使用缓存的路由（来自 app.tsx getInitialState），跳过 API 调用
+        routes = cachedRoutes;
+      } else {
+        const { data, error } = await fetchGetUserRoutes();
+        if (error || !data) {
+          console.error('[RouteModel] Failed to fetch user routes:', error);
+          setAuthRoutes([]);
+          setMenus([]);
+          setIsInitAuthRoute(true);
+          return;
+        }
+        routes = data.routes || [];
       }
 
       // 规范化安全路由
-      const normalized = normalizeSecurityRoutes(data.routes || []);
+      const normalized = normalizeSecurityRoutes(routes);
 
       // 设置动态路由
       setAuthRoutes(normalized);
 
       // 合并常量路由与动态路由生成菜单树（Req 4.3）
-      // 常量路由（如 dashboard）排在前面，动态路由排在后面
       const allRoutesForMenu = [...constantRoutes, ...normalized];
       const menuTree = routeTreeToMenuTree(allRoutesForMenu);
       setMenus(menuTree);
-
-      // 设置首页路由（Req 4.8）
-      if (data.home) {
-        setRouteHome(data.home);
-      }
 
       setIsInitAuthRoute(true);
     } catch (err) {

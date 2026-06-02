@@ -26,6 +26,7 @@ import {
   DeleteOutlined,
   SearchOutlined,
 } from '@ant-design/icons';
+import { useIntl } from '@umijs/max';
 import type { ColumnsType } from 'antd/es/table';
 import { request } from '@/utils/request';
 
@@ -84,6 +85,12 @@ async function fetchRoleOptions() {
 // ---------------------------------------------------------------------------
 
 export default function UserManagementPage() {
+  const intl = useIntl();
+  const t = useCallback(
+    (id: string, fb?: string) => intl.formatMessage({ id, defaultMessage: fb }),
+    [intl],
+  );
+
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState<UserItem[]>([]);
   const [total, setTotal] = useState(0);
@@ -102,13 +109,13 @@ export default function UserManagementPage() {
     setLoading(true);
     const { data, error } = await fetchUserList({ page: p, pageSize: ps, username });
     if (error) {
-      message.error(error.message || 'Failed to load users');
+      message.error(error.message || t('common.error', 'Error'));
     } else if (data) {
       setUsers(data.list || []);
       setTotal(data.total || 0);
     }
     setLoading(false);
-  }, []);
+  }, [t]);
 
   const loadRoles = useCallback(async () => {
     const { data } = await fetchRoleOptions();
@@ -154,9 +161,9 @@ export default function UserManagementPage() {
   const handleDelete = async (id: number) => {
     const { error } = await fetchDeleteUser(id);
     if (error) {
-      message.error(error.message || 'Failed to delete user');
+      message.error(error.message || t('common.deleteFailed', 'Delete Failed'));
     } else {
-      message.success('User deleted successfully');
+      message.success(t('common.deleteSuccess', 'Delete Success'));
       loadUsers(page, pageSize, searchUsername);
     }
   };
@@ -165,9 +172,13 @@ export default function UserManagementPage() {
     const newStatus: '1' | '2' = user.status === '1' ? '2' : '1';
     const { error } = await fetchToggleUserStatus(user.id, newStatus);
     if (error) {
-      message.error(error.message || 'Failed to toggle status');
+      message.error(error.message || t('common.updateFailed', 'Update Failed'));
     } else {
-      message.success(`User ${newStatus === '1' ? 'enabled' : 'disabled'} successfully`);
+      message.success(
+        newStatus === '1'
+          ? t('manage.user.enableSuccess', 'User enabled successfully')
+          : t('manage.user.disableSuccess', 'User disabled successfully'),
+      );
       loadUsers(page, pageSize, searchUsername);
     }
   };
@@ -180,18 +191,18 @@ export default function UserManagementPage() {
       if (editingUser) {
         const { error } = await fetchUpdateUser(editingUser.id, values);
         if (error) {
-          message.error(error.message || 'Failed to update user');
+          message.error(error.message || t('common.updateFailed', 'Update Failed'));
         } else {
-          message.success('User updated successfully');
+          message.success(t('common.updateSuccess', 'Update Success'));
           setModalVisible(false);
           loadUsers(page, pageSize, searchUsername);
         }
       } else {
         const { error } = await fetchCreateUser(values);
         if (error) {
-          message.error(error.message || 'Failed to create user');
+          message.error(error.message || t('common.addFailed', 'Add Failed'));
         } else {
-          message.success('User created successfully');
+          message.success(t('common.addSuccess', 'Add Success'));
           setModalVisible(false);
           setPage(1);
           loadUsers(1, pageSize, searchUsername);
@@ -217,31 +228,31 @@ export default function UserManagementPage() {
       width: 80,
     },
     {
-      title: 'Username',
+      title: t('manage.user.username', 'Username'),
       dataIndex: 'username',
       key: 'username',
       width: 140,
     },
     {
-      title: 'Display Name',
+      title: t('manage.user.displayName', 'Display Name'),
       dataIndex: 'displayName',
       key: 'displayName',
       width: 150,
     },
     {
-      title: 'Email',
+      title: t('manage.user.email', 'Email'),
       dataIndex: 'email',
       key: 'email',
       width: 200,
     },
     {
-      title: 'Phone',
+      title: t('manage.user.phone', 'Phone'),
       dataIndex: 'phone',
       key: 'phone',
       width: 140,
     },
     {
-      title: 'Roles',
+      title: t('manage.user.roles', 'Roles'),
       dataIndex: 'roles',
       key: 'roles',
       width: 200,
@@ -256,44 +267,44 @@ export default function UserManagementPage() {
       ),
     },
     {
-      title: 'Status',
+      title: t('manage.user.status', 'Status'),
       dataIndex: 'status',
       key: 'status',
       width: 100,
       render: (status: '1' | '2', record: UserItem) => (
         <Switch
           checked={status === '1'}
-          checkedChildren="Enabled"
-          unCheckedChildren="Disabled"
+          checkedChildren={t('common.enabled', 'Enabled')}
+          unCheckedChildren={t('common.disabled', 'Disabled')}
           onChange={() => handleToggleStatus(record)}
         />
       ),
     },
     {
-      title: 'Created At',
+      title: t('common.createdAt', 'Created At'),
       dataIndex: 'createdAt',
       key: 'createdAt',
       width: 180,
       render: (text: string) => (text ? new Date(text).toLocaleString() : '-'),
     },
     {
-      title: 'Actions',
+      title: t('common.action', 'Actions'),
       key: 'actions',
       width: 160,
       fixed: 'right',
       render: (_: unknown, record: UserItem) => (
         <Space>
           <Button type="link" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            Edit
+            {t('common.edit', 'Edit')}
           </Button>
           <Popconfirm
-            title="Are you sure you want to delete this user?"
+            title={t('manage.user.confirmDeleteUser', 'Are you sure you want to delete this user?')}
             onConfirm={() => handleDelete(record.id)}
-            okText="Yes"
-            cancelText="No"
+            okText={t('common.yesOrNo.yes', 'Yes')}
+            cancelText={t('common.yesOrNo.no', 'No')}
           >
             <Button type="link" danger icon={<DeleteOutlined />}>
-              Delete
+              {t('common.delete', 'Delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -302,12 +313,12 @@ export default function UserManagementPage() {
   ];
 
   return (
-    <PageContainer title="User Management">
+    <PageContainer title={t('manage.user.title', 'User Management')}>
       <Card>
         {/* Search bar */}
         <Space style={{ marginBottom: 16 }}>
           <Input
-            placeholder="Search by username"
+            placeholder={t('manage.user.searchPlaceholder', 'Search by username')}
             value={searchUsername}
             onChange={(e) => setSearchUsername(e.target.value)}
             onPressEnter={handleSearch}
@@ -315,11 +326,11 @@ export default function UserManagementPage() {
             allowClear
           />
           <Button type="primary" icon={<SearchOutlined />} onClick={handleSearch}>
-            Search
+            {t('common.search', 'Search')}
           </Button>
-          <Button onClick={handleReset}>Reset</Button>
+          <Button onClick={handleReset}>{t('common.reset', 'Reset')}</Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-            Add User
+            {t('manage.user.addUser', 'Add User')}
           </Button>
         </Space>
 
@@ -336,7 +347,11 @@ export default function UserManagementPage() {
             total,
             showSizeChanger: true,
             showQuickJumper: true,
-            showTotal: (t) => `Total ${t} users`,
+            showTotal: (total) =>
+              intl.formatMessage(
+                { id: 'manage.user.totalUsers', defaultMessage: 'Total {total} users' },
+                { total },
+              ),
             onChange: (p, ps) => {
               setPage(p);
               setPageSize(ps);
@@ -347,7 +362,11 @@ export default function UserManagementPage() {
 
       {/* Add/Edit User Modal */}
       <Modal
-        title={editingUser ? 'Edit User' : 'Add User'}
+        title={
+          editingUser
+            ? t('manage.user.editUser', 'Edit User')
+            : t('manage.user.addUser', 'Add User')
+        }
         open={modalVisible}
         onOk={handleSaveUser}
         onCancel={handleCancelModal}
@@ -360,56 +379,59 @@ export default function UserManagementPage() {
           autoComplete="off"
         >
           <Form.Item
-            label="Username"
+            label={t('manage.user.username', 'Username')}
             name="username"
-            rules={[{ required: true, message: 'Please enter username' }]}
+            rules={[{ required: true, message: t('manage.user.enterUsername', 'Please enter username') }]}
           >
-            <Input disabled={!!editingUser} placeholder="Enter username" />
+            <Input
+              disabled={!!editingUser}
+              placeholder={t('manage.user.usernamePlaceholder', 'Enter username')}
+            />
           </Form.Item>
           <Form.Item
-            label="Display Name"
+            label={t('manage.user.displayName', 'Display Name')}
             name="displayName"
-            rules={[{ required: true, message: 'Please enter display name' }]}
+            rules={[{ required: true, message: t('manage.user.enterDisplayName', 'Please enter display name') }]}
           >
-            <Input placeholder="Enter display name" />
+            <Input placeholder={t('manage.user.displayNamePlaceholder', 'Enter display name')} />
           </Form.Item>
           <Form.Item
-            label="Email"
+            label={t('manage.user.email', 'Email')}
             name="email"
             rules={[
-              { required: true, message: 'Please enter email' },
-              { type: 'email', message: 'Invalid email format' },
+              { required: true, message: t('manage.user.enterEmail', 'Please enter email') },
+              { type: 'email', message: t('manage.user.invalidEmail', 'Invalid email format') },
             ]}
           >
-            <Input placeholder="Enter email" />
+            <Input placeholder={t('manage.user.emailPlaceholder', 'Enter email')} />
           </Form.Item>
           <Form.Item
-            label="Phone"
+            label={t('manage.user.phone', 'Phone')}
             name="phone"
           >
-            <Input placeholder="Enter phone number" />
+            <Input placeholder={t('manage.user.phonePlaceholder', 'Enter phone number')} />
           </Form.Item>
           <Form.Item
-            label="Roles"
+            label={t('manage.user.roles', 'Roles')}
             name="roles"
-            rules={[{ required: true, message: 'Please select at least one role' }]}
+            rules={[{ required: true, message: t('manage.user.selectRoleRequired', 'Please select at least one role') }]}
           >
             <Select
               mode="multiple"
-              placeholder="Select roles"
+              placeholder={t('manage.user.selectRoles', 'Select roles')}
               options={roles.map(r => ({ label: r.displayName, value: r.name }))}
             />
           </Form.Item>
           {!editingUser && (
             <Form.Item
-              label="Password"
+              label={t('manage.user.password', 'Password')}
               name="password"
               rules={[
-                { required: true, message: 'Please enter password' },
-                { min: 6, message: 'Password must be at least 6 characters' },
+                { required: true, message: t('manage.user.enterPassword', 'Please enter password') },
+                { min: 6, message: t('manage.user.passwordMinLength', 'Password must be at least 6 characters') },
               ]}
             >
-              <Input.Password placeholder="Enter password" />
+              <Input.Password placeholder={t('manage.user.passwordPlaceholder', 'Enter password')} />
             </Form.Item>
           )}
         </Form>
