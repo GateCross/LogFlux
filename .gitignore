@@ -33,3 +33,4 @@ docker/.env
 .gemini
 
 .kiro/*
+.codegraph/*

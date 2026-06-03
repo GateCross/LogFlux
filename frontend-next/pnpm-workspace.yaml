@@ -8,7 +8,7 @@ packages:
   - packages/@core/*
   - packages/effects/*
   - packages/business/*
-  - apps/*
+  - apps
   - scripts/*
 
 publicHoistPattern:

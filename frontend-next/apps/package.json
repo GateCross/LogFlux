@@ -1,0 +1,53 @@
+{
+  "name": "logflux-web",
+  "version": "3.0.0",
+  "homepage": "https://github.com/GateCross/LogFlux",
+  "bugs": "https://github.com/GateCross/LogFlux/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GateCross/LogFlux.git",
+    "directory": "apps"
+  },
+  "license": "MIT",
+  "author": "GateCross",
+  "type": "module",
+  "scripts": {
+    "build": "pnpm vite build --mode production",
+    "build:analyze": "pnpm vite build --mode analyze",
+    "dev": "pnpm vite --mode development",
+    "preview": "vite preview",
+    "typecheck": "vue-tsc --noEmit --skipLibCheck"
+  },
+  "imports": {
+    "#/*": "./src/*"
+  },
+  "dependencies": {
+    "@vben/access": "workspace:*",
+    "@vben/common-ui": "workspace:*",
+    "@vben/constants": "workspace:*",
+    "@vben/hooks": "workspace:*",
+    "@vben/icons": "workspace:*",
+    "@vben/layouts": "workspace:*",
+    "@vben/locales": "workspace:*",
+    "@vben/plugins": "workspace:*",
+    "@vben/preferences": "workspace:*",
+    "@vben/request": "workspace:*",
+    "@vben/stores": "workspace:*",
+    "@vben/styles": "workspace:*",
+    "@vben/types": "workspace:*",
+    "@vben/utils": "workspace:*",
+    "@vueuse/core": "catalog:",
+    "ant-design-vue": "catalog:",
+    "dayjs": "catalog:",
+    "echarts": "catalog:",
+    "@iconify/vue": "catalog:",
+    "@surbowl/world-geo-json-zh": "^2.1.5",
+    "echarts-china-map": "^1.0.4",
+    "vue-draggable-plus": "^0.6.1",
+    "@guolao/vue-monaco-editor": "^1.6.0",
+    "crypto-js": "catalog:",
+    "pinia": "catalog:",
+    "vue": "catalog:",
+    "vue-router": "catalog:"
+  }
+}
