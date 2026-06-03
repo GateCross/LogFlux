@@ -10,6 +10,15 @@ frontend/dist
 frontend/.env.local
 frontend/*.log
 
+# Frontend-Next (vue-vben-admin)
+frontend-next/node_modules
+frontend-next/dist
+frontend-next/.env.local
+frontend-next/*.log
+frontend-next/.turbo
+frontend-next/.nitro
+frontend-next/.output
+
 # Backend
 backend/logflux
 backend/logs

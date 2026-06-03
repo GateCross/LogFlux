@@ -1,0 +1,69 @@
+{
+  "auth": {
+    "login": "登录",
+    "register": "注册",
+    "codeLogin": "验证码登录",
+    "qrcodeLogin": "二维码登录",
+    "forgetPassword": "忘记密码",
+    "profile": "个人中心"
+  },
+  "dashboard": {
+    "title": "仪表盘",
+    "analytics": "分析页",
+    "workspace": "工作台",
+    "totalRequests": "总请求数",
+    "errorRate": "错误率",
+    "activeTasks": "活跃任务",
+    "avgDuration": "平均耗时",
+    "recentExecutions": "最近执行",
+    "trendChart": "趋势图",
+    "statusDistribution": "状态码分布"
+  },
+  "caddy": {
+    "config": "Caddy 配置",
+    "access": "访问日志",
+    "source": "日志源",
+    "systemLog": "系统日志",
+    "serverList": "服务器列表",
+    "configEditor": "配置编辑器",
+    "save": "保存",
+    "preview": "预览",
+    "history": "历史记录",
+    "rollback": "回滚"
+  },
+  "security": {
+    "title": "安全管理",
+    "source": "WAF 源",
+    "policy": "WAF 策略",
+    "observe": "WAF 观测",
+    "ops": "WAF 运维",
+    "runtime": "WAF 运行时",
+    "crs": "CRS 管理",
+    "exclusion": "规则排除",
+    "binding": "策略绑定",
+    "release": "WAF 发布",
+    "job": "WAF 任务"
+  },
+  "manage": {
+    "user": "用户管理",
+    "role": "角色管理",
+    "menu": "菜单管理"
+  },
+  "notification": {
+    "channel": "通知渠道",
+    "rule": "通知规则",
+    "template": "通知模板",
+    "log": "通知日志"
+  },
+  "cron": {
+    "title": "定时任务",
+    "taskList": "任务列表",
+    "createTask": "创建任务",
+    "logs": "执行日志",
+    "trigger": "手动触发",
+    "scriptHistory": "脚本历史"
+  },
+  "user": {
+    "center": "个人中心"
+  }
+}

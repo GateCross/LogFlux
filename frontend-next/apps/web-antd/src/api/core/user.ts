@@ -1,0 +1,26 @@
+import { requestClient } from '#/api/request';
+
+export namespace UserApi {
+  /** LogFlux 用户信息 */
+  export interface UserInfo {
+    buttons: string[];
+    preferences: string;
+    roles: string[];
+    userId: string;
+    username: string;
+  }
+}
+
+/**
+ * 获取用户信息 — GET /user/info
+ */
+export async function getUserInfoApi() {
+  return requestClient.get<UserApi.UserInfo>('/user/info');
+}
+
+/**
+ * 更新用户偏好 — PUT /user/preferences
+ */
+export async function updateUserPreferencesApi(preferences: string) {
+  return requestClient.put<void>('/user/preferences', { preferences });
+}

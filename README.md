@@ -10,6 +10,7 @@ LogFlux 是一个日志流量分析、Caddy 图形化配置与 Coraza WAF 管理
 |------|------|
 | 后端 | Go, go-zero, GORM, PostgreSQL, Redis(可选) |
 | 前端 | Vue 3, Vite, TypeScript, Naive UI, UnoCSS, Pinia |
+| 前端（开发中） | Vue 3, Vite, TypeScript, Ant Design Vue, vue-vben-admin (frontend-next/) |
 | 反代/WAF | Caddy, Coraza, OWASP CRS |
 | IP 定位 | ip2region |
 | 部署 | Docker Compose, Makefile |
@@ -92,6 +93,14 @@ pnpm install
 pnpm run dev
 ```
 
+### 前端（vue-vben-admin 版本，开发中）
+
+```bash
+cd frontend-next
+pnpm install
+pnpm run dev:antd
+```
+
 ### 后端
 
 ```bash
@@ -132,6 +141,8 @@ goctl api go -api api/logflux.api -dir . -style go_zero
 
 ## 前端结构说明
 
+### 当前生产版（frontend/）
+
 前端基于 [SoybeanAdmin](https://github.com/soybeanjs/soybean-admin) 模板改造，`frontend/README.md` 为模板原始内容。主要业务页面位于 `frontend/src/views/`：
 
 ```
@@ -144,6 +155,32 @@ views/
   notification/ # 通知管理
   cron/         # 定时任务
   user/         # 个人中心
+```
+
+### 新版前端（frontend-next/，开发中）
+
+基于 [vue-vben-admin](https://github.com/vbenjs/vue-vben-admin) (v5) 构建，采用 monorepo 架构（pnpm + Turborepo），Ant Design Vue 组件库。主要业务代码位于 `frontend-next/apps/web-antd/src/`：
+
+```
+frontend-next/
+  apps/
+    web-antd/         # 主应用（Ant Design Vue）
+      src/
+        api/           # API 服务层（core/, caddy/, system/ 等）
+        router/        # 路由配置 + 动态路由守卫
+        store/         # Pinia 状态管理
+        views/         # 业务页面
+          dashboard/   # 仪表盘
+          caddy/       # Caddy 管理（config, access, source, log, system-log）
+          security/    # WAF 管理（source, policy, observe, ops, runtime, crs, exclusion, binding, release, job）
+          manage/      # 系统管理（user, role, menu）
+          notification/# 通知管理（channel, rule, template, log）
+          cron/        # 定时任务
+          user/        # 个人中心
+        locales/       # 国际化（zh-CN, en-US）
+    backend-mock/      # 开发用 Mock API 服务
+  packages/            # 共享包（stores, hooks, utils, styles, types 等）
+  internal/            # 内部工具（lint-configs, vite-config, tsconfig 等）
 ```
 
 ## 文档入口

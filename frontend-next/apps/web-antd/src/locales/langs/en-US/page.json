@@ -1,0 +1,69 @@
+{
+  "auth": {
+    "login": "Login",
+    "register": "Register",
+    "codeLogin": "Code Login",
+    "qrcodeLogin": "Qr Code Login",
+    "forgetPassword": "Forget Password",
+    "profile": "Profile"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "analytics": "Analytics",
+    "workspace": "Workspace",
+    "totalRequests": "Total Requests",
+    "errorRate": "Error Rate",
+    "activeTasks": "Active Tasks",
+    "avgDuration": "Avg Duration",
+    "recentExecutions": "Recent Executions",
+    "trendChart": "Trend Chart",
+    "statusDistribution": "Status Distribution"
+  },
+  "caddy": {
+    "config": "Caddy Config",
+    "access": "Access Logs",
+    "source": "Log Sources",
+    "systemLog": "System Logs",
+    "serverList": "Server List",
+    "configEditor": "Config Editor",
+    "save": "Save",
+    "preview": "Preview",
+    "history": "History",
+    "rollback": "Rollback"
+  },
+  "security": {
+    "title": "Security",
+    "source": "WAF Sources",
+    "policy": "WAF Policies",
+    "observe": "WAF Observe",
+    "ops": "WAF Operations",
+    "runtime": "WAF Runtime",
+    "crs": "CRS Management",
+    "exclusion": "Rule Exclusions",
+    "binding": "Policy Bindings",
+    "release": "WAF Releases",
+    "job": "WAF Jobs"
+  },
+  "manage": {
+    "user": "User Management",
+    "role": "Role Management",
+    "menu": "Menu Management"
+  },
+  "notification": {
+    "channel": "Channels",
+    "rule": "Rules",
+    "template": "Templates",
+    "log": "Notification Logs"
+  },
+  "cron": {
+    "title": "Cron Jobs",
+    "taskList": "Task List",
+    "createTask": "Create Task",
+    "logs": "Execution Logs",
+    "trigger": "Trigger",
+    "scriptHistory": "Script History"
+  },
+  "user": {
+    "center": "User Center"
+  }
+}
