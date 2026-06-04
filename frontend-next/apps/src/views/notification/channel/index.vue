@@ -213,7 +213,7 @@ onMounted(() => {
               <Button
                 size="small"
                 type="link"
-                @click="open编辑(record)"
+                @click="open编辑(record as NotificationApi.Channel)"
               >
                 编辑
               </Button>
@@ -269,7 +269,7 @@ onMounted(() => {
         <FormItem label="Enabled">
           <Switch
             :checked="formState.status === 'enabled'"
-            @change="(val: boolean) => (formState.status = val ? 'enabled' : 'disabled')"
+            @change="(val: unknown) => (formState.status = val === true ? 'enabled' : 'disabled')"
           />
         </FormItem>
       </Form>

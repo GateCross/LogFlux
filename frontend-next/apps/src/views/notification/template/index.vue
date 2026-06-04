@@ -204,14 +204,14 @@ onMounted(() => {
               <Button
                 size="small"
                 type="link"
-                @click="openPreview(record)"
+                @click="openPreview(record as NotificationApi.Template)"
               >
                 Preview
               </Button>
               <Button
                 size="small"
                 type="link"
-                @click="open编辑(record)"
+                @click="open编辑(record as NotificationApi.Template)"
               >
                 编辑
               </Button>

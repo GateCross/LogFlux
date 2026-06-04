@@ -3,7 +3,7 @@ import { onMounted, ref } from 'vue';
 
 import { Page } from '@vben/common-ui';
 
-import { Button, Card, Space, Statistic, Table, Tag } from 'ant-design-vue';
+import { Button, Card, Space, Table, Tag } from 'ant-design-vue';
 
 import {
   getFalsePositiveFeedbackListApi,
@@ -34,8 +34,7 @@ const feedbackColumns = [
 async function fetchStats() {
   statsLoading.value = true;
   try {
-    const res = await getWafPolicyStatsApi();
-    statsData.value = Array.isArray(res) ? res : (res?.data ?? res ?? {});
+    statsData.value = await getWafPolicyStatsApi();
   } catch {
     // error handled by interceptor
   } finally {
@@ -46,18 +45,12 @@ async function fetchStats() {
 async function fetchFeedback() {
   feedbackLoading.value = true;
   try {
-    const res = await getFalsePositiveFeedbackListApi();
-    feedbackList.value = Array.isArray(res) ? res : (res?.data ?? []);
+    feedbackList.value = await getFalsePositiveFeedbackListApi();
   } catch {
     // error handled by interceptor
   } finally {
     feedbackLoading.value = false;
   }
-}
-
-function handleRefresh() {
-  fetchStats();
-  fetchFeedback();
 }
 
 onMounted(() => {

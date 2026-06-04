@@ -37,8 +37,7 @@ const columns = [
 async function fetchData() {
   loading.value = true;
   try {
-    const res = await getWafReleaseListApi();
-    dataList.value = Array.isArray(res) ? res : (res?.data ?? []);
+    dataList.value = await getWafReleaseListApi();
   } catch {
     // error handled by interceptor
   } finally {

@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { Page } from '@vben/common-ui';
 
 import {
@@ -44,8 +44,6 @@ const historyLoading = ref(false);
 // preview drawer
 const previewDrawerVisible = ref(false);
 const previewResult = ref<CaddyServerApi.ConfigPreview | null>(null);
-const previewLoading = ref(false);
-
 // --------------- helpers ---------------
 const serverOptions = computed(() =>
   servers.value.map((s) => ({
@@ -59,7 +57,7 @@ async function fetchServers() {
   try {
     servers.value = await getCaddyServerListApi();
     if (servers.value.length > 0 && !selectedServerId.value) {
-      selectedServerId.value = servers.value[0].id;
+      selectedServerId.value = servers.value[0]?.id;
     }
   } catch {
     message.error('Failed to load server list');
@@ -71,7 +69,7 @@ async function fetchConfig() {
   loading.value = true;
   try {
     const cfg = await getCaddyConfigApi(selectedServerId.value);
-    configContent.value = typeof cfg === 'string' ? cfg : JSON.stringify(cfg, null, 2);
+    configContent.value = cfg.config ?? '';
   } catch {
     message.error('Failed to load config');
   } finally {
@@ -86,13 +84,7 @@ async function handleSave() {
   }
   saving.value = true;
   try {
-    let parsed: any;
-    try {
-      parsed = JSON.parse(configContent.value);
-    } catch {
-      parsed = configContent.value; // send as raw string
-    }
-    await pushCaddyConfigApi(selectedServerId.value, parsed);
+    await pushCaddyConfigApi(selectedServerId.value, configContent.value);
     message.success('Config saved successfully');
   } catch {
     message.error('Failed to save config');
@@ -105,13 +97,10 @@ async function handlePreview() {
   if (!selectedServerId.value) return;
   previewing.value = true;
   try {
-    let parsed: any;
-    try {
-      parsed = JSON.parse(configContent.value);
-    } catch {
-      parsed = configContent.value;
-    }
-    previewResult.value = await previewCaddyConfigApi(selectedServerId.value, parsed);
+    previewResult.value = await previewCaddyConfigApi(selectedServerId.value, {
+      config: configContent.value,
+      mode: 'raw',
+    });
     previewDrawerVisible.value = true;
   } catch {
     message.error('Failed to preview config');
@@ -125,7 +114,8 @@ async function fetchHistory() {
   historyDrawerVisible.value = true;
   historyLoading.value = true;
   try {
-    historyList.value = await getCaddyConfigHistoryListApi(selectedServerId.value);
+    const data = await getCaddyConfigHistoryListApi(selectedServerId.value);
+    historyList.value = data.list ?? [];
   } catch {
     message.error('Failed to load history');
   } finally {
@@ -160,7 +150,8 @@ onMounted(async () => {
 });
 
 // watch server selection change
-function handleServerChange(val: number) {
+function handleServerChange(val: unknown) {
+  if (typeof val !== 'number') return;
   selectedServerId.value = val;
   fetchConfig();
 }
@@ -228,9 +219,6 @@ function handleServerChange(val: number) {
             placeholder="Select a server to load its config..."
             style="width: 100%; height: 100%; min-height: 400px; font-family: monospace; font-size: 13px;"
           />
-          <div style="margin-top: 8px; color: #999; font-size: 12px;">
-            Note: Monaco Editor integration coming soon. Currently using a plain textarea.
-          </div>
         </Spin>
       </Card>
     </div>

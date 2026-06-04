@@ -31,7 +31,7 @@ const showComponent = (route: RouteLocationNormalizedLoadedGeneric) => {
 </script>
 
 <template>
-  <div class="relative h-full">
+  <div class="relative h-full min-h-0 overflow-hidden">
     <IFrameRouterView />
     <RouteCachedView />
     <RouterView v-slot="{ Component, route }">

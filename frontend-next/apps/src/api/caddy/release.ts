@@ -1,12 +1,24 @@
 import { requestClient } from '#/api/request';
 
+import { listOf } from '../_utils';
+
 export namespace CaddyWafReleaseApi {
   export interface WafRelease {
     [key: string]: any;
   }
 
+  export interface WafReleaseListResult {
+    list: WafRelease[];
+    total: number;
+  }
+
   export interface WafJob {
     [key: string]: any;
+  }
+
+  export interface WafJobListResult {
+    list: WafJob[];
+    total: number;
   }
 }
 
@@ -16,9 +28,10 @@ export namespace CaddyWafReleaseApi {
  * 获取 WAF 发布列表 — GET /caddy/waf/release
  */
 export async function getWafReleaseListApi() {
-  return requestClient.get<CaddyWafReleaseApi.WafRelease[]>(
+  const resp = await requestClient.get<CaddyWafReleaseApi.WafReleaseListResult>(
     '/caddy/waf/release',
   );
+  return listOf(resp);
 }
 
 /**
@@ -48,7 +61,10 @@ export async function clearWafReleaseHistoryApi() {
  * 获取 WAF 任务列表 — GET /caddy/waf/job
  */
 export async function getWafJobListApi() {
-  return requestClient.get<CaddyWafReleaseApi.WafJob[]>('/caddy/waf/job');
+  const resp = await requestClient.get<CaddyWafReleaseApi.WafJobListResult>(
+    '/caddy/waf/job',
+  );
+  return listOf(resp);
 }
 
 /**

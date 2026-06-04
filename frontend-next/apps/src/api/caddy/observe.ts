@@ -1,5 +1,7 @@
 import { requestClient } from '#/api/request';
 
+import { listOf } from '../_utils';
+
 export namespace CaddyWafObserveApi {
   export interface WafPolicyStats {
     [key: string]: any;
@@ -7,6 +9,11 @@ export namespace CaddyWafObserveApi {
 
   export interface FalsePositiveFeedback {
     [key: string]: any;
+  }
+
+  export interface FalsePositiveFeedbackListResult {
+    list: FalsePositiveFeedback[];
+    total: number;
   }
 
   export interface FeedbackStatusUpdate {
@@ -35,10 +42,11 @@ export async function getWafPolicyStatsApi(params?: Record<string, any>) {
 export async function getFalsePositiveFeedbackListApi(
   params?: Record<string, any>,
 ) {
-  return requestClient.get<CaddyWafObserveApi.FalsePositiveFeedback[]>(
+  const resp = await requestClient.get<CaddyWafObserveApi.FalsePositiveFeedbackListResult>(
     '/caddy/waf/policy/false-positive-feedback',
     { params },
   );
+  return listOf(resp);
 }
 
 /**

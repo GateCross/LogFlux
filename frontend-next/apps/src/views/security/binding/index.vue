@@ -51,8 +51,7 @@ const columns = [
 async function fetchData() {
   loading.value = true;
   try {
-    const res = await getWafPolicyBindingListApi();
-    dataList.value = Array.isArray(res) ? res : (res?.data ?? []);
+    dataList.value = await getWafPolicyBindingListApi();
   } catch {
     // error handled by interceptor
   } finally {

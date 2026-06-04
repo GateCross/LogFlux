@@ -25,7 +25,18 @@ defineOptions({ name: 'UserCenter' });
 
 const userStore = useUserStore();
 
-const userInfo = computed(() => userStore.userInfo ?? {});
+interface UserProfile {
+  avatar?: string;
+  email?: string;
+  introduction?: string;
+  language?: string;
+  notifyEmail?: boolean;
+  realName?: string;
+  roles?: string[];
+  username?: string;
+}
+
+const userInfo = computed<UserProfile>(() => userStore.userInfo ?? {});
 
 // ── Preferences form ─────────────────────────────────────────
 

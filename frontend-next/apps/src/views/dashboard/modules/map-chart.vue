@@ -195,7 +195,7 @@ function buildMapSeries(): MapSeriesOption {
 const chartRef = ref<HTMLElement | null>(null);
 let chartInstance: echarts.ECharts | null = null;
 
-function getFullOptions(): echarts.EChartsOption {
+function getFullOptions(): echarts.EChartsCoreOption {
   return {
     tooltip: { show: true, formatter: formatTooltip },
     visualMap: {

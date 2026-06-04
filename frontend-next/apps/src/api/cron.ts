@@ -1,163 +1,176 @@
 import { requestClient } from '#/api/request';
 
+import type { ListResult } from './_utils';
+
+import { listOf, totalOf } from './_utils';
+
 export namespace CronApi {
-  /** Cron task entity */
+  export type ScriptMode = 'file' | 'inline';
+  export type TriggerMode = 'manual' | 'schedule' | string;
+
   export interface Task {
     createdAt: string;
-    cronExpression: string;
-    description: string;
-    enabled: boolean;
-    id: string;
+    currentFileId: number;
+    currentFileName: string;
+    currentFilePath: string;
+    currentFileSha256: string;
+    currentFileVersion: number;
+    id: number;
     name: string;
-    scriptContent: string;
-    scriptFileId: string;
-    scriptType: 'file' | 'inline';
+    nextRun: string;
+    schedule: string;
+    script: string;
+    scriptMode: ScriptMode;
+    status: number;
     timeout: number;
     updatedAt: string;
-    [key: string]: any;
   }
 
-  /** Parameters for creating a cron task */
-  export interface CreateTaskParams {
-    cronExpression: string;
-    description?: string;
-    enabled?: boolean;
+  export interface TaskPayload {
     name: string;
-    /** Inline script content (used when scriptType is 'inline') */
-    scriptContent?: string;
-    scriptType: 'file' | 'inline';
-    timeout?: number;
+    schedule: string;
+    script?: string;
+    scriptMode: ScriptMode;
+    status: number;
+    timeout: number;
   }
 
-  /** Parameters for updating a cron task */
-  export interface UpdateTaskParams {
-    cronExpression?: string;
-    description?: string;
-    enabled?: boolean;
+  export interface TaskListParams {
     name?: string;
-    scriptContent?: string;
-    scriptType?: 'file' | 'inline';
-    timeout?: number;
-  }
-
-  /** Script file version entry */
-  export interface ScriptFileVersion {
-    activatedAt: string;
-    createdAt: string;
-    fileName: string;
-    fileSize: number;
-    id: string;
-    isActive: boolean;
-    taskId: string;
-    version: number;
-    [key: string]: any;
-  }
-
-  /** Cron execution log entry */
-  export interface Log {
-    createdAt: string;
-    duration: number;
-    endTime: string;
-    errorMessage: string;
-    id: string;
-    output: string;
-    startTime: string;
-    status: 'failed' | 'running' | 'success';
-    taskId: string;
-    taskName: string;
-    triggerType: 'auto' | 'manual';
-    [key: string]: any;
-  }
-
-  /** Paginated list query parameters for cron logs */
-  export interface LogListParams {
     page?: number;
     pageSize?: number;
-    status?: string;
-    taskId?: string;
   }
 
-  /** Paginated response wrapper */
-  export interface PaginatedResult<T> {
+  export interface ScriptFile {
+    createdAt: string;
+    filePath: string;
+    id: number;
+    isCurrent: boolean;
+    originalName: string;
+    sha256: string;
+    sizeBytes: number;
+    storedName: string;
+    taskId: number;
+    version: number;
+  }
+
+  export interface Log {
+    duration: number;
+    endTime: string;
+    error: string;
+    exitCode: number;
+    id: number;
+    output: string;
+    scriptFileId: number;
+    scriptFileName: string;
+    scriptFilePath: string;
+    scriptFileSha256: string;
+    scriptFileVersion: number;
+    scriptMode: ScriptMode;
+    scriptSnapshot: string;
+    startTime: string;
+    status: number;
+    taskId: number;
+    taskName: string;
+    triggerMode: TriggerMode;
+  }
+
+  export interface ListParams {
+    page?: number;
+    pageSize?: number;
+  }
+
+  export interface LogListParams extends ListParams {
+    status?: number;
+    taskId?: number;
+  }
+
+  export interface ListResult<T> {
     list: T[];
-    page: number;
-    pageSize: number;
     total: number;
   }
 }
 
-// ────────────────────────────────────────────
-// Cron Task CRUD
-// ────────────────────────────────────────────
-
-/** List all cron tasks — GET /cron/task */
-export async function getCronTaskListApi() {
-  return requestClient.get<CronApi.Task[]>('/cron/task');
+function toListResult<T>(resp: ListResult<T> | T[]): CronApi.ListResult<T> {
+  return {
+    list: listOf<T>(resp),
+    total: totalOf(resp),
+  };
 }
 
-/** Create a cron task — POST /cron/task */
-export async function createCronTaskApi(data: CronApi.CreateTaskParams) {
-  return requestClient.post<CronApi.Task>('/cron/task', data);
+export async function getCronTaskListApi(params?: CronApi.TaskListParams) {
+  const resp = await requestClient.get<CronApi.ListResult<CronApi.Task>>(
+    '/cron/task',
+    { params },
+  );
+  return toListResult<CronApi.Task>(resp);
 }
 
-/** Update a cron task — PUT /cron/task/:id */
-export async function updateCronTaskApi(
-  id: string,
-  data: CronApi.UpdateTaskParams,
+export async function createCronTaskApi(data: CronApi.TaskPayload) {
+  return requestClient.post<void>('/cron/task', data);
+}
+
+export async function createCronTaskWithFileApi(
+  data: CronApi.TaskPayload,
+  file: File,
 ) {
-  return requestClient.put<CronApi.Task>(`/cron/task/${id}`, data);
+  const formData = new FormData();
+  formData.append('name', data.name);
+  formData.append('schedule', data.schedule);
+  formData.append('scriptMode', data.scriptMode);
+  formData.append('script', data.script ?? '');
+  formData.append('status', String(data.status));
+  formData.append('timeout', String(data.timeout));
+  formData.append('file', file);
+  return requestClient.post<void>('/cron/task', formData);
 }
 
-/** Delete a cron task — DELETE /cron/task/:id */
-export async function deleteCronTaskApi(id: string) {
+export async function updateCronTaskApi(
+  id: number,
+  data: CronApi.TaskPayload,
+) {
+  return requestClient.put<void>(`/cron/task/${id}`, data);
+}
+
+export async function deleteCronTaskApi(id: number) {
   return requestClient.delete<void>(`/cron/task/${id}`);
 }
 
-/** Manually trigger a cron task — POST /cron/task/:id/trigger */
-export async function triggerCronTaskApi(id: string) {
+export async function triggerCronTaskApi(id: number) {
   return requestClient.post<void>(`/cron/task/${id}/trigger`);
 }
 
-// ────────────────────────────────────────────
-// Script file management
-// ────────────────────────────────────────────
-
-/** Get script file version history — GET /cron/task/:taskId/script/history */
-export async function getCronScriptHistoryApi(taskId: string) {
-  return requestClient.get<CronApi.ScriptFileVersion[]>(
+export async function getCronScriptHistoryApi(
+  taskId: number,
+  params?: CronApi.ListParams,
+) {
+  const resp = await requestClient.get<CronApi.ListResult<CronApi.ScriptFile>>(
     `/cron/task/${taskId}/script/history`,
+    { params },
   );
+  return toListResult<CronApi.ScriptFile>(resp);
 }
 
-/** Upload a script file for a task — POST /cron/task/:taskId/script */
-export async function uploadCronScriptApi(taskId: string, file: File) {
+export async function uploadCronScriptApi(taskId: number, file: File) {
   const formData = new FormData();
   formData.append('file', file);
-  return requestClient.post<CronApi.ScriptFileVersion>(
-    `/cron/task/${taskId}/script`,
-    formData,
-  );
+  return requestClient.post<void>(`/cron/task/${taskId}/script`, formData);
 }
 
-/** Activate a specific script version — POST /cron/task/:taskId/script/:fileId/activate */
-export async function activateCronScriptApi(taskId: string, fileId: string) {
+export async function activateCronScriptApi(taskId: number, fileId: number) {
   return requestClient.post<void>(
     `/cron/task/${taskId}/script/${fileId}/activate`,
   );
 }
 
-// ────────────────────────────────────────────
-// Cron execution logs
-// ────────────────────────────────────────────
-
-/** List cron execution logs (paginated) — GET /cron/log */
 export async function getCronLogListApi(params?: CronApi.LogListParams) {
-  return requestClient.get<CronApi.PaginatedResult<CronApi.Log>>('/cron/log', {
-    params,
-  });
+  const resp = await requestClient.get<CronApi.ListResult<CronApi.Log>>(
+    '/cron/log',
+    { params },
+  );
+  return toListResult<CronApi.Log>(resp);
 }
 
-/** Get cron log detail — GET /cron/log/:id */
-export async function getCronLogDetailApi(id: string) {
+export async function getCronLogDetailApi(id: number) {
   return requestClient.get<CronApi.Log>(`/cron/log/${id}`);
 }

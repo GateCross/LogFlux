@@ -9,7 +9,6 @@ import {
   Form,
   FormItem,
   Input,
-  InputNumber,
   message,
   Modal,
   Popconfirm,
@@ -51,8 +50,7 @@ const columns = [
 async function fetchData() {
   loading.value = true;
   try {
-    const res = await getWafPolicyExclusionListApi();
-    dataList.value = Array.isArray(res) ? res : (res?.data ?? []);
+    dataList.value = await getWafPolicyExclusionListApi();
   } catch {
     // error handled by interceptor
   } finally {

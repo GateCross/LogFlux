@@ -35,8 +35,7 @@ const columns = [
 async function fetchData() {
   loading.value = true;
   try {
-    const res = await getWafJobListApi();
-    dataList.value = Array.isArray(res) ? res : (res?.data ?? []);
+    dataList.value = await getWafJobListApi();
   } catch {
     // error handled by interceptor
   } finally {

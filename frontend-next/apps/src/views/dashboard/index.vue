@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useDebounceFn } from '@vueuse/core';
 import { Icon } from '@iconify/vue';
-import { Button, Card, Col, Row, Space, Tag } from 'ant-design-vue';
+import { Button, Card, Col, Row, Space } from 'ant-design-vue';
 import type {
   DashboardSummaryResp,
 } from '#/api/dashboard';
@@ -220,8 +220,8 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="p-4">
-    <Space direction="vertical" :size="16" class="w-full">
+  <div class="dashboard-page h-full overflow-y-auto p-4">
+    <Space direction="vertical" :size="16" class="min-h-full w-full">
       <HeaderBanner :range-text="rangeText" :stats="headerStats" />
 
       <Card :bordered="false" class="rounded-2xl shadow-sm">
@@ -306,7 +306,7 @@ onUnmounted(() => {
           <MapChart :china-data="geoChinaData" :world-data="geoWorldData" />
         </Col>
         <Col :xs="24" :lg="8">
-          <Space direction="vertical" :size="16" class="h-full w-full">
+          <Space direction="vertical" :size="16" class="w-full">
             <TrendChart :times="trendTimes" :values="trendValues" />
             <RecentLogs :logs="recentLogs" />
           </Space>
@@ -317,6 +317,10 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.dashboard-page {
+  overscroll-behavior: contain;
+}
+
 .error-card {
   border: 1px solid rgba(0, 0, 0, 0.04);
 }

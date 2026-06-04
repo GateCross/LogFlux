@@ -1,17 +1,18 @@
 <script lang="ts" setup>
-import { onMounted, reactive, ref } from 'vue';
+import type { RoleApi } from '#/api/system/role';
+
+import { computed, onMounted, ref } from 'vue';
 
 import {
   Button,
   Card,
+  Checkbox,
+  CheckboxGroup,
   Form,
   FormItem,
-  Input,
   message,
   Modal,
-  Popconfirm,
   Space,
-  Switch,
   Table,
   Tag,
 } from 'ant-design-vue';
@@ -21,74 +22,54 @@ import {
   updateRolePermissionsApi,
 } from '#/api/system/role';
 
-import { requestClient } from '#/api/request';
-
 defineOptions({ name: 'ManageRole' });
 
-// --------------- types ---------------
-interface RoleItem {
-  id: number;
-  name: string;
-  description: string;
-  status: string;
-  permissions: string[];
-}
-
-// --------------- placeholder API calls ---------------
-async function createRoleApi(data: {
-  description: string;
-  name: string;
-  permissions: string[];
-}) {
-  return requestClient.post('/role', data);
-}
-
-async function updateRoleApi(
-  id: number,
-  data: { description?: string; name?: string; permissions?: string[] },
-) {
-  return requestClient.put(`/role/${id}`, data);
-}
-
-async function deleteRoleApi(id: number) {
-  return requestClient.delete(`/role/${id}`);
-}
-
-// --------------- state ---------------
 const loading = ref(false);
-const dataSource = ref<RoleItem[]>([]);
+const dataSource = ref<RoleApi.RoleItem[]>([]);
+
 const modalVisible = ref(false);
-const modalTitle = ref('新增角色');
-const editingId = ref<number | null>(null);
+const currentRoleId = ref<number | null>(null);
+const currentRoleName = ref('');
+const currentPermissions = ref<string[]>([]);
 const submitting = ref(false);
 
-const formState = reactive({
-  description: '',
-  name: '',
-  permissions: [] as string[],
-});
-
-const permissionOptions = [
-  'user:read',
-  'user:write',
-  'role:read',
-  'role:write',
-  'menu:read',
-  'menu:write',
-  'log:read',
-  'log:write',
-  'system:config',
+const permissionGroups = [
+  {
+    label: '仪表盘',
+    options: [{ label: '仪表盘', value: 'dashboard' }],
+  },
+  {
+    label: '日志与安全',
+    options: [
+      { label: '系统日志', value: 'logs' },
+      { label: 'Caddy 代理日志', value: 'logs_caddy' },
+      { label: '安全升级管理', value: 'security' },
+    ],
+  },
+  {
+    label: '系统管理',
+    options: [
+      { label: '用户管理', value: 'manage_user' },
+      { label: '角色管理', value: 'manage_role' },
+      { label: '菜单管理', value: 'manage_menu' },
+    ],
+  },
 ];
 
-// --------------- columns ---------------
 const columns = [
-  { dataIndex: 'name', key: 'name', title: '名称' },
+  { dataIndex: 'id', key: 'id', title: 'ID', width: 80 },
+  { dataIndex: 'name', key: 'name', title: '角色名', width: 140 },
+  { dataIndex: 'displayName', key: 'displayName', title: '显示名称', width: 160 },
   { dataIndex: 'description', key: 'description', title: '描述' },
-  { dataIndex: 'status', key: 'status', title: '状态' },
-  { key: 'actions', title: '操作', width: 220 },
+  { dataIndex: 'permissions', key: 'permissions', title: '权限', width: 260 },
+  { dataIndex: 'createdAt', key: 'createdAt', title: '创建时间', width: 180 },
+  { key: 'actions', title: '操作', width: 120 },
 ];
 
-// --------------- data fetching ---------------
+const modalTitle = computed(() =>
+  currentRoleName.value ? `编辑权限 - ${currentRoleName.value}` : '编辑权限',
+);
+
 async function fetchData() {
   loading.value = true;
   try {
@@ -100,83 +81,31 @@ async function fetchData() {
   }
 }
 
-// --------------- modal actions ---------------
-function openAddModal() {
-  modalTitle.value = '新增角色';
-  editingId.value = null;
-  formState.name = '';
-  formState.description = '';
-  formState.permissions = [];
-  modalVisible.value = true;
-}
-
-function open编辑Modal(record: RoleItem) {
-  modalTitle.value = '编辑角色';
-  editingId.value = record.id;
-  formState.name = record.name;
-  formState.description = record.description;
-  formState.permissions = [...(record.permissions ?? [])];
+function openPermissionModal(record: RoleApi.RoleItem) {
+  currentRoleId.value = record.id;
+  currentRoleName.value = record.displayName || record.name;
+  currentPermissions.value = [...(record.permissions ?? [])];
   modalVisible.value = true;
 }
 
 async function handleSubmit() {
-  if (!formState.name) {
-    message.warning('请输入角色名');
-    return;
-  }
+  if (!currentRoleId.value) return;
 
   submitting.value = true;
   try {
-    if (editingId.value) {
-      await updateRoleApi(editingId.value, {
-        description: formState.description,
-        name: formState.name,
-        permissions: formState.permissions,
-      });
-      // also sync permissions via dedicated endpoint
-      await updateRolePermissionsApi(editingId.value, formState.permissions);
-      message.success('角色更新成功');
-    } else {
-      await createRoleApi({
-        description: formState.description,
-        name: formState.name,
-        permissions: formState.permissions,
-      });
-      message.success('角色创建成功');
-    }
+    await updateRolePermissionsApi(currentRoleId.value, currentPermissions.value);
+    message.success('权限更新成功');
     modalVisible.value = false;
     await fetchData();
   } catch {
-    message.error('操作失败');
+    message.error('权限更新失败');
   } finally {
     submitting.value = false;
   }
 }
 
-async function handle删除(id: number) {
-  try {
-    await deleteRoleApi(id);
-    message.success('角色删除成功');
-    await fetchData();
-  } catch {
-    message.error('删除角色失败');
-  }
-}
-
-function handlePermissionChange(checked: boolean, permission: string) {
-  if (checked) {
-    formState.permissions.push(permission);
-  } else {
-    const idx = formState.permissions.indexOf(permission);
-    if (idx >= 0) {
-      formState.permissions.splice(idx, 1);
-    }
-  }
-}
-
-// --------------- lifecycle ---------------
 onMounted(() => {
-  fetchData();
+  void fetchData();
 });
 </script>
 
@@ -184,7 +113,7 @@ onMounted(() => {
   <div class="p-5">
     <Card title="角色管理">
       <template #extra>
-        <Button type="primary" @click="openAddModal">新增角色</Button>
+        <Button @click="fetchData">刷新</Button>
       </template>
 
       <Table
@@ -195,66 +124,62 @@ onMounted(() => {
         size="middle"
       >
         <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'status'">
-            <Tag :color="record.status === 'active' ? 'green' : 'red'">
-              {{ record.status }}
-            </Tag>
-          </template>
-          <template v-if="column.key === 'actions'">
-            <Space>
-              <Button type="link" size="small" @click="open编辑Modal(record)">
-                编辑
-              </Button>
-              <Popconfirm
-                title="确认删除此角色？"
-                ok-text="确认"
-                cancel-text="取消"
-                @confirm="handle删除(record.id)"
+          <template v-if="column.key === 'permissions'">
+            <template v-if="record.permissions?.length">
+              <Tag
+                v-for="permission in record.permissions"
+                :key="permission"
+                color="blue"
               >
-                <Button type="link" size="small" danger>删除</Button>
-              </Popconfirm>
-            </Space>
+                {{ permission }}
+              </Tag>
+            </template>
+            <Tag v-else>无</Tag>
+          </template>
+
+          <template v-if="column.key === 'actions'">
+            <Button
+              type="link"
+              size="small"
+              @click="openPermissionModal(record as RoleApi.RoleItem)"
+            >
+              编辑权限
+            </Button>
           </template>
         </template>
       </Table>
     </Card>
 
     <Modal
+      :confirm-loading="submitting"
       :open="modalVisible"
       :title="modalTitle"
-      :confirm-loading="submitting"
+      :width="680"
       @cancel="modalVisible = false"
       @ok="handleSubmit"
     >
-      <Form layout="vertical" style="margin-top: 16px;">
-        <FormItem label="Role 名称" required>
-          <Input
-            v-model:value="formState.name"
-            placeholder="请输入角色名"
-          />
-        </FormItem>
-        <FormItem label="描述">
-          <Input.TextArea
-            v-model:value="formState.description"
-            placeholder="请输入角色描述"
-            :rows="3"
-          />
-        </FormItem>
-        <FormItem label="权限">
-          <div style="display: flex; flex-wrap: wrap; gap: 12px;">
+      <Form layout="vertical" class="mt-4">
+        <FormItem label="权限列表">
+          <CheckboxGroup v-model:value="currentPermissions">
             <div
-              v-for="perm in permissionOptions"
-              :key="perm"
-              style="display: flex; align-items: center; gap: 6px;"
+              v-for="group in permissionGroups"
+              :key="group.label"
+              class="mb-4"
             >
-              <Switch
-                :checked="formState.permissions.includes(perm)"
-                size="small"
-                @change="(checked: boolean) => handlePermissionChange(checked, perm)"
-              />
-              <span>{{ perm }}</span>
+              <div class="mb-2 text-sm font-medium text-gray-700">
+                {{ group.label }}
+              </div>
+              <Space direction="vertical">
+                <Checkbox
+                  v-for="option in group.options"
+                  :key="option.value"
+                  :value="option.value"
+                >
+                  {{ option.label }}
+                </Checkbox>
+              </Space>
             </div>
-          </div>
+          </CheckboxGroup>
         </FormItem>
       </Form>
     </Modal>

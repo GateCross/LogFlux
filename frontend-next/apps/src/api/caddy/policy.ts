@@ -1,12 +1,24 @@
 import { requestClient } from '#/api/request';
 
+import { listOf } from '../_utils';
+
 export namespace CaddyWafPolicyApi {
   export interface WafPolicy {
     [key: string]: any;
   }
 
+  export interface WafPolicyListResult {
+    list: WafPolicy[];
+    total: number;
+  }
+
   export interface PolicyRevision {
     [key: string]: any;
+  }
+
+  export interface PolicyRevisionListResult {
+    list: PolicyRevision[];
+    total: number;
   }
 
   export interface PolicyDirectivePreview {
@@ -17,8 +29,18 @@ export namespace CaddyWafPolicyApi {
     [key: string]: any;
   }
 
+  export interface RuleExclusionListResult {
+    list: RuleExclusion[];
+    total: number;
+  }
+
   export interface PolicyBinding {
     [key: string]: any;
+  }
+
+  export interface PolicyBindingListResult {
+    list: PolicyBinding[];
+    total: number;
   }
 
   export interface RollbackParams {
@@ -32,7 +54,10 @@ export namespace CaddyWafPolicyApi {
  * 获取 WAF 策略列表 — GET /caddy/waf/policy
  */
 export async function getWafPolicyListApi() {
-  return requestClient.get<CaddyWafPolicyApi.WafPolicy[]>('/caddy/waf/policy');
+  const resp = await requestClient.get<CaddyWafPolicyApi.WafPolicyListResult>(
+    '/caddy/waf/policy',
+  );
+  return listOf(resp);
 }
 
 /**
@@ -97,9 +122,10 @@ export async function rollbackWafPolicyApi(
  * 获取策略版本列表 — GET /caddy/waf/policy/revision
  */
 export async function getWafPolicyRevisionListApi() {
-  return requestClient.get<CaddyWafPolicyApi.PolicyRevision[]>(
+  const resp = await requestClient.get<CaddyWafPolicyApi.PolicyRevisionListResult>(
     '/caddy/waf/policy/revision',
   );
+  return listOf(resp);
 }
 
 // ─── Rule Exclusions ───
@@ -108,9 +134,10 @@ export async function getWafPolicyRevisionListApi() {
  * 获取规则排除列表 — GET /caddy/waf/policy/exclusion
  */
 export async function getWafPolicyExclusionListApi() {
-  return requestClient.get<CaddyWafPolicyApi.RuleExclusion[]>(
+  const resp = await requestClient.get<CaddyWafPolicyApi.RuleExclusionListResult>(
     '/caddy/waf/policy/exclusion',
   );
+  return listOf(resp);
 }
 
 /**
@@ -145,9 +172,10 @@ export async function deleteWafPolicyExclusionApi(id: number) {
  * 获取策略绑定列表 — GET /caddy/waf/policy/binding
  */
 export async function getWafPolicyBindingListApi() {
-  return requestClient.get<CaddyWafPolicyApi.PolicyBinding[]>(
+  const resp = await requestClient.get<CaddyWafPolicyApi.PolicyBindingListResult>(
     '/caddy/waf/policy/binding',
   );
+  return listOf(resp);
 }
 
 /**

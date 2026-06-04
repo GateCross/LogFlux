@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { h, onMounted, reactive, ref } from 'vue';
+import { onMounted, reactive, ref } from 'vue';
 import {
   Button,
   Card,
@@ -240,14 +240,14 @@ onMounted(() => {
           </template>
           <template v-if="column.key === 'actions'">
             <Space>
-              <Button type="link" size="small" @click="handleEdit(record)">
+              <Button type="link" size="small" @click="handleEdit(record as UserItem)">
                 编辑
               </Button>
               <Button
                 type="link"
                 size="small"
                 :style="{ color: record.status === 1 ? '#faad14' : '#52c41a' }"
-                @click="handleToggleStatus(record)"
+                @click="handleToggleStatus(record as UserItem)"
               >
                 {{ record.status === 1 ? '冻结' : '解冻' }}
               </Button>

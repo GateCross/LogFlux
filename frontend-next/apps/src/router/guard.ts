@@ -113,9 +113,10 @@ function setupAccessGuard(router: Router) {
       return to.fullPath;
     }
 
+    const userHomePath = (userInfo as { homePath?: string })?.homePath;
     const redirectPath = (from.query.redirect ??
       (to.path === preferences.app.defaultHomePath
-        ? userInfo.homePath || preferences.app.defaultHomePath
+        ? userHomePath || preferences.app.defaultHomePath
         : to.fullPath)) as string;
 
     return {

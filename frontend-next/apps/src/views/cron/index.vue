@@ -6,168 +6,374 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import {
   Button,
   Card,
+  Descriptions,
+  DescriptionsItem,
   Drawer,
   Form,
   FormItem,
   Input,
   InputNumber,
+  message,
   Modal,
   Popconfirm,
-  Select,
+  Radio,
+  RadioGroup,
   Space,
   Switch,
   Table,
   Tag,
   Textarea,
-  message,
+  Upload,
 } from 'ant-design-vue';
 
 import {
+  activateCronScriptApi,
   createCronTaskApi,
+  createCronTaskWithFileApi,
   deleteCronTaskApi,
+  getCronLogDetailApi,
   getCronLogListApi,
+  getCronScriptHistoryApi,
   getCronTaskListApi,
   triggerCronTaskApi,
   updateCronTaskApi,
+  uploadCronScriptApi,
 } from '#/api/cron';
 
 defineOptions({ name: 'CronManagement' });
 
-// ── Task list state ──────────────────────────────────────────
-
 const loading = ref(false);
 const tasks = ref<CronApi.Task[]>([]);
+const searchName = ref('');
+const taskPagination = reactive({
+  current: 1,
+  pageSize: 20,
+  total: 0,
+});
+
+const taskModalVisible = ref(false);
+const taskModalMode = ref<'add' | 'edit'>('add');
+const editingTask = ref<CronApi.Task | null>(null);
+const taskSubmitting = ref(false);
+const taskFile = ref<File | null>(null);
+
+const taskForm = reactive<CronApi.TaskPayload>({
+  name: '',
+  schedule: '',
+  script: '',
+  scriptMode: 'inline',
+  status: 1,
+  timeout: 60,
+});
+
+const scriptModalVisible = ref(false);
+const currentScriptTask = ref<CronApi.Task | null>(null);
+const scriptHistory = ref<CronApi.ScriptFile[]>([]);
+const scriptHistoryLoading = ref(false);
+const scriptPagination = reactive({
+  current: 1,
+  pageSize: 10,
+  total: 0,
+});
+const scriptFile = ref<File | null>(null);
+const scriptUploading = ref(false);
+const activatingScriptIds = ref<Set<number>>(new Set());
+
+const logDrawerVisible = ref(false);
+const logs = ref<CronApi.Log[]>([]);
+const logsLoading = ref(false);
+const logTaskId = ref<number | undefined>();
+const logPagination = reactive({
+  current: 1,
+  pageSize: 20,
+  total: 0,
+});
+
+const logDetailVisible = ref(false);
+const detailLoading = ref(false);
+const currentLog = ref<CronApi.Log | null>(null);
+
+const triggeringTaskIds = ref<Set<number>>(new Set());
+const deletingTaskIds = ref<Set<number>>(new Set());
+
+const taskModalTitle = computed(() =>
+  taskModalMode.value === 'add' ? '新增任务' : '编辑任务',
+);
+const scriptModalTitle = computed(() =>
+  currentScriptTask.value
+    ? `脚本管理 - ${currentScriptTask.value.name}`
+    : '脚本管理',
+);
+const logDrawerTitle = computed(() =>
+  logTaskId.value ? `执行日志 #${logTaskId.value}` : '全部执行日志',
+);
+const logDetailTitle = computed(() =>
+  currentLog.value ? `日志详情 #${currentLog.value.id}` : '日志详情',
+);
+const outputLineCount = computed(() => {
+  const output = currentLog.value?.output ?? '';
+  return output.split(/\r?\n/).filter(Boolean).length;
+});
+const taskCanEnable = computed(
+  () =>
+    taskForm.scriptMode === 'inline' ||
+    taskModalMode.value === 'edit' ||
+    Boolean(taskFile.value),
+);
+
+const taskColumns = [
+  { dataIndex: 'name', key: 'name', title: '任务名称', width: 170 },
+  { dataIndex: 'schedule', key: 'schedule', title: 'Cron 表达式', width: 170 },
+  { dataIndex: 'scriptMode', key: 'scriptMode', title: '脚本来源', width: 220 },
+  { dataIndex: 'status', key: 'status', title: '状态', width: 90 },
+  { dataIndex: 'nextRun', key: 'nextRun', title: '下次执行', width: 170 },
+  { dataIndex: 'updatedAt', key: 'updatedAt', title: '更新时间', width: 170 },
+  { key: 'actions', title: '操作', width: 260 },
+];
+
+const scriptColumns = [
+  { dataIndex: 'version', key: 'version', title: '版本', width: 80 },
+  { dataIndex: 'originalName', key: 'originalName', title: '文件名', ellipsis: true },
+  { dataIndex: 'sizeBytes', key: 'sizeBytes', title: '大小', width: 100 },
+  { dataIndex: 'sha256', key: 'sha256', title: 'SHA256', ellipsis: true, width: 200 },
+  { dataIndex: 'isCurrent', key: 'isCurrent', title: '状态', width: 90 },
+  { dataIndex: 'createdAt', key: 'createdAt', title: '创建时间', width: 170 },
+  { key: 'actions', title: '操作', width: 110 },
+];
+
+const logColumns = [
+  { dataIndex: 'id', key: 'id', title: 'ID', width: 80 },
+  { dataIndex: 'taskName', key: 'taskName', title: '任务名称', ellipsis: true },
+  { dataIndex: 'startTime', key: 'startTime', title: '开始时间', width: 170 },
+  { dataIndex: 'triggerMode', key: 'triggerMode', title: '触发方式', width: 110 },
+  { dataIndex: 'scriptMode', key: 'scriptMode', title: '脚本来源', width: 110 },
+  { dataIndex: 'status', key: 'status', title: '状态', width: 90 },
+  { dataIndex: 'duration', key: 'duration', title: '耗时', width: 100 },
+  { key: 'actions', title: '操作', width: 90 },
+];
+
+function setLoadingId(target: typeof triggeringTaskIds, id: number, enabled: boolean) {
+  const next = new Set(target.value);
+  if (enabled) {
+    next.add(id);
+  } else {
+    next.delete(id);
+  }
+  target.value = next;
+}
+
+function validateScriptFile(file: File) {
+  if (file.size > 1024 * 1024) {
+    message.error('脚本文件不能超过 1 MiB');
+    return false;
+  }
+  if (!file.name.toLowerCase().endsWith('.sh')) {
+    message.error('仅支持上传 .sh 脚本文件');
+    return false;
+  }
+  return true;
+}
+
+function beforeTaskFileUpload(file: File) {
+  if (!validateScriptFile(file)) return Upload.LIST_IGNORE;
+  taskFile.value = file;
+  return false;
+}
+
+function beforeScriptFileUpload(file: File) {
+  if (!validateScriptFile(file)) return Upload.LIST_IGNORE;
+  scriptFile.value = file;
+  return false;
+}
+
+function removeTaskFile() {
+  taskFile.value = null;
+  if (taskForm.scriptMode === 'file' && taskModalMode.value === 'add') {
+    taskForm.status = 0;
+  }
+}
+
+function removeScriptFile() {
+  scriptFile.value = null;
+}
+
+function resetTaskForm() {
+  Object.assign(taskForm, {
+    name: '',
+    schedule: '',
+    script: '',
+    scriptMode: 'inline',
+    status: 1,
+    timeout: 60,
+  });
+  taskFile.value = null;
+}
+
+function syncFileModeStatus() {
+  if (!taskCanEnable.value) {
+    taskForm.status = 0;
+  }
+}
+
+function canTriggerTask(task: CronApi.Task) {
+  return task.scriptMode === 'file'
+    ? task.currentFileId > 0
+    : Boolean(task.script?.trim());
+}
+
+function triggerTooltip(task: CronApi.Task) {
+  if (task.scriptMode === 'file' && task.currentFileId <= 0) return '请先上传脚本';
+  if (task.scriptMode !== 'file' && !task.script?.trim()) return '请先填写脚本';
+  return '手动执行';
+}
+
+function currentTaskPayload(): CronApi.TaskPayload {
+  return {
+    name: taskForm.name.trim(),
+    schedule: taskForm.schedule.trim(),
+    script: taskForm.scriptMode === 'inline' ? taskForm.script?.trim() : '',
+    scriptMode: taskForm.scriptMode,
+    status: taskForm.status,
+    timeout: taskForm.timeout,
+  };
+}
 
 async function fetchTasks() {
   loading.value = true;
   try {
-    tasks.value = await getCronTaskListApi();
+    const res = await getCronTaskListApi({
+      name: searchName.value.trim() || undefined,
+      page: taskPagination.current,
+      pageSize: taskPagination.pageSize,
+    });
+    tasks.value = res.list;
+    taskPagination.total = res.total;
   } finally {
     loading.value = false;
   }
 }
 
-// ── Table columns ────────────────────────────────────────────
+function handleSearch() {
+  taskPagination.current = 1;
+  void fetchTasks();
+}
 
-const columns = [
-  { dataIndex: 'name', key: 'name', title: '名称' },
-  { dataIndex: 'scriptContent', key: 'scriptContent', title: '脚本', ellipsis: true },
-  { dataIndex: 'cronExpression', key: 'cronExpression', title: '调度表达式' },
-  { dataIndex: 'enabled', key: 'enabled', title: '状态' },
-  { dataIndex: 'updatedAt', key: 'updatedAt', title: '最后更新' },
-  { key: 'actions', title: '操作', width: 240 },
-];
-
-// ── 创建 / 编辑 modal ──────────────────────────────────────
-
-const modalVisible = ref(false);
-const editingId = ref<string | null>(null);
-const is编辑ing = computed(() => editingId.value !== null);
-
-const formState = reactive<CronApi.CreateTaskParams>({
-  cronExpression: '',
-  description: '',
-  enabled: true,
-  name: '',
-  scriptContent: '',
-  scriptType: 'inline',
-  timeout: 60,
-});
+function handleReset() {
+  searchName.value = '';
+  taskPagination.current = 1;
+  void fetchTasks();
+}
 
 function openCreate() {
-  editingId.value = null;
-  Object.assign(formState, {
-    cronExpression: '',
-    description: '',
-    enabled: true,
-    name: '',
-    scriptContent: '',
-    scriptType: 'inline',
-    timeout: 60,
-  });
-  modalVisible.value = true;
+  taskModalMode.value = 'add';
+  editingTask.value = null;
+  resetTaskForm();
+  taskModalVisible.value = true;
 }
 
-function open编辑(record: CronApi.Task) {
-  editingId.value = record.id;
-  Object.assign(formState, {
-    cronExpression: record.cronExpression,
-    description: record.description,
-    enabled: record.enabled,
-    name: record.name,
-    scriptContent: record.scriptContent,
-    scriptType: record.scriptType,
-    timeout: record.timeout,
+function openEdit(task: CronApi.Task) {
+  taskModalMode.value = 'edit';
+  editingTask.value = task;
+  taskFile.value = null;
+  Object.assign(taskForm, {
+    name: task.name,
+    schedule: task.schedule,
+    script: task.script,
+    scriptMode: task.scriptMode,
+    status: task.status,
+    timeout: task.timeout,
   });
-  modalVisible.value = true;
+  taskModalVisible.value = true;
 }
 
-async function handleSubmit() {
+async function submitTask() {
+  if (!taskForm.name.trim()) {
+    message.warning('请输入任务名称');
+    return;
+  }
+  if (!taskForm.schedule.trim()) {
+    message.warning('请输入 Cron 表达式');
+    return;
+  }
+  if (taskForm.scriptMode === 'inline' && !taskForm.script?.trim()) {
+    message.warning('请输入执行脚本');
+    return;
+  }
+  if (taskForm.scriptMode === 'file' && taskModalMode.value === 'add' && !taskFile.value) {
+    message.warning('请先选择脚本文件');
+    return;
+  }
+
+  syncFileModeStatus();
+  taskSubmitting.value = true;
   try {
-    if (is编辑ing.value) {
-      await updateCronTaskApi(editingId.value!, { ...formState });
-      message.success('Task updated 成功');
-    } else {
-      await createCronTaskApi({ ...formState });
-      message.success('Task created 成功');
+    const payload = currentTaskPayload();
+    if (taskModalMode.value === 'add') {
+      if (payload.scriptMode === 'file' && taskFile.value) {
+        await createCronTaskWithFileApi(payload, taskFile.value);
+      } else {
+        await createCronTaskApi(payload);
+      }
+    } else if (editingTask.value) {
+      await updateCronTaskApi(editingTask.value.id, payload);
     }
-    modalVisible.value = false;
+    message.success('操作成功');
+    taskModalVisible.value = false;
     await fetchTasks();
   } catch {
     message.error('操作失败');
+  } finally {
+    taskSubmitting.value = false;
   }
 }
 
-// ── 删除 ───────────────────────────────────────────────────
-
-async function handle删除(id: string) {
+async function deleteTask(id: number) {
+  setLoadingId(deletingTaskIds, id, true);
   try {
     await deleteCronTaskApi(id);
-    message.success('Task deleted');
+    message.success('删除成功');
+    if (logTaskId.value === id) {
+      logDrawerVisible.value = false;
+      logTaskId.value = undefined;
+    }
+    if (currentScriptTask.value?.id === id) {
+      scriptModalVisible.value = false;
+    }
     await fetchTasks();
   } catch {
-    message.error('删除 failed');
+    message.error('删除失败');
+  } finally {
+    setLoadingId(deletingTaskIds, id, false);
   }
 }
 
-// ── Trigger ──────────────────────────────────────────────────
-
-async function handleTrigger(id: string) {
+async function triggerTask(task: CronApi.Task) {
+  if (!canTriggerTask(task)) {
+    message.warning(triggerTooltip(task));
+    return;
+  }
+  setLoadingId(triggeringTaskIds, task.id, true);
   try {
-    await triggerCronTaskApi(id);
-    message.success('Task triggered');
+    await triggerCronTaskApi(task.id);
+    message.success('执行已提交，可在执行日志查看结果');
   } catch {
-    message.error('Trigger failed');
+    message.error('执行提交失败');
+  } finally {
+    setLoadingId(triggeringTaskIds, task.id, false);
   }
 }
 
-// ── Logs drawer ──────────────────────────────────────────────
+function handleTaskTableChange(pag: any) {
+  taskPagination.current = pag.current;
+  taskPagination.pageSize = pag.pageSize;
+  void fetchTasks();
+}
 
-const logsDrawerVisible = ref(false);
-const logsLoading = ref(false);
-const logList = ref<CronApi.Log[]>([]);
-const logPagination = reactive({
-  current: 1,
-  pageSize: 10,
-  total: 0,
-});
-const logFilterTaskId = ref<string>('');
-
-const logColumns = [
-  { dataIndex: 'taskName', key: 'taskName', title: '任务' },
-  { dataIndex: 'status', key: 'status', title: '状态' },
-  { dataIndex: 'triggerType', key: 'triggerType', title: '触发方式' },
-  { dataIndex: 'duration', key: 'duration', title: '耗时 (ms)' },
-  { dataIndex: 'startTime', key: 'startTime', title: '开始时间' },
-  { dataIndex: 'endTime', key: 'endTime', title: '结束时间' },
-  { dataIndex: 'errorMessage', key: 'errorMessage', title: '错误', ellipsis: true },
-];
-
-async function openLogs(taskId?: string) {
-  logFilterTaskId.value = taskId ?? '';
+function openLogs(taskId?: number) {
+  logTaskId.value = taskId;
   logPagination.current = 1;
-  logsDrawerVisible.value = true;
-  await fetchLogs();
+  logDrawerVisible.value = true;
+  void fetchLogs();
 }
 
 async function fetchLogs() {
@@ -176,85 +382,270 @@ async function fetchLogs() {
     const res = await getCronLogListApi({
       page: logPagination.current,
       pageSize: logPagination.pageSize,
-      taskId: logFilterTaskId.value || undefined,
+      taskId: logTaskId.value,
     });
-    logList.value = res.list;
+    logs.value = res.list;
     logPagination.total = res.total;
   } finally {
     logsLoading.value = false;
   }
 }
 
-function handleLogPageChange(page: number, pageSize: number) {
-  logPagination.current = page;
-  logPagination.pageSize = pageSize;
-  fetchLogs();
+function handleLogTableChange(pag: any) {
+  logPagination.current = pag.current;
+  logPagination.pageSize = pag.pageSize;
+  void fetchLogs();
 }
 
-// ── Init ─────────────────────────────────────────────────────
+async function openLogDetail(id: number) {
+  detailLoading.value = true;
+  logDetailVisible.value = true;
+  currentLog.value = null;
+  try {
+    currentLog.value = await getCronLogDetailApi(id);
+  } finally {
+    detailLoading.value = false;
+  }
+}
+
+function openScriptManager(task: CronApi.Task) {
+  currentScriptTask.value = task;
+  scriptFile.value = null;
+  scriptPagination.current = 1;
+  scriptModalVisible.value = true;
+  void fetchScriptHistory();
+}
+
+async function fetchScriptHistory() {
+  if (!currentScriptTask.value) return;
+  scriptHistoryLoading.value = true;
+  try {
+    const res = await getCronScriptHistoryApi(currentScriptTask.value.id, {
+      page: scriptPagination.current,
+      pageSize: scriptPagination.pageSize,
+    });
+    scriptHistory.value = res.list;
+    scriptPagination.total = res.total;
+  } finally {
+    scriptHistoryLoading.value = false;
+  }
+}
+
+function handleScriptTableChange(pag: any) {
+  scriptPagination.current = pag.current;
+  scriptPagination.pageSize = pag.pageSize;
+  void fetchScriptHistory();
+}
+
+async function uploadScript() {
+  if (!currentScriptTask.value) return;
+  if (!scriptFile.value) {
+    message.warning('请先选择脚本文件');
+    return;
+  }
+
+  scriptUploading.value = true;
+  try {
+    await uploadCronScriptApi(currentScriptTask.value.id, scriptFile.value);
+    message.success('脚本上传成功');
+    scriptFile.value = null;
+    await refreshTaskAndScript(currentScriptTask.value.id);
+  } catch {
+    message.error('脚本上传失败');
+  } finally {
+    scriptUploading.value = false;
+  }
+}
+
+async function activateScript(file: CronApi.ScriptFile) {
+  if (!currentScriptTask.value) return;
+  setLoadingId(activatingScriptIds, file.id, true);
+  try {
+    await activateCronScriptApi(currentScriptTask.value.id, file.id);
+    message.success('已切换为当前脚本版本');
+    await refreshTaskAndScript(currentScriptTask.value.id);
+  } catch {
+    message.error('激活失败');
+  } finally {
+    setLoadingId(activatingScriptIds, file.id, false);
+  }
+}
+
+async function refreshTaskAndScript(taskId: number) {
+  await fetchTasks();
+  const synced = tasks.value.find((task) => task.id === taskId);
+  if (synced) {
+    currentScriptTask.value = synced;
+    if (editingTask.value?.id === taskId) editingTask.value = synced;
+  }
+  await fetchScriptHistory();
+}
+
+function formatScriptMode(mode: string) {
+  return mode === 'file' ? '上传脚本' : '手写脚本';
+}
+
+function formatStatus(status: number) {
+  switch (status) {
+    case 0:
+      return '运行中';
+    case 1:
+      return '成功';
+    case 2:
+      return '失败';
+    case 3:
+      return '超时';
+    default:
+      return '未知';
+  }
+}
+
+function taskStatusText(status: number) {
+  return status === 1 ? '启用' : '禁用';
+}
+
+function statusColor(status: number) {
+  switch (status) {
+    case 0:
+      return 'blue';
+    case 1:
+      return 'green';
+    case 2:
+      return 'red';
+    case 3:
+      return 'orange';
+    default:
+      return 'default';
+  }
+}
+
+function formatTriggerMode(mode: string) {
+  if (mode === 'schedule') return '定时触发';
+  if (mode === 'manual') return '手动触发';
+  return mode || '-';
+}
+
+function formatBytes(bytes: number) {
+  if (!bytes) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let value = bytes;
+  let index = 0;
+  while (value >= 1024 && index < units.length - 1) {
+    value /= 1024;
+    index += 1;
+  }
+  return `${value.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
+}
+
+function shortenHash(hash: string) {
+  if (!hash) return '-';
+  return hash.length <= 16 ? hash : `${hash.slice(0, 8)}...${hash.slice(-8)}`;
+}
 
 onMounted(() => {
-  fetchTasks();
+  void fetchTasks();
 });
 </script>
 
 <template>
   <div class="p-5">
-    <Card title="Cron Tasks">
+    <Card title="定时任务">
       <template #extra>
         <Space>
-          <Button @click="openLogs()">
-            View All Logs
-          </Button>
-          <Button type="primary" @click="openCreate">
-            创建 Task
-          </Button>
+          <Button @click="openLogs()">全部日志</Button>
+          <Button @click="fetchTasks">刷新</Button>
+          <Button type="primary" @click="openCreate">新增任务</Button>
         </Space>
       </template>
 
+      <div class="mb-4 flex flex-wrap items-center gap-3">
+        <Input
+          v-model:value="searchName"
+          allow-clear
+          class="w-72"
+          placeholder="按任务名称搜索"
+          @press-enter="handleSearch"
+        />
+        <Space>
+          <Button type="primary" @click="handleSearch">搜索</Button>
+          <Button @click="handleReset">重置</Button>
+        </Space>
+      </div>
+
       <Table
-        :columns="columns"
+        :columns="taskColumns"
         :data-source="tasks"
         :loading="loading"
+        :pagination="{
+          current: taskPagination.current,
+          pageSize: taskPagination.pageSize,
+          total: taskPagination.total,
+          showSizeChanger: true,
+          showTotal: (total: number) => `共 ${total} 条`,
+        }"
         row-key="id"
         size="middle"
-        :pagination="false"
+        @change="handleTaskTableChange"
       >
         <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'enabled'">
-            <Tag :color="record.enabled ? 'green' : 'default'">
-              {{ record.enabled ? 'Enabled' : 'Disabled' }}
+          <template v-if="column.key === 'scriptMode'">
+            <div class="flex flex-col gap-1">
+              <Tag :color="record.scriptMode === 'file' ? 'green' : 'default'">
+                {{ formatScriptMode(record.scriptMode) }}
+              </Tag>
+              <span class="text-xs text-gray-500">
+                <template v-if="record.scriptMode === 'file'">
+                  {{
+                    record.currentFileName
+                      ? `v${record.currentFileVersion} · ${record.currentFileName}`
+                      : '尚未上传脚本'
+                  }}
+                </template>
+                <template v-else>
+                  {{ record.script ? '已配置内联脚本' : '未填写脚本' }}
+                </template>
+              </span>
+            </div>
+          </template>
+
+          <template v-if="column.key === 'status'">
+            <Tag :color="record.status === 1 ? 'green' : 'orange'">
+              {{ taskStatusText(record.status) }}
             </Tag>
           </template>
 
           <template v-if="column.key === 'actions'">
             <Space>
               <Button
-                size="small"
                 type="link"
-                @click="handleTrigger(record.id)"
+                size="small"
+                :disabled="!canTriggerTask(record as CronApi.Task)"
+                :loading="triggeringTaskIds.has(record.id)"
+                @click="triggerTask(record as CronApi.Task)"
               >
-                Trigger
+                执行
               </Button>
-              <Button
-                size="small"
-                type="link"
-                @click="openLogs(record.id)"
-              >
-                Logs
+              <Button type="link" size="small" @click="openScriptManager(record as CronApi.Task)">
+                脚本
               </Button>
-              <Button
-                size="small"
-                type="link"
-                @click="open编辑(record)"
-              >
+              <Button type="link" size="small" @click="openLogs(record.id)">
+                日志
+              </Button>
+              <Button type="link" size="small" @click="openEdit(record as CronApi.Task)">
                 编辑
               </Button>
               <Popconfirm
-                title="Are you sure to delete this task?"
-                @confirm="handle删除(record.id)"
+                title="确认删除该任务？"
+                ok-text="确认"
+                cancel-text="取消"
+                @confirm="deleteTask(record.id)"
               >
-                <Button size="small" type="link" danger>
+                <Button
+                  type="link"
+                  size="small"
+                  danger
+                  :loading="deletingTaskIds.has(record.id)"
+                >
                   删除
                 </Button>
               </Popconfirm>
@@ -264,110 +655,273 @@ onMounted(() => {
       </Table>
     </Card>
 
-    <!-- ── 创建 / 编辑 modal ──────────────────────────────── -->
     <Modal
-      v-model:open="modalVisible"
-      :title="is编辑ing ? '编辑 Task' : '创建 Task'"
-      :width="560"
-      @ok="handleSubmit"
+      :confirm-loading="taskSubmitting"
+      :open="taskModalVisible"
+      :title="taskModalTitle"
+      :width="720"
+      @cancel="taskModalVisible = false"
+      @ok="submitTask"
     >
-      <Form
-        :label-col="{ span: 6 }"
-        :wrapper-col="{ span: 18 }"
-        class="mt-4"
-      >
-        <FormItem label="Name" required>
-          <Input v-model:value="formState.name" placeholder="Task name" />
+      <Form :label-col="{ span: 5 }" :wrapper-col="{ span: 19 }" class="mt-4">
+        <FormItem label="任务名称" required>
+          <Input v-model:value="taskForm.name" />
         </FormItem>
-        <FormItem label="Schedule" required>
-          <Input
-            v-model:value="formState.cronExpression"
-            placeholder="Cron expression, e.g. */5 * * * *"
-          />
+
+        <FormItem label="Cron 表达式" required>
+          <Input v-model:value="taskForm.schedule" placeholder="例如 0/5 * * * * ?" />
         </FormItem>
-        <FormItem label="Script Type">
-          <Select v-model:value="formState.scriptType">
-            <Select.Option value="inline">Inline</Select.Option>
-            <Select.Option value="file">File</Select.Option>
-          </Select>
+
+        <FormItem label="脚本来源">
+          <RadioGroup v-model:value="taskForm.scriptMode" @change="syncFileModeStatus">
+            <Radio value="inline">手写脚本</Radio>
+            <Radio value="file">上传脚本</Radio>
+          </RadioGroup>
         </FormItem>
-        <FormItem
-          v-if="formState.scriptType === 'inline'"
-          label="Script"
-          required
-        >
+
+        <FormItem v-if="taskForm.scriptMode === 'inline'" label="执行脚本" required>
           <Textarea
-            v-model:value="formState.scriptContent"
-            :rows="6"
-            placeholder="Script content"
+            v-model:value="taskForm.script"
+            :rows="8"
+            placeholder="请输入 Shell 脚本"
           />
         </FormItem>
-        <FormItem label="Timeout (s)">
-          <InputNumber
-            v-model:value="formState.timeout"
-            :min="1"
-            :max="3600"
-            class="w-full"
-          />
+
+        <FormItem v-else label="脚本文件" :required="taskModalMode === 'add'">
+          <Upload
+            v-if="taskModalMode === 'add'"
+            :before-upload="beforeTaskFileUpload"
+            :max-count="1"
+            accept=".sh"
+            @remove="removeTaskFile"
+          >
+            <Button>选择脚本文件</Button>
+          </Upload>
+          <div v-else class="text-sm text-gray-500">
+            如需上传新版本，请在脚本管理中操作。
+            <template v-if="editingTask?.currentFileName">
+              当前脚本：v{{ editingTask.currentFileVersion }} · {{ editingTask.currentFileName }}
+            </template>
+          </div>
         </FormItem>
-        <FormItem label="Description">
-          <Textarea
-            v-model:value="formState.description"
-            :rows="2"
-            placeholder="Optional description"
-          />
+
+        <FormItem label="超时时间">
+          <InputNumber v-model:value="taskForm.timeout" :min="1" :max="3600" class="w-full" />
         </FormItem>
-        <FormItem label="Enabled">
-          <Switch v-model:checked="formState.enabled" />
+
+        <FormItem label="启用">
+          <Switch
+            v-model:checked="taskForm.status"
+            :checked-value="1"
+            :unchecked-value="0"
+            :disabled="!taskCanEnable"
+          />
         </FormItem>
       </Form>
     </Modal>
 
-    <!-- ── Logs drawer ──────────────────────────────────────── -->
-    <Drawer
-      v-model:open="logsDrawerVisible"
-      title="Execution Logs"
-      :width="720"
-      :body-style="{ padding: 0 }"
+    <Modal
+      :open="scriptModalVisible"
+      :title="scriptModalTitle"
+      :width="960"
+      footer=""
+      @cancel="scriptModalVisible = false"
     >
-      <div class="p-4">
+      <div v-if="currentScriptTask" class="space-y-4">
+        <Descriptions :column="2" bordered size="small">
+          <DescriptionsItem label="任务名称">
+            {{ currentScriptTask.name }}
+          </DescriptionsItem>
+          <DescriptionsItem label="脚本来源">
+            {{ formatScriptMode(currentScriptTask.scriptMode) }}
+          </DescriptionsItem>
+          <DescriptionsItem label="当前脚本">
+            <span v-if="currentScriptTask.currentFileName">
+              v{{ currentScriptTask.currentFileVersion }} · {{ currentScriptTask.currentFileName }}
+            </span>
+            <span v-else>-</span>
+          </DescriptionsItem>
+          <DescriptionsItem label="脚本路径">
+            {{ currentScriptTask.currentFilePath || '-' }}
+          </DescriptionsItem>
+        </Descriptions>
+
+        <div class="rounded border border-gray-200 p-4">
+          <div class="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <div class="font-medium">上传新版本</div>
+              <div class="text-xs text-gray-500">仅支持 1 MiB 以内的 .sh 脚本文件。</div>
+            </div>
+            <Space>
+              <Upload
+                :before-upload="beforeScriptFileUpload"
+                :max-count="1"
+                accept=".sh"
+                @remove="removeScriptFile"
+              >
+                <Button>选择脚本文件</Button>
+              </Upload>
+              <Button type="primary" :loading="scriptUploading" @click="uploadScript">
+                上传脚本
+              </Button>
+            </Space>
+          </div>
+          <div class="text-xs text-gray-500">上传后会切换为文件脚本模式，并保留历史版本。</div>
+        </div>
+
         <Table
-          :columns="logColumns"
-          :data-source="logList"
-          :loading="logsLoading"
+          :columns="scriptColumns"
+          :data-source="scriptHistory"
+          :loading="scriptHistoryLoading"
+          :pagination="{
+            current: scriptPagination.current,
+            pageSize: scriptPagination.pageSize,
+            total: scriptPagination.total,
+            showSizeChanger: true,
+          }"
           row-key="id"
           size="small"
-          :pagination="{
-            current: logPagination.current,
-            pageSize: logPagination.pageSize,
-            total: logPagination.total,
-            showSizeChanger: true,
-            showTotal: (t: number) => `Total ${t} records`,
-            onChange: handleLogPageChange,
-          }"
+          @change="handleScriptTableChange"
         >
           <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'status'">
-              <Tag
-                :color="
-                  record.status === 'success'
-                    ? 'green'
-                    : record.status === 'failed'
-                      ? 'red'
-                      : 'blue'
-                "
-              >
-                {{ record.status }}
+            <template v-if="column.key === 'version'">
+              v{{ record.version }}
+            </template>
+            <template v-if="column.key === 'sizeBytes'">
+              {{ formatBytes(record.sizeBytes) }}
+            </template>
+            <template v-if="column.key === 'sha256'">
+              {{ shortenHash(record.sha256) }}
+            </template>
+            <template v-if="column.key === 'isCurrent'">
+              <Tag :color="record.isCurrent ? 'green' : 'default'">
+                {{ record.isCurrent ? '当前' : '历史' }}
               </Tag>
             </template>
-            <template v-if="column.key === 'triggerType'">
-              <Tag :color="record.triggerType === 'auto' ? 'purple' : 'orange'">
-                {{ record.triggerType }}
-              </Tag>
+            <template v-if="column.key === 'actions'">
+              <Tag v-if="record.isCurrent" color="green">已激活</Tag>
+              <Button
+                v-else
+                type="link"
+                size="small"
+                :loading="activatingScriptIds.has(record.id)"
+                @click="activateScript(record as CronApi.ScriptFile)"
+              >
+                激活
+              </Button>
             </template>
           </template>
         </Table>
       </div>
+    </Modal>
+
+    <Drawer
+      v-model:open="logDrawerVisible"
+      :title="logDrawerTitle"
+      :width="960"
+      :body-style="{ padding: '16px' }"
+    >
+      <div class="mb-3 flex justify-end">
+        <Button @click="fetchLogs">刷新</Button>
+      </div>
+      <Table
+        :columns="logColumns"
+        :data-source="logs"
+        :loading="logsLoading"
+        :pagination="{
+          current: logPagination.current,
+          pageSize: logPagination.pageSize,
+          total: logPagination.total,
+          showSizeChanger: true,
+          showTotal: (total: number) => `共 ${total} 条`,
+        }"
+        row-key="id"
+        size="small"
+        @change="handleLogTableChange"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'triggerMode'">
+            <Tag :color="record.triggerMode === 'schedule' ? 'purple' : 'orange'">
+              {{ formatTriggerMode(record.triggerMode) }}
+            </Tag>
+          </template>
+          <template v-if="column.key === 'scriptMode'">
+            <Tag :color="record.scriptMode === 'file' ? 'green' : 'default'">
+              {{ formatScriptMode(record.scriptMode) }}
+            </Tag>
+          </template>
+          <template v-if="column.key === 'status'">
+            <Tag :color="statusColor(record.status)">
+              {{ formatStatus(record.status) }}
+            </Tag>
+          </template>
+          <template v-if="column.key === 'duration'">
+            {{ record.duration }} ms
+          </template>
+          <template v-if="column.key === 'actions'">
+            <Button type="link" size="small" @click="openLogDetail(record.id)">
+              详情
+            </Button>
+          </template>
+        </template>
+      </Table>
     </Drawer>
+
+    <Modal
+      :open="logDetailVisible"
+      :title="logDetailTitle"
+      :width="960"
+      footer=""
+      @cancel="logDetailVisible = false"
+    >
+      <div v-if="detailLoading" class="py-8 text-center text-gray-500">加载中...</div>
+      <div v-else-if="currentLog" class="space-y-4">
+        <Descriptions :column="2" bordered size="small">
+          <DescriptionsItem label="任务名称">{{ currentLog.taskName }}</DescriptionsItem>
+          <DescriptionsItem label="任务 ID">{{ currentLog.taskId }}</DescriptionsItem>
+          <DescriptionsItem label="开始时间">{{ currentLog.startTime }}</DescriptionsItem>
+          <DescriptionsItem label="结束时间">{{ currentLog.endTime || '-' }}</DescriptionsItem>
+          <DescriptionsItem label="触发方式">
+            {{ formatTriggerMode(currentLog.triggerMode) }}
+          </DescriptionsItem>
+          <DescriptionsItem label="脚本来源">
+            {{ formatScriptMode(currentLog.scriptMode) }}
+          </DescriptionsItem>
+          <DescriptionsItem label="状态">
+            {{ formatStatus(currentLog.status) }}
+          </DescriptionsItem>
+          <DescriptionsItem label="退出码">{{ currentLog.exitCode }}</DescriptionsItem>
+          <DescriptionsItem label="耗时">{{ currentLog.duration }} ms</DescriptionsItem>
+          <DescriptionsItem label="输出行数">{{ outputLineCount }}</DescriptionsItem>
+          <DescriptionsItem v-if="currentLog.scriptFileName" label="脚本文件">
+            {{ currentLog.scriptFileName }}
+          </DescriptionsItem>
+          <DescriptionsItem v-if="currentLog.scriptFileVersion > 0" label="文件版本">
+            v{{ currentLog.scriptFileVersion }}
+          </DescriptionsItem>
+          <DescriptionsItem v-if="currentLog.scriptFilePath" label="文件路径" :span="2">
+            {{ currentLog.scriptFilePath }}
+          </DescriptionsItem>
+          <DescriptionsItem v-if="currentLog.scriptFileSha256" label="SHA256" :span="2">
+            {{ currentLog.scriptFileSha256 }}
+          </DescriptionsItem>
+        </Descriptions>
+
+        <div v-if="currentLog.scriptSnapshot">
+          <div class="mb-2 text-sm font-medium">脚本快照</div>
+          <Textarea :value="currentLog.scriptSnapshot" readonly auto-size />
+        </div>
+
+        <div>
+          <div class="mb-2 text-sm font-medium">标准输出</div>
+          <Textarea :value="currentLog.output || '-'" readonly auto-size />
+        </div>
+
+        <div v-if="currentLog.error">
+          <div class="mb-2 text-sm font-medium text-red-500">错误输出</div>
+          <Textarea :value="currentLog.error" readonly auto-size />
+        </div>
+      </div>
+    </Modal>
   </div>
 </template>

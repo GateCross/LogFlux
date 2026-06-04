@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { NotificationApi } from '#/api/notification';
 
-import { onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 
 import {
   Button,
@@ -41,8 +41,8 @@ async function fetchLogs() {
       current: pagination.current,
       pageSize: pagination.pageSize,
     });
-    logs.value = Array.isArray(data) ? data : [];
-    pagination.total = Array.isArray(data) ? data.length : 0;
+    logs.value = data.list ?? [];
+    pagination.total = data.total ?? 0;
   } finally {
     loading.value = false;
   }
@@ -61,12 +61,12 @@ const columns = [
 
 // ── Row selection ───────────────────────────────────────────
 
-const rowSelection = {
-  onChange: (keys: string[]) => {
-    selectedRowKeys.value = keys;
+const rowSelection = computed(() => ({
+  onChange: (keys: Array<number | string>) => {
+    selectedRowKeys.value = keys.map(String);
   },
-  selectedRowKeys,
-};
+  selectedRowKeys: selectedRowKeys.value,
+}));
 
 // ── Pagination change ───────────────────────────────────────
 

@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import type { MenuApi } from '#/api/system/menu';
+
 import { computed, onMounted, reactive, ref } from 'vue';
 
 import {
@@ -14,78 +16,96 @@ import {
   Select,
   SelectOption,
   Space,
+  Switch,
   Table,
   Tag,
 } from 'ant-design-vue';
 
-import { requestClient } from '#/api/request';
+import {
+  createMenuApi,
+  deleteMenuApi,
+  getMenuListApi,
+  updateMenuApi,
+} from '#/api/system/menu';
+import { getRoleListApi } from '#/api/system/role';
 
 defineOptions({ name: 'ManageMenu' });
 
-// --------------- types ---------------
-interface MenuItem {
-  id: number;
-  title: string;
-  path: string;
-  icon: string;
-  order: number;
-  type: 'directory' | 'menu';
-  status: string;
-  parentId: number | null;
+interface MenuItem extends MenuApi.MenuItem {
   children?: MenuItem[];
+  hideInMenu: boolean;
+  i18nKey: string;
+  icon: string;
+  localIcon: string;
+  roles: string[];
+  title: string;
+  type: 'directory' | 'menu';
 }
 
-// --------------- placeholder API calls ---------------
-async function getMenuListApi() {
-  return requestClient.get<MenuItem[]>('/system/menu/list');
-}
-
-async function createMenuApi(data: Omit<MenuItem, 'children' | 'id'>) {
-  return requestClient.post('/system/menu', data);
-}
-
-async function updateMenuApi(
-  id: number,
-  data: Partial<Omit<MenuItem, 'children' | 'id'>>,
-) {
-  return requestClient.put(`/system/menu/${id}`, data);
-}
-
-async function deleteMenuApi(id: number) {
-  return requestClient.delete(`/system/menu/${id}`);
-}
-
-// --------------- state ---------------
 const loading = ref(false);
 const dataSource = ref<MenuItem[]>([]);
 const flatList = ref<MenuItem[]>([]);
+const roleOptions = ref<Array<{ label: string; value: string }>>([]);
+
 const modalVisible = ref(false);
-const modalTitle = ref('新增菜单');
+const modalType = ref<'add' | 'edit'>('add');
 const editingId = ref<number | null>(null);
 const submitting = ref(false);
 
+const modalTitle = computed(() =>
+  modalType.value === 'add' ? '新增菜单' : '编辑菜单',
+);
+
 const formState = reactive({
+  component: '',
+  hideInMenu: false,
+  i18nKey: '',
   icon: '',
+  localIcon: '',
+  name: '',
   order: 0,
-  parentId: null as number | null,
+  parentId: 0 as number | null,
   path: '',
+  roles: [] as string[],
   title: '',
-  type: 'menu' as 'directory' | 'menu',
 });
 
-// --------------- columns ---------------
 const columns = [
-  { dataIndex: 'title', key: 'title', title: 'Title', width: 200 },
-  { dataIndex: 'path', key: 'path', title: 'Path', width: 200 },
-  { dataIndex: 'icon', key: 'icon', title: 'Icon', width: 120 },
-  { dataIndex: 'order', key: 'order', title: 'Order', width: 80 },
-  { dataIndex: 'type', key: 'type', title: 'Type', width: 100 },
-  { dataIndex: 'status', key: 'status', title: '状态', width: 100 },
-  { key: 'actions', title: '操作', width: 180 },
+  { dataIndex: 'title', key: 'title', title: '菜单名称', width: 180 },
+  { dataIndex: 'path', key: 'path', title: '路径', width: 180 },
+  { dataIndex: 'component', key: 'component', title: '组件', ellipsis: true, width: 220 },
+  { dataIndex: 'order', key: 'order', title: '排序', width: 80 },
+  { dataIndex: 'i18nKey', key: 'i18nKey', title: '国际化 Key', width: 180 },
+  { dataIndex: 'roles', key: 'roles', title: '所需角色', width: 220 },
+  { dataIndex: 'hideInMenu', key: 'hideInMenu', title: '菜单显示', width: 100 },
+  { key: 'actions', title: '操作', width: 220 },
 ];
 
-// --------------- helpers ---------------
-/** Flatten nested tree to a flat list for parent select options */
+const parentOptions = computed(() =>
+  flatList.value.filter((item) => item.id !== editingId.value),
+);
+
+function normalizeMenuItem(item: MenuApi.MenuItem): MenuItem {
+  const meta = item.meta ?? {};
+  const children = item.children?.map(normalizeMenuItem) ?? [];
+  return {
+    ...item,
+    children,
+    hideInMenu: Boolean(meta.hideInMenu),
+    i18nKey: meta.i18nKey ?? '',
+    icon: meta.icon ?? '',
+    localIcon: meta.localIcon ?? '',
+    meta,
+    parentId: item.parentId ?? 0,
+    requiredRoles: item.requiredRoles ?? [],
+    roles: item.requiredRoles?.length ? item.requiredRoles : meta.roles ?? [],
+    title: meta.title ?? item.name,
+    type: children.length > 0 || item.component.startsWith('layout.')
+      ? 'directory'
+      : 'menu',
+  };
+}
+
 function flattenTree(nodes: MenuItem[], result: MenuItem[] = []): MenuItem[] {
   for (const node of nodes) {
     result.push(node);
@@ -96,70 +116,116 @@ function flattenTree(nodes: MenuItem[], result: MenuItem[] = []): MenuItem[] {
   return result;
 }
 
-/** Parent options excluding the item being edited */
-const parentOptions = computed(() => {
-  return flatList.value.filter(
-    (item) => item.id !== editingId.value && item.type === 'directory',
-  );
-});
+function resetForm(parentId = 0) {
+  Object.assign(formState, {
+    component: parentId > 0 ? 'view.' : 'layout.base',
+    hideInMenu: false,
+    i18nKey: '',
+    icon: '',
+    localIcon: '',
+    name: '',
+    order: 0,
+    parentId,
+    path: parentId > 0 ? '/' : '',
+    roles: [],
+    title: '',
+  });
+}
 
-// --------------- data fetching ---------------
+function buildPayload(): MenuApi.MenuPayload {
+  const title = formState.title || formState.name;
+  return {
+    component: formState.component,
+    meta: {
+      hideInMenu: formState.hideInMenu,
+      i18nKey: formState.i18nKey,
+      icon: formState.icon,
+      localIcon: formState.localIcon,
+      order: formState.order,
+      roles: formState.roles,
+      title,
+    },
+    name: formState.name,
+    order: formState.order,
+    parentId: formState.parentId ?? 0,
+    path: formState.path,
+    requiredRoles: formState.roles,
+  };
+}
+
+async function fetchRoles() {
+  const roles = await getRoleListApi();
+  roleOptions.value = roles.map((role) => ({
+    label: role.displayName || role.name,
+    value: role.name,
+  }));
+}
+
 async function fetchData() {
   loading.value = true;
   try {
-    dataSource.value = await getMenuListApi();
-    flatList.value = flattenTree([...dataSource.value]);
+    dataSource.value = (await getMenuListApi()).map(normalizeMenuItem);
+    flatList.value = flattenTree(dataSource.value, []);
   } catch {
-    message.error('Failed to load menu list');
+    message.error('加载菜单列表失败');
   } finally {
     loading.value = false;
   }
 }
 
-// --------------- modal actions ---------------
-function openAddModal(parentId?: number) {
-  modalTitle.value = '新增菜单';
+function openAddModal(parentId = 0) {
+  modalType.value = 'add';
   editingId.value = null;
-  formState.title = '';
-  formState.path = '';
-  formState.icon = '';
-  formState.order = 0;
-  formState.parentId = parentId ?? null;
-  formState.type = 'menu';
+  resetForm(parentId);
   modalVisible.value = true;
 }
 
-function open编辑Modal(record: MenuItem) {
-  modalTitle.value = '编辑 Menu';
+function openAddChild(record: MenuItem) {
+  openAddModal(record.id);
+  formState.path = `${record.path.replace(/\/$/, '')}/`;
+}
+
+function openEditModal(record: MenuItem) {
+  modalType.value = 'edit';
   editingId.value = record.id;
-  formState.title = record.title;
-  formState.path = record.path;
-  formState.icon = record.icon;
-  formState.order = record.order;
-  formState.parentId = record.parentId;
-  formState.type = record.type;
+  Object.assign(formState, {
+    component: record.component,
+    hideInMenu: record.hideInMenu,
+    i18nKey: record.i18nKey,
+    icon: record.icon,
+    localIcon: record.localIcon,
+    name: record.name,
+    order: record.order || record.meta?.order || 0,
+    parentId: record.parentId ?? 0,
+    path: record.path,
+    roles: [...record.roles],
+    title: record.title,
+  });
   modalVisible.value = true;
 }
 
 async function handleSubmit() {
-  if (!formState.title) {
-    message.warning('Title is required');
+  if (!formState.name.trim()) {
+    message.warning('请输入菜单唯一标识');
     return;
   }
-  if (!formState.path) {
-    message.warning('Path is required');
+  if (!formState.path.trim()) {
+    message.warning('请输入菜单路径');
+    return;
+  }
+  if (!formState.component.trim()) {
+    message.warning('请输入组件路径');
     return;
   }
 
   submitting.value = true;
   try {
     if (editingId.value) {
-      await updateMenuApi(editingId.value, { ...formState });
-      message.success('Menu updated successfully');
+      await updateMenuApi(editingId.value, buildPayload());
     } else {
-      await createMenuApi({ ...formState });
-      message.success('Menu created successfully');
+      await createMenuApi(buildPayload());
     }
+    message.success('操作成功');
     modalVisible.value = false;
     await fetchData();
   } catch {
@@ -169,62 +235,77 @@ async function handleSubmit() {
   }
 }
 
-async function handle删除(id: number) {
+async function handleDelete(id: number) {
   try {
     await deleteMenuApi(id);
-    message.success('Menu deleted successfully');
+    message.success('删除成功');
     await fetchData();
   } catch {
-    message.error('Failed to delete menu');
+    message.error('删除菜单失败');
   }
 }
+
+onMounted(() => {
+  void fetchRoles();
+  void fetchData();
+});
 </script>
 
 <template>
   <div class="p-5">
     <Card title="菜单管理">
       <template #extra>
-        <Button type="primary" @click="openAddModal()">新增菜单</Button>
+        <Space>
+          <Button @click="fetchData">刷新</Button>
+          <Button type="primary" @click="openAddModal()">新增一级菜单</Button>
+        </Space>
       </template>
 
       <Table
         :columns="columns"
         :data-source="dataSource"
+        :default-expand-all-rows="true"
         :loading="loading"
         :pagination="false"
-        :default-expand-all-rows="true"
         row-key="id"
         size="middle"
       >
         <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'type'">
-            <Tag :color="record.type === 'directory' ? 'orange' : 'blue'">
-              {{ record.type }}
+          <template v-if="column.key === 'title'">
+            <Space size="small">
+              <span>{{ record.title }}</span>
+              <Tag v-if="record.icon" color="blue">{{ record.icon }}</Tag>
+            </Space>
+          </template>
+
+          <template v-if="column.key === 'roles'">
+            <template v-if="record.roles?.length">
+              <Tag v-for="role in record.roles" :key="role" color="blue">
+                {{ role }}
+              </Tag>
+            </template>
+            <Tag v-else>公开</Tag>
+          </template>
+
+          <template v-if="column.key === 'hideInMenu'">
+            <Tag :color="record.hideInMenu ? 'default' : 'green'">
+              {{ record.hideInMenu ? '隐藏' : '显示' }}
             </Tag>
           </template>
-          <template v-if="column.key === 'status'">
-            <Tag :color="record.status === 'active' ? 'green' : 'red'">
-              {{ record.status }}
-            </Tag>
-          </template>
+
           <template v-if="column.key === 'actions'">
             <Space>
-              <Button
-                v-if="record.type === 'directory'"
-                type="link"
-                size="small"
-                @click="openAddModal(record.id)"
-              >
-                Add Child
+              <Button type="link" size="small" @click="openAddChild(record as MenuItem)">
+                新增子级
               </Button>
-              <Button type="link" size="small" @click="open编辑Modal(record)">
+              <Button type="link" size="small" @click="openEditModal(record as MenuItem)">
                 编辑
               </Button>
               <Popconfirm
-                title="Are you sure to delete this menu? Child items will also be removed."
+                title="确认删除该菜单及其所有子项？"
                 ok-text="确认"
                 cancel-text="取消"
-                @confirm="handle删除(record.id)"
+                @confirm="handleDelete(record.id)"
               >
                 <Button type="link" size="small" danger>删除</Button>
               </Popconfirm>
@@ -235,59 +316,83 @@ async function handle删除(id: number) {
     </Card>
 
     <Modal
+      :confirm-loading="submitting"
       :open="modalVisible"
       :title="modalTitle"
-      :confirm-loading="submitting"
+      :width="680"
       @cancel="modalVisible = false"
       @ok="handleSubmit"
     >
-      <Form layout="vertical" style="margin-top: 16px;">
-        <FormItem label="Title" required>
-          <Input
-            v-model:value="formState.title"
-            placeholder="Enter menu title"
-          />
-        </FormItem>
-        <FormItem label="Path" required>
-          <Input
-            v-model:value="formState.path"
-            placeholder="e.g. /system/user"
-          />
-        </FormItem>
-        <FormItem label="Icon">
-          <Input
-            v-model:value="formState.icon"
-            placeholder="Icon name, e.g. UserOutlined"
-          />
-        </FormItem>
-        <FormItem label="Parent">
+      <Form layout="vertical" class="mt-4">
+        <FormItem label="上级菜单">
           <Select
-            v-model:value="formState.parentId"
             allow-clear
-            placeholder="Select parent (none = root)"
+            :value="formState.parentId || undefined"
+            @change="(value: unknown) => (formState.parentId = typeof value === 'number' ? value : 0)"
           >
-            <SelectOption :value="null">-- Root --</SelectOption>
             <SelectOption
               v-for="item in parentOptions"
               :key="item.id"
               :value="item.id"
             >
-              {{ item.title }}
+              {{ item.title }} ({{ item.path }})
             </SelectOption>
           </Select>
         </FormItem>
-        <FormItem label="Order">
-          <InputNumber
-            v-model:value="formState.order"
-            :min="0"
-            style="width: 100%;"
+
+        <FormItem label="菜单唯一标识" required>
+          <Input v-model:value="formState.name" placeholder="例如 dashboard" />
+        </FormItem>
+
+        <FormItem label="路径" required>
+          <Input v-model:value="formState.path" placeholder="例如 /dashboard" />
+        </FormItem>
+
+        <FormItem label="组件" required>
+          <Input
+            v-model:value="formState.component"
+            placeholder="例如 layout.base 或 view.dashboard"
           />
         </FormItem>
-        <FormItem label="Type">
-          <Select v-model:value="formState.type">
-            <SelectOption value="directory">Directory</SelectOption>
-            <SelectOption value="menu">Menu</SelectOption>
+
+        <FormItem label="显示名称">
+          <Input v-model:value="formState.title" placeholder="默认使用菜单唯一标识" />
+        </FormItem>
+
+        <FormItem label="国际化 Key">
+          <Input v-model:value="formState.i18nKey" placeholder="例如 route.dashboard" />
+        </FormItem>
+
+        <FormItem label="图标">
+          <Input v-model:value="formState.icon" placeholder="例如 mdi:home" />
+        </FormItem>
+
+        <FormItem label="本地图标">
+          <Input v-model:value="formState.localIcon" />
+        </FormItem>
+
+        <FormItem label="排序">
+          <InputNumber v-model:value="formState.order" class="w-full" />
+        </FormItem>
+
+        <FormItem label="所需角色">
+          <Select
+            v-model:value="formState.roles"
+            mode="multiple"
+            placeholder="留空表示公开"
+          >
+            <SelectOption
+              v-for="role in roleOptions"
+              :key="role.value"
+              :value="role.value"
+            >
+              {{ role.label }}
+            </SelectOption>
           </Select>
+        </FormItem>
+
+        <FormItem label="隐藏菜单">
+          <Switch v-model:checked="formState.hideInMenu" />
         </FormItem>
       </Form>
     </Modal>

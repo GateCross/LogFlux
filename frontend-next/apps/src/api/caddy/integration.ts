@@ -4,6 +4,18 @@ export namespace CaddyWafIntegrationApi {
   export interface IntegrationStatus {
     [key: string]: any;
   }
+
+  export interface IntegrationApplyPayload {
+    applyAll?: boolean;
+    dryRun?: boolean;
+    enabled: boolean;
+    serverId?: number;
+    siteAddresses?: string[];
+  }
+
+  export interface IntegrationApplyResult {
+    [key: string]: any;
+  }
 }
 
 /**
@@ -20,4 +32,13 @@ export async function getWafIntegrationStatusApi() {
  */
 export async function applyWafIntegrationApi() {
   return requestClient.post<void>('/caddy/waf/integration/apply');
+}
+
+export async function applyWafIntegrationApiWithPayload(
+  data: CaddyWafIntegrationApi.IntegrationApplyPayload,
+) {
+  return requestClient.post<CaddyWafIntegrationApi.IntegrationApplyResult>(
+    '/caddy/waf/integration/apply',
+    data,
+  );
 }

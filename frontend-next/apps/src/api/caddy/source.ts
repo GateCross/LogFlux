@@ -1,8 +1,15 @@
 import { requestClient } from '#/api/request';
 
+import { listOf } from '../_utils';
+
 export namespace CaddyWafSourceApi {
   export interface WafSource {
     [key: string]: any;
+  }
+
+  export interface WafSourceListResult {
+    list: WafSource[];
+    total: number;
   }
 
   export interface WafEngineStatus {
@@ -14,7 +21,10 @@ export namespace CaddyWafSourceApi {
  * 获取 WAF 源列表 — GET /caddy/waf/source
  */
 export async function getWafSourceListApi() {
-  return requestClient.get<CaddyWafSourceApi.WafSource[]>('/caddy/waf/source');
+  const resp = await requestClient.get<CaddyWafSourceApi.WafSourceListResult>(
+    '/caddy/waf/source',
+  );
+  return listOf(resp);
 }
 
 /**

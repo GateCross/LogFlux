@@ -54,12 +54,11 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
     const accessStore = useAccessStore();
     try {
       const resp = await refreshTokenApi();
-      // LogFlux 返回 { token, refreshToken } 在 data 字段中
-      const newToken = resp?.token ?? resp?.data?.token ?? null;
+      const newToken = resp?.token ?? null;
       if (newToken) {
         accessStore.setAccessToken(newToken);
         // 同时更新 refreshToken（如果返回了的话）
-        const newRefreshToken = resp?.refreshToken ?? resp?.data?.refreshToken;
+        const newRefreshToken = resp?.refreshToken;
         if (newRefreshToken) {
           accessStore.setRefreshToken?.(newRefreshToken);
           // 同步到 LF_ 前缀 key，供 refreshTokenApi 读取
@@ -67,9 +66,9 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
         }
         return newToken;
       }
-      return null;
+      return '';
     } catch {
-      return null;
+      return '';
     }
   }
 

@@ -1,18 +1,23 @@
 import { requestClient } from '#/api/request';
 
+import { listOf } from './_utils';
+
 export namespace NotificationApi {
   // ─── Channel ───────────────────────────────────────────────
 
   /** 通知渠道类型 */
-  export type ChannelType = 'dingtalk' | 'email' | 'slack' | 'webhook' | 'wechat';
+  export type ChannelType = string;
 
   /** 通知渠道状态 */
   export type ChannelStatus = 'disabled' | 'enabled';
 
   /** 通知渠道 */
   export interface Channel {
+    description?: string;
     config: Record<string, any>;
     createdAt: string;
+    enabled?: boolean;
+    events?: string;
     id: string;
     name: string;
     status: ChannelStatus;
@@ -39,23 +44,37 @@ export namespace NotificationApi {
   /** 通知规则 */
   export interface Rule {
     channelId: string;
+    channelIds?: number[];
     conditions: Record<string, any>;
+    condition?: string;
     createdAt: string;
+    description?: string;
     enabled: boolean;
+    eventType?: string;
     id: string;
     level: string;
     name: string;
+    ruleType?: string;
+    silenceDuration?: number;
+    template?: string;
     templateId?: string;
     updatedAt: string;
   }
 
   /** 创建/更新规则参数 */
   export interface RuleParams {
-    channelId: string;
-    conditions: Record<string, any>;
+    channelId?: string;
+    channelIds?: number[];
+    condition?: string;
+    conditions?: Record<string, any>;
+    description?: string;
     enabled?: boolean;
-    level: string;
+    eventType?: string;
+    level?: string;
     name: string;
+    ruleType?: string;
+    silenceDuration?: number;
+    template?: string;
     templateId?: string;
   }
 
@@ -65,6 +84,7 @@ export namespace NotificationApi {
   export interface Template {
     content: string;
     createdAt: string;
+    format?: string;
     id: string;
     name: string;
     type: string;
@@ -74,6 +94,7 @@ export namespace NotificationApi {
   /** 创建/更新模板参数 */
   export interface TemplateParams {
     content: string;
+    format?: string;
     name: string;
     type: string;
   }
@@ -81,11 +102,14 @@ export namespace NotificationApi {
   /** 模板预览参数 */
   export interface TemplatePreviewParams {
     content: string;
+    data?: Record<string, any>;
+    format?: string;
     variables?: Record<string, any>;
   }
 
   /** 模板预览结果 */
   export interface TemplatePreviewResult {
+    content?: string;
     rendered: string;
   }
 
@@ -132,13 +156,87 @@ export namespace NotificationApi {
   }
 }
 
+interface ListResp<T> {
+  list: T[];
+  total?: number;
+}
+
+function parseConfig(value: Record<string, any> | string | undefined) {
+  if (!value) return {};
+  if (typeof value !== 'string') return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return {};
+  }
+}
+
+function normalizeChannel(item: any): NotificationApi.Channel {
+  return {
+    ...item,
+    config: parseConfig(item.config),
+    status: item.status ?? (item.enabled ? 'enabled' : 'disabled'),
+  };
+}
+
+function channelPayload(data: NotificationApi.ChannelParams) {
+  return {
+    ...data,
+    config: JSON.stringify(data.config ?? {}),
+    enabled: data.status !== 'disabled',
+    events: JSON.stringify((data.config as any)?.events ?? ['*']),
+  };
+}
+
+function parseJsonRecord(value: Record<string, any> | string | undefined) {
+  if (!value) return {};
+  if (typeof value !== 'string') return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return {};
+  }
+}
+
+function normalizeRule(item: any): NotificationApi.Rule {
+  const channelIds = Array.isArray(item.channelIds) ? item.channelIds : [];
+  const firstChannelId = item.channelId ?? channelIds[0];
+  return {
+    ...item,
+    channelId: firstChannelId === undefined ? '' : String(firstChannelId),
+    conditions: parseJsonRecord(item.conditions ?? item.condition),
+    enabled: item.enabled ?? true,
+    level: item.level ?? item.eventType ?? 'error',
+    templateId: item.templateId ?? item.template,
+  };
+}
+
+function rulePayload(data: NotificationApi.RuleParams) {
+  const condition = data.condition ?? JSON.stringify(data.conditions ?? {});
+  const channelIds =
+    data.channelIds ??
+    (data.channelId ? [Number(data.channelId)].filter((id) => Number.isFinite(id)) : []);
+  return {
+    channelIds,
+    condition,
+    description: data.description ?? '',
+    enabled: data.enabled ?? true,
+    eventType: data.eventType ?? data.level ?? 'error',
+    name: data.name,
+    ruleType: data.ruleType ?? 'threshold',
+    silenceDuration: data.silenceDuration ?? 300,
+    template: data.template ?? data.templateId ?? '',
+  };
+}
+
 // ─── Channel ─────────────────────────────────────────────────
 
 /**
  * 获取通知渠道列表 — GET /notification/channel
  */
 export async function getNotificationChannelsApi() {
-  return requestClient.get<NotificationApi.Channel[]>('/notification/channel');
+  const resp = await requestClient.get<ListResp<any>>('/notification/channel');
+  return listOf(resp).map(normalizeChannel);
 }
 
 /**
@@ -149,7 +247,7 @@ export async function createNotificationChannelApi(
 ) {
   return requestClient.post<NotificationApi.Channel>(
     '/notification/channel',
-    data,
+    channelPayload(data),
   );
 }
 
@@ -162,7 +260,7 @@ export async function updateNotificationChannelApi(
 ) {
   return requestClient.put<NotificationApi.Channel>(
     `/notification/channel/${id}`,
-    data,
+    channelPayload(data),
   );
 }
 
@@ -179,7 +277,10 @@ export async function deleteNotificationChannelApi(id: string) {
 export async function testNotificationChannelApi(
   data: NotificationApi.ChannelTestParams,
 ) {
-  return requestClient.post<void>('/notification/channel/test', data);
+  return requestClient.post<void>('/notification/channel/test', {
+    content: data.message,
+    id: Number(data.channelId),
+  });
 }
 
 // ─── Rule ────────────────────────────────────────────────────
@@ -188,7 +289,10 @@ export async function testNotificationChannelApi(
  * 获取通知规则列表 — GET /notification/rule
  */
 export async function getNotificationRulesApi() {
-  return requestClient.get<NotificationApi.Rule[]>('/notification/rule');
+  const resp = await requestClient.get<ListResp<NotificationApi.Rule>>(
+    '/notification/rule',
+  );
+  return listOf(resp).map(normalizeRule);
 }
 
 /**
@@ -199,7 +303,7 @@ export async function createNotificationRuleApi(
 ) {
   return requestClient.post<NotificationApi.Rule>(
     '/notification/rule',
-    data,
+    rulePayload(data),
   );
 }
 
@@ -212,7 +316,7 @@ export async function updateNotificationRuleApi(
 ) {
   return requestClient.put<NotificationApi.Rule>(
     `/notification/rule/${id}`,
-    data,
+    rulePayload(data),
   );
 }
 
@@ -229,9 +333,10 @@ export async function deleteNotificationRuleApi(id: string) {
  * 获取通知模板列表 — GET /notification/template
  */
 export async function getNotificationTemplatesApi() {
-  return requestClient.get<NotificationApi.Template[]>(
+  const resp = await requestClient.get<ListResp<NotificationApi.Template>>(
     '/notification/template',
   );
+  return listOf(resp);
 }
 
 /**
@@ -274,7 +379,11 @@ export async function previewNotificationTemplateApi(
 ) {
   return requestClient.post<NotificationApi.TemplatePreviewResult>(
     '/notification/template/preview',
-    data,
+    {
+      content: data.content,
+      data: JSON.stringify(data.variables ?? data.data ?? {}),
+      format: data.format ?? 'text',
+    },
   );
 }
 
@@ -286,7 +395,7 @@ export async function previewNotificationTemplateApi(
 export async function getNotificationLogsApi(
   params?: NotificationApi.LogQueryParams,
 ) {
-  return requestClient.get<NotificationApi.NotificationLog[]>(
+  return requestClient.get<ListResp<NotificationApi.NotificationLog>>(
     '/notification/log',
     { params },
   );
@@ -321,9 +430,10 @@ export async function clearNotificationLogsApi() {
  * 获取未读通知 — GET /notification/unread
  */
 export async function getUnreadNotificationsApi() {
-  return requestClient.get<NotificationApi.UnreadNotification[]>(
+  const resp = await requestClient.get<ListResp<NotificationApi.UnreadNotification>>(
     '/notification/unread',
   );
+  return listOf(resp);
 }
 
 /**

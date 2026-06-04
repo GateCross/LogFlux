@@ -7,7 +7,6 @@ import {
   Card,
   Form,
   FormItem,
-  Input,
   InputSearch,
   Select,
   SelectOption,
@@ -99,13 +98,8 @@ async function fetchLogs() {
 
     const res = await getSystemLogsApi(params);
     // API may return array directly or paginated object
-    if (Array.isArray(res)) {
-      dataSource.value = res;
-      total.value = res.length;
-    } else {
-      dataSource.value = (res as any).items ?? (res as any).data ?? [];
-      total.value = (res as any).total ?? dataSource.value.length;
-    }
+    dataSource.value = res.list ?? [];
+    total.value = res.total ?? 0;
   } catch {
     // error handled by request interceptor
   } finally {

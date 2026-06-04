@@ -13,7 +13,6 @@ import {
   Modal,
   Popconfirm,
   Space,
-  Switch,
   Table,
   Tag,
 } from 'ant-design-vue';
@@ -54,8 +53,7 @@ const columns = [
 async function fetchData() {
   loading.value = true;
   try {
-    const res = await getWafPolicyListApi();
-    dataList.value = Array.isArray(res) ? res : (res?.data ?? []);
+    dataList.value = await getWafPolicyListApi();
   } catch {
     // error handled by interceptor
   } finally {

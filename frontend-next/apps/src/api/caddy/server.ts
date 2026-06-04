@@ -1,8 +1,14 @@
 import { requestClient } from '#/api/request';
 
+import { listOf } from '../_utils';
+
 export namespace CaddyServerApi {
   export interface CaddyServer {
     [key: string]: any;
+  }
+
+  export interface CaddyServerListResult {
+    list: CaddyServer[];
   }
 
   export interface CaddyConfig {
@@ -17,6 +23,11 @@ export namespace CaddyServerApi {
     [key: string]: any;
   }
 
+  export interface ConfigHistoryListResult {
+    list: ConfigHistoryItem[];
+    total: number;
+  }
+
   export interface RollbackParams {
     historyId: number;
   }
@@ -26,7 +37,7 @@ export namespace CaddyServerApi {
   }
 
   export interface CaddyLogPageResult {
-    items: CaddyLogItem[];
+    list: CaddyLogItem[];
     total: number;
   }
 }
@@ -35,7 +46,10 @@ export namespace CaddyServerApi {
  * 获取 Caddy 服务器列表 — GET /caddy/server
  */
 export async function getCaddyServerListApi() {
-  return requestClient.get<CaddyServerApi.CaddyServer[]>('/caddy/server');
+  const resp = await requestClient.get<CaddyServerApi.CaddyServerListResult>(
+    '/caddy/server',
+  );
+  return listOf(resp);
 }
 
 /**
@@ -76,11 +90,12 @@ export async function getCaddyConfigApi(serverId: number) {
  */
 export async function pushCaddyConfigApi(
   serverId: number,
-  data: CaddyServerApi.CaddyConfig,
+  config: string,
+  modules?: string,
 ) {
   return requestClient.post<void>(
     `/caddy/server/${serverId}/config`,
-    data,
+    { config, mode: modules ? 'quick' : 'raw', modules },
   );
 }
 
@@ -101,7 +116,7 @@ export async function previewCaddyConfigApi(
  * 获取配置历史列表 — GET /caddy/server/:serverId/config/history
  */
 export async function getCaddyConfigHistoryListApi(serverId: number) {
-  return requestClient.get<CaddyServerApi.ConfigHistoryItem[]>(
+  return requestClient.get<CaddyServerApi.ConfigHistoryListResult>(
     `/caddy/server/${serverId}/config/history`,
   );
 }

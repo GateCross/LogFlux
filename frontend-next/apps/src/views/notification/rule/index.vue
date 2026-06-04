@@ -76,11 +76,6 @@ function channelName(id: string) {
   return channelOptions.value.find((c) => c.value === id)?.label ?? id;
 }
 
-function templateName(id?: string) {
-  if (!id) return '-';
-  return templateOptions.value.find((t) => t.value === id)?.label ?? id;
-}
-
 // ── 创建 / 编辑 modal ─────────────────────────────────────
 
 const modalVisible = ref(false);
@@ -224,7 +219,7 @@ onMounted(async () => {
               <Button
                 size="small"
                 type="link"
-                @click="open编辑(record)"
+                @click="open编辑(record as NotificationApi.Rule)"
               >
                 编辑
               </Button>

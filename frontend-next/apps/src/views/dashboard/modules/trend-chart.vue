@@ -18,7 +18,7 @@ const props = defineProps<Props>();
 const chartRef = ref<HTMLElement | null>(null);
 let chartInstance: echarts.ECharts | null = null;
 
-function buildOption(): echarts.EChartsOption {
+function buildOption(): echarts.EChartsCoreOption {
   return {
     tooltip: {
       trigger: 'axis',

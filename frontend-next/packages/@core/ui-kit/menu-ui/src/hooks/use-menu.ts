@@ -4,6 +4,9 @@ import { computed, getCurrentInstance } from 'vue';
 
 import { findComponentUpward } from '../utils';
 
+const rootMenuNames = ['Menu', 'MenuUI'];
+const parentMenuNames = [...rootMenuNames, 'SubMenu'];
+
 function useMenu() {
   const instance = getCurrentInstance();
   if (!instance) {
@@ -16,7 +19,7 @@ function useMenu() {
   const parentPaths = computed(() => {
     let parent = instance.parent;
     const paths: string[] = [instance.props.path as string];
-    while (parent?.type.name !== 'Menu') {
+    while (parent && !rootMenuNames.includes(parent.type.name ?? '')) {
       if (parent?.props.path) {
         paths.unshift(parent.props.path as string);
       }
@@ -27,7 +30,7 @@ function useMenu() {
   });
 
   const parentMenu = computed(() => {
-    return findComponentUpward(instance, ['Menu', 'SubMenu']);
+    return findComponentUpward(instance, parentMenuNames);
   });
 
   return {

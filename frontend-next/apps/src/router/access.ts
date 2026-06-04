@@ -15,12 +15,122 @@ import { $t } from '#/locales';
 
 const forbiddenComponent = () => import('#/views/_core/fallback/forbidden.vue');
 
+const securityChildRouteTemplates = [
+  {
+    component: 'view.security_source',
+    meta: { hideInMenu: true, icon: 'mdi:source-branch', title: '来源管理' },
+    name: 'security_source',
+    path: '/security/source',
+  },
+  {
+    component: 'view.security_policy',
+    meta: { icon: 'mdi:shield-check', title: '策略管理' },
+    name: 'security_policy',
+    path: '/security/policy',
+  },
+  {
+    component: 'view.security_observe',
+    meta: { icon: 'mdi:eye-outline', title: '观测日志' },
+    name: 'security_observe',
+    path: '/security/observe',
+  },
+  {
+    component: 'view.security_ops',
+    meta: { hideInMenu: true, icon: 'mdi:wrench-outline', title: '运维操作' },
+    name: 'security_ops',
+    path: '/security/ops',
+  },
+  {
+    component: 'view.security_runtime',
+    meta: { hideInMenu: true, icon: 'mdi:clock-outline', title: '运行时' },
+    name: 'security_runtime',
+    path: '/security/runtime',
+  },
+  {
+    component: 'view.security_crs',
+    meta: { hideInMenu: true, icon: 'mdi:tune-vertical', title: 'CRS 调优' },
+    name: 'security_crs',
+    path: '/security/crs',
+  },
+  {
+    component: 'view.security_exclusion',
+    meta: { hideInMenu: true, icon: 'mdi:cancel', title: '排除规则' },
+    name: 'security_exclusion',
+    path: '/security/exclusion',
+  },
+  {
+    component: 'view.security_binding',
+    meta: { hideInMenu: true, icon: 'mdi:link-variant', title: '绑定管理' },
+    name: 'security_binding',
+    path: '/security/binding',
+  },
+  {
+    component: 'view.security_release',
+    meta: { hideInMenu: true, icon: 'mdi:rocket-launch-outline', title: '发布管理' },
+    name: 'security_release',
+    path: '/security/release',
+  },
+  {
+    component: 'view.security_job',
+    meta: { hideInMenu: true, icon: 'mdi:timer-outline', title: '任务管理' },
+    name: 'security_job',
+    path: '/security/job',
+  },
+];
+
+const routeTitleMap: Record<string, string> = {
+  caddy: 'Caddy 配置',
+  caddy_access: '访问控制',
+  caddy_config: '配置管理',
+  caddy_log: '访问日志',
+  caddy_source: '来源管理',
+  'caddy_system-log': '系统日志',
+  caddy_system_log: '系统日志',
+  cron: '定时任务',
+  dashboard: '仪表盘',
+  manage: '系统管理',
+  manage_menu: '菜单管理',
+  manage_role: '角色管理',
+  manage_user: '用户管理',
+  notification: '通知管理',
+  notification_channel: '通知渠道',
+  notification_log: '发送日志',
+  notification_rule: '通知规则',
+  notification_template: '通知模板',
+  security: '安全管理',
+  security_binding: '绑定管理',
+  security_crs: 'CRS 调优',
+  security_exclusion: '排除规则',
+  security_job: '任务管理',
+  security_observe: '观测日志',
+  security_ops: '运维操作',
+  security_policy: '策略管理',
+  security_release: '发布管理',
+  security_runtime: '运行时',
+  security_source: '来源管理',
+  user: '个人中心',
+  user_center: '个人中心',
+};
+
 /**
  * 将 "view.xxx_yyy" 转为 "/xxx/yyy/index"
  */
 function viewToPath(view: string): string {
   const raw = view.replace(/^view\./, '');
   return `/${raw.replace(/_/g, '/')}/index`;
+}
+
+function routeNameOf(name: string) {
+  return name
+    .split(/[-_]/)
+    .filter(Boolean)
+    .map((item) => item.charAt(0).toUpperCase() + item.slice(1))
+    .join('');
+}
+
+function routeTitleOf(route: any, meta: Record<string, any>) {
+  const key = route.name || meta.title || route.title;
+  return routeTitleMap[key] || routeTitleMap[meta.title] || meta.title || route.title || route.name;
 }
 
 /**
@@ -44,6 +154,12 @@ function transformLogfluxRoutes(
 
     let component: string;
     const children = route.children ? [...route.children] : [];
+    if (route.name === 'security') {
+      const childNames = new Set(children.map((child: any) => child.name));
+      children.push(
+        ...securityChildRouteTemplates.filter((child) => !childNames.has(child.name)),
+      );
+    }
 
     if (!comp || comp.trim() === '') {
       // 无 component 且有子路由 → 不设 component，vue-vben-admin 自动加 BasicLayout
@@ -74,13 +190,13 @@ function transformLogfluxRoutes(
     }
 
     const transformed: any = {
-      name: route.name,
+      name: routeNameOf(route.name),
       path: route.path,
       meta: {
         icon: meta.icon,
-        title: meta.title || route.name,
-        order: meta.order || 0,
         ...meta,
+        order: meta.order ?? route.order ?? 0,
+        title: routeTitleOf(route, meta),
       },
     };
 
@@ -111,30 +227,24 @@ async function generateAccess(options: GenerateMenuAndRoutesOptions) {
     const normalized = key.replace(/^\.\.\/views\/?/, '/').replace(/^([^/])/, '/$1');
     pageMap[normalized] = value;
   }
-  console.log('[access] pageMap keys:', Object.keys(pageMap).slice(0, 10));
   const layoutMap: ComponentRecordType = { BasicLayout, IFrameView };
 
   return await generateAccessible(preferences.app.accessMode, {
     ...options,
     fetchMenuListAsync: async () => {
       message.loading({ content: `${$t('common.loadingMenu')}...`, duration: 1.5 });
-      try {
-        const resp = await getUserRoutesApi();
-        const routes = resp?.routes ?? (Array.isArray(resp) ? resp : []);
-        if (!Array.isArray(routes) || routes.length === 0) {
-          console.warn('[access] 路由为空:', resp);
-          return [];
-        }
-        let transformed = transformLogfluxRoutes(routes, pageMap);
-        // 过滤无效路由：无 component 且无 children 的路由无法被 vue-router 处理
-        transformed = transformed.filter((r) => r.component || (r.children && r.children.length > 0));
-        console.log('[access] 有效路由数:', transformed.length);
-        return transformed;
-      } catch (err: any) {
-        console.error('[access] 获取路由失败:', err?.message || err);
-        message.error(`获取菜单失败: ${err?.message || '未知错误'}`);
-        return [];
+      const resp = await getUserRoutesApi();
+      const routes = resp?.routes ?? (Array.isArray(resp) ? resp : []);
+      if (!Array.isArray(routes) || routes.length === 0) {
+        throw new Error('后端未返回可用菜单');
       }
+      let transformed = transformLogfluxRoutes(routes, pageMap);
+      // 过滤无效路由：无 component 且无 children 的路由无法被 vue-router 处理
+      transformed = transformed.filter((r) => r.component || (r.children && r.children.length > 0));
+      if (transformed.length === 0) {
+        throw new Error('后端菜单无法转换为可用路由');
+      }
+      return transformed;
     },
     forbiddenComponent,
     layoutMap,

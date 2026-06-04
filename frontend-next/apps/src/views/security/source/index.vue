@@ -9,7 +9,6 @@ import {
   Form,
   FormItem,
   Input,
-  InputNumber,
   message,
   Modal,
   Popconfirm,
@@ -56,8 +55,7 @@ const columns = [
 async function fetchData() {
   loading.value = true;
   try {
-    const res = await getWafSourceListApi();
-    dataList.value = Array.isArray(res) ? res : (res?.data ?? []);
+    dataList.value = await getWafSourceListApi();
   } catch {
     // error handled by interceptor
   } finally {

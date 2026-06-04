@@ -1,8 +1,19 @@
 import { requestClient } from '#/api/request';
 
+import { listOf } from '../_utils';
+
 export namespace RoleApi {
   export interface RoleItem {
-    [key: string]: any;
+    createdAt?: string;
+    description?: string;
+    displayName?: string;
+    id: number;
+    name: string;
+    permissions?: string[];
+  }
+
+  export interface RoleListResult {
+    list: RoleItem[];
   }
 }
 
@@ -10,7 +21,8 @@ export namespace RoleApi {
  * 获取角色列表 — GET /role/list
  */
 export async function getRoleListApi() {
-  return requestClient.get<RoleApi.RoleItem[]>('/role/list');
+  const resp = await requestClient.get<RoleApi.RoleListResult>('/role/list');
+  return listOf(resp);
 }
 
 /**
