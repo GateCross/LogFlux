@@ -35,13 +35,17 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
     console.warn('Access token or refresh token is invalid or expired.');
     const accessStore = useAccessStore();
     const authStore = useAuthStore();
+    const isAccessChecked = accessStore.isAccessChecked;
     accessStore.setAccessToken(null);
+    accessStore.setRefreshToken(null);
+    localStorage.removeItem('LF_refreshToken');
+
     if (
       preferences.app.loginExpiredMode === 'modal' &&
-      accessStore.isAccessChecked
+      isAccessChecked
     ) {
       accessStore.setLoginExpired(true);
-    } else {
+    } else if (isAccessChecked) {
       await authStore.logout();
     }
   }
@@ -53,7 +57,8 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
   async function doRefreshToken() {
     const accessStore = useAccessStore();
     try {
-      const resp = await refreshTokenApi();
+      const rawResp = await refreshTokenApi();
+      const resp = (rawResp as any)?.data?.data ?? (rawResp as any)?.data ?? rawResp;
       const newToken = resp?.token ?? null;
       if (newToken) {
         accessStore.setAccessToken(newToken);
@@ -83,6 +88,20 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
       config.headers.Authorization = formatToken(accessStore.accessToken);
       config.headers['Accept-Language'] = preferences.app.locale;
       return config;
+    },
+  });
+
+  // LogFlux 部分接口会用 HTTP 200 + body.code=401 表示登录失效
+  client.addResponseInterceptor({
+    fulfilled: async (response) => {
+      if (
+        response.config.responseReturn !== 'raw' &&
+        Number(response.data?.code) === 401
+      ) {
+        await doReAuthenticate();
+        throw Object.assign({}, response, { response });
+      }
+      return response;
     },
   });
 

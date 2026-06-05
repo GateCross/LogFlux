@@ -66,7 +66,7 @@ async function fetchReferenceData() {
 
 const columns = [
   { dataIndex: 'name', key: 'name', title: '名称' },
-  { dataIndex: 'level', key: 'level', title: 'Event' },
+  { dataIndex: 'level', key: 'level', title: '事件级别' },
   { dataIndex: 'channelId', key: 'channelId', title: '渠道' },
   { dataIndex: 'enabled', key: 'enabled', title: '启用' },
   { key: 'actions', title: '操作', width: 180 },
@@ -81,14 +81,14 @@ function channelName(id: string) {
 const modalVisible = ref(false);
 const modalLoading = ref(false);
 const editingId = ref<string | null>(null);
-const is编辑ing = computed(() => editingId.value !== null);
+const isEditing = computed(() => editingId.value !== null);
 
 const levelOptions = [
-  { label: 'Critical', value: 'critical' },
-  { label: 'Error', value: 'error' },
-  { label: 'Warning', value: 'warning' },
-  { label: 'Info', value: 'info' },
-  { label: 'Debug', value: 'debug' },
+  { label: '严重', value: 'critical' },
+  { label: '错误', value: 'error' },
+  { label: '警告', value: 'warning' },
+  { label: '信息', value: 'info' },
+  { label: '调试', value: 'debug' },
 ];
 
 const formState = reactive<NotificationApi.RuleParams>({
@@ -113,7 +113,7 @@ function openCreate() {
   modalVisible.value = true;
 }
 
-function open编辑(record: NotificationApi.Rule) {
+function openEdit(record: NotificationApi.Rule) {
   editingId.value = record.id;
   Object.assign(formState, {
     channelId: record.channelId,
@@ -128,17 +128,17 @@ function open编辑(record: NotificationApi.Rule) {
 
 async function handleSubmit() {
   if (!formState.channelId) {
-    message.warning('Please select a channel');
+    message.warning('请选择通知渠道');
     return;
   }
   modalLoading.value = true;
   try {
-    if (is编辑ing.value) {
+    if (isEditing.value) {
       await updateNotificationRuleApi(editingId.value!, { ...formState });
-      message.success('Rule updated 成功');
+      message.success('通知规则已更新');
     } else {
       await createNotificationRuleApi({ ...formState });
-      message.success('Rule created 成功');
+      message.success('通知规则已创建');
     }
     modalVisible.value = false;
     await fetchRules();
@@ -151,14 +151,18 @@ async function handleSubmit() {
 
 // ── 删除 ──────────────────────────────────────────────────
 
-async function handle删除(id: string) {
+async function handleDelete(id: string) {
   try {
     await deleteNotificationRuleApi(id);
-    message.success('Rule deleted');
+    message.success('通知规则已删除');
     await fetchRules();
   } catch {
-    message.error('删除 failed');
+    message.error('删除失败');
   }
+}
+
+function levelLabel(level: string) {
+  return levelOptions.find((item) => item.value === level)?.label ?? level;
 }
 
 // ── Init ────────────────────────────────────────────────────
@@ -170,10 +174,10 @@ onMounted(async () => {
 
 <template>
   <div class="p-5">
-    <Card title="Notification Rules">
+    <Card title="通知规则">
       <template #extra>
         <Button type="primary" @click="openCreate">
-          新增 Rule
+          新增规则
         </Button>
       </template>
 
@@ -200,7 +204,7 @@ onMounted(async () => {
                         : 'default'
               "
             >
-              {{ record.level }}
+              {{ levelLabel(record.level) }}
             </Tag>
           </template>
 
@@ -210,7 +214,7 @@ onMounted(async () => {
 
           <template v-if="column.key === 'enabled'">
             <Tag :color="record.enabled ? 'green' : 'default'">
-              {{ record.enabled ? 'Enabled' : 'Disabled' }}
+              {{ record.enabled ? '启用' : '停用' }}
             </Tag>
           </template>
 
@@ -219,13 +223,13 @@ onMounted(async () => {
               <Button
                 size="small"
                 type="link"
-                @click="open编辑(record as NotificationApi.Rule)"
+                @click="openEdit(record as NotificationApi.Rule)"
               >
                 编辑
               </Button>
               <Popconfirm
-                title="Are you sure to delete this rule?"
-                @confirm="handle删除(record.id)"
+                title="确认删除该通知规则？"
+                @confirm="handleDelete(record.id)"
               >
                 <Button size="small" type="link" danger>
                   删除
@@ -241,7 +245,7 @@ onMounted(async () => {
     <Modal
       v-model:open="modalVisible"
       :confirm-loading="modalLoading"
-      :title="is编辑ing ? '编辑 Rule' : '新增 Rule'"
+      :title="isEditing ? '编辑规则' : '新增规则'"
       :width="560"
       @ok="handleSubmit"
     >
@@ -250,36 +254,36 @@ onMounted(async () => {
         :wrapper-col="{ span: 18 }"
         class="mt-4"
       >
-        <FormItem label="Name" required>
-          <Input v-model:value="formState.name" placeholder="Rule name" />
+        <FormItem label="名称" required>
+          <Input v-model:value="formState.name" placeholder="规则名称" />
         </FormItem>
-        <FormItem label="Event Level" required>
+        <FormItem label="事件级别" required>
           <Select
             v-model:value="formState.level"
             :options="levelOptions"
-            placeholder="Select event level"
+            placeholder="选择事件级别"
           />
         </FormItem>
-        <FormItem label="Channel" required>
+        <FormItem label="渠道" required>
           <Select
             v-model:value="formState.channelId"
             :options="channelOptions"
-            placeholder="Select notification channel"
+            placeholder="选择通知渠道"
             show-search
             :filter-option="(input: string, option: any) => option.label.toLowerCase().includes(input.toLowerCase())"
           />
         </FormItem>
-        <FormItem label="Template">
+        <FormItem label="模板">
           <Select
             v-model:value="formState.templateId"
             :options="templateOptions"
-            placeholder="Select template (optional)"
+            placeholder="选择模板（可选）"
             allow-clear
             show-search
             :filter-option="(input: string, option: any) => option.label.toLowerCase().includes(input.toLowerCase())"
           />
         </FormItem>
-        <FormItem label="Enabled">
+        <FormItem label="启用">
           <Switch v-model:checked="formState.enabled" />
         </FormItem>
       </Form>

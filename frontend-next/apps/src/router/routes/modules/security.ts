@@ -3,6 +3,7 @@ import type { RouteRecordRaw } from 'vue-router';
 const routes: RouteRecordRaw[] = [
   {
     meta: {
+      hideInMenu: true,
       icon: 'mdi:shield-check-outline',
       order: 2,
       title: '安全',
@@ -20,13 +21,13 @@ const routes: RouteRecordRaw[] = [
         name: 'SecurityPolicy',
         path: '/security/policy',
         component: () => import('#/views/security/policy/index.vue'),
-        meta: { icon: 'mdi:shield-check', title: '策略管理' },
+        meta: { hideInMenu: true, icon: 'mdi:shield-check', title: '策略管理' },
       },
       {
         name: 'SecurityObserve',
         path: '/security/observe',
         component: () => import('#/views/security/observe/index.vue'),
-        meta: { icon: 'mdi:eye-outline', title: '观测日志' },
+        meta: { hideInMenu: true, icon: 'mdi:eye-outline', title: '观测日志' },
       },
       {
         name: 'SecurityOps',

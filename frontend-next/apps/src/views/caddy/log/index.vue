@@ -200,7 +200,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="h-full overflow-hidden p-4">
+  <div class="h-full overflow-x-hidden overflow-y-auto p-4">
     <Card title="Caddy 访问日志" :bordered="false" class="h-full rounded-lg shadow-sm">
       <div class="flex h-full min-h-0 flex-col">
         <Form layout="inline" class="mb-4">

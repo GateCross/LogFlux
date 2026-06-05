@@ -55,10 +55,10 @@ const columns = [
 // ── Template type options ───────────────────────────────────
 
 const templateTypeOptions = [
-  { label: 'Email', value: 'email' },
+  { label: '邮件', value: 'email' },
   { label: 'Telegram', value: 'telegram' },
-  { label: 'DingTalk', value: 'dingtalk' },
-  { label: 'WeChat', value: 'wechat' },
+  { label: '钉钉', value: 'dingtalk' },
+  { label: '企业微信', value: 'wechat' },
   { label: 'Slack', value: 'slack' },
   { label: 'Webhook', value: 'webhook' },
 ];
@@ -68,7 +68,7 @@ const templateTypeOptions = [
 const modalVisible = ref(false);
 const modalLoading = ref(false);
 const editingId = ref<string | null>(null);
-const is编辑ing = computed(() => editingId.value !== null);
+const isEditing = computed(() => editingId.value !== null);
 
 const formState = reactive<NotificationApi.TemplateParams>({
   content: '',
@@ -86,7 +86,7 @@ function openCreate() {
   modalVisible.value = true;
 }
 
-function open编辑(record: NotificationApi.Template) {
+function openEdit(record: NotificationApi.Template) {
   editingId.value = record.id;
   Object.assign(formState, {
     content: record.content,
@@ -99,12 +99,12 @@ function open编辑(record: NotificationApi.Template) {
 async function handleSubmit() {
   modalLoading.value = true;
   try {
-    if (is编辑ing.value) {
+    if (isEditing.value) {
       await updateNotificationTemplateApi(editingId.value!, { ...formState });
-      message.success('Template updated 成功');
+      message.success('通知模板已更新');
     } else {
       await createNotificationTemplateApi({ ...formState });
-      message.success('Template created 成功');
+      message.success('通知模板已创建');
     }
     modalVisible.value = false;
     await fetchTemplates();
@@ -117,13 +117,13 @@ async function handleSubmit() {
 
 // ── 删除 ──────────────────────────────────────────────────
 
-async function handle删除(id: string) {
+async function handleDelete(id: string) {
   try {
     await deleteNotificationTemplateApi(id);
-    message.success('Template deleted');
+    message.success('通知模板已删除');
     await fetchTemplates();
   } catch {
-    message.error('删除 failed');
+    message.error('删除失败');
   }
 }
 
@@ -152,7 +152,7 @@ async function handlePreview() {
     try {
       variables = JSON.parse(previewVariables.value);
     } catch {
-      message.warning('Invalid JSON in variables field');
+      message.warning('变量字段不是有效 JSON');
     }
     const result = await previewNotificationTemplateApi({
       content: previewTemplate.value.content,
@@ -160,10 +160,14 @@ async function handlePreview() {
     });
     previewContent.value = result.rendered;
   } catch {
-    message.error('Preview failed');
+    message.error('预览失败');
   } finally {
     previewLoading.value = false;
   }
+}
+
+function templateTypeLabel(type: string) {
+  return templateTypeOptions.find((item) => item.value === type)?.label ?? type;
 }
 
 // ── Init ────────────────────────────────────────────────────
@@ -175,10 +179,10 @@ onMounted(() => {
 
 <template>
   <div class="p-5">
-    <Card title="Notification Templates">
+    <Card title="通知模板">
       <template #extra>
         <Button type="primary" @click="openCreate">
-          新增 Template
+          新增模板
         </Button>
       </template>
 
@@ -192,7 +196,7 @@ onMounted(() => {
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'type'">
-            <Tag color="blue">{{ record.type }}</Tag>
+            <Tag color="blue">{{ templateTypeLabel(record.type) }}</Tag>
           </template>
 
           <template v-if="column.key === 'subject'">
@@ -206,18 +210,18 @@ onMounted(() => {
                 type="link"
                 @click="openPreview(record as NotificationApi.Template)"
               >
-                Preview
+                预览
               </Button>
               <Button
                 size="small"
                 type="link"
-                @click="open编辑(record as NotificationApi.Template)"
+                @click="openEdit(record as NotificationApi.Template)"
               >
                 编辑
               </Button>
               <Popconfirm
-                title="Are you sure to delete this template?"
-                @confirm="handle删除(record.id)"
+                title="确认删除该通知模板？"
+                @confirm="handleDelete(record.id)"
               >
                 <Button size="small" type="link" danger>
                   删除
@@ -233,7 +237,7 @@ onMounted(() => {
     <Modal
       v-model:open="modalVisible"
       :confirm-loading="modalLoading"
-      :title="is编辑ing ? '编辑 Template' : '新增 Template'"
+      :title="isEditing ? '编辑模板' : '新增模板'"
       :width="640"
       @ok="handleSubmit"
     >
@@ -242,21 +246,21 @@ onMounted(() => {
         :wrapper-col="{ span: 20 }"
         class="mt-4"
       >
-        <FormItem label="Name" required>
-          <Input v-model:value="formState.name" placeholder="Template name" />
+        <FormItem label="名称" required>
+          <Input v-model:value="formState.name" placeholder="模板名称" />
         </FormItem>
-        <FormItem label="Type" required>
+        <FormItem label="类型" required>
           <Select
             v-model:value="formState.type"
             :options="templateTypeOptions"
-            placeholder="Select template type"
+            placeholder="选择模板类型"
           />
         </FormItem>
-        <FormItem label="Content" required>
+        <FormItem label="内容" required>
           <Input.TextArea
             v-model:value="formState.content"
             :rows="10"
-            placeholder="Template content (supports variables like {{.Name}})"
+            placeholder="模板内容，支持 {{.Name}} 这样的变量"
           />
         </FormItem>
       </Form>
@@ -265,11 +269,11 @@ onMounted(() => {
     <!-- ── Preview drawer ───────────────────────────────────── -->
     <Drawer
       v-model:open="previewDrawerVisible"
-      title="Template Preview"
+      title="模板预览"
       :width="640"
     >
       <Form :label-col="{ span: 6 }" :wrapper-col="{ span: 18 }">
-        <FormItem label="Variables (JSON)">
+        <FormItem label="变量 JSON">
           <Input.TextArea
             v-model:value="previewVariables"
             :rows="4"
@@ -278,13 +282,13 @@ onMounted(() => {
         </FormItem>
         <FormItem :wrapper-col="{ offset: 6, span: 18 }">
           <Button type="primary" :loading="previewLoading" @click="handlePreview">
-            Refresh Preview
+            刷新预览
           </Button>
         </FormItem>
       </Form>
 
       <div style="margin-top: 16px;">
-        <h4>Rendered Result:</h4>
+        <h4>渲染结果：</h4>
         <div
           style="
             background: #f5f5f5;
@@ -298,7 +302,7 @@ onMounted(() => {
             font-size: 13px;
           "
         >
-          {{ previewContent || 'No preview available' }}
+          {{ previewContent || '暂无预览内容' }}
         </div>
       </div>
     </Drawer>

@@ -3,6 +3,8 @@ import type { MenuApi } from '#/api/system/menu';
 
 import { computed, onMounted, reactive, ref } from 'vue';
 
+import { Icon } from '@iconify/vue';
+
 import {
   Button,
   Card,
@@ -71,11 +73,11 @@ const formState = reactive({
 });
 
 const columns = [
-  { dataIndex: 'title', key: 'title', title: '菜单名称', width: 180 },
-  { dataIndex: 'path', key: 'path', title: '路径', width: 180 },
+  { dataIndex: 'title', key: 'title', title: '菜单名称', width: 260 },
+  { dataIndex: 'path', key: 'path', title: '路径', ellipsis: true, width: 180 },
   { dataIndex: 'component', key: 'component', title: '组件', ellipsis: true, width: 220 },
   { dataIndex: 'order', key: 'order', title: '排序', width: 80 },
-  { dataIndex: 'i18nKey', key: 'i18nKey', title: '国际化 Key', width: 180 },
+  { dataIndex: 'i18nKey', key: 'i18nKey', title: '国际化 Key', ellipsis: true, width: 180 },
   { dataIndex: 'roles', key: 'roles', title: '所需角色', width: 220 },
   { dataIndex: 'hideInMenu', key: 'hideInMenu', title: '菜单显示', width: 100 },
   { key: 'actions', title: '操作', width: 220 },
@@ -245,6 +247,10 @@ async function handleDelete(id: number) {
   }
 }
 
+function iconName(record: MenuItem) {
+  return record.icon;
+}
+
 onMounted(() => {
   void fetchRoles();
   void fetchData();
@@ -268,14 +274,16 @@ onMounted(() => {
         :loading="loading"
         :pagination="false"
         row-key="id"
+        :scroll="{ x: 1260 }"
         size="middle"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'title'">
-            <Space size="small">
-              <span>{{ record.title }}</span>
-              <Tag v-if="record.icon" color="blue">{{ record.icon }}</Tag>
-            </Space>
+            <div class="menu-title-cell">
+              <Icon v-if="iconName(record as MenuItem)" :icon="iconName(record as MenuItem)" class="menu-icon" />
+              <span class="menu-title-text">{{ record.title }}</span>
+              <span v-if="record.localIcon && !record.icon" class="menu-icon-key">{{ record.localIcon }}</span>
+            </div>
           </template>
 
           <template v-if="column.key === 'roles'">
@@ -398,3 +406,42 @@ onMounted(() => {
     </Modal>
   </div>
 </template>
+
+<style scoped>
+.menu-title-cell {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+}
+
+.menu-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  color: #1677ff;
+}
+
+.menu-title-text {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu-icon-key {
+  max-width: 88px;
+  flex: 0 1 auto;
+  overflow: hidden;
+  padding: 1px 6px;
+  color: #1677ff;
+  font-size: 12px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: #e6f4ff;
+  border: 1px solid #91caff;
+  border-radius: 4px;
+}
+</style>

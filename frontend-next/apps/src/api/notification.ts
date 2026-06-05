@@ -27,7 +27,10 @@ export namespace NotificationApi {
 
   /** 创建/更新渠道参数 */
   export interface ChannelParams {
-    config: Record<string, any>;
+    config: Record<string, any> | string;
+    description?: string;
+    enabled?: boolean;
+    events?: string;
     name: string;
     status?: ChannelStatus;
     type: ChannelType;
@@ -36,7 +39,9 @@ export namespace NotificationApi {
   /** 测试渠道参数 */
   export interface ChannelTestParams {
     channelId: string;
+    content?: string;
     message?: string;
+    title?: string;
   }
 
   // ─── Rule ──────────────────────────────────────────────────
@@ -117,15 +122,26 @@ export namespace NotificationApi {
 
   /** 通知日志 */
   export interface NotificationLog {
-    channelId: string;
-    channelName: string;
-    content: string;
+    channelId: number | string;
+    channelName?: string;
+    content?: string;
     createdAt: string;
     errorMessage?: string;
-    id: string;
-    ruleId?: string;
+    error?: string;
+    eventType?: string;
+    id: number | string;
+    jobRetryCount?: number;
+    jobStatus?: string;
+    lastError?: string;
+    level?: string;
+    message?: string;
+    nextRunAt?: string;
+    retryCount?: number;
+    ruleId?: number | string;
     ruleName?: string;
-    status: 'failed' | 'pending' | 'sent';
+    sentAt?: string;
+    status: 'failed' | 'pending' | 'sending' | 'sent' | 'success' | number;
+    title?: string;
   }
 
   /** 通知日志分页查询参数 */
@@ -133,6 +149,7 @@ export namespace NotificationApi {
     channelId?: string;
     current?: number;
     endTime?: string;
+    page?: number;
     pageSize?: number;
     startTime?: string;
     status?: string;
@@ -140,7 +157,7 @@ export namespace NotificationApi {
 
   /** 批量删除日志参数 */
   export interface BatchDeleteLogParams {
-    ids: string[];
+    ids: Array<number | string>;
   }
 
   // ─── Unread / Read ─────────────────────────────────────────
@@ -180,11 +197,18 @@ function normalizeChannel(item: any): NotificationApi.Channel {
 }
 
 function channelPayload(data: NotificationApi.ChannelParams) {
+  const config =
+    typeof data.config === 'string'
+      ? data.config
+      : JSON.stringify(data.config ?? {});
+
   return {
-    ...data,
-    config: JSON.stringify(data.config ?? {}),
-    enabled: data.status !== 'disabled',
-    events: JSON.stringify((data.config as any)?.events ?? ['*']),
+    config,
+    description: data.description ?? '',
+    enabled: data.enabled ?? data.status !== 'disabled',
+    events: data.events ?? JSON.stringify(['*']),
+    name: data.name,
+    type: data.type,
   };
 }
 
@@ -278,8 +302,9 @@ export async function testNotificationChannelApi(
   data: NotificationApi.ChannelTestParams,
 ) {
   return requestClient.post<void>('/notification/channel/test', {
-    content: data.message,
+    content: data.content ?? data.message,
     id: Number(data.channelId),
+    title: data.title,
   });
 }
 

@@ -10,6 +10,59 @@ import { useAuthStore } from '#/store';
 
 import { generateAccess } from './access';
 
+function isUnauthorizedError(error: unknown) {
+  const err = error as {
+    code?: number | string;
+    message?: string;
+    msg?: string;
+    response?: {
+      data?: {
+        code?: number | string;
+        message?: string;
+        msg?: string;
+      };
+      status?: number;
+    };
+    status?: number;
+  };
+  const responseData = err?.response?.data ?? {};
+  const code = err?.code ?? responseData.code;
+  const message = err?.message ?? err?.msg ?? responseData.message ?? responseData.msg ?? '';
+
+  return (
+    Number(code) === 401 ||
+    err?.status === 401 ||
+    err?.response?.status === 401 ||
+    message.includes('登录状态无效')
+  );
+}
+
+function clearInvalidLoginState(
+  accessStore: ReturnType<typeof useAccessStore>,
+  userStore: ReturnType<typeof useUserStore>,
+) {
+  accessStore.setAccessToken(null);
+  accessStore.setRefreshToken(null);
+  accessStore.setAccessCodes([]);
+  accessStore.setAccessMenus([]);
+  accessStore.setAccessRoutes([]);
+  accessStore.setIsAccessChecked(false);
+  accessStore.setLoginExpired(false);
+  userStore.setUserInfo(null);
+  localStorage.removeItem('LF_refreshToken');
+}
+
+function toLoginRoute(fullPath: string) {
+  return {
+    path: LOGIN_PATH,
+    query:
+      fullPath === preferences.app.defaultHomePath
+        ? {}
+        : { redirect: encodeURIComponent(fullPath) },
+    replace: true,
+  };
+}
+
 /**
  * 通用守卫配置
  * @param router
@@ -71,16 +124,8 @@ function setupAccessGuard(router: Router) {
 
       // 没有访问权限，跳转登录页面
       if (to.fullPath !== LOGIN_PATH) {
-        return {
-          path: LOGIN_PATH,
-          // 如不需要，直接删除 query
-          query:
-            to.fullPath === preferences.app.defaultHomePath
-              ? {}
-              : { redirect: encodeURIComponent(to.fullPath) },
-          // 携带当前跳转的页面，登录后重新跳转该页面
-          replace: true,
-        };
+        // 携带当前跳转的页面，登录后重新跳转该页面
+        return toLoginRoute(to.fullPath);
       }
       return to;
     }
@@ -90,13 +135,14 @@ function setupAccessGuard(router: Router) {
       return true;
     }
 
-    // 生成路由表
-    // 当前登录用户拥有的角色标识列表
-    const userInfo = userStore.userInfo || (await authStore.fetchUserInfo());
-    const userRoles = userInfo.roles ?? [];
-
-    // 生成菜单和路由
+    let userInfo: any;
     try {
+      // 生成路由表
+      // 当前登录用户拥有的角色标识列表
+      userInfo = userStore.userInfo || (await authStore.fetchUserInfo());
+      const userRoles = userInfo.roles ?? [];
+
+      // 生成菜单和路由
       const { accessibleMenus, accessibleRoutes } = await generateAccess({
         roles: userRoles,
         router,
@@ -108,6 +154,11 @@ function setupAccessGuard(router: Router) {
       accessStore.setAccessRoutes(accessibleRoutes);
       accessStore.setIsAccessChecked(true);
     } catch (err) {
+      if (isUnauthorizedError(err)) {
+        clearInvalidLoginState(accessStore, userStore);
+        return toLoginRoute(to.fullPath);
+      }
+
       console.error('[guard] 生成路由失败:', err);
       accessStore.setIsAccessChecked(true);
       return to.fullPath;

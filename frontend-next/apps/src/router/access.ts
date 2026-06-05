@@ -24,13 +24,13 @@ const securityChildRouteTemplates = [
   },
   {
     component: 'view.security_policy',
-    meta: { icon: 'mdi:shield-check', title: '策略管理' },
+    meta: { hideInMenu: true, icon: 'mdi:shield-check', title: '策略管理' },
     name: 'security_policy',
     path: '/security/policy',
   },
   {
     component: 'view.security_observe',
-    meta: { icon: 'mdi:eye-outline', title: '观测日志' },
+    meta: { hideInMenu: true, icon: 'mdi:eye-outline', title: '观测日志' },
     name: 'security_observe',
     path: '/security/observe',
   },
@@ -133,6 +133,12 @@ function routeTitleOf(route: any, meta: Record<string, any>) {
   return routeTitleMap[key] || routeTitleMap[meta.title] || meta.title || route.title || route.name;
 }
 
+function isSecurityRoute(route: any) {
+  const name = String(route.name || '');
+  const path = String(route.path || '');
+  return name === 'security' || name.startsWith('security_') || path.startsWith('/security');
+}
+
 /**
  * 递归转换 LogFlux 后端路由为 vue-vben-admin 格式
  *
@@ -195,6 +201,7 @@ function transformLogfluxRoutes(
       meta: {
         icon: meta.icon,
         ...meta,
+        hideInMenu: Boolean(meta.hideInMenu || isSecurityRoute(route)),
         order: meta.order ?? route.order ?? 0,
         title: routeTitleOf(route, meta),
       },
