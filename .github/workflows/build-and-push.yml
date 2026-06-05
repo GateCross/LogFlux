@@ -41,7 +41,7 @@ jobs:
       - name: Set up pnpm
         uses: pnpm/action-setup@v6
         with:
-          version: 9.15.4
+          version: 11.5.0
           run_install: false
 
       - name: Get pnpm store path
@@ -62,13 +62,13 @@ jobs:
         run: pnpm -C frontend install --frozen-lockfile
 
       - name: Build frontend
-        run: pnpm -C frontend run build
+        run: pnpm -C frontend -F logflux-web run build
 
       - name: Upload dist
         uses: actions/upload-artifact@v7
         with:
           name: frontend-dist
-          path: frontend/dist
+          path: frontend/apps/dist
           retention-days: 3
 
   backend:

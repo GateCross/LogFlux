@@ -10,9 +10,15 @@ docs/
 
 # Frontend
 frontend/node_modules
+frontend/apps/node_modules
 frontend/.next
 frontend/.nuxt
 frontend/dist
+frontend/apps/dist
+frontend/apps/dist.zip
+frontend/apps/.vite
+frontend/apps/.vite-temp
+frontend/.turbo
 frontend/.cache
 frontend/coverage
 frontend/.vscode

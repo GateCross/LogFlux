@@ -2,15 +2,14 @@
 
 LogFlux 是一个日志流量分析、Caddy 图形化配置与 Coraza WAF 管理系统。
 
-它基于 **go-zero + GORM + PostgreSQL** 构建后端，前端采用 **Vue 3 / Vite / Naive UI / UnoCSS**，默认通过 **Caddy** 对外提供统一入口。
+它基于 **go-zero + GORM + PostgreSQL** 构建后端，前端采用 **Vue 3 / Vite / Ant Design Vue / vue-vben-admin**，默认通过 **Caddy** 对外提供统一入口。
 
 ## 技术栈
 
 | 层级 | 技术 |
 |------|------|
 | 后端 | Go, go-zero, GORM, PostgreSQL, Redis(可选) |
-| 前端 | Vue 3, Vite, TypeScript, Naive UI, UnoCSS, Pinia |
-| 前端（开发中） | Vue 3, Vite, TypeScript, Ant Design Vue, vue-vben-admin (frontend-next/) |
+| 前端 | Vue 3, Vite, TypeScript, Ant Design Vue, vue-vben-admin, Pinia |
 | 反代/WAF | Caddy, Coraza, OWASP CRS |
 | IP 定位 | ip2region |
 | 部署 | Docker Compose, Makefile |
@@ -90,14 +89,6 @@ LOGFLUX_IMAGE=ghcr.io/<owner>/<repo>:latest
 ```bash
 cd frontend
 pnpm install
-pnpm run dev
-```
-
-### 前端（vue-vben-admin 版本，开发中）
-
-```bash
-cd frontend-next
-pnpm install
 pnpm run dev:antd
 ```
 
@@ -141,38 +132,21 @@ goctl api go -api api/logflux.api -dir . -style go_zero
 
 ## 前端结构说明
 
-### 当前生产版（frontend/）
+### 当前前端（frontend/）
 
-前端基于 [SoybeanAdmin](https://github.com/soybeanjs/soybean-admin) 模板改造，`frontend/README.md` 为模板原始内容。主要业务页面位于 `frontend/src/views/`：
-
-```
-views/
-  dashboard/    # 仪表盘（趋势图、状态码分布、地理分布地图）
-  caddy/        # Caddy 管理
-    config/     # 配置分块工作台（composables/ + components/）
-    log/        # 访问日志
-  manage/       # 系统管理（用户、角色、菜单）
-  notification/ # 通知管理
-  cron/         # 定时任务
-  user/         # 个人中心
-```
-
-### 新版前端（frontend-next/，开发中）
-
-基于 [vue-vben-admin](https://github.com/vbenjs/vue-vben-admin) (v5) 构建，采用 monorepo 架构（pnpm + Turborepo），Ant Design Vue 组件库。主要业务代码位于 `frontend-next/apps/web-antd/src/`：
+基于 [vue-vben-admin](https://github.com/vbenjs/vue-vben-admin) (v5) 构建，采用 monorepo 架构（pnpm + Turborepo），Ant Design Vue 组件库。主要业务代码位于 `frontend/apps/src/`：
 
 ```
-frontend-next/
+frontend/
   apps/
-    web-antd/         # 主应用（Ant Design Vue）
-      src/
-        api/           # API 服务层（core/, caddy/, system/ 等）
-        router/        # 路由配置 + 动态路由守卫
-        store/         # Pinia 状态管理
-        views/         # 业务页面
-          dashboard/   # 仪表盘
-          caddy/       # Caddy 管理（config, access, source, log, system-log）
-          security/    # WAF 管理（source, policy, observe, ops, runtime, crs, exclusion, binding, release, job）
+    src/
+      api/           # API 服务层（core/, caddy/, system/ 等）
+      router/        # 路由配置 + 动态路由守卫
+      store/         # Pinia 状态管理
+      views/         # 业务页面
+        dashboard/   # 仪表盘
+        caddy/       # Caddy 管理（config, access, log, system-log）
+        security/    # WAF 管理（source, policy, observe, ops, runtime, crs, exclusion, binding, release, job）
           manage/      # 系统管理（user, role, menu）
           notification/# 通知管理（channel, rule, template, log）
           cron/        # 定时任务

@@ -2,6 +2,9 @@ services:
   # LogFlux Application (Frontend + Backend + Caddy)
   logflux:
     image: ${LOGFLUX_IMAGE:-logflux:local}
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
     container_name: logflux-app
     restart: unless-stopped
     ports:

@@ -125,6 +125,13 @@ func (s *LogService) GetSystemLogs(req *types.SystemLogReq) (*types.SystemLogRes
 	return &types.SystemLogResp{List: list, Total: total}, nil
 }
 
+func (s *LogService) ClearSystemLogs() (*types.BaseResp, error) {
+	if err := s.systemLogModel().Clear(s.ctx); err != nil {
+		return nil, xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "清空系统日志失败", err)
+	}
+	return &types.BaseResp{Code: 200, Msg: "成功"}, nil
+}
+
 func (s *LogService) caddyLogModel() caddymodel.CaddyLogModel {
 	if s.svcCtx.CaddyLogModel != nil {
 		return s.svcCtx.CaddyLogModel

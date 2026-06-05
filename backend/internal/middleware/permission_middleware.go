@@ -129,8 +129,10 @@ func permissionRuleFor(method, path string) permissionRule {
 		return permissionRule{permissions: []string{"dashboard"}}
 	case path == "/api/caddy/logs":
 		return permissionRule{permissions: []string{"logs_caddy", "logs"}}
-	case path == "/api/system/logs":
+	case path == "/api/system/logs" && method == http.MethodGet:
 		return permissionRule{permissions: []string{"logs"}}
+	case path == "/api/system/logs/clear" && method == http.MethodPost:
+		return permissionRule{roles: []string{"admin"}}
 	case path == "/api/source" && method == http.MethodGet:
 		return permissionRule{permissions: []string{"logs"}}
 	case strings.HasPrefix(path, "/api/caddy/server") && method == http.MethodGet:

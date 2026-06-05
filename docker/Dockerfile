@@ -18,12 +18,15 @@ ENV VITE_SERVICE_BASE_URL=$VITE_SERVICE_BASE_URL
 
 # 跳过 git hooks，并固定 pnpm 版本（避免 corepack 拉取不确定版本）
 ENV SKIP_SIMPLE_GIT_HOOKS=1
-ARG PNPM_VERSION=9.15.4
+ARG PNPM_VERSION=11.5.0
 RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
 
-# 复制依赖文件（包含 workspace 定义与子包）
-COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
+# 复制新版前端 monorepo 依赖文件与 workspace 包
+COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml frontend/turbo.json ./
+COPY frontend/apps/package.json ./apps/package.json
+COPY frontend/internal/ ./internal/
 COPY frontend/packages/ ./packages/
+COPY frontend/scripts/ ./scripts/
 
 # 安装依赖（利用缓存）
 RUN pnpm install --frozen-lockfile
@@ -32,7 +35,7 @@ RUN pnpm install --frozen-lockfile
 COPY frontend/ ./
 
 # 构建前端
-RUN pnpm run build
+RUN pnpm -F logflux-web run build
 
 # ==========================================
 # Stage 2: Caddy binary (prebuilt)
@@ -58,6 +61,7 @@ RUN go mod download
 COPY backend/ ./
 
 # 下载 ip2region xdb 数据文件（构建时获取最新版本）
+RUN apk add --no-cache bash
 RUN bash scripts/download-xdb.sh
 
 # 构建后端
@@ -110,7 +114,7 @@ WORKDIR /app
 COPY --from=caddy-binary --chown=${APP_USER}:${APP_GROUP} /usr/bin/caddy /usr/bin/caddy
 
 # 复制前端构建产物
-COPY --from=frontend-builder --chown=${APP_USER}:${APP_GROUP} /app/dist /app/frontend
+COPY --from=frontend-builder --chown=${APP_USER}:${APP_GROUP} /app/apps/dist /app/frontend
 
 # 复制后端二进制文件
 COPY --from=backend-builder --chown=${APP_USER}:${APP_GROUP} /app/logflux-api /app/logflux-api

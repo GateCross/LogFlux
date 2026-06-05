@@ -16,7 +16,7 @@ help:
 
 build-frontend:
 	@echo "构建前端..."
-	cd frontend && pnpm install && pnpm run build
+	cd frontend && pnpm install && pnpm -F logflux-web run build
 
 download-xdb:
 	@echo "下载 ip2region xdb 数据..."
@@ -61,5 +61,5 @@ status:
 clean:
 	@echo "清理构建文件和容器..."
 	docker-compose -f docker/docker-compose.yml down -v
-	rm -rf frontend/dist
+	rm -rf frontend/apps/dist frontend/apps/dist.zip
 	@echo "清理完成!"

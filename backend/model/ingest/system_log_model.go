@@ -23,6 +23,7 @@ type SystemLogQuery struct {
 
 type SystemLogModel interface {
 	List(ctx context.Context, query SystemLogQuery) ([]SystemLog, int64, error)
+	Clear(ctx context.Context) error
 }
 
 type defaultSystemLogModel struct {
@@ -70,6 +71,10 @@ func (m *defaultSystemLogModel) List(ctx context.Context, query SystemLogQuery) 
 		return nil, 0, err
 	}
 	return logs, total, nil
+}
+
+func (m *defaultSystemLogModel) Clear(ctx context.Context) error {
+	return systemLogConn(m.db, ctx).Exec(`TRUNCATE TABLE "system_logs" RESTART IDENTITY`).Error
 }
 
 func systemLogOrder(sortBy, order string) string {

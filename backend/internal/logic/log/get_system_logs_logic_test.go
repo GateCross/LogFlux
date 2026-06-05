@@ -160,3 +160,32 @@ func TestGetSystemLogs_EmptyResult(t *testing.T) {
 		t.Fatalf("sql expectations not met: %v", err)
 	}
 }
+
+func TestClearSystemLogs_TruncatesTable(t *testing.T) {
+	sqldb, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("failed to open sqlmock: %v", err)
+	}
+	defer sqldb.Close()
+
+	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqldb}), &gorm.Config{SkipDefaultTransaction: true})
+	if err != nil {
+		t.Fatalf("failed to open gorm: %v", err)
+	}
+
+	mock.ExpectExec(`TRUNCATE TABLE "system_logs" RESTART IDENTITY`).WillReturnResult(sqlmock.NewResult(0, 3))
+
+	logic := NewClearSystemLogsLogic(context.Background(), &svc.ServiceContext{DB: gdb})
+	resp, err := logic.ClearSystemLogs()
+	if err != nil {
+		t.Fatalf("ClearSystemLogs() error = %v", err)
+	}
+
+	if resp.Code != 200 || resp.Msg != "成功" {
+		t.Fatalf("expected success response, got %+v", resp)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("sql expectations not met: %v", err)
+	}
+}

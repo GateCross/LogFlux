@@ -27,7 +27,7 @@ type IPRegionMiddleware struct {
 	v6Searcher *xdb.Searcher
 	mu         sync.RWMutex
 	enabled    bool
-	allowList  map[string]struct{} // 允许的国家/地区集合
+	allowList  map[string]struct{} // 允许的国家、省份或城市集合
 	db         *gorm.DB
 	logModel   caddymodel.CaddyLogModel
 }
@@ -41,17 +41,7 @@ func NewIPRegionMiddleware(enabled bool, allowCountries []string, db *gorm.DB) *
 	m := &IPRegionMiddleware{enabled: enabled, db: db, logModel: logModel}
 	m.initSearchers()
 
-	allow := make(map[string]struct{}, len(allowCountries))
-	for _, c := range allowCountries {
-		c = strings.TrimSpace(c)
-		if c != "" {
-			allow[c] = struct{}{}
-		}
-	}
-	if len(allow) == 0 {
-		allow["中国"] = struct{}{}
-	}
-	m.allowList = allow
+	m.allowList = buildRegionAllowSet(allowCountries)
 
 	if enabled {
 		logx.Infof("IP 区域中间件已启用，允许访问的地区: %v", allowCountries)
@@ -119,17 +109,7 @@ func (m *IPRegionMiddleware) Reload(enabled bool, allowCountries []string) {
 
 	m.enabled = enabled
 	m.initSearchers()
-	allow := make(map[string]struct{}, len(allowCountries))
-	for _, c := range allowCountries {
-		c = strings.TrimSpace(c)
-		if c != "" {
-			allow[c] = struct{}{}
-		}
-	}
-	if len(allow) == 0 {
-		allow["中国"] = struct{}{}
-	}
-	m.allowList = allow
+	m.allowList = buildRegionAllowSet(allowCountries)
 	logx.Infof("IP 区域配置已更新: enabled=%v allowList=%v", enabled, allowCountries)
 }
 
@@ -199,12 +179,11 @@ func (m *IPRegionMiddleware) isAllowed(ip, region string) bool {
 	if !enabled || isPrivateIP(ip) {
 		return true
 	}
-	country := parseCountry(region)
+	country, province, city := parseRegionParts(region)
 	if country == "" {
 		return false
 	}
-	_, ok := allowList[country]
-	return ok
+	return isRegionAllowed(allowList, country, province, city)
 }
 
 // lookupRegion 查询 IP 地理信息，失败返回空串
@@ -228,6 +207,55 @@ func parseCountry(region string) string {
 		return region[:idx]
 	}
 	return region
+}
+
+func buildRegionAllowSet(regions []string) map[string]struct{} {
+	allow := make(map[string]struct{}, len(regions))
+	for _, region := range regions {
+		region = normalizeRegionRule(region)
+		if region != "" {
+			allow[region] = struct{}{}
+		}
+	}
+	if len(allow) == 0 {
+		allow["中国"] = struct{}{}
+	}
+	return allow
+}
+
+func normalizeRegionRule(region string) string {
+	region = strings.TrimSpace(region)
+	region = strings.Trim(region, "/")
+	if region == "" {
+		return ""
+	}
+
+	parts := strings.Split(region, "/")
+	normalized := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			normalized = append(normalized, part)
+		}
+	}
+	return strings.Join(normalized, "/")
+}
+
+func isRegionAllowed(allowList map[string]struct{}, country, province, city string) bool {
+	if _, ok := allowList[country]; ok {
+		return true
+	}
+	if province != "" {
+		if _, ok := allowList[country+"/"+province]; ok {
+			return true
+		}
+	}
+	if province != "" && city != "" {
+		if _, ok := allowList[country+"/"+province+"/"+city]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 func parseRegionParts(region string) (country, province, city string) {

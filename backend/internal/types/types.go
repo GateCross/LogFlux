@@ -422,41 +422,6 @@ type LogListResp struct {
 	Total int64     `json:"total"`
 }
 
-type LogSourceItem struct {
-	ID           uint   `json:"id"`
-	Name         string `json:"name"`
-	Path         string `json:"path"`
-	Type         string `json:"type"`
-	Enabled      bool   `json:"enabled"`
-	ScanInterval int    `json:"scanInterval"` // seconds, default 60
-	CreatedAt    string `json:"createdAt"`
-}
-
-type LogSourceListReq struct {
-	Page     int `form:"page,default=1"`
-	PageSize int `form:"pageSize,default=20"`
-}
-
-type LogSourceListResp struct {
-	List  []LogSourceItem `json:"list"`
-	Total int64           `json:"total"`
-}
-
-type LogSourceReq struct {
-	Name         string `json:"name"`
-	Path         string `json:"path"`
-	Type         string `json:"type,default=caddy"`
-	ScanInterval int    `json:"scanInterval,optional"` // seconds, for directory scanning, default 60
-}
-
-type LogSourceUpdateReq struct {
-	ID           uint   `path:"id"`
-	Name         string `json:"name,optional"`
-	Path         string `json:"path,optional"`
-	Enabled      bool   `json:"enabled,optional"`
-	ScanInterval int    `json:"scanInterval,optional"` // seconds, for directory scanning, default 60
-}
-
 type LoginReq struct {
 	Username string `json:"username"`
 	Password string `json:"password"`

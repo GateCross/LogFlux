@@ -461,8 +461,10 @@ func initRBACData(db *gorm2.DB) {
 			DisplayName: "管理员",
 			Description: "系统管理员，拥有所有权限",
 			Permissions: []string{
-				"dashboard", "manage", "manage_user", "manage_role", "manage_menu",
-				"logs", "logs_caddy", "security",
+				"dashboard",
+				"caddy", "caddy_config", "caddy_access", "logs", "logs_caddy",
+				"security", "cron",
+				"manage", "manage_user", "manage_role", "manage_menu",
 				"notification", "notification_channel", "notification_rule", "notification_template", "notification_log",
 				"user_center",
 			},
@@ -696,6 +698,7 @@ func initRBACData(db *gorm2.DB) {
 	db.Where("name = ?", "home").Delete(&menumodel.Menu{})
 	db.Where("path = ?", "/home").Delete(&menumodel.Menu{})
 	db.Where("component = ?", "home").Delete(&menumodel.Menu{})
+	db.Where("name = ?", "caddy_source").Delete(&menumodel.Menu{})
 	db.Where("name = ?", "caddy_waf").Delete(&menumodel.Menu{})
 	db.Where("name in ?", []string{"waf", "crs"}).Delete(&menumodel.Menu{})
 	// 清理已废弃的 security_access 菜单（已迁移到 caddy_access）

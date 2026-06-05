@@ -123,12 +123,22 @@ func menuPermissionKey(name string) string {
 	switch normalized {
 	case "dashboard":
 		return "dashboard"
+	case "caddy":
+		return "caddy"
+	case "caddy_config", "caddy-config":
+		return "caddy_config"
+	case "caddy_access", "caddy-access":
+		return "caddy_access"
+	case "caddy_source", "caddy-source":
+		return "caddy_source"
 	case "caddy_log", "caddy-log":
 		return "logs_caddy"
 	case "caddy_system_log", "caddy_system-log", "system_log", "system-log":
 		return "logs"
 	case "security", "waf", "waf_security":
 		return "security"
+	case "cron":
+		return "cron"
 	default:
 		return normalized
 	}

@@ -32,6 +32,14 @@ func menuPermissionKey(menuName string) string {
 	switch menuName {
 	case "dashboard":
 		return "dashboard"
+	case "caddy":
+		return "caddy"
+	case "caddy_config":
+		return "caddy_config"
+	case "caddy_access":
+		return "caddy_access"
+	case "caddy_source":
+		return "caddy_source"
 	case "manage":
 		return "manage"
 	case "manage_user":
@@ -58,6 +66,8 @@ func menuPermissionKey(menuName string) string {
 		return "logs_caddy"
 	case "security":
 		return "security"
+	case "cron":
+		return "cron"
 	case "user_center":
 		return "user_center"
 	default:
