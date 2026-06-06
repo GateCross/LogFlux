@@ -163,13 +163,10 @@ export namespace NotificationApi {
   // ─── Unread / Read ─────────────────────────────────────────
 
   /** 未读通知 */
-  export interface UnreadNotification {
-    content: string;
-    createdAt: string;
-    id: string;
-    read: boolean;
-    title: string;
-    type: string;
+  export interface UnreadNotification extends NotificationLog {
+    content?: string;
+    read?: boolean;
+    type?: string;
   }
 }
 
@@ -260,7 +257,7 @@ function rulePayload(data: NotificationApi.RuleParams) {
  */
 export async function getNotificationChannelsApi() {
   const resp = await requestClient.get<ListResp<any>>('/notification/channel');
-  return listOf(resp).map(normalizeChannel);
+  return listOf(resp).map((item) => normalizeChannel(item));
 }
 
 /**
@@ -292,7 +289,7 @@ export async function updateNotificationChannelApi(
  * 删除通知渠道 — DELETE /notification/channel/:id
  */
 export async function deleteNotificationChannelApi(id: string) {
-  return requestClient.delete<void>(`/notification/channel/${id}`);
+  return requestClient.delete(`/notification/channel/${id}`);
 }
 
 /**
@@ -301,7 +298,7 @@ export async function deleteNotificationChannelApi(id: string) {
 export async function testNotificationChannelApi(
   data: NotificationApi.ChannelTestParams,
 ) {
-  return requestClient.post<void>('/notification/channel/test', {
+  return requestClient.post('/notification/channel/test', {
     content: data.content ?? data.message,
     id: Number(data.channelId),
     title: data.title,
@@ -317,7 +314,7 @@ export async function getNotificationRulesApi() {
   const resp = await requestClient.get<ListResp<NotificationApi.Rule>>(
     '/notification/rule',
   );
-  return listOf(resp).map(normalizeRule);
+  return listOf(resp).map((item) => normalizeRule(item));
 }
 
 /**
@@ -349,7 +346,7 @@ export async function updateNotificationRuleApi(
  * 删除通知规则 — DELETE /notification/rule/:id
  */
 export async function deleteNotificationRuleApi(id: string) {
-  return requestClient.delete<void>(`/notification/rule/${id}`);
+  return requestClient.delete(`/notification/rule/${id}`);
 }
 
 // ─── Template ────────────────────────────────────────────────
@@ -393,7 +390,7 @@ export async function updateNotificationTemplateApi(
  * 删除通知模板 — DELETE /notification/template/:id
  */
 export async function deleteNotificationTemplateApi(id: string) {
-  return requestClient.delete<void>(`/notification/template/${id}`);
+  return requestClient.delete(`/notification/template/${id}`);
 }
 
 /**
@@ -430,7 +427,7 @@ export async function getNotificationLogsApi(
  * 删除单条通知日志 — DELETE /notification/log/:id
  */
 export async function deleteNotificationLogApi(id: string) {
-  return requestClient.delete<void>(`/notification/log/${id}`);
+  return requestClient.delete(`/notification/log/${id}`);
 }
 
 /**
@@ -439,14 +436,14 @@ export async function deleteNotificationLogApi(id: string) {
 export async function batchDeleteNotificationLogsApi(
   data: NotificationApi.BatchDeleteLogParams,
 ) {
-  return requestClient.post<void>('/notification/log/batch-delete', data);
+  return requestClient.post('/notification/log/batch-delete', data);
 }
 
 /**
  * 清空所有通知日志 — POST /notification/log/clear
  */
 export async function clearNotificationLogsApi() {
-  return requestClient.post<void>('/notification/log/clear');
+  return requestClient.post('/notification/log/clear');
 }
 
 // ─── Unread / Read ───────────────────────────────────────────
@@ -465,12 +462,12 @@ export async function getUnreadNotificationsApi() {
  * 标记单条通知为已读 — POST /notification/read/:id
  */
 export async function markNotificationReadApi(id: string) {
-  return requestClient.post<void>(`/notification/read/${id}`);
+  return requestClient.post(`/notification/read/${id}`);
 }
 
 /**
  * 标记所有通知为已读 — POST /notification/read/all
  */
 export async function markAllNotificationsReadApi() {
-  return requestClient.post<void>('/notification/read/all');
+  return requestClient.post('/notification/read/all');
 }

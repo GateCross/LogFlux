@@ -1,7 +1,9 @@
 <script lang="ts" setup>
 import type { NotificationItem } from '@vben/layouts';
 
-import { computed, ref, watch } from 'vue';
+import type { NotificationApi } from '#/api/notification';
+
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { AuthenticationLoginExpiredModal } from '@vben/common-ui';
@@ -18,62 +20,19 @@ import { preferences, usePreferences } from '@vben/preferences';
 import { useAccessStore, useUserStore } from '@vben/stores';
 import { openWindow } from '@vben/utils';
 
+import {
+  getUnreadNotificationsApi,
+  markAllNotificationsReadApi,
+  markNotificationReadApi,
+} from '#/api/notification';
 import { $t } from '#/locales';
 import { useAuthStore } from '#/store';
 import LoginForm from '#/views/_core/authentication/login.vue';
 
-const notifications = ref<NotificationItem[]>([
-  {
-    id: 1,
-    avatar: 'https://avatar.vercel.sh/vercel.svg?text=VB',
-    date: '3小时前',
-    isRead: true,
-    message: '描述信息描述信息描述信息',
-    title: '收到了 14 份新周报',
-  },
-  {
-    id: 2,
-    avatar: 'https://avatar.vercel.sh/1',
-    date: '刚刚',
-    isRead: false,
-    message: '描述信息描述信息描述信息',
-    title: '朱偏右 回复了你',
-  },
-  {
-    id: 3,
-    avatar: 'https://avatar.vercel.sh/1',
-    date: '2024-01-01',
-    isRead: false,
-    message: '描述信息描述信息描述信息',
-    title: '曲丽丽 评论了你',
-  },
-  {
-    id: 4,
-    avatar: 'https://avatar.vercel.sh/satori',
-    date: '1天前',
-    isRead: false,
-    message: '描述信息描述信息描述信息',
-    title: '代办提醒',
-  },
-  {
-    id: 5,
-    avatar: 'https://avatar.vercel.sh/satori',
-    date: '1天前',
-    isRead: false,
-    message: '描述信息描述信息描述信息',
-    title: '跳转Workspace示例',
-    link: '/workspace',
-  },
-  {
-    id: 6,
-    avatar: 'https://avatar.vercel.sh/satori',
-    date: '1天前',
-    isRead: false,
-    message: '描述信息描述信息描述信息',
-    title: '跳转外部链接示例',
-    link: 'https://doc.vben.pro',
-  },
-]);
+const NOTIFICATION_POLL_INTERVAL = 60_000;
+
+const notifications = ref<NotificationItem[]>([]);
+let notificationTimer: number | undefined;
 
 const router = useRouter();
 const userStore = useUserStore();
@@ -84,6 +43,32 @@ const { isDark } = usePreferences();
 const showDot = computed(() =>
   notifications.value.some((item) => !item.isRead),
 );
+
+function toNotificationItem(
+  item: NotificationApi.UnreadNotification,
+): NotificationItem {
+  const message = item.message || item.content || '暂无通知内容';
+  const title = item.title || item.eventType || item.type || '系统通知';
+
+  return {
+    ...item,
+    avatar: preferences.logo.source || preferences.app.defaultAvatar,
+    date: item.createdAt || item.sentAt || '',
+    isRead: item.read ?? false,
+    link: '/notification/log',
+    message,
+    title,
+  };
+}
+
+async function loadUnreadNotifications() {
+  try {
+    const list = await getUnreadNotificationsApi();
+    notifications.value = list.map((item) => toNotificationItem(item));
+  } catch {
+    notifications.value = [];
+  }
+}
 
 const menus = computed(() => [
   {
@@ -130,14 +115,28 @@ async function handleLogout() {
   await authStore.logout(false);
 }
 
-function handleNoticeClear() {
+async function handleNoticeClear() {
+  const previous = notifications.value;
   notifications.value = [];
+
+  try {
+    await markAllNotificationsReadApi();
+  } catch {
+    notifications.value = previous;
+  }
 }
 
-function markRead(id: number | string) {
+async function markRead(id: number | string) {
   const item = notifications.value.find((item) => item.id === id);
-  if (item) {
-    item.isRead = true;
+  if (!item || item.isRead) {
+    return;
+  }
+
+  item.isRead = true;
+  try {
+    await markNotificationReadApi(String(id));
+  } catch {
+    item.isRead = false;
   }
 }
 
@@ -145,13 +144,29 @@ function remove(id: number | string) {
   notifications.value = notifications.value.filter((item) => item.id !== id);
 }
 
-function handleMakeAll() {
-  notifications.value.forEach((item) => (item.isRead = true));
+async function handleMakeAll() {
+  const unreadItems = notifications.value.filter((item) => !item.isRead);
+  if (unreadItems.length === 0) {
+    return;
+  }
+
+  unreadItems.forEach((item) => (item.isRead = true));
+  try {
+    await markAllNotificationsReadApi();
+  } catch {
+    unreadItems.forEach((item) => (item.isRead = false));
+  }
 }
 
-const viewAll = () => {};
+const viewAll = () => {
+  router.push({ name: 'NotificationLog' });
+};
 
-const handleClick = (item: NotificationItem) => {
+const handleClick = async (item: NotificationItem) => {
+  if (item.id) {
+    await markRead(item.id);
+  }
+
   // 如果通知项有链接，点击时跳转
   if (item.link) {
     navigateTo(item.link, item.query, item.state);
@@ -214,6 +229,19 @@ watch(
     immediate: true,
   },
 );
+
+onMounted(() => {
+  void loadUnreadNotifications();
+  notificationTimer = window.setInterval(() => {
+    void loadUnreadNotifications();
+  }, NOTIFICATION_POLL_INTERVAL);
+});
+
+onUnmounted(() => {
+  if (notificationTimer) {
+    window.clearInterval(notificationTimer);
+  }
+});
 </script>
 
 <template>
