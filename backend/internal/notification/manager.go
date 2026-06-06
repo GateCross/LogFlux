@@ -76,9 +76,16 @@ func (m *Manager) RegisterProvider(provider NotificationProvider) error {
 
 // SendToChannel 直接向指定渠道发送通知，不依赖事件订阅规则
 func (m *Manager) SendToChannel(ctx context.Context, channelID uint, event *Event) error {
+	if event == nil {
+		return fmt.Errorf("通知事件不能为空")
+	}
+
 	m.mu.RLock()
 	channel, exists := m.channels[channelID]
-	provider := m.providers[channel.Type]
+	var provider NotificationProvider
+	if exists && channel != nil {
+		provider = m.providers[channel.Type]
+	}
 	m.mu.RUnlock()
 
 	if !exists || channel == nil {
@@ -89,19 +96,35 @@ func (m *Manager) SendToChannel(ctx context.Context, channelID uint, event *Even
 		return fmt.Errorf("通知提供者 %s 不存在", channel.Type)
 	}
 
-	if m.templateMgr != nil {
-		templateName := m.determineTemplateName(channel, nil)
-		if content, err := m.templateMgr.Render(templateName, event); err == nil {
-			if event.Data == nil {
-				event.Data = make(map[string]interface{})
-			}
-			event.Data["rendered_content"] = content
-		} else {
-			m.logger.Errorf("渲染模板失败: name=%s err=%v", templateName, err)
-		}
+	_, eventData := m.prepareEventData(channel, nil, event)
+
+	log := &notificationmodel.NotificationLog{
+		ChannelID: &channel.ID,
+		EventType: event.Type,
+		EventData: commonmodel.JSONMap(eventData),
+		Status:    notificationmodel.NotificationStatusPending,
+	}
+	if err := m.db.WithContext(ctx).Create(log).Error; err != nil {
+		return fmt.Errorf("创建通知日志失败: %w", err)
 	}
 
 	err := provider.Send(ctx, map[string]interface{}(channel.Config), event)
+	now := time.Now()
+	updates := map[string]interface{}{
+		"status":        notificationmodel.NotificationStatusSuccess,
+		"error_message": "",
+		"sent_at":       &now,
+	}
+	if err != nil {
+		updates["status"] = notificationmodel.NotificationStatusFailed
+		updates["error_message"] = err.Error()
+		updates["sent_at"] = nil
+	}
+	if updateErr := m.db.WithContext(ctx).Model(&notificationmodel.NotificationLog{}).
+		Where("id = ?", log.ID).
+		Updates(updates).Error; updateErr != nil {
+		m.logger.Errorf("更新通知日志失败: logID=%d err=%v", log.ID, updateErr)
+	}
 	if err != nil && errors.Is(err, context.DeadlineExceeded) {
 		m.logger.Errorf("发送到通知渠道超时: channelID=%d err=%v", channelID, err)
 	}
@@ -382,11 +405,13 @@ func (m *Manager) matchPattern(eventType, pattern string) bool {
 
 // sendToChannel 发送通知到指定渠道
 func (m *Manager) sendToChannel(ctx context.Context, channel *notificationmodel.NotificationChannel, event *Event, rule *notificationmodel.NotificationRule) {
+	_, eventData := m.prepareEventData(channel, rule, event)
+
 	// 创建通知日志
 	log := &notificationmodel.NotificationLog{
 		ChannelID: &channel.ID,
 		EventType: event.Type,
-		EventData: commonmodel.JSONMap(event.Data),
+		EventData: commonmodel.JSONMap(eventData),
 		Status:    notificationmodel.NotificationStatusPending,
 	}
 	if rule != nil {
@@ -405,19 +430,6 @@ func (m *Manager) sendToChannel(ctx context.Context, channel *notificationmodel.
 		m.updateLogStatus(log.ID, notificationmodel.NotificationStatusFailed, fmt.Sprintf("通知提供者 %s 不存在", channel.Type))
 		m.logger.Errorf("通知提供者 %s 不存在，渠道=%s", channel.Type, channel.Name)
 		return
-	}
-
-	// 渲染通知内容
-	templateName := m.determineTemplateName(channel, rule)
-	if content, errRender := m.templateMgr.Render(templateName, event); errRender == nil {
-		// 将渲染后的内容存入 Event Data，供 Provider 使用
-		if event.Data == nil {
-			event.Data = make(map[string]interface{})
-		}
-		event.Data["rendered_content"] = content
-	} else {
-		m.logger.Errorf("渲染模板失败: name=%s err=%v", templateName, errRender)
-		// Fallback: Provider will use event.Message
 	}
 
 	// 发送通知
@@ -482,34 +494,8 @@ func (m *Manager) determineTemplateName(channel *notificationmodel.NotificationC
 }
 
 func (m *Manager) enqueueJob(ctx context.Context, channel *notificationmodel.NotificationChannel, event *Event, rule *notificationmodel.NotificationRule) uint {
-	// 渲染通知内容（在入队时渲染，避免 worker 发送时再依赖共享 event.Data）
-	templateName := m.determineTemplateName(channel, rule)
-	content := ""
-	if m.templateMgr != nil {
-		if rendered, err := m.templateMgr.Render(templateName, event); err == nil {
-			content = rendered
-		} else {
-			m.logger.Errorf("渲染模板失败: name=%s err=%v", templateName, err)
-		}
-	}
-
-	// 复制一份 event data，避免并发写 map
-	eventData := map[string]interface{}{}
-	if event.Data != nil {
-		for k, v := range event.Data {
-			eventData[k] = v
-		}
-	}
-	if eventData == nil {
-		eventData = map[string]interface{}{}
-	}
-	// 标准字段，供 UI 展示
-	eventData["title"] = event.Title
-	eventData["message"] = event.Message
-	eventData["level"] = event.Level
-	if content != "" {
-		eventData["rendered_content"] = content
-	}
+	// 入队前固化展示字段，避免 worker 异步发送时右上角读取不到标题和正文。
+	templateName, eventData := m.prepareEventData(channel, rule, event)
 
 	// 创建通知日志
 	log := &notificationmodel.NotificationLog{
@@ -549,4 +535,35 @@ func (m *Manager) enqueueJob(ctx context.Context, channel *notificationmodel.Not
 	}
 
 	return job.ID
+}
+
+// prepareEventData 固化通知展示字段，保证通知日志和发送提供者看到同一份内容。
+func (m *Manager) prepareEventData(channel *notificationmodel.NotificationChannel, rule *notificationmodel.NotificationRule, event *Event) (string, map[string]interface{}) {
+	templateName := m.determineTemplateName(channel, rule)
+	eventData := map[string]interface{}{}
+	if event != nil && event.Data != nil {
+		for key, value := range event.Data {
+			eventData[key] = value
+		}
+	}
+	delete(eventData, "rendered_content")
+
+	if event != nil {
+		eventData["title"] = event.Title
+		eventData["message"] = event.Message
+		eventData["level"] = event.Level
+	}
+
+	if event != nil && m.templateMgr != nil {
+		if rendered, err := m.templateMgr.Render(templateName, event); err == nil && strings.TrimSpace(rendered) != "" {
+			eventData["rendered_content"] = rendered
+		} else if err != nil {
+			m.logger.Errorf("渲染模板失败: name=%s err=%v", templateName, err)
+		}
+	}
+
+	if event != nil {
+		event.Data = eventData
+	}
+	return templateName, eventData
 }

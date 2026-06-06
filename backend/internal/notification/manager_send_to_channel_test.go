@@ -33,7 +33,7 @@ func (p *directSendProvider) Send(_ context.Context, config map[string]interface
 }
 
 func TestManagerSendToChannel(t *testing.T) {
-	sqldb, _, err := sqlmock.New()
+	sqldb, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatalf("failed to open sqlmock: %v", err)
 	}
@@ -62,6 +62,21 @@ func TestManagerSendToChannel(t *testing.T) {
 	}
 
 	event := NewEvent("system.test", LevelInfo, "Test Title", "Test Content")
+	mock.ExpectQuery("INSERT INTO \"notification_logs\"").
+		WithArgs(
+			sqlmock.AnyArg(),
+			sqlmock.AnyArg(),
+			sqlmock.AnyArg(),
+			sqlmock.AnyArg(),
+			sqlmock.AnyArg(),
+			sqlmock.AnyArg(),
+			sqlmock.AnyArg(),
+			sqlmock.AnyArg(),
+			sqlmock.AnyArg(),
+			sqlmock.AnyArg(),
+		).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+	mock.ExpectExec("UPDATE \"notification_logs\" SET").WillReturnResult(sqlmock.NewResult(0, 1))
+
 	if err := m.SendToChannel(context.Background(), 1, event); err != nil {
 		t.Fatalf("SendToChannel() error = %v", err)
 	}
@@ -80,5 +95,13 @@ func TestManagerSendToChannel(t *testing.T) {
 
 	if provider.lastConfig["url"] != "https://example.com" {
 		t.Fatalf("provider config url = %v", provider.lastConfig["url"])
+	}
+
+	if provider.lastEvent.Data["title"] != "Test Title" {
+		t.Fatalf("expected title to be persisted in event data, got %v", provider.lastEvent.Data["title"])
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("sql expectations not met: %v", err)
 	}
 }
