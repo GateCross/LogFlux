@@ -40,6 +40,7 @@ export const useAuthStore = defineStore('auth', () => {
       userId: String(userInfo?.userId ?? ''),
       username: userInfo?.username,
       realName: displayName,
+      avatar: userInfo?.avatar || '',
       roles: userInfo?.roles || [],
       homePath: preferences.app.defaultHomePath,
       preferences: userInfo?.preferences || '{}',

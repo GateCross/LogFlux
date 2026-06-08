@@ -3,6 +3,7 @@ import { requestClient } from '#/api/request';
 export namespace UserApi {
   /** LogFlux 用户信息 */
   export interface UserInfo {
+    avatar?: string;
     buttons: string[];
     preferences: string;
     roles: string[];
