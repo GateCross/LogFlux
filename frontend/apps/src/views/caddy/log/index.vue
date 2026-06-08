@@ -14,6 +14,7 @@ import {
   Input,
   message,
   Modal,
+  Popconfirm,
   Select,
   Space,
   Table,
@@ -22,7 +23,7 @@ import {
 import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
 
-import { getCaddyLogsApi } from '#/api/caddy/server';
+import { clearCaddyLogsApi, getCaddyLogsApi } from '#/api/caddy/server';
 
 defineOptions({ name: 'CaddyAccessLog' });
 
@@ -30,6 +31,7 @@ type CaddyLog = CaddyServerApi.CaddyLogItem;
 type SortOrder = 'ascend' | 'descend' | false;
 
 const loading = ref(false);
+const clearing = ref(false);
 const logs = ref<CaddyLog[]>([]);
 const selectedLog = ref<CaddyLog | null>(null);
 const detailVisible = ref(false);
@@ -177,6 +179,25 @@ function handleReset() {
   fetchLogs();
 }
 
+async function handleClearLogs() {
+  if (clearing.value) return;
+  clearing.value = true;
+  try {
+    await clearCaddyLogsApi();
+    message.success('访问日志已清空');
+    selectedLog.value = null;
+    detailVisible.value = false;
+    pagination.current = 1;
+    logs.value = [];
+    pagination.total = 0;
+    await fetchLogs();
+  } catch {
+    message.error('清空访问日志失败');
+  } finally {
+    clearing.value = false;
+  }
+}
+
 function handleTableChange(pag: any, _filters: any, sorter: any) {
   pagination.current = pag.current;
   pagination.pageSize = pag.pageSize;
@@ -233,6 +254,12 @@ onMounted(() => {
               <Button type="primary" @click="handleSearch">搜索</Button>
               <Button @click="fetchLogs">刷新</Button>
               <Button @click="handleReset">重置</Button>
+              <Popconfirm
+                title="确认清空全部访问日志？此操作不可恢复。"
+                @confirm="handleClearLogs"
+              >
+                <Button danger :loading="clearing">清空日志</Button>
+              </Popconfirm>
             </Space>
           </FormItem>
         </Form>

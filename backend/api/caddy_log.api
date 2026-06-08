@@ -45,4 +45,7 @@ type (
 service logflux-api {
 	@handler GetCaddyLogs
 	get /caddy/logs (CaddyLogReq) returns (CaddyLogResp)
+
+	@handler ClearCaddyLogs
+	post /caddy/logs/clear returns (BaseResp)
 }

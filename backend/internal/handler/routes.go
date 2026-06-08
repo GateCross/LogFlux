@@ -427,6 +427,11 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					Path:    "/caddy/logs",
 					Handler: log.GetCaddyLogsHandler(serverCtx),
 				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/caddy/logs/clear",
+					Handler: log.ClearCaddyLogsHandler(serverCtx),
+				},
 			}...,
 		),
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),

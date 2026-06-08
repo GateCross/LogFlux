@@ -36,6 +36,7 @@ type DashboardGeoRow struct {
 type CaddyLogModel interface {
 	Create(ctx context.Context, log *CaddyLog) error
 	List(ctx context.Context, query CaddyLogQuery) ([]CaddyLog, int64, error)
+	Clear(ctx context.Context) error
 	CountRange(ctx context.Context, start, end time.Time) (int64, error)
 	CountStatuses(ctx context.Context, start, end time.Time, statuses []int) (int64, error)
 	CountStatusRange(ctx context.Context, start, end time.Time, min, max int) (int64, error)
@@ -100,6 +101,10 @@ func (m *defaultCaddyLogModel) List(ctx context.Context, query CaddyLogQuery) ([
 		return nil, 0, err
 	}
 	return logs, total, nil
+}
+
+func (m *defaultCaddyLogModel) Clear(ctx context.Context) error {
+	return conn(m.db, ctx).Exec(`TRUNCATE TABLE "caddy_logs" RESTART IDENTITY`).Error
 }
 
 func (m *defaultCaddyLogModel) CountRange(ctx context.Context, start, end time.Time) (int64, error) {

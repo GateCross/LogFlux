@@ -154,3 +154,10 @@ export async function getCaddyLogsApi(params?: Record<string, any>) {
     params,
   });
 }
+
+/**
+ * 清空 Caddy 访问日志 — POST /caddy/logs/clear
+ */
+export async function clearCaddyLogsApi() {
+  return requestClient.post<void>('/caddy/logs/clear');
+}
