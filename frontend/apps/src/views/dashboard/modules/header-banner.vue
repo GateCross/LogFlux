@@ -2,7 +2,6 @@
 import { computed } from 'vue';
 import { Icon } from '@iconify/vue';
 import { useUserStore } from '@vben/stores';
-import { VbenAvatar } from '@vben-core/shadcn-ui';
 
 const userStore = useUserStore();
 
@@ -29,14 +28,23 @@ const defaultIcon = 'mdi:help-circle-outline';
 
 const username = computed(() => userStore.userInfo?.username ?? '');
 const userAvatar = computed(() => userStore.userInfo?.avatar || '');
-const userRealName = computed(() => userStore.userInfo?.realName ?? '');
+const avatarFallback = computed(() => {
+  const name = userStore.userInfo?.realName ?? '';
+  return name.slice(-2).toUpperCase();
+});
 </script>
 
 <template>
   <div class="banner-card overflow-hidden rounded-2xl p-6">
     <div class="flex flex-wrap items-center justify-between gap-4">
       <div class="flex items-center gap-4">
-        <VbenAvatar :alt="userRealName" :src="userAvatar" class="size-12" />
+        <div
+          class="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full"
+          style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.12) 0%, rgba(139, 92, 246, 0.08) 100%)"
+        >
+          <img v-if="userAvatar" :src="userAvatar" :alt="username" class="size-full object-cover" />
+          <span v-else class="text-sm font-medium text-blue-500">{{ avatarFallback }}</span>
+        </div>
         <div>
           <h3 class="text-lg font-semibold">欢迎回来，{{ username }}</h3>
           <p class="text-sm text-gray-400 leading-7">统计范围：{{ props.rangeText }}</p>
