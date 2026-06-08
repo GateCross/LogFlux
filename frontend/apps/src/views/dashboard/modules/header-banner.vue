@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { Icon } from '@iconify/vue';
 import { useUserStore } from '@vben/stores';
+import { VbenAvatar } from '@vben-core/shadcn-ui';
 
 const userStore = useUserStore();
 
@@ -27,18 +28,15 @@ const defaultColor = '#6b7280';
 const defaultIcon = 'mdi:help-circle-outline';
 
 const username = computed(() => userStore.userInfo?.username ?? '');
+const userAvatar = computed(() => userStore.userInfo?.avatar || '');
+const userRealName = computed(() => userStore.userInfo?.realName ?? '');
 </script>
 
 <template>
   <div class="banner-card overflow-hidden rounded-2xl p-6">
     <div class="flex flex-wrap items-center justify-between gap-4">
       <div class="flex items-center gap-4">
-        <div
-          class="h-18 w-18 flex shrink-0 items-center justify-center rounded-full"
-          style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.12) 0%, rgba(139, 92, 246, 0.08) 100%)"
-        >
-          <Icon icon="mdi:account-circle-outline" class="text-4xl text-blue-500" />
-        </div>
+        <VbenAvatar :alt="userRealName" :src="userAvatar" class="size-12" />
         <div>
           <h3 class="text-lg font-semibold">欢迎回来，{{ username }}</h3>
           <p class="text-sm text-gray-400 leading-7">统计范围：{{ props.rangeText }}</p>
