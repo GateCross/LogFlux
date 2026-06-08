@@ -27,6 +27,7 @@ import {
 } from '#/api/notification';
 import { $t } from '#/locales';
 import { useAuthStore } from '#/store';
+import { resolveAvatar } from '#/utils/avatar';
 import LoginForm from '#/views/_core/authentication/login.vue';
 
 const NOTIFICATION_POLL_INTERVAL = 60_000;
@@ -108,7 +109,7 @@ const menus = computed(() => [
 ]);
 
 const avatar = computed(() => {
-  return userStore.userInfo?.avatar || '';
+  return resolveAvatar(userStore.userInfo?.avatar, userStore.userInfo?.username);
 });
 
 async function handleLogout() {

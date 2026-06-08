@@ -4,6 +4,8 @@ import { Icon } from '@iconify/vue';
 import { useUserStore } from '@vben/stores';
 import { Avatar } from 'ant-design-vue';
 
+import { resolveAvatar } from '#/utils/avatar';
+
 const userStore = useUserStore();
 
 interface StatisticData {
@@ -28,7 +30,9 @@ const defaultColor = '#6b7280';
 const defaultIcon = 'mdi:help-circle-outline';
 
 const username = computed(() => userStore.userInfo?.username ?? '');
-const userAvatar = computed(() => userStore.userInfo?.avatar || '');
+const userAvatar = computed(() =>
+  resolveAvatar(userStore.userInfo?.avatar, userStore.userInfo?.username),
+);
 const displayName = computed(() => userStore.userInfo?.realName || username.value);
 </script>
 

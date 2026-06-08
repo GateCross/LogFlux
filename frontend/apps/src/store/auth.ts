@@ -12,6 +12,7 @@ import { defineStore } from 'pinia';
 
 import { getAccessCodesApi, getUserInfoApi, loginApi } from '#/api';
 import { $t } from '#/locales';
+import { getDefaultAvatarDataUrl } from '#/utils/avatar';
 import { encrypt } from '#/utils/crypto';
 
 export const useAuthStore = defineStore('auth', () => {
@@ -35,12 +36,16 @@ export const useAuthStore = defineStore('auth', () => {
     const userPreferences = parseUserPreferences(userInfo?.preferences);
     const displayName =
       (userPreferences as any).displayName || userInfo?.username || 'LogFlux 用户';
+    const username = userInfo?.username || 'LF';
+    // 头像优先级：API 服务器头像 > 用户中心保存的头像 > 默认生成头像
+    const avatar =
+      userInfo?.avatar || (userPreferences as any).avatar || getDefaultAvatarDataUrl(username);
     return {
       ...(userPreferences as Record<string, any>),
       userId: String(userInfo?.userId ?? ''),
       username: userInfo?.username,
       realName: displayName,
-      avatar: userInfo?.avatar || '',
+      avatar,
       roles: userInfo?.roles || [],
       homePath: preferences.app.defaultHomePath,
       preferences: userInfo?.preferences || '{}',
