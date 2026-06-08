@@ -249,7 +249,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <Card class="rounded-2xl shadow-sm" :body-style="{ position: 'relative' }">
+  <Card class="h-full rounded-2xl shadow-sm" :body-style="{ position: 'relative' }">
     <template #title>
       <div class="flex items-center justify-between">
         <span>访问地理分布</span>

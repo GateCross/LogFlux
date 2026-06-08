@@ -11,7 +11,6 @@ import HeaderBanner from './modules/header-banner.vue';
 import StatCard from './modules/stat-card.vue';
 import TrendChart from './modules/trend-chart.vue';
 import MapChart from './modules/map-chart.vue';
-import RecentLogs from './modules/recent-logs.vue';
 import type { StatCard as StatCardItem } from './data';
 
 defineOptions({ name: 'Dashboard' });
@@ -159,7 +158,6 @@ const trendTimes = computed(() => summary.value?.trend?.map((item) => item.time)
 const trendValues = computed(() => summary.value?.trend?.map((item) => item.value) ?? []);
 const geoWorldData = computed(() => summary.value?.geo ?? []);
 const geoChinaData = computed(() => summary.value?.geoProvince ?? []);
-const recentLogs = computed(() => summary.value?.recent ?? []);
 
 function formatDateTime(value: Date) {
   const pad = (num: number) => String(num).padStart(2, '0');
@@ -181,7 +179,6 @@ async function loadSummary() {
       endTime: formatDateTime(now),
       intervalSec: activeInterval.value.seconds,
       topN: 6,
-      recentLimit: 6,
     });
     if (data) {
       summary.value = data;
@@ -256,15 +253,15 @@ onUnmounted(() => {
       </Card>
 
       <Row :gutter="[16, 16]">
-        <Col v-for="item in statCards" :key="item.id" :xs="12" :sm="8" :lg="4">
+        <Col v-for="item in statCards" :key="item.id" class="dashboard-col" :xs="12" :sm="8" :lg="4">
           <StatCard :data="item" />
         </Col>
       </Row>
 
       <Row :gutter="[16, 16]">
-        <Col v-for="item in errorStats" :key="item.title" :xs="24" :sm="12" :lg="8">
+        <Col v-for="item in errorStats" :key="item.title" class="dashboard-col" :xs="24" :sm="12" :lg="8">
           <div
-            class="error-card group relative overflow-hidden rounded-2xl p-5 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5"
+            class="error-card group relative h-full overflow-hidden rounded-2xl p-5 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5"
             :style="{ background: item.bg, borderLeft: `3px solid ${item.border}` }"
           >
             <div class="flex items-start justify-between">
@@ -302,14 +299,11 @@ onUnmounted(() => {
       </Row>
 
       <Row :gutter="[16, 16]">
-        <Col :xs="24" :lg="16">
+        <Col class="dashboard-col" :xs="24" :lg="16">
           <MapChart :china-data="geoChinaData" :world-data="geoWorldData" />
         </Col>
-        <Col :xs="24" :lg="8">
-          <Space direction="vertical" :size="16" class="w-full">
-            <TrendChart :times="trendTimes" :values="trendValues" />
-            <RecentLogs :logs="recentLogs" />
-          </Space>
+        <Col class="dashboard-col" :xs="24" :lg="8">
+          <TrendChart :times="trendTimes" :values="trendValues" />
         </Col>
       </Row>
     </Space>
@@ -319,6 +313,14 @@ onUnmounted(() => {
 <style scoped>
 .dashboard-page {
   overscroll-behavior: contain;
+}
+
+.dashboard-col {
+  display: flex;
+}
+
+.dashboard-col > :deep(*) {
+  width: 100%;
 }
 
 .error-card {

@@ -95,13 +95,13 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <Card class="rounded-2xl shadow-sm">
+  <Card class="h-full rounded-2xl shadow-sm">
     <template #title>
       <div class="flex items-center gap-2">
         <span>实时 QPS 趋势</span>
         <Tag color="blue">Live</Tag>
       </div>
     </template>
-    <div ref="chartRef" class="h-[300px]" />
+    <div ref="chartRef" class="h-[400px]" />
   </Card>
 </template>

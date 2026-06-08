@@ -31,7 +31,7 @@ const trendColor = computed(() => (trendDir.value === 'up' ? '#10b981' : '#ef444
 
 <template>
   <div
-    class="stat-card group relative overflow-hidden rounded-2xl p-5 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5"
+    class="stat-card group relative h-full overflow-hidden rounded-2xl p-5 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5"
     :style="{ background: cardBg }"
   >
     <div class="flex items-start justify-between">

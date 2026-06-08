@@ -25,16 +25,6 @@ export interface DashboardGeoItem {
   value: number;
 }
 
-export interface DashboardRecentItem {
-  id: number;
-  logTime: string;
-  method: string;
-  uri: string;
-  status: number;
-  remoteIp: string;
-  country: string;
-}
-
 export interface DashboardRange {
   startTime: string;
   endTime: string;
@@ -47,7 +37,6 @@ export interface DashboardSummaryResp {
   trend: DashboardTrendItem[];
   geo: DashboardGeoItem[];
   geoProvince: DashboardGeoItem[];
-  recent: DashboardRecentItem[];
   range: DashboardRange;
 }
 
@@ -59,7 +48,6 @@ export async function getDashboardSummaryApi(params?: {
   endTime?: string;
   intervalSec?: number;
   topN?: number;
-  recentLimit?: number;
 }) {
   return requestClient.get<DashboardSummaryResp>('/dashboard/summary', {
     params,
