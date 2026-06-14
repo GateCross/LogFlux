@@ -4,7 +4,6 @@ Port: 8888
 Auth:
   AccessSecret: "L0gFlux@2024!Secure#JWT$Key%Str0ng"
   AccessExpire: 86400
-  AESKey: "LogFlux@AES#2024"
 Database:
   Host: "host.docker.internal"  # 使用 host.docker.internal 访问主机上的数据库
   Port: 5432

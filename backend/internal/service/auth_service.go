@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"time"
 
-	"logflux/common/cryptx"
 	"logflux/internal/svc"
 	"logflux/internal/types"
 	"logflux/internal/utils/logger"
@@ -51,11 +50,7 @@ func (s *AuthService) Login(req *types.LoginReq) (*types.LoginResp, error) {
 		return nil, xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "查询用户失败", err)
 	}
 
-	password, err := cryptx.Decrypt(req.Password, s.svcCtx.Config.Auth.AESKey)
-	if err != nil {
-		return nil, xerr.NewBusinessErrorWith("用户名或密码错误")
-	}
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
 		return nil, xerr.NewBusinessErrorWith("用户名或密码错误")
 	}
 	if user.Status == 0 {
