@@ -45,7 +45,6 @@
     "echarts-china-map": "^1.0.4",
     "vue-draggable-plus": "^0.6.1",
     "@guolao/vue-monaco-editor": "^1.6.0",
-    "crypto-js": "catalog:",
     "pinia": "catalog:",
     "vue": "catalog:",
     "vue-router": "catalog:"

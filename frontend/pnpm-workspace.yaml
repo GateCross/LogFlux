@@ -33,7 +33,6 @@ overrides:
   clsx: 'catalog:'
   pinia: 'catalog:'
   vue: 'catalog:'
-  crypto-js: 'catalog:'
 
 catalog:
   '@ast-grep/napi': ^0.43.0
@@ -111,7 +110,6 @@ catalog:
   commitlint-plugin-function-rules: ^5.0.1
   consola: ^3.4.2
   cross-env: ^10.1.0
-  crypto-js: ^4.2.0
   cspell: ^10.0.1
   cz-git: ^1.13.1
   czg: ^1.13.1

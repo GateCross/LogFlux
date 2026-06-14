@@ -13,7 +13,6 @@ import { defineStore } from 'pinia';
 import { getAccessCodesApi, getUserInfoApi, loginApi } from '#/api';
 import { $t } from '#/locales';
 import { getDefaultAvatarDataUrl } from '#/utils/avatar';
-import { encrypt } from '#/utils/crypto';
 
 export const useAuthStore = defineStore('auth', () => {
   const accessStore = useAccessStore();
@@ -65,10 +64,9 @@ export const useAuthStore = defineStore('auth', () => {
       loginLoading.value = true;
 
       // LogFlux 登录返回 { token, refreshToken }
-      // 密码需要 AES 加密后发送
       const loginResult = await loginApi({
         username: params.username,
-        password: encrypt(params.password),
+        password: params.password,
       });
       const { token, refreshToken } = loginResult;
 
