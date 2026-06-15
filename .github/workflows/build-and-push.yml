@@ -9,6 +9,9 @@ on:
       - backend/**
       - docker/**
       - .github/workflows/build-and-push.yml
+  workflow_run:
+    workflows: ["build-caddy"]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
