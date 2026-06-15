@@ -7,6 +7,7 @@ import (
 	"fmt"
 	cronutil "logflux/common/cron"
 	"logflux/common/gorm"
+	ingest "logflux/common/ingest"
 	"logflux/common/logging"
 	redisClient "logflux/common/redis"
 	"logflux/internal/config"
@@ -44,6 +45,7 @@ type ServiceContext struct {
 	ArchiveTask       *tasks.ArchiveTask
 	CronScheduler     *tasks.CronScheduler
 	WafScheduler      *tasks.WafScheduler
+	IngestMgr         *ingest.IngestManager
 	NotificationMgr   notification.NotificationManager
 	Permission        rest.Middleware
 	RateLimit         rest.Middleware
@@ -150,6 +152,15 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	// 初始化 WAF 更新调度器（执行器在 main 中注入）
 	wafScheduler := tasks.NewWafScheduler(db)
 
+	// 初始化日志摄取管理器（tail WAF 审计日志并入库）
+	// 注意：access.log 由 IPRegionMiddleware 直接写入 DB，无需 tail；仅 WAF 审计日志需要 tail
+	ingestMgr := ingest.NewIngestManager(db)
+	var wafSources []ingestmodel.LogSource
+	db.Where("enabled = ? AND name = ?", true, "WAF 审计日志").Find(&wafSources)
+	for _, src := range wafSources {
+		ingestMgr.StartSource(src)
+	}
+
 	// 初始化系统配置模型
 	systemConfigModel := systemmodel.NewSystemConfigModel(db)
 
@@ -172,6 +183,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		ArchiveTask:       archiveTask,
 		CronScheduler:     cronScheduler,
 		WafScheduler:      wafScheduler,
+		IngestMgr:         ingestMgr,
 		NotificationMgr:   notificationMgr,
 		Permission:        middleware.NewPermissionMiddleware(db).Handle,
 		RateLimit:         middleware.NewRateLimitMiddleware(5, time.Minute, "/api/login", "/api/refreshToken").Handle, // 登录接口 5 次/分钟

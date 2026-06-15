@@ -146,6 +146,11 @@ func (s *simpleWafConfigService) Apply(req *types.SimpleWafConfigUpdateReq) (*ty
 		syncCaddyLogSources(s.svcCtx, candidate.Server, s.logger)
 	})
 
+	// 确保 WAF 审计日志路径已注册为日志源
+	if candidate.Normalized.Enabled {
+		ensureWafAuditLogSource(s.svcCtx.DB, managedCaddyDefaultWafAuditLog, s.logger)
+	}
+
 	resp := s.buildResponse(candidate.Server, candidate.Policy, candidate.Snapshot, candidate.Actions, []string{candidate.Directives})
 	resp.Config = candidate.Config
 	resp.Message = "简单 WAF 配置已应用"

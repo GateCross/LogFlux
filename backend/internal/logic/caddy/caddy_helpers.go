@@ -177,3 +177,44 @@ func discoverLogPathsFromConfigJSON(raw []byte) []string {
 	}
 	return paths
 }
+
+// ensureWafAuditLogSource 确保 WAF 审计日志路径已注册为日志源。
+// Coraza 的 SecAuditLog 不会出现在 Caddy JSON 配置中，需要显式注册。
+func ensureWafAuditLogSource(db *gorm.DB, auditLogPath string, logger logx.Logger) {
+	path := strings.TrimSpace(auditLogPath)
+	if path == "" || db == nil {
+		return
+	}
+
+	var source ingestmodel.LogSource
+	err := db.Where("path = ?", path).First(&source).Error
+	if err == nil {
+		// 已存在，确保启用
+		if !source.Enabled {
+			db.Model(&ingestmodel.LogSource{}).Where("id = ?", source.ID).Update("enabled", true)
+		}
+		return
+	}
+	if err != gorm.ErrRecordNotFound {
+		if logger != nil {
+			logger.Errorf("查询 WAF 审计日志源失败: %v", err)
+		}
+		return
+	}
+
+	newSource := ingestmodel.LogSource{
+		Name:    "WAF 审计日志",
+		Path:    path,
+		Type:    "caddy",
+		Enabled: true,
+	}
+	if createErr := db.Create(&newSource).Error; createErr != nil {
+		if logger != nil {
+			logger.Errorf("注册 WAF 审计日志源失败: %v", createErr)
+		}
+		return
+	}
+	if logger != nil {
+		logger.Infof("已注册 WAF 审计日志源: %s", path)
+	}
+}

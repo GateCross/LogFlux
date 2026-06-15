@@ -396,6 +396,11 @@ func (i *CaddyIngestor) parseJSONLine(line string) (*caddymodel.CaddyLog, error)
 		return nil, err
 	}
 
+	// Coraza WAF 审计日志格式：顶层含 "transaction" 字段
+	if _, ok := data["transaction"]; ok {
+		return parseCorazaAuditJSON(line, data)
+	}
+
 	entry := &caddymodel.CaddyLog{
 		RawLog:    line,
 		ExtraData: "{}",
@@ -423,6 +428,79 @@ func (i *CaddyIngestor) parseJSONLine(line string) (*caddymodel.CaddyLog, error)
 	entry.Country = pickString(data, "country", "country_name", "country_name_zh", "country_name_zh-CN", "geoip2.country_names_zh-CN")
 	entry.Province = pickString(data, "province", "province_name", "province_name_zh", "province_name_zh-CN", "geoip2.subdivisions_1_names_zh-CN")
 	entry.City = pickString(data, "city", "city_name", "city_name_zh", "city_name_zh-CN", "geoip2.city_names_zh-CN")
+
+	return entry, nil
+}
+
+// parseCorazaAuditJSON 解析 Coraza WAF 审计日志 JSON 格式。
+// Coraza 格式: {transaction:{...}, messages:[...], request:{...}, response:{...}}
+func parseCorazaAuditJSON(line string, data map[string]any) (*caddymodel.CaddyLog, error) {
+	entry := &caddymodel.CaddyLog{
+		RawLog:    line,
+		ExtraData: "{}",
+	}
+
+	// 提取 transaction 字段
+	tx, _ := data["transaction"].(map[string]any)
+	if tx != nil {
+		if ts, ok := shared.ParseUnixTS(tx["unix_timestamp"]); ok {
+			entry.LogTime = ts
+		}
+		entry.ClientIP = shared.AsString(tx["client_ip"])
+		entry.RemoteIP = shared.AsString(tx["host_ip"])
+	}
+
+	if entry.LogTime.IsZero() {
+		entry.LogTime = time.Now()
+	}
+
+	// 提取 request 字段
+	if req, ok := data["request"].(map[string]any); ok {
+		entry.Method = shared.AsString(req["method"])
+		entry.Uri = shared.AsString(req["uri"])
+		if hv, ok := req["http_version"].(float64); ok {
+			entry.Proto = fmt.Sprintf("HTTP/%.1f", hv)
+		}
+		entry.Host = headerValue(req["headers"], "Host")
+		entry.UserAgent = headerValue(req["headers"], "User-Agent")
+	}
+
+	// 提取 response 字段
+	if resp, ok := data["response"].(map[string]any); ok {
+		entry.Status = int(shared.AsFloat(resp["status"]))
+	}
+
+	// 提取 WAF 命中信息存入 ExtraData
+	extra := map[string]any{}
+	if tx != nil {
+		extra["transaction_id"] = shared.AsString(tx["id"])
+	}
+	if msgs, ok := data["messages"].([]any); ok && len(msgs) > 0 {
+		rules := make([]map[string]any, 0, len(msgs))
+		for _, msg := range msgs {
+			if m, ok := msg.(map[string]any); ok {
+				rule := map[string]any{}
+				if d, ok := m["data"].(map[string]any); ok {
+					rule["id"] = d["id"]
+					rule["rev"] = d["rev"]
+					rule["msg"] = d["msg"]
+					rule["severity"] = d["severity"]
+					rule["ver"] = d["ver"]
+				}
+				rule["message"] = shared.AsString(m["message"])
+				rule["actionset"] = shared.AsString(m["actionset"])
+				rules = append(rules, rule)
+			}
+		}
+		if len(rules) > 0 {
+			extra["matched_rules"] = rules
+		}
+	}
+	extra["source"] = "waf"
+
+	if b, err := json.Marshal(extra); err == nil {
+		entry.ExtraData = string(b)
+	}
 
 	return entry, nil
 }

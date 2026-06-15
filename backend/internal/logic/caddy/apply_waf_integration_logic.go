@@ -126,6 +126,12 @@ func (l *ApplyWafIntegrationLogic) ApplyWafIntegration(req *types.WafIntegration
 	if err := applyService.apply(server, nextConfig, modules, historyAction); err != nil {
 		return nil, err
 	}
+
+	// 确保 WAF 审计日志路径已注册为日志源
+	if req.Enabled {
+		ensureWafAuditLogSource(l.svcCtx.DB, managedCaddyDefaultWafAuditLog, l.Logger)
+	}
+
 	return resp, nil
 }
 
