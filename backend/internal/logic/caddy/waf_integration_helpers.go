@@ -442,37 +442,29 @@ func ensureApiCrsExclusion(config string) (string, bool) {
 	return config, true
 }
 
+// crsExcludeIPAccessRuleID 是 IP 直接访问排除规则的 ID。
+const crsExcludeIPAccessRuleID = "1000200"
+
 // ensureCrsFalsePositiveExclusions 在 Coraza directives 中注入 CRS 常见误报排除规则。
-// 解决内部/LAN 环境通过 IP 地址访问以及特定浏览器 Cookie 触发的误报。
+// 当 Host 头为 IP 地址时（内部/LAN 直接访问），完全禁用 WAF 引擎，避免 920350 等规则误报。
+// 注意：SecRuleRemoveById 在 Coraza 中不生效，改用 ctl:ruleEngine=Off 匹配 IP Host 头。
+// 必须放在 Include @owasp_crs/*.conf 之前，确保在 CRS 规则执行前就禁用引擎。
 func ensureCrsFalsePositiveExclusions(config string) (string, bool) {
 	if !strings.Contains(config, "Include @owasp_crs") {
 		return config, false
 	}
-
-	exclusions := make([]string, 0, 2)
-
-	// 920350: Host header is a numeric IP address
-	// 内部/LAN 环境常用 IP 直接访问管理界面，此规则会产生大量误报（severity warning, score 4）
-	if !strings.Contains(config, "SecRuleRemoveById 920350") {
-		exclusions = append(exclusions, "SecRuleRemoveById 920350")
-	}
-
-	// 942200: MySQL comment-/space-obfuscated injections
-	// 百度统计 Cookie (Hm_lvt_*) 中的逗号分隔时间戳会匹配 MySQL 注入模式
-	if !strings.Contains(config, "Hm_lvt_") && !strings.Contains(config, "ruleRemoveTargetById=942200") {
-		exclusions = append(exclusions, `SecRuleUpdateTargetById 942200 "!REQUEST_COOKIES:/^Hm_lvt_/"`)
-	}
-
-	if len(exclusions) == 0 {
+	if strings.Contains(config, "id:"+crsExcludeIPAccessRuleID) {
 		return config, false
 	}
 
-	comment := "\n    # CRS 误报排除：IP 直接访问 + 百度统计 Cookie"
-	ruleBlock := "\n    " + strings.Join(exclusions, "\n    ")
+	// 匹配 Host 头为 IPv4 地址的请求（如 192.168.50.10:8100），直接跳过 WAF
+	rule := `SecRule REQUEST_HEADERS:Host "@rx ^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}" "id:` +
+		crsExcludeIPAccessRuleID + `,phase:1,pass,nolog,noauditlog,ctl:ruleEngine=Off"`
+
 	config = strings.Replace(
 		config,
 		"Include @owasp_crs/*.conf",
-		comment+ruleBlock+"\n\n    Include @owasp_crs/*.conf",
+		"\n    # IP 直接访问排除：Host 头为 IP 地址时跳过 WAF（内部/LAN 环境）\n    "+rule+"\n\n    Include @owasp_crs/*.conf",
 		1,
 	)
 	return config, true
