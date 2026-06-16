@@ -155,6 +155,12 @@ func TestIngestWithPath_PublicAccessWritesCaddyLog(t *testing.T) {
 
 func TestParseCorazaAuditJSON_InterruptedRequestMatchesAccessLogFields(t *testing.T) {
 	ingestor := NewCaddyIngestor(nil)
+	ingestor.SetGeoResolver(func(ip string) (string, string, string) {
+		if ip != "125.65.97.87" {
+			t.Fatalf("expected resolver ip 125.65.97.87, got %q", ip)
+		}
+		return "中国", "四川省", "成都市"
+	})
 	line := `{"transaction":{"id":"tx-waf","client_ip":"125.65.97.87","host_ip":"","unix_timestamp":1781576984434828300,"timestamp":"2026/06/16 10:29:44","is_interrupted":true,"request":{"method":"GET","uri":"/?id=WAFTEST","protocol":"HTTP/2.0","headers":{"host":["pve.myddpp.top"],"User-Agent":["curl/8.0"]}},"response":{"status":0,"headers":{},"body":""}},"messages":[{"message":"Matched Data","actionset":"deny","data":{"id":"1000001","msg":"waf smoke test","severity":"CRITICAL"}}]}`
 
 	entry, err := ingestor.ParseLine(line)
@@ -185,6 +191,9 @@ func TestParseCorazaAuditJSON_InterruptedRequestMatchesAccessLogFields(t *testin
 	}
 	if entry.Status != 403 {
 		t.Fatalf("expected interrupted WAF audit log to use status 403, got %d", entry.Status)
+	}
+	if entry.Country != "中国" || entry.Province != "四川省" || entry.City != "成都市" {
+		t.Fatalf("expected geo fields, got country=%q province=%q city=%q", entry.Country, entry.Province, entry.City)
 	}
 
 	var extra map[string]any

@@ -24,6 +24,10 @@ func NewIngestManager(db *gorm.DB) *IngestManager {
 	}
 }
 
+func (m *IngestManager) SetCaddyGeoResolver(resolver caddyingest.GeoResolver) {
+	m.caddy.SetGeoResolver(resolver)
+}
+
 func (m *IngestManager) StartSource(source ingestmodel.LogSource) {
 	if !source.Enabled || strings.TrimSpace(source.Path) == "" {
 		return

@@ -35,6 +35,9 @@ var logRegex = regexp.MustCompile(`^\[(.*?)\] "(.*?)" "(.*?)" "(.*?)" "(.*?)" "(
 
 const caddyInternalSource = "caddy_internal"
 
+// GeoResolver 根据 IP 返回国家、省份、城市。
+type GeoResolver func(ip string) (country, province, city string)
+
 type dirWatcher struct {
 	stopCh   chan struct{}
 	interval time.Duration
@@ -45,6 +48,7 @@ type CaddyIngestor struct {
 	tails       map[string]*tail.Tail
 	dirWatchers map[string]dirWatcher
 	dirFiles    map[string]map[string]struct{}
+	geoResolver GeoResolver
 	mu          sync.Mutex
 }
 
@@ -57,6 +61,10 @@ func NewCaddyIngestor(db *gorm.DB) *CaddyIngestor {
 	}
 }
 
+func (i *CaddyIngestor) SetGeoResolver(resolver GeoResolver) {
+	i.geoResolver = resolver
+}
+
 func (i *CaddyIngestor) ParseLine(line string) (*caddymodel.CaddyLog, error) {
 	line = strings.TrimSpace(line)
 	if line == "" {
@@ -65,6 +73,7 @@ func (i *CaddyIngestor) ParseLine(line string) (*caddymodel.CaddyLog, error) {
 
 	if strings.HasPrefix(line, "{") {
 		if logEntry, err := i.parseJSONLine(line); err == nil {
+			i.fillGeo(logEntry)
 			return logEntry, nil
 		}
 	}
@@ -82,7 +91,7 @@ func (i *CaddyIngestor) ParseLine(line string) (*caddymodel.CaddyLog, error) {
 	status, _ := strconv.Atoi(matches[9])
 	size, _ := strconv.ParseInt(matches[10], 10, 64)
 
-	return &caddymodel.CaddyLog{
+	entry := &caddymodel.CaddyLog{
 		LogTime:   logTime,
 		Country:   matches[2],
 		Province:  matches[3],
@@ -98,7 +107,9 @@ func (i *CaddyIngestor) ParseLine(line string) (*caddymodel.CaddyLog, error) {
 		ClientIP:  matches[13],
 		RawLog:    mustJSONRaw(line),
 		ExtraData: "{}",
-	}, nil
+	}
+	i.fillGeo(entry)
+	return entry, nil
 }
 
 func (i *CaddyIngestor) parseTime(ts string) (time.Time, error) {
@@ -122,6 +133,25 @@ func (i *CaddyIngestor) parseTime(ts string) (time.Time, error) {
 
 func (i *CaddyIngestor) Ingest(line string) error {
 	return i.IngestWithPath("", line)
+}
+
+func (i *CaddyIngestor) fillGeo(entry *caddymodel.CaddyLog) {
+	if entry == nil || i.geoResolver == nil {
+		return
+	}
+	if strings.TrimSpace(entry.Country) != "" || strings.TrimSpace(entry.Province) != "" || strings.TrimSpace(entry.City) != "" {
+		return
+	}
+
+	ip := strings.TrimSpace(entry.ClientIP)
+	if ip == "" {
+		ip = strings.TrimSpace(entry.RemoteIP)
+	}
+	if ip == "" {
+		return
+	}
+
+	entry.Country, entry.Province, entry.City = i.geoResolver(ip)
 }
 
 func (i *CaddyIngestor) IngestWithPath(filePath string, line string) error {

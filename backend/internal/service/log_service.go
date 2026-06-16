@@ -56,17 +56,18 @@ func (s *LogService) GetCaddyLogs(req *types.CaddyLogReq) (*types.CaddyLogResp, 
 
 	list := make([]types.CaddyLogItem, 0, len(logs))
 	for _, logItem := range logs {
+		country, province, city := s.resolveCaddyLogRegion(logItem)
 		location := strings.TrimSpace(strings.Join([]string{
-			strings.TrimSpace(logItem.Country),
-			strings.TrimSpace(logItem.Province),
-			strings.TrimSpace(logItem.City),
+			strings.TrimSpace(country),
+			strings.TrimSpace(province),
+			strings.TrimSpace(city),
 		}, " "))
 		list = append(list, types.CaddyLogItem{
 			ID:        logItem.ID,
 			LogTime:   logItem.LogTime.Format("2006-01-02 15:04:05"),
-			Country:   logItem.Country,
-			Province:  logItem.Province,
-			City:      logItem.City,
+			Country:   country,
+			Province:  province,
+			City:      city,
 			Location:  location,
 			Host:      logItem.Host,
 			Method:    logItem.Method,
@@ -80,6 +81,25 @@ func (s *LogService) GetCaddyLogs(req *types.CaddyLogReq) (*types.CaddyLogResp, 
 		})
 	}
 	return &types.CaddyLogResp{List: list, Total: total}, nil
+}
+
+func (s *LogService) resolveCaddyLogRegion(logItem caddymodel.CaddyLog) (country, province, city string) {
+	country = strings.TrimSpace(logItem.Country)
+	province = strings.TrimSpace(logItem.Province)
+	city = strings.TrimSpace(logItem.City)
+	if country != "" || province != "" || city != "" || s.svcCtx.IPRegionMgr == nil {
+		return country, province, city
+	}
+
+	ip := strings.TrimSpace(logItem.ClientIP)
+	if ip == "" {
+		ip = strings.TrimSpace(logItem.RemoteIP)
+	}
+	if ip == "" {
+		return country, province, city
+	}
+
+	return s.svcCtx.IPRegionMgr.Resolve(ip)
 }
 
 func (s *LogService) GetSystemLogs(req *types.SystemLogReq) (*types.SystemLogResp, error) {

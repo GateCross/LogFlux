@@ -58,3 +58,12 @@ func TestNormalizeRegionRule(t *testing.T) {
 		t.Fatalf("normalizeRegionRule() = %q", got)
 	}
 }
+
+func TestResolve_ReturnsRegionForPublicIP(t *testing.T) {
+	m := NewIPRegionMiddleware(false, nil, nil)
+
+	country, province, city := m.Resolve("125.65.97.87")
+	if country == "" {
+		t.Fatalf("Resolve() returned empty country, province=%q city=%q", province, city)
+	}
+}

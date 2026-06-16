@@ -29,6 +29,15 @@ defineOptions({ name: 'CaddyAccessLog' });
 
 type CaddyLog = CaddyServerApi.CaddyLogItem;
 type SortOrder = 'ascend' | 'descend' | false;
+type ColumnWidthKey =
+  | 'actions'
+  | 'clientIp'
+  | 'host'
+  | 'location'
+  | 'logTime'
+  | 'method'
+  | 'status'
+  | 'uri';
 
 const loading = ref(false);
 const clearing = ref(false);
@@ -52,6 +61,13 @@ const pagination = reactive({
   total: 0,
 });
 
+const hasLogs = computed(() => logs.value.length > 0);
+
+const tableScroll = computed(() => {
+  if (!hasLogs.value) return undefined;
+  return { x: 1400 };
+});
+
 const statusOptions = [
   { label: '全部状态', value: -1 },
   { label: '200', value: 200 },
@@ -68,68 +84,102 @@ const statusOptions = [
 ];
 
 const rawLogText = computed(() => {
-  const rawLog = selectedLog.value?.rawLog;
-  if (!rawLog) return '-';
-  try {
-    const parsed = JSON.parse(rawLog);
-    return typeof parsed === 'string' ? parsed : JSON.stringify(parsed, null, 2);
-  } catch {
-    return rawLog;
-  }
+  return normalizeLogText(selectedLog.value?.rawLog);
 });
 
-const columns = [
-  {
-    dataIndex: 'logTime',
-    defaultSortOrder: 'descend' as const,
-    key: 'logTime',
-    sorter: true,
-    title: '时间',
-    width: 170,
-  },
-  {
-    customRender: ({ text }: { text: string }) => {
-      const color = text === 'GET' ? 'blue' : text === 'POST' ? 'green' : 'orange';
-      return h(Tag, { color }, () => text || '-');
+function normalizeLogText(value?: string) {
+  if (!value) return '-';
+  try {
+    const parsed = JSON.parse(value);
+    if (typeof parsed !== 'string') {
+      return JSON.stringify(parsed, null, 2);
+    }
+    const trimmed = parsed.trim();
+    if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
+      return parsed;
+    }
+    try {
+      return JSON.stringify(JSON.parse(trimmed), null, 2);
+    } catch {
+      return parsed;
+    }
+  } catch {
+    return value;
+  }
+}
+
+const columns = computed(() => {
+  const columnWidths: Partial<Record<ColumnWidthKey, number>> = hasLogs.value
+    ? {
+        actions: 90,
+        clientIp: 150,
+        host: 180,
+        location: 180,
+        logTime: 170,
+        method: 90,
+        status: 90,
+        uri: 320,
+      }
+    : {};
+
+  return [
+    {
+      dataIndex: 'logTime',
+      defaultSortOrder: 'descend' as const,
+      key: 'logTime',
+      sorter: true,
+      title: '时间',
+      width: columnWidths.logTime,
     },
-    dataIndex: 'method',
-    key: 'method',
-    title: '方法',
-    width: 90,
-  },
-  {
-    customRender: ({ text }: { text: number }) => {
-      let color = 'default';
-      if (text >= 200 && text < 300) color = 'green';
-      else if (text >= 300 && text < 400) color = 'orange';
-      else if (text >= 400) color = 'red';
-      return h(Tag, { color }, () => String(text ?? '-'));
+    {
+      customRender: ({ text }: { text: string }) => {
+        const color = text === 'GET' ? 'blue' : text === 'POST' ? 'green' : 'orange';
+        return h(Tag, { color }, () => text || '-');
+      },
+      dataIndex: 'method',
+      key: 'method',
+      title: '方法',
+      width: columnWidths.method,
     },
-    dataIndex: 'status',
-    key: 'status',
-    title: '状态',
-    width: 90,
-  },
-  { dataIndex: 'host', ellipsis: true, key: 'host', title: '域名', width: 180 },
-  { dataIndex: 'uri', ellipsis: true, key: 'uri', title: '路径', width: 280 },
-  {
-    dataIndex: 'clientIp',
-    ellipsis: true,
-    key: 'clientIp',
-    title: '来源 IP',
-    width: 150,
-  },
-  {
-    customRender: ({ record }: { record: CaddyLog }) =>
-      record.location ||
-      [record.country, record.province, record.city].filter(Boolean).join(' ') ||
-      '-',
-    key: 'location',
-    title: '地区',
-    width: 180,
-  },
-  { fixed: 'right' as const, key: 'actions', title: '操作', width: 90 },
-];
+    {
+      customRender: ({ text }: { text: number }) => {
+        let color = 'default';
+        if (text >= 200 && text < 300) color = 'green';
+        else if (text >= 300 && text < 400) color = 'orange';
+        else if (text >= 400) color = 'red';
+        return h(Tag, { color }, () => String(text ?? '-'));
+      },
+      dataIndex: 'status',
+      key: 'status',
+      title: '状态',
+      width: columnWidths.status,
+    },
+    { dataIndex: 'host', ellipsis: true, key: 'host', title: '域名', width: columnWidths.host },
+    { dataIndex: 'uri', ellipsis: true, key: 'uri', title: '路径', width: columnWidths.uri },
+    {
+      dataIndex: 'clientIp',
+      ellipsis: true,
+      key: 'clientIp',
+      title: '来源 IP',
+      width: columnWidths.clientIp,
+    },
+    {
+      customRender: ({ record }: { record: CaddyLog }) =>
+        record.location ||
+        [record.country, record.province, record.city].filter(Boolean).join(' ') ||
+        '-',
+      key: 'location',
+      title: '地区',
+      width: columnWidths.location,
+    },
+    {
+      fixed: hasLogs.value ? ('right' as const) : undefined,
+      key: 'actions',
+      title: '操作',
+      width: columnWidths.actions,
+    },
+  ];
+});
 
 function formatRangeTime(value: Dayjs | undefined) {
   if (!value) return undefined;
@@ -270,7 +320,7 @@ onMounted(() => {
             :data-source="logs"
             :loading="loading"
             :pagination="pagination"
-            :scroll="{ x: 1230, y: 'calc(100vh - 300px)' }"
+            :scroll="tableScroll"
             class="access-log-table"
             row-key="id"
             size="middle"
@@ -310,7 +360,7 @@ onMounted(() => {
             {{ selectedLog.userAgent || '-' }}
           </DescriptionsItem>
           <DescriptionsItem label="原始日志">
-            <Input.TextArea :value="rawLogText" readonly :auto-size="{ minRows: 4, maxRows: 12 }" />
+            <pre class="log-detail-pre">{{ rawLogText }}</pre>
           </DescriptionsItem>
         </Descriptions>
       </div>
@@ -325,22 +375,11 @@ onMounted(() => {
 }
 
 .access-log-card :deep(.ant-card-body) {
-  height: calc(100% - 57px);
   min-width: 0;
-  overflow: hidden;
 }
 
 .access-log-table-wrap {
-  flex: 1;
   min-width: 0;
-  min-height: 0;
-  max-width: 100%;
-  overflow-x: auto;
-  overflow-y: hidden;
-}
-
-.access-log-table {
-  min-width: 1230px;
 }
 
 .access-log-table :deep(.ant-table-cell) {
@@ -354,5 +393,18 @@ onMounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   vertical-align: middle;
+}
+
+.log-detail-pre {
+  max-height: 320px;
+  margin: 0 0 8px;
+  overflow: auto;
+  padding: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  background: #f5f5f5;
+  border-radius: 6px;
 }
 </style>

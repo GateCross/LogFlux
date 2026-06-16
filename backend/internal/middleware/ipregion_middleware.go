@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -93,13 +94,22 @@ func loadXdbData(filename string) []byte {
 		}
 	}
 
-	// 本地开发允许先编译后下载 xdb，运行时从源码目录兜底读取。
-	diskPath := filepath.Join("internal", "middleware", "data", filename)
-	data, err := os.ReadFile(diskPath)
-	if err != nil {
-		return nil
+	// 本地开发允许先编译后下载 xdb，运行目录可能是项目根、backend 根或当前包目录。
+	candidates := []string{
+		filepath.Join("internal", "middleware", "data", filename),
+		filepath.Join("backend", "internal", "middleware", "data", filename),
+		filepath.Join("data", filename),
 	}
-	return data
+	if _, currentFile, _, ok := runtime.Caller(0); ok {
+		candidates = append([]string{filepath.Join(filepath.Dir(currentFile), "data", filename)}, candidates...)
+	}
+	for _, diskPath := range candidates {
+		data, err := os.ReadFile(diskPath)
+		if err == nil {
+			return data
+		}
+	}
+	return nil
 }
 
 // Reload 热更新 IP 区域配置（并发安全）
@@ -197,6 +207,11 @@ func (m *IPRegionMiddleware) lookupRegion(ip string) string {
 		return ""
 	}
 	return region
+}
+
+// Resolve 将 IP 解析为国家、省份、城市，供非 HTTP 中间件链路复用。
+func (m *IPRegionMiddleware) Resolve(ip string) (country, province, city string) {
+	return parseRegionParts(m.lookupRegion(ip))
 }
 
 func parseCountry(region string) string {

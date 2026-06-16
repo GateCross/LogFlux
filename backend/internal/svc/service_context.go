@@ -152,15 +152,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	// 初始化 WAF 更新调度器（执行器在 main 中注入）
 	wafScheduler := tasks.NewWafScheduler(db)
 
-	// 初始化日志摄取管理器（tail WAF 审计日志并入库）
-	// 注意：access.log 由 IPRegionMiddleware 直接写入 DB，无需 tail；仅 WAF 审计日志需要 tail
-	ingestMgr := ingest.NewIngestManager(db)
-	var wafSources []ingestmodel.LogSource
-	db.Where("enabled = ? AND name = ?", true, "WAF 审计日志").Find(&wafSources)
-	for _, src := range wafSources {
-		ingestMgr.StartSource(src)
-	}
-
 	// 初始化系统配置模型
 	systemConfigModel := systemmodel.NewSystemConfigModel(db)
 
@@ -174,6 +165,16 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		if json.Unmarshal([]byte(cfg.Value), &ipCfg) == nil {
 			ipRegionMgr.Reload(ipCfg.Enabled, ipCfg.AllowList)
 		}
+	}
+
+	// 初始化日志摄取管理器（tail WAF 审计日志并入库）
+	// 注意：access.log 由 IPRegionMiddleware 直接写入 DB，无需 tail；仅 WAF 审计日志需要 tail
+	ingestMgr := ingest.NewIngestManager(db)
+	ingestMgr.SetCaddyGeoResolver(ipRegionMgr.Resolve)
+	var wafSources []ingestmodel.LogSource
+	db.Where("enabled = ? AND name = ?", true, "WAF 审计日志").Find(&wafSources)
+	for _, src := range wafSources {
+		ingestMgr.StartSource(src)
 	}
 
 	return &ServiceContext{
