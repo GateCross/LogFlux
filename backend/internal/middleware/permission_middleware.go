@@ -66,6 +66,7 @@ func (m *PermissionMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		roleNames := []string(user.Roles)
+		logx.Infof("权限检查: path=%s method=%s userId=%d status=%d roles=%v requiredRoles=%v", r.URL.Path, r.Method, userID, user.Status, roleNames, rule.roles)
 		if hasAny(roleNames, "admin") || hasAny(roleNames, rule.roles...) {
 			next(w, r)
 			return
@@ -84,6 +85,7 @@ func (m *PermissionMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
 			}
 		}
 
+		logx.Infof("权限拒绝: path=%s method=%s userId=%d roles=%v requiredRoles=%v requiredPerms=%v", r.URL.Path, r.Method, userID, roleNames, rule.roles, rule.permissions)
 		writePermissionError(w, http.StatusForbidden, 403, "权限不足")
 	}
 }
