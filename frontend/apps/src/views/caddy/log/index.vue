@@ -65,7 +65,7 @@ const hasLogs = computed(() => logs.value.length > 0);
 
 const tableScroll = computed(() => {
   if (!hasLogs.value) return undefined;
-  return { x: 1400 };
+  return { x: 1400, y: 'calc(100vh - 430px)' };
 });
 
 const statusOptions = [
@@ -375,11 +375,15 @@ onMounted(() => {
 }
 
 .access-log-card :deep(.ant-card-body) {
+  height: calc(100% - 57px);
   min-width: 0;
+  overflow: hidden;
 }
 
 .access-log-table-wrap {
+  flex: 1;
   min-width: 0;
+  min-height: 0;
 }
 
 .access-log-table :deep(.ant-table-cell) {
