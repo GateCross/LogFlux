@@ -416,6 +416,30 @@ func replaceLineRange(lines []string, start, end int, replacement []string) []st
 	return updated
 }
 
+// apiCrsExclusionRuleID 是 LogFlux 管理 API 的 CRS 排除规则 ID。
+// 避免 POST body 中的 Caddyfile/IP 模式触发 CRS SSRF 检测误报。
+const apiCrsExclusionRuleID = "1000100"
+const apiCrsExclusionRule = `SecRule REQUEST_URI "@beginsWith /api/" "id:` + apiCrsExclusionRuleID + `,phase:1,pass,nolog,noauditlog,ctl:requestBodyAccess=Off"`
+
+// ensureApiCrsExclusion 自动在 Coraza directives 中注入 /api/ 路径的 CRS 排除规则。
+// 防止 LogFlux 保存 Caddy 配置时，body 中的 IP/localhost 模式触发 WAF 拦截。
+func ensureApiCrsExclusion(config string) (string, bool) {
+	if !strings.Contains(config, "coraza_waf") || !strings.Contains(config, "Include @owasp_crs") {
+		return config, false
+	}
+	if strings.Contains(config, "@beginsWith /api/") {
+		return config, false
+	}
+	// 在 Include @owasp_crs/*.conf 之前插入排除规则
+	config = strings.Replace(
+		config,
+		"Include @owasp_crs/*.conf",
+		"\n    # LogFlux 管理 API 排除：body 含 Caddyfile/IP 模式会触发 CRS SSRF 误报\n    "+apiCrsExclusionRule+"\n\n    Include @owasp_crs/*.conf",
+		1,
+	)
+	return config, true
+}
+
 func renderWafProtectSnippet(newline string) string {
 	defaultDirectives := strings.Join([]string{
 		"SecRuleEngine DetectionOnly",

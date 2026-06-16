@@ -165,6 +165,10 @@ func (s *caddyConfigService) prepareQuick(config, modules string) (*caddyConfigP
 	if err != nil {
 		return nil, err
 	}
+	if updated, changed := ensureApiCrsExclusion(caddyfile); changed {
+		caddyfile = updated
+		wafActions = append(wafActions, "自动注入 /api/ CRS 排除规则，防止 WAF 误拦 LogFlux 配置保存")
+	}
 	actions := []string{
 		"根据结构化配置生成 Caddyfile",
 		"复杂自定义片段保留在全局配置或站点 import 中",
@@ -224,10 +228,15 @@ func (s *caddyConfigService) prepareRaw(config, modules string) (*caddyConfigPre
 	if strings.TrimSpace(formatted) == "" {
 		return nil, fmt.Errorf("Caddy 配置不能为空")
 	}
+	actions := []string{"使用原始 Caddyfile 内容"}
+	if updated, changed := ensureApiCrsExclusion(formatted); changed {
+		formatted = updated
+		actions = append(actions, "自动注入 /api/ CRS 排除规则，防止 WAF 误拦 LogFlux 配置保存")
+	}
 	return &caddyConfigPrepareResult{
 		Config:  formatted,
 		Modules: normalizeCaddyModulesJSON(modules),
-		Actions: []string{"使用原始 Caddyfile 内容"},
+		Actions: actions,
 	}, nil
 }
 
