@@ -408,7 +408,7 @@ func initWafDefaultPolicies(db *gorm2.DB) {
 		EngineMode:                  "detectiononly",
 		AuditEngine:                 "relevantonly",
 		AuditLogFormat:              "json",
-		AuditRelevantStatus:         "^(?:5|4(?!04))",
+		AuditRelevantStatus:         wafmodel.DefaultAuditRelevantStatus,
 		RequestBodyAccess:           true,
 		RequestBodyLimit:            10 * 1024 * 1024,
 		RequestBodyNoFilesLimit:     1024 * 1024,
@@ -426,7 +426,18 @@ func initWafDefaultPolicies(db *gorm2.DB) {
 		return
 	}
 
-	directives := "SecRuleEngine DetectionOnly\nSecAuditEngine RelevantOnly\nSecAuditLogFormat JSON\nSecAuditLogRelevantStatus ^(?:5|4(?!04))\nSecRequestBodyAccess On\nSecRequestBodyLimit 10485760\nSecRequestBodyNoFilesLimit 1048576\nSecAction \"id:900000,phase:1,pass,nolog,t:none,setvar:tx.paranoia_level=1\"\nSecAction \"id:900110,phase:1,pass,nolog,t:none,setvar:tx.inbound_anomaly_score_threshold=10\"\nSecAction \"id:900100,phase:1,pass,nolog,t:none,setvar:tx.outbound_anomaly_score_threshold=8\""
+	directives := strings.Join([]string{
+		"SecRuleEngine DetectionOnly",
+		"SecAuditEngine RelevantOnly",
+		"SecAuditLogFormat JSON",
+		"SecAuditLogRelevantStatus " + wafmodel.DefaultAuditRelevantStatus,
+		"SecRequestBodyAccess On",
+		"SecRequestBodyLimit 10485760",
+		"SecRequestBodyNoFilesLimit 1048576",
+		"SecAction \"id:900000,phase:1,pass,nolog,t:none,setvar:tx.paranoia_level=1\"",
+		"SecAction \"id:900110,phase:1,pass,nolog,t:none,setvar:tx.inbound_anomaly_score_threshold=10\"",
+		"SecAction \"id:900100,phase:1,pass,nolog,t:none,setvar:tx.outbound_anomaly_score_threshold=8\"",
+	}, "\n")
 	revision := wafmodel.WafPolicyRevision{
 		PolicyID:           defaultPolicy.ID,
 		Version:            1,

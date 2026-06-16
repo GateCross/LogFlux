@@ -443,7 +443,7 @@ func parseCorazaAuditJSON(line string, data map[string]any) (*caddymodel.CaddyLo
 	// 提取 transaction 字段
 	tx, _ := data["transaction"].(map[string]any)
 	if tx != nil {
-		if ts, ok := shared.ParseUnixTS(tx["unix_timestamp"]); ok {
+		if ts, ok := parseCorazaAuditTime(tx); ok {
 			entry.LogTime = ts
 		}
 		entry.ClientIP = shared.AsString(tx["client_ip"])
@@ -453,29 +453,53 @@ func parseCorazaAuditJSON(line string, data map[string]any) (*caddymodel.CaddyLo
 	if entry.LogTime.IsZero() {
 		entry.LogTime = time.Now()
 	}
+	if entry.RemoteIP == "" {
+		entry.RemoteIP = entry.ClientIP
+	}
 
 	// 提取 request 字段
-	if req, ok := data["request"].(map[string]any); ok {
+	req, _ := data["request"].(map[string]any)
+	if req == nil && tx != nil {
+		req, _ = tx["request"].(map[string]any)
+	}
+	if req != nil {
 		entry.Method = shared.AsString(req["method"])
 		entry.Uri = shared.AsString(req["uri"])
-		if hv, ok := req["http_version"].(float64); ok {
-			entry.Proto = fmt.Sprintf("HTTP/%.1f", hv)
-		}
+		entry.Proto = corazaAuditRequestProto(req)
 		entry.Host = headerValue(req["headers"], "Host")
+		if entry.Host == "" {
+			entry.Host = shared.AsString(req["host"])
+		}
 		entry.UserAgent = headerValue(req["headers"], "User-Agent")
 	}
 
 	// 提取 response 字段
-	if resp, ok := data["response"].(map[string]any); ok {
+	resp, _ := data["response"].(map[string]any)
+	if resp == nil && tx != nil {
+		resp, _ = tx["response"].(map[string]any)
+	}
+	if resp != nil {
 		entry.Status = int(shared.AsFloat(resp["status"]))
+		entry.Size = int64(len(shared.AsString(resp["body"])))
+	}
+	if entry.Status == 0 && corazaAuditInterrupted(tx) {
+		entry.Status = 403
 	}
 
 	// 提取 WAF 命中信息存入 ExtraData
 	extra := map[string]any{}
 	if tx != nil {
 		extra["transaction_id"] = shared.AsString(tx["id"])
+		extra["interrupted"] = corazaAuditInterrupted(tx)
+		if severity := shared.AsString(tx["highest_severity"]); severity != "" {
+			extra["highest_severity"] = severity
+		}
 	}
-	if msgs, ok := data["messages"].([]any); ok && len(msgs) > 0 {
+	msgs, _ := data["messages"].([]any)
+	if len(msgs) == 0 && tx != nil {
+		msgs, _ = tx["messages"].([]any)
+	}
+	if len(msgs) > 0 {
 		rules := make([]map[string]any, 0, len(msgs))
 		for _, msg := range msgs {
 			if m, ok := msg.(map[string]any); ok {
@@ -505,6 +529,91 @@ func parseCorazaAuditJSON(line string, data map[string]any) (*caddymodel.CaddyLo
 	return entry, nil
 }
 
+func parseCorazaAuditTime(tx map[string]any) (time.Time, bool) {
+	if tx == nil {
+		return time.Time{}, false
+	}
+	if t, ok := parseCorazaAuditUnixTime(tx["unix_timestamp"]); ok {
+		return t, true
+	}
+	timestamp := strings.TrimSpace(shared.AsString(tx["timestamp"]))
+	if timestamp == "" {
+		return time.Time{}, false
+	}
+	layouts := []string{
+		"2006/01/02 15:04:05",
+		"2006-01-02 15:04:05",
+		time.RFC3339,
+	}
+	for _, layout := range layouts {
+		if t, err := time.ParseInLocation(layout, timestamp, time.Local); err == nil {
+			return t, true
+		}
+	}
+	return time.Time{}, false
+}
+
+func parseCorazaAuditUnixTime(value any) (time.Time, bool) {
+	raw := shared.AsFloat(value)
+	if raw <= 0 {
+		return time.Time{}, false
+	}
+	switch {
+	case raw > 1e17:
+		return time.Unix(0, int64(raw)), true
+	case raw > 1e14:
+		return time.Unix(0, int64(raw)*int64(time.Microsecond)), true
+	case raw > 1e11:
+		return time.Unix(0, int64(raw)*int64(time.Millisecond)), true
+	default:
+		return shared.ParseUnixTS(value)
+	}
+}
+
+func corazaAuditRequestProto(req map[string]any) string {
+	proto := shared.AsString(req["protocol"])
+	if proto != "" {
+		return proto
+	}
+	proto = shared.AsString(req["proto"])
+	if proto != "" {
+		return proto
+	}
+	switch v := req["http_version"].(type) {
+	case float64:
+		if v > 0 {
+			return fmt.Sprintf("HTTP/%.1f", v)
+		}
+	case json.Number:
+		if f, err := v.Float64(); err == nil && f > 0 {
+			return fmt.Sprintf("HTTP/%.1f", f)
+		}
+	}
+	version := shared.AsString(req["http_version"])
+	if version == "" {
+		return ""
+	}
+	if strings.HasPrefix(strings.ToUpper(version), "HTTP/") {
+		return version
+	}
+	return "HTTP/" + version
+}
+
+func corazaAuditInterrupted(tx map[string]any) bool {
+	if tx == nil {
+		return false
+	}
+	switch v := tx["is_interrupted"].(type) {
+	case bool:
+		return v
+	case string:
+		parsed, err := strconv.ParseBool(v)
+		return err == nil && parsed
+	default:
+		return shared.AsFloat(v) > 0
+	}
+}
+
 func headerValue(headers any, key string) string {
 	m, ok := headers.(map[string]any)
 	if !ok {
@@ -512,7 +621,16 @@ func headerValue(headers any, key string) string {
 	}
 	val, ok := m[key]
 	if !ok {
-		return ""
+		for headerKey, headerValue := range m {
+			if strings.EqualFold(headerKey, key) {
+				val = headerValue
+				ok = true
+				break
+			}
+		}
+		if !ok {
+			return ""
+		}
 	}
 	switch v := val.(type) {
 	case []any:

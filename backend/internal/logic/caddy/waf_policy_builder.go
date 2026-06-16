@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	wafPolicyDefaultAuditRelevantStatus = "^(?:5|4(?!04))"
+	wafPolicyDefaultAuditRelevantStatus = wafmodel.DefaultAuditRelevantStatus
 
 	wafPolicyCRSTemplateLowFP        = "low_fp"
 	wafPolicyCRSTemplateBalanced     = "balanced"
@@ -99,7 +99,7 @@ func validatePolicyAuditLogFormat(format string) error {
 
 func normalizePolicyAuditRelevantStatus(value string) string {
 	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
+	if trimmed == "" || trimmed == wafmodel.LegacyAuditRelevantStatus {
 		return wafPolicyDefaultAuditRelevantStatus
 	}
 	return trimmed

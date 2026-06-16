@@ -421,7 +421,7 @@ func renderWafProtectSnippet(newline string) string {
 		"SecRuleEngine DetectionOnly",
 		"SecAuditEngine RelevantOnly",
 		"SecAuditLogFormat JSON",
-		"SecAuditLogRelevantStatus ^(?:5|4(?!04))",
+		"SecAuditLogRelevantStatus " + wafPolicyDefaultAuditRelevantStatus,
 		"SecRequestBodyAccess On",
 		"SecRequestBodyLimit 10485760",
 		"SecRequestBodyNoFilesLimit 1048576",

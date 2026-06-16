@@ -266,7 +266,7 @@ docker compose -f docker/docker-compose.yml down
 优先排查：
 
 1. `Caddy` 配置中缺少 `coraza_waf` 的 `directives` 块（会导致无法注入策略）。
-2. `SecAuditLogRelevantStatus` 表达式填写错误，导致 `/adapt` 失败。
+2. `SecAuditLogRelevantStatus` 表达式填写错误，导致 `/load` 加载失败。
 3. `SecRequestBodyLimit` / `SecRequestBodyNoFilesLimit` 超过上限（当前限制 1 GiB）。
 4. Caddy Admin API 无法访问（网络、鉴权或容器状态异常）。
 

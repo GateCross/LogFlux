@@ -2,6 +2,13 @@ package waf
 
 import "time"
 
+const (
+	// DefaultAuditRelevantStatus 避免使用 Coraza 不支持的 lookahead 正则。
+	DefaultAuditRelevantStatus = "^(5[0-9][0-9]|40[0-35-9]|4[1-9][0-9])$"
+	// LegacyAuditRelevantStatus 是旧默认值，仅用于兼容历史数据。
+	LegacyAuditRelevantStatus = "^(?:5|4(?!04))"
+)
+
 // WafPolicy WAF 运行时策略（结构化配置）
 type WafPolicy struct {
 	ID        uint      `gorm:"primarykey" json:"id"`
@@ -14,17 +21,17 @@ type WafPolicy struct {
 	Enabled   bool `gorm:"default:true;index;not null" json:"enabled"`
 	IsDefault bool `gorm:"default:false;index;not null" json:"isDefault"`
 
-	EngineMode                  string `gorm:"size:32;not null;default:'on'" json:"engineMode"`                       // on | off | detectiononly
-	AuditEngine                 string `gorm:"size:32;not null;default:'relevantonly'" json:"auditEngine"`            // off | on | relevantonly
-	AuditLogFormat              string `gorm:"size:32;not null;default:'json'" json:"auditLogFormat"`                 // json | native
-	AuditRelevantStatus         string `gorm:"size:255;not null;default:'^(?:5|4(?!04))'" json:"auditRelevantStatus"` // SecAuditLogRelevantStatus
-	RequestBodyAccess           bool   `gorm:"default:true;not null" json:"requestBodyAccess"`                        // SecRequestBodyAccess
-	RequestBodyLimit            int64  `gorm:"default:10485760;not null" json:"requestBodyLimit"`                     // SecRequestBodyLimit
-	RequestBodyNoFilesLimit     int64  `gorm:"default:1048576;not null" json:"requestBodyNoFilesLimit"`               // SecRequestBodyNoFilesLimit
-	CrsTemplate                 string `gorm:"size:32;not null;default:'low_fp'" json:"crsTemplate"`                  // low_fp | balanced | high_blocking | custom
-	CrsParanoiaLevel            int64  `gorm:"not null;default:1" json:"crsParanoiaLevel"`                            // tx.paranoia_level
-	CrsInboundAnomalyThreshold  int64  `gorm:"not null;default:10" json:"crsInboundAnomalyThreshold"`                 // tx.inbound_anomaly_score_threshold
-	CrsOutboundAnomalyThreshold int64  `gorm:"not null;default:8" json:"crsOutboundAnomalyThreshold"`                 // tx.outbound_anomaly_score_threshold
+	EngineMode                  string `gorm:"size:32;not null;default:'on'" json:"engineMode"`                                               // on | off | detectiononly
+	AuditEngine                 string `gorm:"size:32;not null;default:'relevantonly'" json:"auditEngine"`                                    // off | on | relevantonly
+	AuditLogFormat              string `gorm:"size:32;not null;default:'json'" json:"auditLogFormat"`                                         // json | native
+	AuditRelevantStatus         string `gorm:"size:255;not null;default:'^(5[0-9][0-9]|40[0-35-9]|4[1-9][0-9])$'" json:"auditRelevantStatus"` // SecAuditLogRelevantStatus
+	RequestBodyAccess           bool   `gorm:"default:true;not null" json:"requestBodyAccess"`                                                // SecRequestBodyAccess
+	RequestBodyLimit            int64  `gorm:"default:10485760;not null" json:"requestBodyLimit"`                                             // SecRequestBodyLimit
+	RequestBodyNoFilesLimit     int64  `gorm:"default:1048576;not null" json:"requestBodyNoFilesLimit"`                                       // SecRequestBodyNoFilesLimit
+	CrsTemplate                 string `gorm:"size:32;not null;default:'low_fp'" json:"crsTemplate"`                                          // low_fp | balanced | high_blocking | custom
+	CrsParanoiaLevel            int64  `gorm:"not null;default:1" json:"crsParanoiaLevel"`                                                    // tx.paranoia_level
+	CrsInboundAnomalyThreshold  int64  `gorm:"not null;default:10" json:"crsInboundAnomalyThreshold"`                                         // tx.inbound_anomaly_score_threshold
+	CrsOutboundAnomalyThreshold int64  `gorm:"not null;default:8" json:"crsOutboundAnomalyThreshold"`                                         // tx.outbound_anomaly_score_threshold
 
 	Config JSONMap `gorm:"type:jsonb" json:"config,omitempty"`
 }

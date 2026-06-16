@@ -222,7 +222,7 @@ onMounted(() => {
 
 <template>
   <div class="h-full overflow-x-hidden overflow-y-auto p-4">
-    <Card title="Caddy 访问日志" :bordered="false" class="h-full rounded-lg shadow-sm">
+    <Card title="Caddy 访问日志" :bordered="false" class="access-log-card h-full rounded-lg shadow-sm">
       <div class="flex h-full min-h-0 flex-col">
         <Form layout="inline" class="access-log-filter-form">
           <FormItem label="搜索">
@@ -264,24 +264,27 @@ onMounted(() => {
           </FormItem>
         </Form>
 
-        <Table
-          :columns="columns"
-          :data-source="logs"
-          :loading="loading"
-          :pagination="pagination"
-          :scroll="{ x: 1200, y: 'calc(100vh - 300px)' }"
-          row-key="id"
-          size="middle"
-          @change="handleTableChange"
-        >
-          <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'actions'">
-              <Button type="link" size="small" @click="openDetail(record as CaddyLog)">
-                详情
-              </Button>
+        <div class="access-log-table-wrap">
+          <Table
+            :columns="columns"
+            :data-source="logs"
+            :loading="loading"
+            :pagination="pagination"
+            :scroll="{ x: 1230, y: 'calc(100vh - 300px)' }"
+            class="access-log-table"
+            row-key="id"
+            size="middle"
+            @change="handleTableChange"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'actions'">
+                <Button type="link" size="small" @click="openDetail(record as CaddyLog)">
+                  详情
+                </Button>
+              </template>
             </template>
-          </template>
-        </Table>
+          </Table>
+        </div>
       </div>
     </Card>
 
@@ -319,5 +322,38 @@ onMounted(() => {
 .access-log-filter-form {
   row-gap: 12px;
   margin-bottom: 24px;
+}
+
+.access-log-card :deep(.ant-card-body) {
+  height: calc(100% - 57px);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.access-log-table-wrap {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.access-log-table :deep(.ant-table),
+.access-log-table :deep(.ant-table-container),
+.access-log-table :deep(.ant-table-content) {
+  max-width: 100%;
+}
+
+.access-log-table :deep(.ant-table-cell) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.access-log-table :deep(.ant-tag) {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
 }
 </style>

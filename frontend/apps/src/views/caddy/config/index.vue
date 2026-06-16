@@ -675,8 +675,8 @@ async function previewBeforeSave(kind: SavePreviewKind) {
       open: true,
       original: config,
     });
-  } catch {
-    message.error('预览配置失败');
+  } catch (error) {
+    message.error(apiErrorMessage(error, '预览配置失败'));
   } finally {
     previewing.value = false;
   }
@@ -704,8 +704,8 @@ async function confirmSave() {
       mode.value = 'raw';
     }
     savePreview.open = false;
-  } catch {
-    message.error('保存配置失败');
+  } catch (error) {
+    message.error(apiErrorMessage(error, '保存配置失败'));
   } finally {
     saving.value = false;
   }
@@ -758,8 +758,8 @@ function rollbackHistory(id: number) {
         message.success('回滚成功');
         await fetchConfig();
         await openHistory();
-      } catch {
-        message.error('回滚失败');
+      } catch (error) {
+        message.error(apiErrorMessage(error, '回滚失败'));
       }
     },
   });
@@ -772,6 +772,12 @@ function mbToBytes(value: number) {
 function bytesToMB(value: number, fallback: number) {
   if (!value || value <= 0) return fallback;
   return Math.max(1, Math.round(value / 1024 / 1024));
+}
+
+function apiErrorMessage(error: unknown, fallback: string) {
+  const data = (error as any)?.response?.data ?? (error as any)?.data ?? {};
+  const detail = data?.message ?? data?.msg ?? data?.error ?? (error as any)?.message;
+  return detail ? `${fallback}：${detail}` : fallback;
 }
 
 function syncWafForm(data: Record<string, any>) {
@@ -823,8 +829,8 @@ async function saveWafConfig() {
     await updateSimpleWafConfigApi(buildWafPayload());
     message.success('防火墙设置已保存');
     await fetchWafConfig();
-  } catch {
-    message.error('保存防火墙设置失败');
+  } catch (error) {
+    message.error(apiErrorMessage(error, '保存防火墙设置失败'));
   } finally {
     wafSaving.value = false;
   }
@@ -836,8 +842,8 @@ async function previewWafConfig() {
   try {
     wafPreviewResult.value = await previewSimpleWafConfigApi(buildWafPayload());
     wafPreviewVisible.value = true;
-  } catch {
-    message.error('生成防火墙预览失败');
+  } catch (error) {
+    message.error(apiErrorMessage(error, '生成防火墙预览失败'));
   } finally {
     wafPreviewing.value = false;
   }
@@ -851,8 +857,8 @@ async function applyWafConfig() {
     message.success(data?.message || '防火墙配置已应用');
     syncWafForm(data ?? {});
     await fetchConfig();
-  } catch {
-    message.error('应用防火墙配置失败');
+  } catch (error) {
+    message.error(apiErrorMessage(error, '应用防火墙配置失败'));
   } finally {
     wafApplying.value = false;
   }

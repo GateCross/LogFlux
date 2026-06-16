@@ -1,7 +1,9 @@
 package caddy
 
 import (
+	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"gorm.io/driver/postgres"
@@ -148,6 +150,49 @@ func TestIngestWithPath_PublicAccessWritesCaddyLog(t *testing.T) {
 
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("sql expectations not met: %v", err)
+	}
+}
+
+func TestParseCorazaAuditJSON_InterruptedRequestMatchesAccessLogFields(t *testing.T) {
+	ingestor := NewCaddyIngestor(nil)
+	line := `{"transaction":{"id":"tx-waf","client_ip":"125.65.97.87","host_ip":"","unix_timestamp":1781576984434828300,"timestamp":"2026/06/16 10:29:44","is_interrupted":true,"request":{"method":"GET","uri":"/?id=WAFTEST","protocol":"HTTP/2.0","headers":{"host":["pve.myddpp.top"],"User-Agent":["curl/8.0"]}},"response":{"status":0,"headers":{},"body":""}},"messages":[{"message":"Matched Data","actionset":"deny","data":{"id":"1000001","msg":"waf smoke test","severity":"CRITICAL"}}]}`
+
+	entry, err := ingestor.ParseLine(line)
+	if err != nil {
+		t.Fatalf("ParseLine() error = %v", err)
+	}
+
+	if entry.LogTime.Year() != 2026 || entry.LogTime.Unix() != 1781576984 {
+		t.Fatalf("expected nanosecond unix timestamp to parse as 2026, got %s", entry.LogTime.Format(time.RFC3339Nano))
+	}
+	if entry.Method != "GET" {
+		t.Fatalf("expected method GET, got %q", entry.Method)
+	}
+	if entry.Uri != "/?id=WAFTEST" {
+		t.Fatalf("expected uri, got %q", entry.Uri)
+	}
+	if entry.Proto != "HTTP/2.0" {
+		t.Fatalf("expected proto HTTP/2.0, got %q", entry.Proto)
+	}
+	if entry.Host != "pve.myddpp.top" {
+		t.Fatalf("expected host from case-insensitive header, got %q", entry.Host)
+	}
+	if entry.UserAgent != "curl/8.0" {
+		t.Fatalf("expected user agent, got %q", entry.UserAgent)
+	}
+	if entry.ClientIP != "125.65.97.87" || entry.RemoteIP != "125.65.97.87" {
+		t.Fatalf("expected client/remote IP fallback, got client=%q remote=%q", entry.ClientIP, entry.RemoteIP)
+	}
+	if entry.Status != 403 {
+		t.Fatalf("expected interrupted WAF audit log to use status 403, got %d", entry.Status)
+	}
+
+	var extra map[string]any
+	if err := json.Unmarshal([]byte(entry.ExtraData), &extra); err != nil {
+		t.Fatalf("extra data is not json: %v", err)
+	}
+	if extra["source"] != "waf" || extra["transaction_id"] != "tx-waf" || extra["interrupted"] != true {
+		t.Fatalf("unexpected extra data: %s", entry.ExtraData)
 	}
 }
 

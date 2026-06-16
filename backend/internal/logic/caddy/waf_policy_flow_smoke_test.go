@@ -175,7 +175,7 @@ func policyRows(now time.Time) *sqlmock.Rows {
 	}).AddRow(
 		uint(1), now, now,
 		"default-runtime-policy", "", true, true,
-		"on", "relevantonly", "json", "^(?:5|4(?!04))",
+		"on", "relevantonly", "json", "^(5[0-9][0-9]|40[0-35-9]|4[1-9][0-9])$",
 		true, int64(10485760), int64(1048576),
 		"balanced", int64(2), int64(5), int64(4),
 		[]byte(`{}`),
@@ -192,7 +192,7 @@ func policyRevisionRows(now time.Time) *sqlmock.Rows {
 		uint(10), now, now,
 		uint(1), uint(2), "published",
 		[]byte(`{}`),
-		"SecRuleEngine DetectionOnly\nSecAuditEngine RelevantOnly\nSecAuditLogFormat JSON\nSecAuditLogRelevantStatus ^(?:5|4(?!04))\nSecRequestBodyAccess On\nSecRequestBodyLimit 10485760\nSecRequestBodyNoFilesLimit 1048576\nSecAction \"id:900000,phase:1,pass,nolog,t:none,setvar:tx.paranoia_level=2\"\nSecAction \"id:900110,phase:1,pass,nolog,t:none,setvar:tx.inbound_anomaly_score_threshold=5\"\nSecAction \"id:900100,phase:1,pass,nolog,t:none,setvar:tx.outbound_anomaly_score_threshold=4\"",
+		"SecRuleEngine DetectionOnly\nSecAuditEngine RelevantOnly\nSecAuditLogFormat JSON\nSecAuditLogRelevantStatus ^(5[0-9][0-9]|40[0-35-9]|4[1-9][0-9])$\nSecRequestBodyAccess On\nSecRequestBodyLimit 10485760\nSecRequestBodyNoFilesLimit 1048576\nSecAction \"id:900000,phase:1,pass,nolog,t:none,setvar:tx.paranoia_level=2\"\nSecAction \"id:900110,phase:1,pass,nolog,t:none,setvar:tx.inbound_anomaly_score_threshold=5\"\nSecAction \"id:900100,phase:1,pass,nolog,t:none,setvar:tx.outbound_anomaly_score_threshold=4\"",
 		"system", "publish policy",
 	)
 }

@@ -63,11 +63,79 @@ func postCaddyText(server *caddymodel.CaddyServer, endpoint, contentType, body s
 		defer resp.Body.Close()
 		respBody, _ := io.ReadAll(resp.Body)
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			if message := caddyAdminResponseError(respBody); message != "" {
+				return resp.StatusCode, respBody, fmt.Errorf("Caddy API 错误: %s", message)
+			}
 			return resp.StatusCode, respBody, nil
 		}
-		return resp.StatusCode, respBody, fmt.Errorf("Caddy API 错误: %s", strings.TrimSpace(string(respBody)))
+		message := caddyAdminResponseError(respBody)
+		if message == "" {
+			message = strings.TrimSpace(string(respBody))
+		}
+		return resp.StatusCode, respBody, fmt.Errorf("Caddy API 错误: %s", message)
 	}
 	return 0, nil, lastErr
+}
+
+func caddyAdminResponseError(body []byte) string {
+	trimmed := bytes.TrimSpace(body)
+	if len(trimmed) == 0 {
+		return ""
+	}
+
+	decoder := json.NewDecoder(bytes.NewReader(trimmed))
+	decoded := false
+	for {
+		var payload any
+		err := decoder.Decode(&payload)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return caddyAdminRawError(trimmed)
+		}
+		decoded = true
+		if message := caddyAdminErrorFromPayload(payload); message != "" {
+			return message
+		}
+	}
+
+	if !decoded {
+		return caddyAdminRawError(trimmed)
+	}
+	return ""
+}
+
+func caddyAdminErrorFromPayload(payload any) string {
+	switch value := payload.(type) {
+	case map[string]any:
+		if message, ok := value["error"].(string); ok {
+			return strings.TrimSpace(message)
+		}
+		for _, child := range value {
+			if message := caddyAdminErrorFromPayload(child); message != "" {
+				return message
+			}
+		}
+	case []any:
+		for _, child := range value {
+			if message := caddyAdminErrorFromPayload(child); message != "" {
+				return message
+			}
+		}
+	}
+	return ""
+}
+
+func caddyAdminRawError(body []byte) string {
+	text := strings.TrimSpace(string(body))
+	if !strings.Contains(strings.ToLower(text), `"error"`) {
+		return ""
+	}
+	if len(text) > 1200 {
+		return text[:1200] + "..."
+	}
+	return text
 }
 
 func getCaddyConfigJSON(server *caddymodel.CaddyServer) ([]byte, error) {
