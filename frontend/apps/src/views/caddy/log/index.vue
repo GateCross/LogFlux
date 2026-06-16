@@ -335,13 +335,12 @@ onMounted(() => {
   min-width: 0;
   min-height: 0;
   max-width: 100%;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
-.access-log-table :deep(.ant-table),
-.access-log-table :deep(.ant-table-container),
-.access-log-table :deep(.ant-table-content) {
-  max-width: 100%;
+.access-log-table {
+  min-width: 1230px;
 }
 
 .access-log-table :deep(.ant-table-cell) {
