@@ -169,6 +169,10 @@ func (s *caddyConfigService) prepareQuick(config, modules string) (*caddyConfigP
 		caddyfile = updated
 		wafActions = append(wafActions, "自动注入 /api/ CRS 排除规则，防止 WAF 误拦 LogFlux 配置保存")
 	}
+	if updated, changed := ensureCrsFalsePositiveExclusions(caddyfile); changed {
+		caddyfile = updated
+		wafActions = append(wafActions, "自动注入 CRS 误报排除规则（IP 访问 / Cookie 误报）")
+	}
 	actions := []string{
 		"根据结构化配置生成 Caddyfile",
 		"复杂自定义片段保留在全局配置或站点 import 中",
@@ -232,6 +236,10 @@ func (s *caddyConfigService) prepareRaw(config, modules string) (*caddyConfigPre
 	if updated, changed := ensureApiCrsExclusion(formatted); changed {
 		formatted = updated
 		actions = append(actions, "自动注入 /api/ CRS 排除规则，防止 WAF 误拦 LogFlux 配置保存")
+	}
+	if updated, changed := ensureCrsFalsePositiveExclusions(formatted); changed {
+		formatted = updated
+		actions = append(actions, "自动注入 CRS 误报排除规则（IP 访问 / Cookie 误报）")
 	}
 	return &caddyConfigPrepareResult{
 		Config:  formatted,

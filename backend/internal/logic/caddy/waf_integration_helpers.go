@@ -442,6 +442,42 @@ func ensureApiCrsExclusion(config string) (string, bool) {
 	return config, true
 }
 
+// ensureCrsFalsePositiveExclusions 在 Coraza directives 中注入 CRS 常见误报排除规则。
+// 解决内部/LAN 环境通过 IP 地址访问以及特定浏览器 Cookie 触发的误报。
+func ensureCrsFalsePositiveExclusions(config string) (string, bool) {
+	if !strings.Contains(config, "Include @owasp_crs") {
+		return config, false
+	}
+
+	exclusions := make([]string, 0, 2)
+
+	// 920350: Host header is a numeric IP address
+	// 内部/LAN 环境常用 IP 直接访问管理界面，此规则会产生大量误报（severity warning, score 4）
+	if !strings.Contains(config, "SecRuleRemoveById 920350") {
+		exclusions = append(exclusions, "SecRuleRemoveById 920350")
+	}
+
+	// 942200: MySQL comment-/space-obfuscated injections
+	// 百度统计 Cookie (Hm_lvt_*) 中的逗号分隔时间戳会匹配 MySQL 注入模式
+	if !strings.Contains(config, "Hm_lvt_") && !strings.Contains(config, "ruleRemoveTargetById=942200") {
+		exclusions = append(exclusions, `SecRuleUpdateTargetById 942200 "!REQUEST_COOKIES:/^Hm_lvt_/"`)
+	}
+
+	if len(exclusions) == 0 {
+		return config, false
+	}
+
+	comment := "\n    # CRS 误报排除：IP 直接访问 + 百度统计 Cookie"
+	ruleBlock := "\n    " + strings.Join(exclusions, "\n    ")
+	config = strings.Replace(
+		config,
+		"Include @owasp_crs/*.conf",
+		comment+ruleBlock+"\n\n    Include @owasp_crs/*.conf",
+		1,
+	)
+	return config, true
+}
+
 func renderWafProtectSnippet(newline string) string {
 	defaultDirectives := strings.Join([]string{
 		"SecRuleEngine DetectionOnly",
