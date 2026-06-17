@@ -7,8 +7,6 @@ import (
 	caddymodel "logflux/model/caddy"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -88,6 +86,19 @@ func TestCaddyConfigServicePrepareQuick(t *testing.T) {
 	}
 	if result.Modules == "" || result.Modules == emptyModulesJSON {
 		t.Fatalf("expected normalized modules, got %q", result.Modules)
+	}
+}
+
+func TestCaddyConfigServicePrepareRawRejectsCommentOnly(t *testing.T) {
+	_, err := newCaddyConfigService().Prepare(caddyConfigPrepareInput{
+		Mode:   caddyConfigModeRaw,
+		Config: "# LogFlux 尚未接管 Caddy 配置。\n# 请粘贴当前 Caddyfile 后保存。",
+	})
+	if err == nil {
+		t.Fatalf("expected comment-only raw config error")
+	}
+	if !strings.Contains(err.Error(), "Caddy 配置不能为空") {
+		t.Fatalf("expected empty config error, got %v", err)
 	}
 }
 
@@ -238,7 +249,7 @@ func TestCaddyConfigServiceValidateQuick(t *testing.T) {
 	}
 }
 
-func TestResolveCaddyConfigModulesForUpdateClearsRawSnapshot(t *testing.T) {
+func TestResolveCaddyConfigModulesKeepsRawSnapshot(t *testing.T) {
 	request := mustCaddyModules(t, caddyFormModel{
 		SchemaVersion: 1,
 		Global:        caddyGlobal{Raw: "{"},
@@ -259,13 +270,14 @@ func TestResolveCaddyConfigModulesForUpdateClearsRawSnapshot(t *testing.T) {
 			},
 		},
 	})
-	if got := resolveCaddyConfigModulesForUpdate(caddyConfigModeRaw, ""); got != emptyModulesJSON {
-		t.Fatalf("expected raw update to clear modules, got %q", got)
+	existing := mustCaddyModules(t, caddyFormModel{SchemaVersion: 1, Global: caddyGlobal{Raw: "{existing}"}})
+	if got := resolveCaddyConfigModules(caddyConfigModeRaw, "", existing); got != existing {
+		t.Fatalf("expected raw update to keep existing modules, got %q", got)
 	}
-	if got := resolveCaddyConfigModulesForUpdate(caddyConfigModeRaw, request); got != emptyModulesJSON {
-		t.Fatalf("expected raw update to ignore request modules, got %q", got)
+	if got := resolveCaddyConfigModules(caddyConfigModeRaw, request, existing); got != request {
+		t.Fatalf("expected raw update with request modules to use request modules, got %q", got)
 	}
-	if got := resolveCaddyConfigModulesForUpdate(caddyConfigModeQuick, request); got != request {
+	if got := resolveCaddyConfigModules(caddyConfigModeQuick, request, existing); got != request {
 		t.Fatalf("expected structured update to use request modules, got %q", got)
 	}
 }
@@ -281,20 +293,7 @@ func TestCaddyConfigFromServerReturnsEmptyModulesWhenConfigMissing(t *testing.T)
 	}
 }
 
-func TestLoadCurrentCaddyConfigUsesEmptyModulesForLocalFallback(t *testing.T) {
-	tmpDir := t.TempDir()
-	caddyfilePath := filepath.Join(tmpDir, "Caddyfile")
-	rawConfig := "example.com {\n  reverse_proxy localhost:8888\n}\n"
-	if err := os.WriteFile(caddyfilePath, []byte(rawConfig), 0o644); err != nil {
-		t.Fatalf("write temp caddyfile: %v", err)
-	}
-
-	originalPath := localCaddyfilePath
-	localCaddyfilePath = caddyfilePath
-	defer func() {
-		localCaddyfilePath = originalPath
-	}()
-
+func TestLoadCurrentCaddyConfigRequiresManagedConfig(t *testing.T) {
 	server := &caddymodel.CaddyServer{
 		Type:    "local",
 		Config:  "",
@@ -302,31 +301,21 @@ func TestLoadCurrentCaddyConfigUsesEmptyModulesForLocalFallback(t *testing.T) {
 	}
 
 	config, modules, err := loadCurrentCaddyConfig(server)
-	if err != nil {
-		t.Fatalf("loadCurrentCaddyConfig() error = %v", err)
+	if err == nil {
+		t.Fatalf("expected unmanaged config error")
 	}
-	if strings.TrimSpace(config) != strings.TrimSpace(rawConfig) {
-		t.Fatalf("expected local file config, got %q", config)
+	if config != "" {
+		t.Fatalf("expected empty config when unmanaged, got %q", config)
 	}
 	if modules != emptyModulesJSON {
-		t.Fatalf("expected empty modules for local fallback, got %q", modules)
+		t.Fatalf("expected empty modules when unmanaged, got %q", modules)
+	}
+	if !strings.Contains(err.Error(), "尚未由 LogFlux 接管") {
+		t.Fatalf("expected unmanaged error, got %v", err)
 	}
 }
 
-func TestGetCaddyConfigUsesEmptyModulesForLocalFallback(t *testing.T) {
-	tmpDir := t.TempDir()
-	caddyfilePath := filepath.Join(tmpDir, "Caddyfile")
-	rawConfig := "example.com {\n  reverse_proxy localhost:8888\n}\n"
-	if err := os.WriteFile(caddyfilePath, []byte(rawConfig), 0o644); err != nil {
-		t.Fatalf("write temp caddyfile: %v", err)
-	}
-
-	originalPath := localCaddyfilePath
-	localCaddyfilePath = caddyfilePath
-	defer func() {
-		localCaddyfilePath = originalPath
-	}()
-
+func TestGetCaddyConfigReturnsUnmanagedPrompt(t *testing.T) {
 	gdb, mock, cleanup := newWafIntegrationMockDB(t)
 	defer cleanup()
 
@@ -357,11 +346,11 @@ func TestGetCaddyConfigUsesEmptyModulesForLocalFallback(t *testing.T) {
 	if resp == nil {
 		t.Fatalf("expected response")
 	}
-	if strings.TrimSpace(resp.Config) != strings.TrimSpace(rawConfig) {
-		t.Fatalf("expected local file config, got %q", resp.Config)
+	if !strings.Contains(resp.Config, "尚未接管 Caddy 配置") {
+		t.Fatalf("expected unmanaged prompt, got %q", resp.Config)
 	}
 	if resp.Modules != emptyModulesJSON {
-		t.Fatalf("expected empty modules for local fallback, got %q", resp.Modules)
+		t.Fatalf("expected empty modules when unmanaged, got %q", resp.Modules)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("sql expectations not met: %v", err)

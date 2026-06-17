@@ -39,10 +39,11 @@ func (l *GetCaddyConfigLogic) GetCaddyConfig(req *types.CaddyConfigReq) (resp *t
 		}, nil
 	}
 
-	defaultConfig := `# No Caddyfile found in database.
-# Please paste your existing Caddyfile content here.
-# It will be saved to the database and pushed to Caddy.
+	defaultConfig := `# LogFlux 尚未接管 Caddy 配置。
+# /etc/caddy/Caddyfile 仅作为首次启动模板，Caddy autosave 仅作为运行态缓存。
+# 请粘贴当前 Caddyfile 后保存；保存成功后数据库将作为管理态唯一来源。
 `
+
 	return &types.CaddyConfigResp{
 		Config:  defaultConfig,
 		Modules: emptyModulesJSON,

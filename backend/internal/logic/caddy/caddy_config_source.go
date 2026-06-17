@@ -7,11 +7,12 @@ import (
 	"strings"
 )
 
-// 默认读取本地 Caddyfile 的路径，测试可以临时覆盖。
+// localCaddyfilePath 仅预留给后续显式导入 bootstrap Caddyfile 使用。
+// 当前配置读取不会自动 fallback 到该文件。
 var localCaddyfilePath = "/etc/caddy/Caddyfile"
 
-// loadCurrentCaddyConfig 统一返回当前可用的 Caddy 配置。
-// 只有数据库里已经确认的结构化快照才保留 modules；本地文件回退一律返回空快照。
+// loadCurrentCaddyConfig 返回 LogFlux 已接管的 Caddy 配置。
+// /etc/caddy/Caddyfile 仅作为容器首次启动的 bootstrap 模板，不再作为当前配置来源。
 func loadCurrentCaddyConfig(server *caddymodel.CaddyServer) (string, string, error) {
 	if server == nil {
 		return "", emptyModulesJSON, fmt.Errorf("Caddy 服务器不存在")
@@ -21,14 +22,7 @@ func loadCurrentCaddyConfig(server *caddymodel.CaddyServer) (string, string, err
 		return config, modules, nil
 	}
 
-	if strings.EqualFold(server.Type, "local") {
-		config, err := readLocalCaddyfile()
-		if err == nil {
-			return config, emptyModulesJSON, nil
-		}
-	}
-
-	return "", emptyModulesJSON, fmt.Errorf("Caddy 配置为空，请先保存 Caddy 配置")
+	return "", emptyModulesJSON, fmt.Errorf("Caddy 配置尚未由 LogFlux 接管，请先保存或导入配置")
 }
 
 // readLocalCaddyfile 读取本地 Caddyfile，返回值会自动去掉首尾空白。

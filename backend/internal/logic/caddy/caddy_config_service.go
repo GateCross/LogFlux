@@ -229,8 +229,8 @@ func ensureQuickWafImportDependencies(config string) (string, []string, error) {
 
 func (s *caddyConfigService) prepareRaw(config, modules string) (*caddyConfigPrepareResult, error) {
 	formatted := formatCaddyfile(config)
-	if strings.TrimSpace(formatted) == "" {
-		return nil, fmt.Errorf("Caddy 配置不能为空")
+	if strings.TrimSpace(formatted) == "" || !hasCaddyConfigContent(formatted) {
+		return nil, fmt.Errorf("Caddy 配置不能为空，请粘贴有效 Caddyfile")
 	}
 	actions := []string{"使用原始 Caddyfile 内容"}
 	if updated, changed := ensureApiCrsExclusion(formatted); changed {
@@ -663,6 +663,15 @@ func formatCaddyfile(content string) string {
 		indent = nextIndent + openCount
 	}
 	return strings.TrimSpace(strings.Join(out, "\n"))
+}
+
+func hasCaddyConfigContent(content string) bool {
+	for _, line := range strings.Split(content, "\n") {
+		if strings.TrimSpace(stripCaddyComment(line)) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func countCaddyLineBraces(line string) (int, int) {
@@ -1100,10 +1109,13 @@ func caddyConfigFromServer(server *caddymodel.CaddyServer) (string, string) {
 	return server.Config, normalizeCaddyModulesJSON(server.Modules)
 }
 
-func resolveCaddyConfigModulesForUpdate(mode, requestModules string) string {
+func resolveCaddyConfigModules(mode, requestModules, existingModules string) string {
 	normalizedMode := normalizeCaddyConfigMode(mode, requestModules)
-	if normalizedMode == caddyConfigModeRaw {
-		return emptyModulesJSON
+	if normalizedMode == caddyConfigModeQuick {
+		return normalizeCaddyModulesJSON(requestModules)
 	}
-	return normalizeCaddyModulesJSON(requestModules)
+	if strings.TrimSpace(requestModules) != "" {
+		return normalizeCaddyModulesJSON(requestModules)
+	}
+	return normalizeCaddyModulesJSON(existingModules)
 }
