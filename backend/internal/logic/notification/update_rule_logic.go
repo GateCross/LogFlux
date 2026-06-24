@@ -39,8 +39,11 @@ func (l *UpdateRuleLogic) UpdateRule(req *types.RuleUpdateReq) (resp *types.Base
 	if req.RuleType != "" {
 		rule.RuleType = req.RuleType
 	}
-	if req.EventType != "" {
-		rule.EventType = req.EventType
+	if req.EventLevel != "" {
+		rule.EventLevel = req.EventLevel
+	}
+	if req.EventTypes != nil {
+		rule.EventTypes = notificationmodel.StringArray(req.EventTypes)
 	}
 	if req.Condition != "" {
 		var conditionMap map[string]interface{}

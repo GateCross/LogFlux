@@ -370,6 +370,16 @@ type DashboardTrendItem struct {
 	Value int64  `json:"value"`
 }
 
+type EventItem struct {
+	Value string `json:"value"`
+	Label string `json:"label"`
+	Group string `json:"group"`
+}
+
+type EventListResp struct {
+	List []EventItem `json:"list"`
+}
+
 type IDReq struct {
 	ID uint `path:"id"`
 }
@@ -495,18 +505,19 @@ type RouteMeta struct {
 }
 
 type RuleItem struct {
-	ID              uint    `json:"id"`
-	Name            string  `json:"name"`
-	Enabled         bool    `json:"enabled"`
-	RuleType        string  `json:"ruleType"`
-	EventType       string  `json:"eventType"`
-	Condition       string  `json:"condition"`
-	ChannelIDs      []int64 `json:"channelIds"`
-	Template        string  `json:"template"`
-	SilenceDuration int     `json:"silenceDuration"`
-	Description     string  `json:"description"`
-	CreatedAt       string  `json:"createdAt"`
-	UpdatedAt       string  `json:"updatedAt"`
+	ID              uint     `json:"id"`
+	Name            string   `json:"name"`
+	Enabled         bool     `json:"enabled"`
+	RuleType        string   `json:"ruleType"`
+	EventLevel      string   `json:"eventLevel"`
+	EventTypes      []string `json:"eventTypes"`
+	Condition       string   `json:"condition"`
+	ChannelIDs      []int64  `json:"channelIds"`
+	Template        string   `json:"template"`
+	SilenceDuration int      `json:"silenceDuration"`
+	Description     string   `json:"description"`
+	CreatedAt       string   `json:"createdAt"`
+	UpdatedAt       string   `json:"updatedAt"`
 }
 
 type RuleListResp struct {
@@ -514,28 +525,31 @@ type RuleListResp struct {
 }
 
 type RuleReq struct {
-	Name            string  `json:"name"`
-	Enabled         bool    `json:"enabled"`
-	RuleType        string  `json:"ruleType"` // threshold, frequency, pattern
-	EventType       string  `json:"eventType"`
-	Condition       string  `json:"condition"` // JSON string
-	ChannelIDs      []int64 `json:"channelIds"`
-	Template        string  `json:"template,optional"`
-	SilenceDuration int     `json:"silenceDuration"` // seconds
-	Description     string  `json:"description,optional"`
+	Name            string   `json:"name"`
+	Enabled         bool     `json:"enabled"`
+	RuleType        string   `json:"ruleType"` // threshold, frequency, pattern
+	EventLevel      string   `json:"eventLevel"`
+	EventTypes      []string `json:"eventTypes"`
+	Condition       string   `json:"condition"` // JSON string
+	ChannelIDs      []int64  `json:"channelIds"`
+	Template        string   `json:"template,optional"`
+	SilenceDuration int      `json:"silenceDuration"` // seconds
+	Description     string   `json:"description,optional"`
 }
 
 type RuleUpdateReq struct {
-	ID              uint    `path:"id"`
-	Name            string  `json:"name,optional"`
-	Enabled         bool    `json:"enabled,optional"`
-	RuleType        string  `json:"ruleType,optional"`
-	EventType       string  `json:"eventType,optional"`
-	Condition       string  `json:"condition,optional"`
-	ChannelIDs      []int64 `json:"channelIds,optional"`
-	Template        string  `json:"template,optional"`
-	SilenceDuration int     `json:"silenceDuration,optional"`
-	Description     string  `json:"description,optional"`
+	ID              uint     `path:"id"`
+	Name            string   `json:"name,optional"`
+	Enabled         bool     `json:"enabled,optional"`
+	RuleType        string   `json:"ruleType,optional"`
+	EventLevel      string   `json:"eventLevel,optional"`
+	EventTypes      []string `json:"eventTypes,optional"`
+	Condition       string   `json:"condition,optional"`
+	ChannelID       int64    `json:"channelId,optional"`
+	ChannelIDs      []int64  `json:"channelIds,optional"`
+	Template        string   `json:"template,optional"`
+	SilenceDuration int      `json:"silenceDuration,optional"`
+	Description     string   `json:"description,optional"`
 }
 
 type SimpleWafConfigReq struct {

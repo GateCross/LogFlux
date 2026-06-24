@@ -57,9 +57,23 @@ func (e *ruleEngine) Evaluate(ctx context.Context, rule *notificationmodel.Notif
 		return false, nil
 	}
 
-	// 检查事件类型是否匹配 (同时支持事件级别匹配，以兼容前端的事件级别过滤逻辑)
-	if rule.EventType != "*" && !matchEventType(rule.EventType, event.Type) && rule.EventType != event.Level {
+	// 检查事件等级是否匹配
+	if rule.EventLevel != "" && rule.EventLevel != "*" && rule.EventLevel != event.Level {
 		return false, nil
+	}
+
+	// 检查特定事件类型是否匹配
+	if len(rule.EventTypes) > 0 {
+		matched := false
+		for _, pattern := range rule.EventTypes {
+			if matchEventType(pattern, event.Type) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false, nil
+		}
 	}
 
 	// 检查静默期

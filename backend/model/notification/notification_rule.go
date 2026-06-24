@@ -25,8 +25,11 @@ type NotificationRule struct {
 	// 条件表达式 (JSONB)
 	Condition JSONMap `gorm:"type:jsonb;not null" json:"condition"`
 
-	// 触发事件类型
-	EventType string `gorm:"size:100;index;not null" json:"event_type"`
+	// 触发事件等级
+	EventLevel string `gorm:"size:50;index;not null;default:'*'" json:"event_level"`
+
+	// 触发特定事件类型列表
+	EventTypes StringArray `gorm:"type:text[];not null;default:'{}'" json:"event_types"`
 
 	// 通知渠道 ID
 	ChannelIDs Int64Array `gorm:"type:bigint[];not null;default:'{}'" json:"channel_ids"`
@@ -108,6 +111,8 @@ func (i *Int64Array) Scan(value interface{}) error {
 	*i = result
 	return nil
 }
+
+
 
 // RuleType 规则类型常量
 const (

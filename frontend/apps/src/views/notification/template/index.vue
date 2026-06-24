@@ -52,16 +52,19 @@ const columns = [
   { key: 'actions', title: '操作', width: 240 },
 ];
 
-// ── Template type options ───────────────────────────────────
+// ── Template format options ───────────────────────────────────
 
-const templateTypeOptions = [
-  { label: '邮件', value: 'email' },
-  { label: 'Telegram', value: 'telegram' },
-  { label: '钉钉', value: 'dingtalk' },
-  { label: '企业微信', value: 'wechat' },
-  { label: 'Slack', value: 'slack' },
-  { label: 'Webhook', value: 'webhook' },
+const templateFormatOptions = [
+  { label: '文本 (Text)', value: 'text' },
+  { label: '富文本 (HTML)', value: 'html' },
+  { label: 'Markdown', value: 'markdown' },
+  { label: 'JSON', value: 'json' },
 ];
+
+const templateTypeLabels: Record<string, string> = {
+  system: '系统',
+  user: '自定义',
+};
 
 // ── 创建 / 编辑 modal ─────────────────────────────────────
 
@@ -73,7 +76,8 @@ const isEditing = computed(() => editingId.value !== null);
 const formState = reactive<NotificationApi.TemplateParams>({
   content: '',
   name: '',
-  type: 'email',
+  format: 'text',
+  type: 'user',
 });
 
 function openCreate() {
@@ -81,7 +85,8 @@ function openCreate() {
   Object.assign(formState, {
     content: '',
     name: '',
-    type: 'email',
+    format: 'text',
+    type: 'user',
   });
   modalVisible.value = true;
 }
@@ -91,6 +96,7 @@ function openEdit(record: NotificationApi.Template) {
   Object.assign(formState, {
     content: record.content,
     name: record.name,
+    format: record.format || 'text',
     type: record.type,
   });
   modalVisible.value = true;
@@ -166,8 +172,8 @@ async function handlePreview() {
   }
 }
 
-function templateTypeLabel(type: string) {
-  return templateTypeOptions.find((item) => item.value === type)?.label ?? type;
+function templateFormatLabel(format: string) {
+  return templateFormatOptions.find((item) => item.value === format)?.label ?? format;
 }
 
 // ── Init ────────────────────────────────────────────────────
@@ -196,7 +202,12 @@ onMounted(() => {
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'type'">
-            <Tag color="blue">{{ templateTypeLabel(record.type) }}</Tag>
+            <Space>
+              <Tag :color="record.type === 'system' ? 'purple' : 'blue'">
+                {{ templateTypeLabels[record.type] ?? record.type }}
+              </Tag>
+              <Tag color="cyan">{{ templateFormatLabel(record.format || 'text') }}</Tag>
+            </Space>
           </template>
 
           <template v-if="column.key === 'subject'">
@@ -247,14 +258,20 @@ onMounted(() => {
         class="mt-4"
       >
         <FormItem label="名称" required>
-          <Input v-model:value="formState.name" placeholder="模板名称" />
+          <Input v-model:value="formState.name" placeholder="模板名称" :disabled="formState.type === 'system'" />
         </FormItem>
-        <FormItem label="类型" required>
+        <FormItem label="格式" required>
           <Select
-            v-model:value="formState.type"
-            :options="templateTypeOptions"
-            placeholder="选择模板类型"
+            v-model:value="formState.format"
+            :options="templateFormatOptions"
+            placeholder="选择模板格式"
           />
+        </FormItem>
+        <FormItem label="类型" v-if="isEditing">
+          <Tag :color="formState.type === 'system' ? 'purple' : 'blue'">
+            {{ templateTypeLabels[formState.type] ?? formState.type }}
+          </Tag>
+          <span v-if="formState.type === 'system'" class="text-gray-400 text-xs ml-2">系统模板仅可修改格式和内容</span>
         </FormItem>
         <FormItem label="内容" required>
           <Input.TextArea

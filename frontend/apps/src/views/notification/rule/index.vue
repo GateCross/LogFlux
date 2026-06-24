@@ -17,13 +17,13 @@ import {
   Table,
   Tag,
   message,
-  AutoComplete,
 } from 'ant-design-vue';
 
 import {
   createNotificationRuleApi,
   deleteNotificationRuleApi,
   getNotificationChannelsApi,
+  getNotificationEventsApi,
   getNotificationRulesApi,
   getNotificationTemplatesApi,
   updateNotificationRuleApi,
@@ -49,15 +49,41 @@ async function fetchRules() {
 
 const channelOptions = ref<{ label: string; value: string }[]>([]);
 const templateOptions = ref<{ label: string; value: string }[]>([]);
+const levelOptions = ref<{ label: string; value: string }[]>([]);
+const eventTypeOptions = ref<{ label: string; options: { label: string; value: string }[] }[]>([]);
+const flatEventTypeOptions = ref<{ label: string; value: string }[]>([]);
 
 async function fetchReferenceData() {
   try {
-    const [channels, templates] = await Promise.all([
+    const [channels, templates, events] = await Promise.all([
       getNotificationChannelsApi(),
       getNotificationTemplatesApi(),
+      getNotificationEventsApi(),
     ]);
     channelOptions.value = channels.map((c) => ({ label: c.name, value: String(c.id) }));
     templateOptions.value = templates.map((t) => ({ label: t.name, value: t.name }));
+
+    levelOptions.value = [];
+    flatEventTypeOptions.value = [];
+
+    const groups = new Map<string, { label: string; value: string }[]>();
+    events.forEach((e) => {
+      if (e.group === '事件级别') {
+        levelOptions.value.push({ label: e.label, value: e.value });
+      } else {
+        const opts = groups.get(e.group) || [];
+        opts.push({ label: e.label, value: e.value });
+        groups.set(e.group, opts);
+        flatEventTypeOptions.value.push({ label: e.label, value: e.value });
+      }
+    });
+    // 追加“不限”选项到等级
+    levelOptions.value.unshift({ label: '不限', value: '*' });
+
+    eventTypeOptions.value = Array.from(groups.entries()).map(([label, options]) => ({
+      label,
+      options,
+    }));
   } catch {
     // Non-critical; selects will just be empty
   }
@@ -67,7 +93,8 @@ async function fetchReferenceData() {
 
 const columns = [
   { dataIndex: 'name', key: 'name', title: '名称' },
-  { dataIndex: 'level', key: 'level', title: '事件级别' },
+  { dataIndex: 'eventLevel', key: 'eventLevel', title: '事件等级' },
+  { dataIndex: 'eventTypes', key: 'eventTypes', title: '特定事件' },
   { dataIndex: 'channelId', key: 'channelId', title: '渠道' },
   { dataIndex: 'enabled', key: 'enabled', title: '启用' },
   { key: 'actions', title: '操作', width: 180 },
@@ -84,19 +111,12 @@ const modalLoading = ref(false);
 const editingId = ref<string | null>(null);
 const isEditing = computed(() => editingId.value !== null);
 
-const levelOptions = [
-  { label: '严重', value: 'critical' },
-  { label: '错误', value: 'error' },
-  { label: '警告', value: 'warning' },
-  { label: '信息', value: 'info' },
-  { label: '调试', value: 'debug' },
-];
-
 const formState = reactive<NotificationApi.RuleParams>({
   channelId: '',
   conditions: {},
   enabled: true,
-  level: 'error',
+  eventLevel: '*',
+  eventTypes: [],
   name: '',
   templateId: undefined,
 });
@@ -107,7 +127,8 @@ function openCreate() {
     channelId: '',
     conditions: {},
     enabled: true,
-    level: 'error',
+    eventLevel: '*',
+    eventTypes: [],
     name: '',
     templateId: undefined,
   });
@@ -120,7 +141,8 @@ function openEdit(record: NotificationApi.Rule) {
     channelId: record.channelId,
     conditions: record.conditions,
     enabled: record.enabled,
-    level: record.level,
+    eventLevel: record.eventLevel,
+    eventTypes: record.eventTypes,
     name: record.name,
     templateId: record.templateId,
   });
@@ -163,7 +185,12 @@ async function handleDelete(id: string) {
 }
 
 function levelLabel(level: string) {
-  return levelOptions.find((item) => item.value === level)?.label ?? level;
+  if (level === '*') return '不限';
+  return levelOptions.value.find((item) => item.value === level)?.label ?? level;
+}
+
+function typeLabel(type: string) {
+  return flatEventTypeOptions.value.find((item) => item.value === type)?.label ?? type;
 }
 
 // ── Init ────────────────────────────────────────────────────
@@ -191,22 +218,33 @@ onMounted(async () => {
         :pagination="false"
       >
         <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'level'">
+          <template v-if="column.key === 'eventLevel'">
             <Tag
               :color="
-                record.level === 'critical'
+                record.eventLevel === 'critical'
                   ? 'red'
-                  : record.level === 'error'
+                  : record.eventLevel === 'error'
                     ? 'volcano'
-                    : record.level === 'warning'
+                    : record.eventLevel === 'warning'
                       ? 'orange'
-                      : record.level === 'info'
+                      : record.eventLevel === 'info'
                         ? 'blue'
                         : 'default'
               "
             >
-              {{ levelLabel(record.level) }}
+              {{ levelLabel(record.eventLevel) }}
             </Tag>
+          </template>
+
+          <template v-if="column.key === 'eventTypes'">
+            <template v-if="record.eventTypes && record.eventTypes.length > 0">
+              <Space wrap>
+                <Tag v-for="type in record.eventTypes" :key="type" color="purple">
+                  {{ typeLabel(type) }}
+                </Tag>
+              </Space>
+            </template>
+            <span v-else class="text-gray-400">不限</span>
           </template>
 
           <template v-if="column.key === 'channelId'">
@@ -258,12 +296,21 @@ onMounted(async () => {
         <FormItem label="名称" required>
           <Input v-model:value="formState.name" placeholder="规则名称" />
         </FormItem>
-        <FormItem label="事件级别" required>
-          <AutoComplete
-            v-model:value="formState.level"
+        <FormItem label="事件等级" required>
+          <Select
+            v-model:value="formState.eventLevel"
             :options="levelOptions"
-            placeholder="选择级别或输入特定事件（如 system.startup）"
-            :filter-option="(input, option) => option.label.toLowerCase().includes(input.toLowerCase()) || option.value.toLowerCase().includes(input.toLowerCase())"
+            placeholder="选择拦截的事件等级"
+          />
+        </FormItem>
+        <FormItem label="特定事件">
+          <Select
+            v-model:value="formState.eventTypes"
+            mode="multiple"
+            :options="eventTypeOptions"
+            placeholder="选择特定事件（可多选），留空表示不限"
+            show-search
+            :filter-option="(input, option) => (option?.label as string)?.toLowerCase().includes(input.toLowerCase()) ?? false"
           />
         </FormItem>
         <FormItem label="渠道" required>

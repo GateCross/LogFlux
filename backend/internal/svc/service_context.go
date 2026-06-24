@@ -99,6 +99,16 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		&systemmodel.SystemConfig{},
 	)
 
+	// 处理破坏性变更: 移除 notification_rules 表被废弃的 event_type 列
+	if db.Migrator().HasColumn(&notificationmodel.NotificationRule{}, "event_type") {
+		err := db.Migrator().DropColumn(&notificationmodel.NotificationRule{}, "event_type")
+		if err != nil {
+			logx.Errorf("移除废弃列 event_type 失败: %v", err)
+		} else {
+			logx.Info("已成功移除 notification_rules 表的 event_type 列")
+		}
+	}
+
 	ensureCronTaskLogRetentionConstraints(db)
 	backfillCronTaskLogTaskNames(db)
 	initWafWorkspace(&c)

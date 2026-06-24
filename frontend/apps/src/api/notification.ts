@@ -44,6 +44,15 @@ export namespace NotificationApi {
     title?: string;
   }
 
+  // ─── Event ─────────────────────────────────────────────────
+
+  /** 事件选项 */
+  export interface EventItem {
+    value: string;
+    label: string;
+    group: string;
+  }
+
   // ─── Rule ──────────────────────────────────────────────────
 
   /** 通知规则 */
@@ -55,9 +64,9 @@ export namespace NotificationApi {
     createdAt: string;
     description?: string;
     enabled: boolean;
-    eventType?: string;
+    eventLevel: string;
+    eventTypes: string[];
     id: string;
-    level: string;
     name: string;
     ruleType?: string;
     silenceDuration?: number;
@@ -74,8 +83,8 @@ export namespace NotificationApi {
     conditions?: Record<string, any>;
     description?: string;
     enabled?: boolean;
-    eventType?: string;
-    level?: string;
+    eventLevel?: string;
+    eventTypes?: string[];
     name: string;
     ruleType?: string;
     silenceDuration?: number;
@@ -227,7 +236,8 @@ function normalizeRule(item: any): NotificationApi.Rule {
     channelId: firstChannelId === undefined ? '' : String(firstChannelId),
     conditions: parseJsonRecord(item.conditions ?? item.condition),
     enabled: item.enabled ?? true,
-    level: item.level ?? item.eventType ?? 'error',
+    eventLevel: item.eventLevel ?? '*',
+    eventTypes: Array.isArray(item.eventTypes) ? item.eventTypes : [],
     templateId: item.templateId ?? item.template,
   };
 }
@@ -242,7 +252,8 @@ function rulePayload(data: NotificationApi.RuleParams) {
     condition,
     description: data.description ?? '',
     enabled: data.enabled ?? true,
-    eventType: data.eventType ?? data.level ?? 'error',
+    eventLevel: data.eventLevel ?? '*',
+    eventTypes: data.eventTypes ?? [],
     name: data.name,
     ruleType: data.ruleType ?? 'threshold',
     silenceDuration: data.silenceDuration ?? 300,
@@ -303,6 +314,18 @@ export async function testNotificationChannelApi(
     id: Number(data.channelId),
     title: data.title,
   });
+}
+
+// ─── Event ───────────────────────────────────────────────────
+
+/**
+ * 获取通知事件列表 — GET /notification/event
+ */
+export async function getNotificationEventsApi() {
+  const resp = await requestClient.get<ListResp<NotificationApi.EventItem>>(
+    '/notification/event',
+  );
+  return listOf(resp);
 }
 
 // ─── Rule ────────────────────────────────────────────────────
