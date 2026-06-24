@@ -57,8 +57,8 @@ func (e *ruleEngine) Evaluate(ctx context.Context, rule *notificationmodel.Notif
 		return false, nil
 	}
 
-	// 检查事件类型是否匹配
-	if rule.EventType != "*" && !matchEventType(rule.EventType, event.Type) {
+	// 检查事件类型是否匹配 (同时支持事件级别匹配，以兼容前端的事件级别过滤逻辑)
+	if rule.EventType != "*" && !matchEventType(rule.EventType, event.Type) && rule.EventType != event.Level {
 		return false, nil
 	}
 

@@ -55,8 +55,8 @@ async function fetchReferenceData() {
       getNotificationChannelsApi(),
       getNotificationTemplatesApi(),
     ]);
-    channelOptions.value = channels.map((c) => ({ label: c.name, value: c.id }));
-    templateOptions.value = templates.map((t) => ({ label: t.name, value: t.id }));
+    channelOptions.value = channels.map((c) => ({ label: c.name, value: String(c.id) }));
+    templateOptions.value = templates.map((t) => ({ label: t.name, value: t.name }));
   } catch {
     // Non-critical; selects will just be empty
   }
