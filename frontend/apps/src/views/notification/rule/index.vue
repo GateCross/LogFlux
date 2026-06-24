@@ -17,6 +17,7 @@ import {
   Table,
   Tag,
   message,
+  AutoComplete,
 } from 'ant-design-vue';
 
 import {
@@ -258,10 +259,11 @@ onMounted(async () => {
           <Input v-model:value="formState.name" placeholder="规则名称" />
         </FormItem>
         <FormItem label="事件级别" required>
-          <Select
+          <AutoComplete
             v-model:value="formState.level"
             :options="levelOptions"
-            placeholder="选择事件级别"
+            placeholder="选择级别或输入特定事件（如 system.startup）"
+            :filter-option="(input, option) => option.label.toLowerCase().includes(input.toLowerCase()) || option.value.toLowerCase().includes(input.toLowerCase())"
           />
         </FormItem>
         <FormItem label="渠道" required>
