@@ -82,7 +82,7 @@ const columns = [
   { dataIndex: 'i18nKey', key: 'i18nKey', title: '国际化 Key', ellipsis: true, width: 180 },
   { dataIndex: 'roles', key: 'roles', title: '所需角色', width: 220 },
   { dataIndex: 'hideInMenu', key: 'hideInMenu', title: '菜单显示', width: 100 },
-  { key: 'actions', title: '操作', width: 220 },
+  { key: 'actions', title: '操作', width: 220, fixed: 'right' as const },
 ];
 
 const parentOptions = computed(() =>
