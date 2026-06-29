@@ -121,7 +121,7 @@ const logoSrc = computed(() => {
             <img
               :alt="appName"
               :src="sloganImage"
-              class="h-64 w-2/5 animate-float"
+              class="h-72 w-72 max-w-full animate-float object-contain"
             />
           </template>
           <SloganIcon v-else :alt="appName" class="h-64 w-2/5 animate-float" />

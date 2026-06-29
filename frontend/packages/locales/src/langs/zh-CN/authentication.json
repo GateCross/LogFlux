@@ -1,7 +1,7 @@
 {
   "welcomeBack": "欢迎回来",
-  "pageTitle": "开箱即用的大型中后台管理系统",
-  "pageDesc": "工程化、高性能、跨组件库的前端模版",
+  "pageTitle": "日志流量分析与防护中枢",
+  "pageDesc": "统一查看访问日志，编排 Caddy 配置与 Coraza WAF 防护",
   "loginSuccess": "登录成功",
   "loginSuccessDesc": "欢迎回来",
   "loginSubtitle": "请输入您的账户信息以开始管理您的项目",

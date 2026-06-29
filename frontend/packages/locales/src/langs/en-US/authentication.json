@@ -1,7 +1,7 @@
 {
   "welcomeBack": "Welcome Back",
-  "pageTitle": "Plug-and-play Admin system",
-  "pageDesc": "Efficient, versatile frontend template",
+  "pageTitle": "Log Traffic Analysis and Protection Hub",
+  "pageDesc": "Review access logs, manage Caddy routing, and operate Coraza WAF",
   "loginSuccess": "Login Successful",
   "loginSuccessDesc": "Welcome Back",
   "loginSubtitle": "Enter your account details to manage your projects",
