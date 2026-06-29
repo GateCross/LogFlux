@@ -32,7 +32,7 @@ const currentRoleId = ref<number | null>(null);
 const currentRoleName = ref('');
 const currentPermissions = ref<string[]>([]);
 const submitting = ref(false);
-const hiddenPermissionValues = new Set(['caddy_source']);
+const hiddenPermissionValues = new Set(['caddy_source', 'user_center']);
 
 interface PermissionOption {
   label: string;
@@ -94,10 +94,6 @@ const permissionGroups: PermissionGroup[] = [
       { label: '通知模板', value: 'notification_template' },
       { label: '发送日志', value: 'notification_log' },
     ],
-  },
-  {
-    label: '个人中心',
-    options: [{ label: '个人中心', value: 'user_center' }],
   },
 ];
 

@@ -68,8 +68,6 @@ func menuPermissionKey(menuName string) string {
 		return "security"
 	case "cron":
 		return "cron"
-	case "user_center":
-		return "user_center"
 	default:
 		return ""
 	}

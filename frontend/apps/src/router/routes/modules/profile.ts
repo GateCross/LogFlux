@@ -4,8 +4,8 @@ import { $t } from '#/locales';
 
 const routes: RouteRecordRaw[] = [
   {
-    name: 'Profile',
-    path: '/profile',
+    name: 'User',
+    path: '/user/center',
     component: () => import('#/views/user/center/index.vue'),
     meta: {
       icon: 'lucide:user',

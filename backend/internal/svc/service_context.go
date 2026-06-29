@@ -500,7 +500,6 @@ func initRBACData(db *gorm2.DB) {
 				"security", "cron",
 				"manage", "manage_user", "manage_role", "manage_menu",
 				"notification", "notification_channel", "notification_rule", "notification_template", "notification_log",
-				"user_center",
 			},
 		},
 		{
@@ -657,17 +656,10 @@ func initRBACData(db *gorm2.DB) {
 		// --- 个人中心 ---
 		{
 			Name:          "user",
-			Path:          "/user",
-			Component:     "layout.base",
+			Path:          "/user/center",
+			Component:     "layout.base$view.user_center",
 			Order:         11,
 			Meta:          `{"title":"user","i18nKey":"route.user","icon":"carbon:user-avatar","order":11}`,
-			RequiredRoles: []string{}, // Public
-		},
-		{
-			Name:          "user_center",
-			Path:          "/user/center",
-			Component:     "view.user_center",
-			Meta:          `{"title":"user_center","i18nKey":"route.user_center","icon":"carbon:user-profile"}`,
 			RequiredRoles: []string{}, // Public
 		},
 	}
@@ -723,7 +715,6 @@ func initRBACData(db *gorm2.DB) {
 	setParent("notification_rule", "notification")
 	setParent("notification_template", "notification")
 	setParent("notification_log", "notification")
-	setParent("user_center", "user")
 	setParentForce("caddy_system_log", "manage")
 	setParentForce("caddy_access", "caddy")
 	// setParent("cron", "manage") // moved to top level
@@ -739,6 +730,9 @@ func initRBACData(db *gorm2.DB) {
 	db.Where("name = ?", "security_access").Delete(&menumodel.Menu{})
 	// 修复被误改 name 的 caddy_access 菜单（name 必须是路由 key，不是中文标题）
 	db.Model(&menumodel.Menu{}).Where("path = ? AND name != ?", "/caddy/access", "caddy_access").Delete(&menumodel.Menu{})
+	// 个人中心现在是一级菜单，清理旧的二级重复菜单并确保父级为空。
+	db.Where("name = ?", "user_center").Delete(&menumodel.Menu{})
+	db.Model(&menumodel.Menu{}).Where("name = ?", "user").Update("parent_id", nil)
 }
 
 // createArchiveFunction 创建归档存储过程

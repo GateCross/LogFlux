@@ -74,7 +74,7 @@ async function loadUnreadNotifications() {
 const menus = computed(() => [
   {
     handler: () => {
-      router.push({ name: 'Profile' });
+      router.push('/user/center');
     },
     icon: 'lucide:user',
     text: $t('page.auth.profile'),

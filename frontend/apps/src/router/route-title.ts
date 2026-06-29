@@ -29,7 +29,6 @@ export const routeTitleMap: Record<string, string> = {
   security_runtime: '运行时',
   security_source: '来源管理',
   user: '个人中心',
-  user_center: '个人中心',
 };
 
 export function findRouteTitle(...keys: Array<null | string | undefined>) {

@@ -32,15 +32,36 @@
     background: #0d0d10;
   }
 
-  .title {
-    margin-top: 66px;
-    font-size: 28px;
-    font-weight: 600;
-    color: rgb(0 0 0 / 85%);
+  .loading-text {
+    margin-top: 34px;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 20px;
+    color: rgb(15 23 42 / 65%);
   }
 
-  .dark .title {
-    color: #fff;
+  .dark .loading-text {
+    color: rgb(255 255 255 / 68%);
+  }
+
+  .loading-progress {
+    position: relative;
+    width: 180px;
+    height: 3px;
+    margin-top: 14px;
+    overflow: hidden;
+    background: hsl(var(--primary, 210 100% 50%) / 14%);
+    border-radius: 999px;
+  }
+
+  .loading-progress::after {
+    position: absolute;
+    inset: 0 auto 0 -45%;
+    width: 45%;
+    content: '';
+    background: hsl(var(--primary, 210 100% 50%) / 78%);
+    border-radius: inherit;
+    animation: loading-progress-ani 1.4s ease-in-out infinite;
   }
 
   .loader {
@@ -106,8 +127,15 @@
       transform: scale(1.2, 1);
     }
   }
+
+  @keyframes loading-progress-ani {
+    to {
+      transform: translateX(320%);
+    }
+  }
 </style>
 <div class="loading" id="__app-loading__">
   <div class="loader"></div>
-  <div class="title">%VITE_APP_TITLE%</div>
+  <div class="loading-text">正在准备日志工作台...</div>
+  <div class="loading-progress"></div>
 </div>

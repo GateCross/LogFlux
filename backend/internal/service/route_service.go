@@ -139,6 +139,8 @@ func menuPermissionKey(name string) string {
 		return "security"
 	case "cron":
 		return "cron"
+	case "user":
+		return ""
 	default:
 		return normalized
 	}
