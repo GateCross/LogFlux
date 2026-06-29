@@ -298,11 +298,7 @@ func (s *simpleWafConfigService) persistAppliedCandidate(candidate *simpleWafCan
 		if err := createCaddyPolicyHistory(tx, candidate.Server.ID, "simple_waf_apply", candidate.Config, candidate.Modules); err != nil {
 			return err
 		}
-		revision, err := createPolicyRevision(tx, candidate.Policy, wafPolicyStatusPublished, candidate.Directives, "simple waf apply", currentOperatorFromContext(s.ctx))
-		if err != nil {
-			return err
-		}
-		return markPolicyRevisionsRolledBack(tx, candidate.Policy.ID, revision.ID)
+		return nil
 	}); err != nil {
 		return fmt.Errorf("简单 WAF 配置落库失败: %w", err)
 	}

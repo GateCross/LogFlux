@@ -11,7 +11,7 @@ type WafUpdateJob struct {
 	SourceID  uint `gorm:"index" json:"sourceId"`
 	ReleaseID uint `gorm:"index" json:"releaseId"`
 
-	Action      string `gorm:"size:32;index;not null" json:"action"`                       // check | download | verify | activate | rollback
+	Action      string `gorm:"size:32;index;not null" json:"action"`                       // check | download | verify | activate
 	TriggerMode string `gorm:"size:32;index;not null;default:'manual'" json:"triggerMode"` // manual | schedule | upload
 	Operator    string `gorm:"size:100" json:"operator,omitempty"`
 

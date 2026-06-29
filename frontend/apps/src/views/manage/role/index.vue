@@ -69,10 +69,6 @@ const permissionGroups: PermissionGroup[] = [
     options: [{ label: '系统日志', value: 'logs' }],
   },
   {
-    label: '安全管理',
-    options: [{ label: '安全管理', value: 'security' }],
-  },
-  {
     label: '定时任务',
     options: [{ label: '定时任务', value: 'cron' }],
   },

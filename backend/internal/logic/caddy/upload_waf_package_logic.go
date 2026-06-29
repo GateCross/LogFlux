@@ -82,7 +82,7 @@ func (l *UploadWafPackageLogic) UploadWafPackage(req *types.WafUploadReq) (resp 
 		helper.finishJob(job, wafJobStatusSuccess, "版本已存在，复用已有版本", existingRelease.ID)
 		if kind != wafKindCorazaEngine && req.ActivateNow {
 			activateLogic := NewActivateWafReleaseLogic(l.ctx, l.svcCtx)
-			if _, activateErr := activateLogic.ActivateWafRelease(&types.WafReleaseActivateReq{ID: existingRelease.ID}); activateErr != nil {
+			if _, activateErr := activateLogic.ActivateWafRelease(existingRelease.ID); activateErr != nil {
 				return nil, activateErr
 			}
 		}
@@ -144,7 +144,7 @@ func (l *UploadWafPackageLogic) UploadWafPackage(req *types.WafUploadReq) (resp 
 
 	if kind != wafKindCorazaEngine && req.ActivateNow {
 		activateLogic := NewActivateWafReleaseLogic(l.ctx, l.svcCtx)
-		if _, activateErr := activateLogic.ActivateWafRelease(&types.WafReleaseActivateReq{ID: release.ID}); activateErr != nil {
+		if _, activateErr := activateLogic.ActivateWafRelease(release.ID); activateErr != nil {
 			return nil, activateErr
 		}
 	}

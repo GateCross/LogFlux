@@ -441,3 +441,7 @@ func caddyServerRowsWithModules(now time.Time, url, config, modules string) *sql
 		config, modules,
 	)
 }
+
+func caddyServerRows(now time.Time, url, config string) *sqlmock.Rows {
+	return caddyServerRowsWithModules(now, url, config, "{}")
+}

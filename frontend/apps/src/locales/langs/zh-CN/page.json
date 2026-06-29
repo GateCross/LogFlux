@@ -31,19 +31,6 @@
     "history": "历史记录",
     "rollback": "回滚"
   },
-  "security": {
-    "title": "安全管理",
-    "source": "WAF 源",
-    "policy": "WAF 策略",
-    "observe": "WAF 观测",
-    "ops": "WAF 运维",
-    "runtime": "WAF 运行时",
-    "crs": "CRS 管理",
-    "exclusion": "规则排除",
-    "binding": "策略绑定",
-    "release": "WAF 发布",
-    "job": "WAF 任务"
-  },
   "manage": {
     "user": "用户管理",
     "role": "角色管理",

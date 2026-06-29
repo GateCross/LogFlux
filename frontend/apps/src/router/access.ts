@@ -17,69 +17,6 @@ import { findRouteTitle } from './route-title';
 
 const forbiddenComponent = () => import('#/views/_core/fallback/forbidden.vue');
 
-const securityChildRouteTemplates = [
-  {
-    component: 'view.security_source',
-    meta: { hideInMenu: true, icon: 'mdi:source-branch', title: '来源管理' },
-    name: 'security_source',
-    path: '/security/source',
-  },
-  {
-    component: 'view.security_policy',
-    meta: { hideInMenu: true, icon: 'mdi:shield-check', title: '策略管理' },
-    name: 'security_policy',
-    path: '/security/policy',
-  },
-  {
-    component: 'view.security_observe',
-    meta: { hideInMenu: true, icon: 'mdi:eye-outline', title: '观测日志' },
-    name: 'security_observe',
-    path: '/security/observe',
-  },
-  {
-    component: 'view.security_ops',
-    meta: { hideInMenu: true, icon: 'mdi:wrench-outline', title: '运维操作' },
-    name: 'security_ops',
-    path: '/security/ops',
-  },
-  {
-    component: 'view.security_runtime',
-    meta: { hideInMenu: true, icon: 'mdi:clock-outline', title: '运行时' },
-    name: 'security_runtime',
-    path: '/security/runtime',
-  },
-  {
-    component: 'view.security_crs',
-    meta: { hideInMenu: true, icon: 'mdi:tune-vertical', title: 'CRS 调优' },
-    name: 'security_crs',
-    path: '/security/crs',
-  },
-  {
-    component: 'view.security_exclusion',
-    meta: { hideInMenu: true, icon: 'mdi:cancel', title: '排除规则' },
-    name: 'security_exclusion',
-    path: '/security/exclusion',
-  },
-  {
-    component: 'view.security_binding',
-    meta: { hideInMenu: true, icon: 'mdi:link-variant', title: '绑定管理' },
-    name: 'security_binding',
-    path: '/security/binding',
-  },
-  {
-    component: 'view.security_release',
-    meta: { hideInMenu: true, icon: 'mdi:rocket-launch-outline', title: '发布管理' },
-    name: 'security_release',
-    path: '/security/release',
-  },
-  {
-    component: 'view.security_job',
-    meta: { hideInMenu: true, icon: 'mdi:timer-outline', title: '任务管理' },
-    name: 'security_job',
-    path: '/security/job',
-  },
-];
-
 /**
  * 将 "view.xxx_yyy" 转为 "/xxx/yyy/index"
  */
@@ -99,12 +36,6 @@ function routeNameOf(name: string) {
 function routeTitleOf(route: any, meta: Record<string, any>) {
   const key = route.name || meta.title || route.title;
   return findRouteTitle(key, meta.title, route.title) || meta.title || route.title || route.name;
-}
-
-function isSecurityRoute(route: any) {
-  const name = String(route.name || '');
-  const path = String(route.path || '');
-  return name === 'security' || name.startsWith('security_') || path.startsWith('/security');
 }
 
 /**
@@ -128,12 +59,6 @@ function transformLogfluxRoutes(
 
     let component: string;
     const children = route.children ? [...route.children] : [];
-    if (route.name === 'security') {
-      const childNames = new Set(children.map((child: any) => child.name));
-      children.push(
-        ...securityChildRouteTemplates.filter((child) => !childNames.has(child.name)),
-      );
-    }
 
     if (!comp || comp.trim() === '') {
       // 无 component 且有子路由 → 不设 component，vue-vben-admin 自动加 BasicLayout
@@ -158,7 +83,8 @@ function transformLogfluxRoutes(
       // 纯布局路由（有子路由）→ 不设 component
       component = children.length > 0 ? '' : 'BasicLayout';
     } else if (comp.startsWith('view.')) {
-      component = viewToPath(comp);
+      const viewPath = viewToPath(comp);
+      component = pageMap[`${viewPath}.vue`] ? viewPath : '';
     } else {
       component = comp;
     }
@@ -169,7 +95,7 @@ function transformLogfluxRoutes(
       meta: {
         icon: meta.icon,
         ...meta,
-        hideInMenu: Boolean(meta.hideInMenu || isSecurityRoute(route)),
+        hideInMenu: Boolean(meta.hideInMenu),
         order: meta.order ?? route.order ?? 0,
         title: routeTitleOf(route, meta),
       },

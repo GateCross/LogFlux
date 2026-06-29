@@ -152,7 +152,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <Page description="Manage Caddy log sources" title="Log Sources">
+  <Page title="Log Sources">
     <Card>
       <div style="display: flex; justify-content: space-between; margin-bottom: 16px;">
         <span style="font-size: 16px; font-weight: 500;">Log Source List</span>

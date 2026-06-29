@@ -17,17 +17,6 @@ export const routeTitleMap: Record<string, string> = {
   notification_log: '发送日志',
   notification_rule: '通知规则',
   notification_template: '通知模板',
-  security: '安全管理',
-  security_binding: '绑定管理',
-  security_crs: 'CRS 调优',
-  security_exclusion: '排除规则',
-  security_job: '任务管理',
-  security_observe: '观测日志',
-  security_ops: '运维操作',
-  security_policy: '策略管理',
-  security_release: '发布管理',
-  security_runtime: '运行时',
-  security_source: '来源管理',
   user: '个人中心',
 };
 

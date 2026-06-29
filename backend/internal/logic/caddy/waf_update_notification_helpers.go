@@ -72,13 +72,6 @@ func resolveWafUpdateEventMeta(action, status string) (eventType, level, title s
 		if status == wafJobStatusFailed {
 			return notification.EventSecurityWafReleaseActivateFailed, notification.LevelError, "WAF 版本激活失败"
 		}
-	case "rollback":
-		if status == wafJobStatusSuccess {
-			return notification.EventSecurityWafReleaseRollbackSuccess, notification.LevelWarning, "WAF 版本回滚成功"
-		}
-		if status == wafJobStatusFailed {
-			return notification.EventSecurityWafReleaseRollbackFailed, notification.LevelError, "WAF 版本回滚失败"
-		}
 	}
 	return "", "", ""
 }
@@ -88,7 +81,6 @@ func buildWafUpdateEventMessage(action, message string) string {
 		"check":    "检查",
 		"download": "同步",
 		"activate": "激活",
-		"rollback": "回滚",
 	}[action]
 	if actionName == "" {
 		actionName = "任务"

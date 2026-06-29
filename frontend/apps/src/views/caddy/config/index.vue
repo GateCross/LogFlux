@@ -886,7 +886,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <Page description="管理 Caddy 服务器、分块配置、WAF 与历史版本。" title="Caddy 配置">
+  <Page title="Caddy 配置">
     <div class="caddy-config-page">
       <Card :bordered="false" class="caddy-shell">
         <div class="caddy-toolbar">

@@ -64,8 +64,6 @@ func menuPermissionKey(menuName string) string {
 		return "logs"
 	case "caddy_log":
 		return "logs_caddy"
-	case "security":
-		return "security"
 	case "cron":
 		return "cron"
 	default:

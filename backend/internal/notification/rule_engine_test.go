@@ -176,7 +176,7 @@ func TestRuleEngine_Evaluate_SilencePeriod(t *testing.T) {
 		Name:            "test-rule",
 		Enabled:         true,
 		RuleType:        notificationmodel.RuleTypeThreshold,
-		EventType:       "test.*",
+		EventTypes:      notificationmodel.StringArray{"test.*"},
 		SilenceDuration: 300, // 5 分钟静默期
 		LastTriggeredAt: &lastTriggered,
 		Condition: commonmodel.JSONMap{

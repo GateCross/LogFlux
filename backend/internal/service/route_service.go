@@ -65,7 +65,7 @@ func (s *RouteService) GetUserRoutes() (*types.UserRouteResp, error) {
 func buildRouteTree(allMenus []menumodel.Menu, parentID *uint, userRoles []rolemodel.Role, permissions map[string]bool) []types.MenuRoute {
 	routes := make([]types.MenuRoute, 0)
 	for _, menu := range allMenus {
-		if !matchMenuParent(menu, parentID) || !hasMenuPermission(menu, userRoles, permissions) {
+		if isRetiredMenu(menu) || !matchMenuParent(menu, parentID) || !hasMenuPermission(menu, userRoles, permissions) {
 			continue
 		}
 
@@ -86,6 +86,16 @@ func buildRouteTree(allMenus []menumodel.Menu, parentID *uint, userRoles []rolem
 		routes = append(routes, route)
 	}
 	return routes
+}
+
+func isRetiredMenu(menu menumodel.Menu) bool {
+	normalizedName := strings.ToLower(strings.TrimSpace(menu.Name))
+	normalizedPath := strings.ToLower(strings.TrimSpace(menu.Path))
+	return normalizedName == "security" ||
+		normalizedName == "waf" ||
+		normalizedName == "waf_security" ||
+		normalizedPath == "/security" ||
+		strings.HasPrefix(normalizedPath, "/security/")
 }
 
 func parseRouteMeta(menu menumodel.Menu) types.RouteMeta {
@@ -135,8 +145,6 @@ func menuPermissionKey(name string) string {
 		return "logs_caddy"
 	case "caddy_system_log", "caddy_system-log", "system_log", "system-log":
 		return "logs"
-	case "security", "waf", "waf_security":
-		return "security"
 	case "cron":
 		return "cron"
 	case "user":

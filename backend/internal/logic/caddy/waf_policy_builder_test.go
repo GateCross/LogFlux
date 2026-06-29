@@ -1,13 +1,9 @@
 package caddy
 
 import (
-	"context"
 	wafmodel "logflux/model/waf"
 	"strings"
 	"testing"
-
-	"logflux/internal/svc"
-	"logflux/internal/types"
 )
 
 func TestBuildWafPolicyDirectivesDeterministic(t *testing.T) {
@@ -153,59 +149,5 @@ func TestBuildWafPolicyDirectivesOutOfRange(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "requestBodyLimit 过大") {
 		t.Fatalf("expected requestBodyLimit too large error, got %v", err)
-	}
-}
-
-func TestApplyPolicyReqToModelOutOfRange(t *testing.T) {
-	helper := newWafLogicHelper(context.Background(), &svc.ServiceContext{}, nil)
-	req := &types.WafPolicyReq{
-		Name:                        "test-policy",
-		EngineMode:                  "on",
-		AuditEngine:                 "relevantonly",
-		AuditLogFormat:              "json",
-		AuditRelevantStatus:         "^(5[0-9][0-9]|40[0-35-9]|4[1-9][0-9])$",
-		RequestBodyAccess:           true,
-		RequestBodyLimit:            1024*1024*1024 + 1,
-		RequestBodyNoFilesLimit:     1048576,
-		CrsTemplate:                 "balanced",
-		CrsParanoiaLevel:            2,
-		CrsInboundAnomalyThreshold:  5,
-		CrsOutboundAnomalyThreshold: 4,
-	}
-	policy := &wafmodel.WafPolicy{}
-
-	err := applyPolicyReqToModel(helper, req, policy)
-	if err == nil {
-		t.Fatalf("expected applyPolicyReqToModel out-of-range error")
-	}
-	if !strings.Contains(err.Error(), "requestBodyLimit 过大") {
-		t.Fatalf("expected requestBodyLimit too large error, got %v", err)
-	}
-}
-
-func TestApplyPolicyReqToModelCRSParanoiaOutOfRange(t *testing.T) {
-	helper := newWafLogicHelper(context.Background(), &svc.ServiceContext{}, nil)
-	req := &types.WafPolicyReq{
-		Name:                        "test-policy",
-		EngineMode:                  "on",
-		AuditEngine:                 "relevantonly",
-		AuditLogFormat:              "json",
-		AuditRelevantStatus:         "^(5[0-9][0-9]|40[0-35-9]|4[1-9][0-9])$",
-		RequestBodyAccess:           true,
-		RequestBodyLimit:            10 * 1024 * 1024,
-		RequestBodyNoFilesLimit:     1024 * 1024,
-		CrsTemplate:                 "balanced",
-		CrsParanoiaLevel:            8,
-		CrsInboundAnomalyThreshold:  5,
-		CrsOutboundAnomalyThreshold: 4,
-	}
-	policy := &wafmodel.WafPolicy{}
-
-	err := applyPolicyReqToModel(helper, req, policy)
-	if err == nil {
-		t.Fatalf("expected applyPolicyReqToModel crsParanoiaLevel out-of-range error")
-	}
-	if !strings.Contains(err.Error(), "CRS 偏执级别必须在 1 到 4 之间") {
-		t.Fatalf("expected crsParanoiaLevel range error, got %v", err)
 	}
 }

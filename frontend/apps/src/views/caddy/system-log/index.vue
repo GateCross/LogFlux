@@ -2,7 +2,7 @@
 import type { SystemLogApi } from '#/api/system/log';
 import type { TableColumnsType } from 'ant-design-vue';
 
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue';
 
 import { Page } from '@vben/common-ui';
 
@@ -12,8 +12,6 @@ import {
   DatePicker,
   Descriptions,
   DescriptionsItem,
-  Form,
-  FormItem,
   Input,
   Modal,
   Popconfirm,
@@ -36,6 +34,9 @@ const selectedLog = ref<SystemLog | null>(null);
 const detailVisible = ref(false);
 const autoRefreshTimer = ref<number | null>(null);
 const autoRefreshSeconds = ref(loadAutoRefreshSeconds());
+const tableWrapRef = ref<HTMLElement | null>(null);
+const tableScrollY = ref<number>();
+let tableResizeObserver: ResizeObserver | null = null;
 
 const detailPreviewMaxLength = 1200;
 const detailExpandState = reactive({
@@ -59,6 +60,13 @@ const pagination = reactive({
   total: 0,
 });
 
+const hasLogs = computed(() => dataSource.value.length > 0);
+
+const tableScroll = computed(() => {
+  if (!hasLogs.value || !tableScrollY.value) return { x: 1310 };
+  return { x: 1310, y: tableScrollY.value };
+});
+
 const sortState = ref<{ columnKey: string; order: SortOrder }>({
   columnKey: 'logTime',
   order: 'descend',
@@ -80,16 +88,16 @@ const levelOptions = [
 ];
 
 const autoRefreshOptions = [
-  { label: '关闭', value: 0 },
-  { label: '5秒', value: 5 },
-  { label: '10秒', value: 10 },
+  { label: '自动刷新: 关', value: 0 },
+  { label: '自动刷新: 5秒', value: 5 },
+  { label: '自动刷新: 10秒', value: 10 },
 ];
 
 const quickPresetOptions = [
-  { label: '仅后端', level: '', source: 'backend' },
-  { label: '仅 Caddy 后台', level: '', source: 'caddy_runtime' },
-  { label: '仅本机访问', level: '', source: 'caddy_internal' },
-  { label: '仅错误级别', level: 'error', source: '' },
+  { label: '仅后端', level: '', source: 'backend', value: 'backend' },
+  { label: '仅 Caddy 后台', level: '', source: 'caddy_runtime', value: 'caddy_runtime' },
+  { label: '仅本机访问', level: '', source: 'caddy_internal', value: 'caddy_internal' },
+  { label: '仅错误级别', level: 'error', source: '', value: 'error' },
 ];
 
 const rawLogFullText = computed(() => normalizeJson(selectedLog.value?.rawLog));
@@ -182,6 +190,7 @@ async function fetchLogs() {
     message.error('获取系统日志失败');
   } finally {
     loading.value = false;
+    void nextTick(updateTableScrollY);
   }
 }
 
@@ -271,6 +280,10 @@ function applyQuickPreset(preset: { level: string; source: string }) {
   filters.level = preset.level;
   pagination.current = 1;
   void fetchLogs();
+}
+
+function handleAutoRefreshSelectChange(value: unknown) {
+  if (typeof value === 'number') handleAutoRefreshChange(value);
 }
 
 function isQuickPresetActive(preset: { level: string; source: string }) {
@@ -381,79 +394,91 @@ async function copySingleLog(log: SystemLog | null) {
   }
 }
 
+function updateTableScrollY() {
+  const wrap = tableWrapRef.value;
+  if (!wrap || !hasLogs.value) {
+    tableScrollY.value = undefined;
+    return;
+  }
+
+  const header = wrap.querySelector<HTMLElement>('.ant-table-thead');
+  const paginationEl = wrap.querySelector<HTMLElement>('.ant-pagination');
+  const headerHeight = header?.offsetHeight ?? 55;
+  const paginationHeight = paginationEl ? paginationEl.offsetHeight + 12 : 44;
+  const nextY = wrap.clientHeight - headerHeight - paginationHeight - 2;
+
+  tableScrollY.value = Math.max(240, nextY);
+}
+
 onMounted(() => {
   void fetchLogs();
   restartAutoRefresh();
+  tableResizeObserver = new ResizeObserver(() => updateTableScrollY());
+  if (tableWrapRef.value) tableResizeObserver.observe(tableWrapRef.value);
+  void nextTick(updateTableScrollY);
 });
 
 onUnmounted(() => {
   clearAutoRefresh();
+  tableResizeObserver?.disconnect();
 });
 </script>
 
 <template>
-  <Page description="查看后端与 Caddy 运行时日志。" title="系统日志">
+  <Page auto-content-height content-class="overflow-hidden">
     <div class="system-log-page">
       <Card :bordered="false" class="system-log-card" title="系统日志">
-        <Form class="log-filter-form" layout="inline">
-          <FormItem label="关键字">
+        <div class="log-filter-panel">
+          <div class="log-filter-main">
             <Input.Search
               v-model:value="filters.keyword"
               allow-clear
-              placeholder="搜索 内容/位置/原始日志"
-              style="width: 260px;"
+              class="toolbar-keyword"
+              placeholder="关键字"
               @search="handleSearch"
             />
-          </FormItem>
-          <FormItem label="来源">
-            <Select v-model:value="filters.source" :options="sourceOptions" style="width: 150px;" @change="handleSearch" />
-          </FormItem>
-          <FormItem label="级别">
-            <Select v-model:value="filters.level" :options="levelOptions" style="width: 130px;" @change="handleSearch" />
-          </FormItem>
-          <FormItem label="时间">
+            <Select
+              v-model:value="filters.source"
+              :options="sourceOptions"
+              class="toolbar-source"
+              @change="handleSearch"
+            />
+            <Select
+              v-model:value="filters.level"
+              :options="levelOptions"
+              class="toolbar-level"
+              @change="handleSearch"
+            />
             <DatePicker.RangePicker
               v-model:value="filters.timeRange"
+              class="toolbar-time"
               show-time
               value-format="YYYY-MM-DD HH:mm:ss"
-              style="width: 330px;"
+              @change="handleSearch"
             />
-          </FormItem>
-          <FormItem>
-            <Space>
-              <Button type="primary" @click="handleSearch">搜索</Button>
-              <Button @click="fetchLogs">刷新</Button>
-              <Button @click="handleReset">重置</Button>
-            </Space>
-          </FormItem>
-        </Form>
+            <Button type="primary" @click="handleSearch">搜索</Button>
+            <Button @click="fetchLogs">刷新</Button>
+            <Button @click="handleReset">重置</Button>
+          </div>
 
-        <div class="filter-strip">
-          <span class="strip-label">快速筛选</span>
-          <Space wrap>
-            <Button
-              v-for="item in quickPresetOptions"
-              :key="item.label"
-              size="small"
-              :type="isQuickPresetActive(item) ? 'primary' : 'default'"
-              @click="applyQuickPreset(item)"
-            >
-              {{ item.label }}
-            </Button>
-          </Space>
-          <span class="strip-label refresh-label">自动刷新</span>
-          <Space wrap>
-            <Button
-              v-for="item in autoRefreshOptions"
-              :key="item.value"
-              size="small"
-              :type="item.value === autoRefreshSeconds ? 'primary' : 'default'"
-              @click="handleAutoRefreshChange(item.value)"
-            >
-              {{ item.label }}
-            </Button>
-          </Space>
-          <span class="clear-log-action">
+          <div class="log-filter-extra">
+            <div class="preset-actions">
+              <Button
+                v-for="item in quickPresetOptions"
+                :key="item.value"
+                size="small"
+                :type="isQuickPresetActive(item) ? 'primary' : 'default'"
+                @click="applyQuickPreset(item)"
+              >
+                {{ item.label }}
+              </Button>
+            </div>
+            <Select
+              :options="autoRefreshOptions"
+              :value="autoRefreshSeconds"
+              class="toolbar-refresh"
+              @change="handleAutoRefreshSelectChange"
+            />
             <Popconfirm
               title="确认清空全部系统日志？此操作不可恢复。"
               @confirm="handleClearLogs"
@@ -462,34 +487,37 @@ onUnmounted(() => {
                 清空日志
               </Button>
             </Popconfirm>
-          </span>
+          </div>
         </div>
 
-        <Table
-          :columns="columns"
-          :data-source="dataSource"
-          :loading="loading"
-          :pagination="pagination"
-          :scroll="{ x: 1310 }"
-          row-key="id"
-          size="middle"
-          @change="handleTableChange"
-        >
-          <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'level'">
-              <Tag :color="levelTagColor(record.level)">{{ record.level || '-' }}</Tag>
+        <div ref="tableWrapRef" class="system-log-table-wrap">
+          <Table
+            :columns="columns"
+            :data-source="dataSource"
+            :loading="loading"
+            :pagination="pagination"
+            :scroll="tableScroll"
+            class="system-log-table"
+            row-key="id"
+            size="middle"
+            @change="handleTableChange"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'level'">
+                <Tag :color="levelTagColor(record.level)">{{ record.level || '-' }}</Tag>
+              </template>
+              <template v-if="column.key === 'source'">
+                <Tag :color="sourceTagColor(record.source)">{{ sourceLabel(record.source) }}</Tag>
+              </template>
+              <template v-if="column.key === 'actions'">
+                <Space>
+                  <Button size="small" type="link" @click="openDetail(record as SystemLog)">详情</Button>
+                  <Button size="small" type="link" @click="copySingleLog(record as SystemLog)">复制</Button>
+                </Space>
+              </template>
             </template>
-            <template v-if="column.key === 'source'">
-              <Tag :color="sourceTagColor(record.source)">{{ sourceLabel(record.source) }}</Tag>
-            </template>
-            <template v-if="column.key === 'actions'">
-              <Space>
-                <Button size="small" type="link" @click="openDetail(record as SystemLog)">详情</Button>
-                <Button size="small" type="link" @click="copySingleLog(record as SystemLog)">复制</Button>
-              </Space>
-            </template>
-          </template>
-        </Table>
+          </Table>
+        </div>
       </Card>
 
       <Modal v-model:open="detailVisible" title="日志详情" :footer="null" width="760px">
@@ -524,37 +552,126 @@ onUnmounted(() => {
 
 <style scoped>
 .system-log-page {
-  padding: 16px;
+  height: 100%;
+  min-height: 0;
 }
 
 .system-log-card {
-  min-height: calc(100vh - 140px);
+  height: 100%;
+  min-height: 0;
 }
 
-.log-filter-form {
-  row-gap: 12px;
+.system-log-card :deep(.ant-card-body) {
+  display: flex;
+  flex-direction: column;
+  height: calc(100% - 57px);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.log-filter-panel {
+  padding: 12px;
   margin-bottom: 12px;
+  background: #f8fafc;
+  border: 1px solid #eef2f7;
+  border-radius: 6px;
 }
 
-.filter-strip {
+.log-filter-main,
+.log-filter-extra {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  margin-bottom: 16px;
 }
 
-.strip-label {
-  color: #667085;
-  font-size: 13px;
+.log-filter-extra {
+  justify-content: space-between;
+  padding-top: 10px;
+  margin-top: 10px;
+  border-top: 1px solid #eef2f7;
 }
 
-.refresh-label {
-  margin-left: 12px;
+.toolbar-keyword {
+  width: 260px;
 }
 
-.clear-log-action {
-  margin-left: auto;
+.toolbar-source {
+  width: 150px;
+}
+
+.toolbar-level {
+  width: 130px;
+}
+
+.toolbar-refresh {
+  width: 150px;
+}
+
+.toolbar-time {
+  width: 330px;
+}
+
+.preset-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 960px) {
+  .toolbar-keyword,
+  .toolbar-source,
+  .toolbar-level,
+  .toolbar-time,
+  .toolbar-refresh {
+    width: 100%;
+  }
+
+  .log-filter-extra {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .preset-actions {
+    width: 100%;
+  }
+}
+
+.system-log-table-wrap {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.system-log-table :deep(.ant-table-cell) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.system-log-table {
+  height: 100%;
+}
+
+.system-log-table :deep(.ant-spin-nested-loading),
+.system-log-table :deep(.ant-spin-container) {
+  height: 100%;
+}
+
+.system-log-table :deep(.ant-spin-container) {
+  display: flex;
+  flex-direction: column;
+}
+
+.system-log-table :deep(.ant-table) {
+  flex: 1;
+  min-height: 0;
+}
+
+.system-log-table :deep(.ant-table-pagination.ant-pagination) {
+  margin: 12px 0 0;
 }
 
 .log-detail-pre {

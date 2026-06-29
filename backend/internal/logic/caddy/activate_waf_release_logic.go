@@ -25,11 +25,11 @@ func NewActivateWafReleaseLogic(ctx context.Context, svcCtx *svc.ServiceContext)
 	}
 }
 
-func (l *ActivateWafReleaseLogic) ActivateWafRelease(req *types.WafReleaseActivateReq) (resp *types.BaseResp, err error) {
+func (l *ActivateWafReleaseLogic) ActivateWafRelease(releaseID uint) (resp *types.BaseResp, err error) {
 	helper := newWafLogicHelper(l.ctx, l.svcCtx, l.Logger)
 
 	var release wafmodel.WafRelease
-	if err := helper.svcCtx.DB.WithContext(helper.ctx).First(&release, req.ID).Error; err != nil {
+	if err := helper.svcCtx.DB.WithContext(helper.ctx).First(&release, releaseID).Error; err != nil {
 		return nil, fmt.Errorf("版本不存在")
 	}
 	if normalizeWafKind(release.Kind) == wafKindCorazaEngine {

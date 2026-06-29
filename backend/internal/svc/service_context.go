@@ -91,10 +91,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		&wafmodel.WafRelease{},
 		&wafmodel.WafUpdateJob{},
 		&wafmodel.WafPolicy{},
-		&wafmodel.WafPolicyRevision{},
-		&wafmodel.WafRuleExclusion{},
-		&wafmodel.WafPolicyBinding{},
-		&wafmodel.WafPolicyFalsePositiveFeedback{},
 		// 系统配置
 		&systemmodel.SystemConfig{},
 	)
@@ -437,42 +433,6 @@ func initWafDefaultPolicies(db *gorm2.DB) {
 		return
 	}
 
-	directives := strings.Join([]string{
-		"SecRuleEngine DetectionOnly",
-		"SecAuditEngine RelevantOnly",
-		"SecAuditLogFormat JSON",
-		"SecAuditLogRelevantStatus " + wafmodel.DefaultAuditRelevantStatus,
-		"SecRequestBodyAccess On",
-		"SecRequestBodyLimit 10485760",
-		"SecRequestBodyNoFilesLimit 1048576",
-		"SecAction \"id:900000,phase:1,pass,nolog,t:none,setvar:tx.paranoia_level=1\"",
-		"SecAction \"id:900110,phase:1,pass,nolog,t:none,setvar:tx.inbound_anomaly_score_threshold=10\"",
-		"SecAction \"id:900100,phase:1,pass,nolog,t:none,setvar:tx.outbound_anomaly_score_threshold=8\"",
-	}, "\n")
-	revision := wafmodel.WafPolicyRevision{
-		PolicyID:           defaultPolicy.ID,
-		Version:            1,
-		Status:             "published",
-		ConfigSnapshot:     defaultPolicy.Config,
-		DirectivesSnapshot: directives,
-		Operator:           "system",
-		Message:            "init default policy",
-	}
-	if err := db.Create(&revision).Error; err != nil {
-		logx.Errorf("初始化默认 WAF 策略版本失败: %v", err)
-	}
-
-	defaultBinding := wafmodel.WafPolicyBinding{
-		PolicyID:  defaultPolicy.ID,
-		Name:      "default-global-binding",
-		Enabled:   true,
-		ScopeType: "global",
-		Priority:  100,
-	}
-	if err := db.Where("policy_id = ? AND scope_type = ? AND priority = ?", defaultPolicy.ID, "global", 100).
-		FirstOrCreate(&defaultBinding).Error; err != nil {
-		logx.Errorf("初始化默认 WAF 策略绑定失败: %v", err)
-	}
 }
 
 func (svc *ServiceContext) EnsureWafDefaultSources() {
@@ -497,7 +457,7 @@ func initRBACData(db *gorm2.DB) {
 			Permissions: []string{
 				"dashboard",
 				"caddy", "caddy_config", "caddy_access", "logs", "logs_caddy",
-				"security", "cron",
+				"cron",
 				"manage", "manage_user", "manage_role", "manage_menu",
 				"notification", "notification_channel", "notification_rule", "notification_template", "notification_log",
 			},
@@ -542,14 +502,6 @@ func initRBACData(db *gorm2.DB) {
 			Order:         2,
 			Meta:          `{"title":"caddy","i18nKey":"route.caddy","icon":"carbon:cloud-monitoring","order":2}`,
 			RequiredRoles: []string{"admin", "analyst"},
-		},
-		{
-			Name:          "security",
-			Path:          "/security",
-			Component:     "layout.base$view.security",
-			Order:         3,
-			Meta:          `{"title":"security","i18nKey":"route.security","icon":"carbon:security","order":3}`,
-			RequiredRoles: []string{"admin"},
 		},
 		{
 			Name:          "manage",
@@ -725,9 +677,8 @@ func initRBACData(db *gorm2.DB) {
 	db.Where("component = ?", "home").Delete(&menumodel.Menu{})
 	db.Where("name = ?", "caddy_source").Delete(&menumodel.Menu{})
 	db.Where("name = ?", "caddy_waf").Delete(&menumodel.Menu{})
-	db.Where("name in ?", []string{"waf", "crs"}).Delete(&menumodel.Menu{})
-	// 清理已废弃的 security_access 菜单（已迁移到 caddy_access）
-	db.Where("name = ?", "security_access").Delete(&menumodel.Menu{})
+	db.Where("name in ?", []string{"security", "waf", "waf_security", "crs", "security_access"}).Delete(&menumodel.Menu{})
+	db.Where("path = ? OR path LIKE ?", "/security", "/security/%").Delete(&menumodel.Menu{})
 	// 修复被误改 name 的 caddy_access 菜单（name 必须是路由 key，不是中文标题）
 	db.Model(&menumodel.Menu{}).Where("path = ? AND name != ?", "/caddy/access", "caddy_access").Delete(&menumodel.Menu{})
 	// 个人中心现在是一级菜单，清理旧的二级重复菜单并确保父级为空。

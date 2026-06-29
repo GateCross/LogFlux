@@ -197,8 +197,8 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="h-full overflow-x-hidden overflow-y-auto">
-    <Card title="用户管理" :bordered="false" class="h-full rounded-lg shadow-sm">
+  <div class="p-5">
+    <Card title="用户管理">
       <template #extra>
         <Space>
           <Input

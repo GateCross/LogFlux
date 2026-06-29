@@ -31,19 +31,6 @@
     "history": "History",
     "rollback": "Rollback"
   },
-  "security": {
-    "title": "Security",
-    "source": "WAF Sources",
-    "policy": "WAF Policies",
-    "observe": "WAF Observe",
-    "ops": "WAF Operations",
-    "runtime": "WAF Runtime",
-    "crs": "CRS Management",
-    "exclusion": "Rule Exclusions",
-    "binding": "Policy Bindings",
-    "release": "WAF Releases",
-    "job": "WAF Jobs"
-  },
   "manage": {
     "user": "User Management",
     "role": "Role Management",

@@ -84,7 +84,7 @@ func (l *SyncWafSourceLogic) SyncWafSource(req *types.WafSourceSyncReq) (resp *t
 
 		if normalizeWafKind(source.Kind) != wafKindCorazaEngine && (req.ActivateNow || source.AutoActivate) {
 			activateLogic := NewActivateWafReleaseLogic(l.ctx, l.svcCtx)
-			if _, activateErr := activateLogic.ActivateWafRelease(&types.WafReleaseActivateReq{ID: existingRelease.ID}); activateErr != nil {
+			if _, activateErr := activateLogic.ActivateWafRelease(existingRelease.ID); activateErr != nil {
 				return nil, activateErr
 			}
 		}
@@ -190,7 +190,7 @@ func (l *SyncWafSourceLogic) SyncWafSource(req *types.WafSourceSyncReq) (resp *t
 
 	if normalizeWafKind(source.Kind) != wafKindCorazaEngine && (req.ActivateNow || source.AutoActivate) {
 		activateLogic := NewActivateWafReleaseLogic(l.ctx, l.svcCtx)
-		if _, activateErr := activateLogic.ActivateWafRelease(&types.WafReleaseActivateReq{ID: release.ID}); activateErr != nil {
+		if _, activateErr := activateLogic.ActivateWafRelease(release.ID); activateErr != nil {
 			return nil, activateErr
 		}
 	}
