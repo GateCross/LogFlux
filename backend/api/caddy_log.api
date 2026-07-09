@@ -1,11 +1,11 @@
 syntax = "v1"
 
 type (
-	// Log Query
+	// 日志查询
 	CaddyLogReq {
 		Page     int    `form:"page,default=1"`
 		PageSize int    `form:"pageSize,default=20"`
-		Keyword  string `form:"keyword,optional"` // Search in host, uri, ip
+		Keyword  string `form:"keyword,optional"` // 在 host、uri、ip 中搜索
 		Host     string `form:"host,optional"`
 		Status   int    `form:"status,default=-1"`
 		StartTime string `form:"startTime,optional"`
@@ -34,6 +34,19 @@ type (
 		List  []CaddyLogItem `json:"list"`
 		Total int64          `json:"total"`
 	}
+	// 站点近窗指标（按 host 聚合访问日志 4xx/5xx）
+	SiteMetricsReq {
+		Hosts         []string `json:"hosts"`                    // 必填；最多 50
+		WindowMinutes int      `json:"windowMinutes,optional"` // 省略或 <=0 时默认 15
+	}
+	SiteMetricsItem {
+		Host     string `json:"host"`
+		Count4xx int64  `json:"count4xx"`
+		Count5xx int64  `json:"count5xx"`
+	}
+	SiteMetricsResp {
+		List []SiteMetricsItem `json:"list"`
+	}
 )
 
 @server (
@@ -48,4 +61,7 @@ service logflux-api {
 
 	@handler ClearCaddyLogs
 	post /caddy/logs/clear returns (BaseResp)
+
+	@handler GetSiteMetrics
+	post /caddy/logs/site-metrics (SiteMetricsReq) returns (SiteMetricsResp)
 }

@@ -20,6 +20,15 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        name: 'CaddyCatalog',
+        path: '/caddy/catalog',
+        component: () => import('#/views/caddy/catalog/index.vue'),
+        meta: {
+          icon: 'mdi:view-grid-outline',
+          title: '服务目录',
+        },
+      },
+      {
         name: 'CaddyAccess',
         path: '/caddy/access',
         component: () => import('#/views/caddy/access/index.vue'),

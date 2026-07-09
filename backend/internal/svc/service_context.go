@@ -528,6 +528,13 @@ func initRBACData(db *gorm2.DB) {
 			RequiredRoles: []string{"admin", "analyst"},
 		},
 		{
+			Name:          "caddy_catalog",
+			Path:          "/caddy/catalog",
+			Component:     "view.caddy_catalog",
+			Meta:          `{"title":"caddy_catalog","i18nKey":"route.caddy_catalog","icon":"carbon:catalog"}`,
+			RequiredRoles: []string{"admin", "analyst"},
+		},
+		{
 			Name:          "caddy_log",
 			Path:          "/caddy/log",
 			Component:     "view.caddy_log",
@@ -659,6 +666,7 @@ func initRBACData(db *gorm2.DB) {
 	}
 
 	setParent("caddy_config", "caddy")
+	setParent("caddy_catalog", "caddy")
 	setParent("caddy_log", "caddy")
 	setParent("manage_user", "manage")
 	setParent("manage_role", "manage")
@@ -670,6 +678,14 @@ func initRBACData(db *gorm2.DB) {
 	setParentForce("caddy_system_log", "manage")
 	setParentForce("caddy_access", "caddy")
 	// setParent("cron", "manage") // moved to top level
+
+	// 兼容：强制校正服务目录菜单的父子关系与组件路径
+	setParentForce("caddy_catalog", "caddy")
+	db.Model(&menumodel.Menu{}).Where("name = ?", "caddy_catalog").Updates(map[string]interface{}{
+		"path":      "/caddy/catalog",
+		"component": "view.caddy_catalog",
+		"meta":      `{"title":"caddy_catalog","i18nKey":"route.caddy_catalog","icon":"carbon:catalog"}`,
+	})
 
 	// 清理遗留数据
 	db.Where("name = ?", "home").Delete(&menumodel.Menu{})

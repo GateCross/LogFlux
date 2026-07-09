@@ -2,6 +2,7 @@ package caddy
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -138,8 +139,11 @@ func caddyAdminRawError(body []byte) string {
 	return text
 }
 
-func getCaddyConfigJSON(server *caddymodel.CaddyServer) ([]byte, error) {
-	req, err := http.NewRequest("GET", strings.TrimRight(server.Url, "/")+"/config/", nil)
+func getCaddyConfigJSON(ctx context.Context, server *caddymodel.CaddyServer) ([]byte, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	req, err := http.NewRequestWithContext(ctx, "GET", strings.TrimRight(server.Url, "/")+"/config/", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -165,7 +169,7 @@ func hashConfig(config string) string {
 }
 
 func syncCaddyLogSources(svcCtx *svc.ServiceContext, server *caddymodel.CaddyServer, logger logx.Logger) {
-	body, err := getCaddyConfigJSON(server)
+	body, err := getCaddyConfigJSON(context.Background(), server)
 	if err != nil {
 		logger.Errorf("同步日志配置失败: %v", err)
 		return

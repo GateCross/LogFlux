@@ -40,6 +40,20 @@ export namespace CaddyServerApi {
     list: CaddyLogItem[];
     total: number;
   }
+
+  /** 节点探测结果 — GET /caddy/server/status */
+  export interface CaddyServerStatusItem {
+    serverId: number;
+    name: string;
+    reachable: boolean;
+    latencyMs: number;
+    probedAt: string;
+    errorMessage?: string;
+  }
+
+  export interface CaddyServerStatusListResult {
+    list: CaddyServerStatusItem[];
+  }
 }
 
 /**
@@ -48,6 +62,16 @@ export namespace CaddyServerApi {
 export async function getCaddyServerListApi() {
   const resp = await requestClient.get<CaddyServerApi.CaddyServerListResult>(
     '/caddy/server',
+  );
+  return listOf(resp);
+}
+
+/**
+ * 探测 Caddy 节点在线状态（只读，不触发 /load）— GET /caddy/server/status
+ */
+export async function getCaddyServerStatusApi() {
+  const resp = await requestClient.get<CaddyServerApi.CaddyServerStatusListResult>(
+    '/caddy/server/status',
   );
   return listOf(resp);
 }
@@ -155,9 +179,74 @@ export async function getCaddyLogsApi(params?: Record<string, any>) {
   });
 }
 
+/** 站点近窗 4xx/5xx 指标项 — POST /caddy/logs/site-metrics */
+export interface SiteMetricsItem {
+  host: string;
+  count4xx: number;
+  count5xx: number;
+}
+
+export interface SiteMetricsListResult {
+  list: SiteMetricsItem[];
+}
+
+export interface SiteMetricsParams {
+  /** 主机列表，单次最多 50 */
+  hosts: string[];
+  /** 时间窗分钟数，默认 15 */
+  windowMinutes?: number;
+}
+
+/**
+ * 批量查询站点近窗 4xx/5xx 指标 — POST /caddy/logs/site-metrics
+ * 只读聚合，不触发 /load；失败时由调用方降级展示。
+ */
+export async function getSiteMetricsApi(params: SiteMetricsParams) {
+  const resp = await requestClient.post<SiteMetricsListResult>(
+    '/caddy/logs/site-metrics',
+    {
+      hosts: params.hosts,
+      windowMinutes: params.windowMinutes,
+    },
+  );
+  return listOf(resp);
+}
+
 /**
  * 清空 Caddy 访问日志 — POST /caddy/logs/clear
  */
 export async function clearCaddyLogsApi() {
   return requestClient.post<void>('/caddy/logs/clear');
+}
+
+/** Docker 发现候选项 — GET /caddy/discovery/docker（会话候选，不落库、不 /load） */
+export interface DockerDiscoveryCandidate {
+  candidateId: string;
+  containerId: string;
+  containerName: string;
+  status: string;
+  name: string;
+  domains: string[];
+  upstream: string;
+  lbPolicy?: string;
+  tlsMode: string;
+  healthPath?: string;
+  healthInterval?: string;
+  healthTimeout?: string;
+  reason?: string;
+  valid: boolean;
+}
+
+export interface DockerDiscoveryResult {
+  list: DockerDiscoveryCandidate[];
+  scannedAt: string;
+  message?: string;
+}
+
+/**
+ * 扫描 Docker 容器 labels，返回会话候选草稿数据。
+ * 只读：不调用 /load，不写 discovery DB。
+ */
+export async function discoverDockerServicesApi() {
+  return requestClient.get<DockerDiscoveryResult>('/caddy/discovery/docker');
 }

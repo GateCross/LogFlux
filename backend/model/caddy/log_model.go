@@ -33,6 +33,14 @@ type DashboardGeoRow struct {
 	Value int64  `gorm:"column:value"`
 }
 
+// 按 host 聚合的状态计数行。
+// 仅返回时间窗内存在匹配日志的 host；无日志 host 不出现在结果中，
+// 由调用方（如站点近窗指标 API）对请求的 hosts 补 0。
+type HostStatusCount struct {
+	Host  string `gorm:"column:host"`
+	Count int64  `gorm:"column:count"`
+}
+
 type CaddyLogModel interface {
 	Create(ctx context.Context, log *CaddyLog) error
 	List(ctx context.Context, query CaddyLogQuery) ([]CaddyLog, int64, error)
@@ -40,6 +48,9 @@ type CaddyLogModel interface {
 	CountRange(ctx context.Context, start, end time.Time) (int64, error)
 	CountStatuses(ctx context.Context, start, end time.Time, statuses []int) (int64, error)
 	CountStatusRange(ctx context.Context, start, end time.Time, min, max int) (int64, error)
+	// 在时间窗内按 host 批量聚合指定状态范围（min 含，max 不含）的计数。
+	// hosts 为空时返回空切片；结果仅含有匹配行的 host。
+	CountStatusByHosts(ctx context.Context, start, end time.Time, hosts []string, min, max int) ([]HostStatusCount, error)
 	CountUniqueVisitor(ctx context.Context, start, end time.Time) (int64, error)
 	CountUniqueRemoteIP(ctx context.Context, start, end time.Time) (int64, error)
 	CountAttackIP(ctx context.Context, start, end time.Time, statuses []int) (int64, error)
@@ -123,6 +134,25 @@ func (m *defaultCaddyLogModel) CountStatusRange(ctx context.Context, start, end 
 	var total int64
 	err := m.baseRange(ctx, start, end).Where("status >= ? AND status < ?", min, max).Count(&total).Error
 	return total, err
+}
+
+// 按 host 批量统计时间窗内状态范围计数。
+// 状态语义与按范围计数一致：status ∈ [min, max)。
+// 例如 4xx 传 min=400,max=500；5xx 传 min=500,max=600。
+// 空 hosts 直接返回空结果；无匹配日志的 host 不会出现在返回值中。
+func (m *defaultCaddyLogModel) CountStatusByHosts(ctx context.Context, start, end time.Time, hosts []string, min, max int) ([]HostStatusCount, error) {
+	rows := make([]HostStatusCount, 0)
+	if len(hosts) == 0 {
+		return rows, nil
+	}
+	// 利用 host / status / log_time 相关索引：时间窗 + host IN + status 范围 + GROUP BY host
+	err := m.baseRange(ctx, start, end).
+		Select("host, COUNT(*) AS count").
+		Where("host IN ?", hosts).
+		Where("status >= ? AND status < ?", min, max).
+		Group("host").
+		Scan(&rows).Error
+	return rows, err
 }
 
 func (m *defaultCaddyLogModel) CountUniqueVisitor(ctx context.Context, start, end time.Time) (int64, error) {

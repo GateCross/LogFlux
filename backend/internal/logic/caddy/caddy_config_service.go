@@ -122,7 +122,9 @@ type caddyKV struct {
 var (
 	caddyDomainPattern   = regexp.MustCompile(`^(\*\.)?([a-zA-Z0-9-]+\.)+[a-zA-Z0-9-]+$`)
 	caddyPortOnlyPattern = regexp.MustCompile(`^:\d+$`)
-	caddyMethodAllowSet  = map[string]struct{}{
+	// 与前端 HEALTH_DURATION_RE 一致：正整数 + 单位 ms|s|m|h
+	caddyHealthDurationPattern = regexp.MustCompile(`^[1-9]\d*(ms|s|m|h)$`)
+	caddyMethodAllowSet        = map[string]struct{}{
 		"GET": {}, "POST": {}, "PUT": {}, "PATCH": {}, "DELETE": {}, "HEAD": {}, "OPTIONS": {},
 	}
 )
@@ -314,6 +316,8 @@ func validateCaddyFormModel(model *caddyFormModel) []string {
 		if len(trimStringSlice(upstream.Targets)) == 0 {
 			errors = append(errors, fmt.Sprintf("上游 %s 至少配置一个目标", name))
 		}
+		label := fmt.Sprintf("上游 %s 健康检查", firstNonEmpty(name, "未命名"))
+		errors = append(errors, validateCaddyHealthCheckFields(upstream.HealthCheck, label)...)
 	}
 	for _, site := range model.Sites {
 		if !site.Enabled {
@@ -376,6 +380,8 @@ func validateCaddyRoute(siteName string, route caddyRoute, upstreamNames map[str
 			errors = append(errors, fmt.Sprintf("路由 %s 的 reverse_proxy 未选择上游", routeName))
 		}
 		if handle.Type == "reverse_proxy" {
+			label := fmt.Sprintf("路由 %s 健康检查", routeName)
+			errors = append(errors, validateCaddyHealthCheckFields(handle.HealthCheck, label)...)
 			if _, ok := upstreamNames[strings.TrimSpace(handle.Upstream)]; ok {
 				continue
 			}
@@ -599,29 +605,135 @@ func renderCaddyHandle(lines *[]string, handle caddyHandle, upstreams map[string
 
 func renderCaddyReverseProxy(lines *[]string, handle caddyHandle, upstreams map[string]caddyUpstream) {
 	targets := strings.TrimSpace(handle.Upstream)
-	if upstream, ok := upstreams[targets]; ok && len(trimStringSlice(upstream.Targets)) > 0 {
-		targets = strings.Join(trimStringSlice(upstream.Targets), " ")
+	var pool *caddyUpstream
+	if upstream, ok := upstreams[targets]; ok {
+		pool = &upstream
+		if len(trimStringSlice(upstream.Targets)) > 0 {
+			targets = strings.Join(trimStringSlice(upstream.Targets), " ")
+		}
 	}
 	if targets == "" {
 		targets = "localhost:8080"
 	}
+
+	healthCheck := resolveEffectiveHealthCheck(handle.HealthCheck, pool)
+	lbPolicy := resolveEffectiveLbPolicy(handle.LBPolicy, pool)
 	transport := strings.TrimSpace(handle.TransportProtocol)
 	if transport == "" && handle.TLSInsecureSkipVerify {
 		transport = "http"
 	}
-	if transport != "" || handle.TLSInsecureSkipVerify {
+
+	if reverseProxyNeedsBlock(healthCheck, lbPolicy, transport, handle.TLSInsecureSkipVerify) {
 		*lines = append(*lines, "    reverse_proxy "+targets+" {")
-		if transport != "" {
-			*lines = append(*lines, "      transport "+transport+" {")
-			if handle.TLSInsecureSkipVerify {
-				*lines = append(*lines, "        tls_insecure_skip_verify")
-			}
-			*lines = append(*lines, "      }")
-		}
+		appendReverseProxyBlockLines(lines, "      ", healthCheck, lbPolicy, transport, handle.TLSInsecureSkipVerify)
 		*lines = append(*lines, "    }")
 		return
 	}
 	*lines = append(*lines, "    reverse_proxy "+targets)
+}
+
+// 与前端一致：path 非空才可写出 health 指令。
+func hasEmittableHealthCheck(healthCheck *caddyHealthCheck) bool {
+	return healthCheck != nil && strings.TrimSpace(healthCheck.Path) != ""
+}
+
+// handle 级有效健康检查优先于被引用 pool 级（Req 3.4）。
+func resolveEffectiveHealthCheck(handleHC *caddyHealthCheck, pool *caddyUpstream) *caddyHealthCheck {
+	if hasEmittableHealthCheck(handleHC) {
+		return normalizeHealthCheck(handleHC)
+	}
+	if pool != nil && hasEmittableHealthCheck(pool.HealthCheck) {
+		return normalizeHealthCheck(pool.HealthCheck)
+	}
+	return nil
+}
+
+func normalizeHealthCheck(hc *caddyHealthCheck) *caddyHealthCheck {
+	if hc == nil {
+		return nil
+	}
+	out := &caddyHealthCheck{Path: strings.TrimSpace(hc.Path)}
+	if interval := strings.TrimSpace(hc.Interval); interval != "" {
+		out.Interval = interval
+	}
+	if timeout := strings.TrimSpace(hc.Timeout); timeout != "" {
+		out.Timeout = timeout
+	}
+	return out
+}
+
+// handle 级非空负载策略优先，否则用 pool 级。
+func resolveEffectiveLbPolicy(handlePolicy string, pool *caddyUpstream) string {
+	if policy := strings.TrimSpace(handlePolicy); policy != "" {
+		return policy
+	}
+	if pool != nil {
+		if policy := strings.TrimSpace(pool.LBPolicy); policy != "" {
+			return policy
+		}
+	}
+	return ""
+}
+
+func reverseProxyNeedsBlock(healthCheck *caddyHealthCheck, lbPolicy, transport string, tlsInsecureSkipVerify bool) bool {
+	if strings.TrimSpace(lbPolicy) != "" {
+		return true
+	}
+	if hasEmittableHealthCheck(healthCheck) {
+		return true
+	}
+	if strings.TrimSpace(transport) != "" || tlsInsecureSkipVerify {
+		return true
+	}
+	return false
+}
+
+// 写出 lb_policy / health_* / transport，顺序与前端一致。
+func appendReverseProxyBlockLines(lines *[]string, indent string, healthCheck *caddyHealthCheck, lbPolicy, transport string, tlsInsecureSkipVerify bool) {
+	if policy := strings.TrimSpace(lbPolicy); policy != "" {
+		*lines = append(*lines, indent+"lb_policy "+policy)
+	}
+	if hasEmittableHealthCheck(healthCheck) {
+		path := strings.TrimSpace(healthCheck.Path)
+		*lines = append(*lines, indent+"health_uri "+path)
+		if interval := strings.TrimSpace(healthCheck.Interval); interval != "" {
+			*lines = append(*lines, indent+"health_interval "+interval)
+		}
+		if timeout := strings.TrimSpace(healthCheck.Timeout); timeout != "" {
+			*lines = append(*lines, indent+"health_timeout "+timeout)
+		}
+	}
+	if transport != "" {
+		*lines = append(*lines, indent+"transport "+transport+" {")
+		if tlsInsecureSkipVerify {
+			*lines = append(*lines, indent+"  tls_insecure_skip_verify")
+		}
+		*lines = append(*lines, indent+"}")
+	}
+}
+
+// 与前端健康检查字段校验同一契约（中文字段错误）。
+func validateCaddyHealthCheckFields(healthCheck *caddyHealthCheck, fieldLabel string) []string {
+	if healthCheck == nil {
+		return nil
+	}
+	if strings.TrimSpace(fieldLabel) == "" {
+		fieldLabel = "健康检查"
+	}
+	errors := make([]string, 0, 3)
+	path := strings.TrimSpace(healthCheck.Path)
+	if path != "" && !strings.HasPrefix(path, "/") {
+		errors = append(errors, fieldLabel+"路径必须以 / 开头")
+	}
+	interval := strings.TrimSpace(healthCheck.Interval)
+	if interval != "" && !caddyHealthDurationPattern.MatchString(interval) {
+		errors = append(errors, fieldLabel+"间隔格式无效，应为正整数加单位（ms|s|m|h）")
+	}
+	timeout := strings.TrimSpace(healthCheck.Timeout)
+	if timeout != "" && !caddyHealthDurationPattern.MatchString(timeout) {
+		errors = append(errors, fieldLabel+"超时格式无效，应为正整数加单位（ms|s|m|h）")
+	}
+	return errors
 }
 
 func renderCaddyHeaderOnly(lines *[]string, prefix string, handles []caddyHandle) {

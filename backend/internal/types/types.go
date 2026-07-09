@@ -108,7 +108,7 @@ type CaddyLogItem struct {
 type CaddyLogReq struct {
 	Page      int    `form:"page,default=1"`
 	PageSize  int    `form:"pageSize,default=20"`
-	Keyword   string `form:"keyword,optional"` // Search in host, uri, ip
+	Keyword   string `form:"keyword,optional"` // 在 host、uri、ip 中搜索
 	Host      string `form:"host,optional"`
 	Status    int    `form:"status,default=-1"`
 	StartTime string `form:"startTime,optional"`
@@ -136,11 +136,24 @@ type CaddyServerListResp struct {
 
 type CaddyServerReq struct {
 	Name     string `json:"name"`
-	Url      string `json:"url"`                // http://localhost:2019 or remote IP
-	Token    string `json:"token,optional"`     // For remote auth if needed
+	Url      string `json:"url"`                // http://localhost:2019 或远程 IP
+	Token    string `json:"token,optional"`     // 远程鉴权（如需要）
 	Type     string `json:"type,default=local"` // local | remote
 	Username string `json:"username,optional"`
 	Password string `json:"password,optional"`
+}
+
+type CaddyServerStatusItem struct {
+	ServerId     uint   `json:"serverId"`
+	Name         string `json:"name"`
+	Reachable    bool   `json:"reachable"`
+	LatencyMs    int64  `json:"latencyMs"`
+	ProbedAt     string `json:"probedAt"`
+	ErrorMessage string `json:"errorMessage,optional"`
+}
+
+type CaddyServerStatusListResp struct {
+	List []CaddyServerStatusItem `json:"list"`
 }
 
 type ChangePasswordReq struct {
@@ -370,6 +383,29 @@ type DashboardTrendItem struct {
 	Value int64  `json:"value"`
 }
 
+type DockerDiscoveryCandidate struct {
+	CandidateId    string   `json:"candidateId"`
+	ContainerId    string   `json:"containerId"`
+	ContainerName  string   `json:"containerName"`
+	Status         string   `json:"status"`
+	Name           string   `json:"name"`
+	Domains        []string `json:"domains"`
+	Upstream       string   `json:"upstream"`
+	LbPolicy       string   `json:"lbPolicy,optional"`
+	TlsMode        string   `json:"tlsMode"`
+	HealthPath     string   `json:"healthPath,optional"`
+	HealthInterval string   `json:"healthInterval,optional"`
+	HealthTimeout  string   `json:"healthTimeout,optional"`
+	Reason         string   `json:"reason,optional"`
+	Valid          bool     `json:"valid"`
+}
+
+type DockerDiscoveryResp struct {
+	List      []DockerDiscoveryCandidate `json:"list"`
+	ScannedAt string                     `json:"scannedAt"`
+	Message   string                     `json:"message,optional"`
+}
+
 type EventItem struct {
 	Value string `json:"value"`
 	Label string `json:"label"`
@@ -586,6 +622,21 @@ type SimpleWafConfigUpdateReq struct {
 	RequestBodyLimit        int64    `json:"requestBodyLimit,optional"`
 	RequestBodyNoFilesLimit int64    `json:"requestBodyNoFilesLimit,optional"`
 	SiteAddresses           []string `json:"siteAddresses,optional"` // 为空时默认使用全部可识别站点
+}
+
+type SiteMetricsItem struct {
+	Host     string `json:"host"`
+	Count4xx int64  `json:"count4xx"`
+	Count5xx int64  `json:"count5xx"`
+}
+
+type SiteMetricsReq struct {
+	Hosts         []string `json:"hosts"`                  // 必填；最多 50
+	WindowMinutes int      `json:"windowMinutes,optional"` // 省略或 <=0 时默认 15
+}
+
+type SiteMetricsResp struct {
+	List []SiteMetricsItem `json:"list"`
 }
 
 type SystemLogItem struct {

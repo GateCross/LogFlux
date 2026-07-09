@@ -1,8 +1,10 @@
 <script lang="ts" setup>
-import type { CaddyBlockDraft, CaddyFormModel, CaddyPageMode, PreservedCaddyBlock } from './types';
+import type { CaddyBlockDraft, CaddyFormModel, CaddyPageMode, HealthCheck, PreservedCaddyBlock } from './types';
 import type { QuickSiteDraft } from './quick-config-utils';
 
 import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { useDebounceFn } from '@vueuse/core';
 
 import { Page } from '@vben/common-ui';
 
@@ -31,20 +33,24 @@ import {
   Spin,
   Switch,
   Tag,
+  Tooltip,
 } from 'ant-design-vue';
 
 import {
   addCaddyServerApi,
   deleteCaddyServerApi,
+  discoverDockerServicesApi,
   getCaddyConfigApi,
   getCaddyConfigHistoryDetailApi,
   getCaddyConfigHistoryListApi,
   getCaddyServerListApi,
+  getSiteMetricsApi,
   previewCaddyConfigApi,
   pushCaddyConfigApi,
   rollbackCaddyConfigApi,
   updateCaddyServerApi,
 } from '#/api/caddy/server';
+import type { DockerDiscoveryCandidate, SiteMetricsItem } from '#/api/caddy/server';
 import {
   applySimpleWafConfigApi,
   getSimpleWafConfigApi,
@@ -65,14 +71,59 @@ import {
   createQuickSiteDraft,
   mergeQuickConfigDrafts,
 } from './quick-config-utils';
-
+import type { SiteWizardWafDraft } from './site-wizard-utils';
+import SiteWizardModal from './SiteWizardModal.vue';
+import DockerDiscoveryModal from './DockerDiscoveryModal.vue';
+import type { DockerDiscoveryCandidate as SessionDockerCandidate } from './docker-discovery-utils';
+import {
+  formatLatency,
+  statusLabel,
+  statusTagColor,
+  statusTooltip,
+} from '../shared/caddy-server-status';
+import { useCaddyServerStatus } from '../shared/use-caddy-server-status';
 defineOptions({ name: 'CaddyConfig' });
+
+const router = useRouter();
+const route = useRoute();
 
 type CaddyServer = Record<string, any>;
 type SavePreviewKind = 'blocks' | 'raw';
 type SimpleWafMode = 'detectiononly' | 'off' | 'on';
 type SimpleWafStrength = 'balanced' | 'high_blocking' | 'low_fp';
 type SimpleWafAudit = 'off' | 'on' | 'relevantonly';
+
+/** 站点卡片近窗指标（host → 计数）；失败时降级，不阻塞配置编辑 */
+type SiteMetricsMap = Map<string, { count4xx: number; count5xx: number }>;
+
+const SITE_METRICS_WINDOW_MINUTES = 15;
+const SITE_METRICS_HOST_CHUNK = 50;
+
+/** 服务目录等入口深链：/caddy/config?serverId=&mode= */
+function queryServerId(): number | undefined {
+  const raw = route.query.serverId;
+  const text = Array.isArray(raw) ? String(raw[0] ?? '') : String(raw ?? '');
+  const id = Number(text);
+  return Number.isFinite(id) && id > 0 ? id : undefined;
+}
+
+function queryMode(): CaddyPageMode | undefined {
+  const raw = route.query.mode;
+  const text = Array.isArray(raw) ? String(raw[0] ?? '') : String(raw ?? '');
+  if (text === 'blocks' || text === 'waf' || text === 'raw' || text === 'preview') {
+    return text;
+  }
+  return undefined;
+}
+
+function applyRouteModeDeepLink() {
+  const next = queryMode();
+  if (!next) return;
+  mode.value = next;
+  if (next === 'blocks' || next === 'raw') {
+    lastEditMode.value = next;
+  }
+}
 
 const createEmptyFormModel = (): CaddyFormModel => ({
   schemaVersion: 1,
@@ -88,6 +139,12 @@ const loadingConfig = ref(false);
 const saving = ref(false);
 const previewing = ref(false);
 
+/** 站点近窗指标：失败时降级为 "—"，不阻塞配置编辑 */
+const siteMetricsMap = ref<SiteMetricsMap>(new Map());
+const loadingSiteMetrics = ref(false);
+const siteMetricsError = ref('');
+const siteMetricsLoaded = ref(false);
+
 const configContent = ref('');
 const mode = ref<CaddyPageMode>('blocks');
 const lastEditMode = ref<'blocks' | 'raw'>('blocks');
@@ -97,6 +154,26 @@ const preservedBlocks = ref<PreservedCaddyBlock[]>([]);
 const quickSiteDrafts = ref<QuickSiteDraft[]>([]);
 const complexSiteSummaries = ref<Array<{ domains: string[]; id: string; name: string; reasons: string[] }>>([]);
 const activeQuickSiteId = ref<string>();
+
+function serverLabel(server: CaddyServer) {
+  return server.name ?? server.host ?? server.url ?? `Server #${server.id}`;
+}
+
+/**
+ * 配置管理：仅保留当前选中节点的轻量状态提示。
+ * 完整节点状态总览在「服务目录」页。
+ */
+const {
+  loadingServerStatus,
+  serverStatusLoaded,
+  selectedServerStatus,
+  pruneByServers,
+  handleRefreshServerStatus,
+} = useCaddyServerStatus({
+  servers,
+  selectedServerId,
+  labelOf: serverLabel,
+});
 
 const serverModalVisible = ref(false);
 const serverModalType = ref<'add' | 'edit'>('add');
@@ -125,6 +202,22 @@ const savePreview = reactive<{
   open: false,
   original: '',
 });
+
+/** 站点创建向导：默认仅产出草稿，不自动 /load */
+const siteWizardOpen = ref(false);
+/** 向导携带的可选 WAF 意图（草稿阶段不调用 WAF 接口） */
+const pendingWizardWaf = ref<SiteWizardWafDraft | null>(null);
+/** 向导本地预览用：合并草稿后的 Caddyfile 文本（未 /load） */
+const wizardLocalPreview = ref('');
+
+/** Docker 发现：会话候选（内存，不建 discovery DB） */
+const dockerDiscoveryOpen = ref(false);
+const dockerDiscoveryScanning = ref(false);
+const dockerDiscoveryResult = ref<{
+  list: SessionDockerCandidate[];
+  scannedAt: string;
+  message: string;
+} | null>(null);
 
 const historyDrawerVisible = ref(false);
 const historyLoading = ref(false);
@@ -177,6 +270,20 @@ const lbPolicyOptions = [
   { label: '最少连接', value: 'least_conn' },
   { label: 'IP Hash', value: 'ip_hash' },
 ];
+
+const defaultHealthCheck = (): HealthCheck => ({
+  path: '/health',
+  interval: '10s',
+  timeout: '5s',
+});
+
+/** 上游池下拉选项（用于 Simple reverse_proxy 选择池名） */
+const upstreamPoolOptions = computed(() =>
+  formModel.value.upstreams
+    .map((item) => item.name?.trim())
+    .filter((name): name is string => Boolean(name))
+    .map((name) => ({ label: `上游池：${name}`, value: name })),
+);
 
 const wafModeOptions = [
   { label: '仅检测', value: 'detectiononly' },
@@ -278,8 +385,151 @@ const historyCompareRows = computed(() => {
   return historyDiffOnly.value ? rows.filter((row) => row.type !== 'same') : rows;
 });
 
-function serverLabel(server: CaddyServer) {
-  return server.name ?? server.host ?? server.url ?? `Server #${server.id}`;
+function shortHash(value: unknown) {
+  const text = String(value ?? '').trim();
+  if (text.length <= 16) return text;
+  return `${text.slice(0, 8)}...${text.slice(-8)}`;
+}
+
+/** 从站点域名中提取可用于 metrics / 日志过滤的 host（去掉端口与协议） */
+function normalizeSiteHost(domain: string): string {
+  const raw = String(domain ?? '').trim();
+  if (!raw) return '';
+  // 监听地址如 :8080 不是 host
+  if (raw.startsWith(':')) return '';
+  try {
+    if (raw.includes('://')) {
+      const url = new URL(raw);
+      return (url.hostname || '').toLowerCase();
+    }
+  } catch {
+    // 解析失败则继续后续处理
+  }
+  // 去掉 path / query
+  const withoutPath = raw.split('/')[0] ?? raw;
+  // IPv4/域名去掉端口；罕见 IPv6 host:port 无解析时保留方括号
+  const hostPart = withoutPath.includes(']')
+    ? withoutPath
+    : (withoutPath.split(':')[0] ?? withoutPath);
+  return hostPart.trim().toLowerCase();
+}
+
+/** 收集当前工作台所有站点域名（简单 + 复杂），去重 */
+function collectSiteHosts(): string[] {
+  const hosts = new Set<string>();
+  for (const site of quickSiteDrafts.value) {
+    for (const domain of site.domains ?? []) {
+      const host = normalizeSiteHost(domain);
+      if (host) hosts.add(host);
+    }
+  }
+  for (const site of complexSiteSummaries.value) {
+    for (const domain of site.domains ?? []) {
+      const host = normalizeSiteHost(domain);
+      if (host) hosts.add(host);
+    }
+  }
+  return [...hosts];
+}
+
+/** 站点卡片用：取第一个有效 host 对应的指标 */
+function sitePrimaryHost(domains: string[] | undefined): string {
+  for (const domain of domains ?? []) {
+    const host = normalizeSiteHost(domain);
+    if (host) return host;
+  }
+  return '';
+}
+
+function siteMetricsForDomains(domains: string[] | undefined) {
+  const host = sitePrimaryHost(domains);
+  if (!host) return null;
+  return siteMetricsMap.value.get(host) ?? null;
+}
+
+function formatMetricCount(value: number | undefined | null): string {
+  if (value === undefined || value === null || Number.isNaN(Number(value))) return '—';
+  return String(Math.max(0, Math.round(Number(value))));
+}
+
+function metricCountColor(count: number | undefined | null, kind: '4xx' | '5xx') {
+  if (count === undefined || count === null) return 'default';
+  if (Number(count) <= 0) return 'default';
+  return kind === '5xx' ? 'error' : 'warning';
+}
+
+/**
+ * 批量拉取站点近窗 4xx/5xx。
+ * 失败时仅记录错误并清空/保留上次数据展示 "—"，绝不阻断配置编辑。
+ */
+async function fetchSiteMetrics() {
+  if (loadingSiteMetrics.value) return;
+  const hosts = collectSiteHosts();
+  if (hosts.length === 0) {
+    siteMetricsMap.value = new Map();
+    siteMetricsError.value = '';
+    siteMetricsLoaded.value = true;
+    return;
+  }
+
+  loadingSiteMetrics.value = true;
+  siteMetricsError.value = '';
+  try {
+    const next = new Map<string, { count4xx: number; count5xx: number }>();
+    // 后端单次最多 50 hosts，分块请求
+    for (let i = 0; i < hosts.length; i += SITE_METRICS_HOST_CHUNK) {
+      const chunk = hosts.slice(i, i + SITE_METRICS_HOST_CHUNK);
+      const list = await getSiteMetricsApi({
+        hosts: chunk,
+        windowMinutes: SITE_METRICS_WINDOW_MINUTES,
+      });
+      for (const item of list as SiteMetricsItem[]) {
+        const host = normalizeSiteHost(item.host) || String(item.host ?? '').trim().toLowerCase();
+        if (!host) continue;
+        next.set(host, {
+          count4xx: Number(item.count4xx) || 0,
+          count5xx: Number(item.count5xx) || 0,
+        });
+      }
+    }
+    // 无日志 host 后端可能省略，补 0
+    for (const host of hosts) {
+      if (!next.has(host)) {
+        next.set(host, { count4xx: 0, count5xx: 0 });
+      }
+    }
+    siteMetricsMap.value = next;
+    siteMetricsLoaded.value = true;
+  } catch (error) {
+    // 降级：不阻塞编辑；展示 "—" 与可选中文提示
+    siteMetricsError.value = apiErrorMessage(error, '获取站点近窗指标失败');
+    siteMetricsMap.value = new Map();
+    siteMetricsLoaded.value = true;
+  } finally {
+    loadingSiteMetrics.value = false;
+  }
+}
+
+/** 配置/站点变更后 debounce 拉取，避免每个键入 thrash */
+const debouncedFetchSiteMetrics = useDebounceFn(fetchSiteMetrics, 600);
+
+function handleRefreshSiteMetrics() {
+  debouncedFetchSiteMetrics();
+}
+
+/** 深链到访问日志并带 host 过滤 */
+function openAccessLogs(domains: string[] | undefined, event?: Event) {
+  event?.stopPropagation();
+  event?.preventDefault();
+  const host = sitePrimaryHost(domains);
+  if (!host) {
+    message.warning('该站点未配置可用域名，无法过滤访问日志');
+    return;
+  }
+  router.push({
+    name: 'CaddyLog',
+    query: { host },
+  });
 }
 
 function blockKindLabel(kind: PreservedCaddyBlock['kind']) {
@@ -294,12 +544,6 @@ function blockKindColor(kind: PreservedCaddyBlock['kind']) {
   if (kind === 'snippet') return 'blue';
   if (kind === 'site') return 'orange';
   return 'default';
-}
-
-function shortHash(value: unknown) {
-  const text = String(value ?? '').trim();
-  if (text.length <= 16) return text;
-  return `${text.slice(0, 8)}...${text.slice(-8)}`;
 }
 
 function historyDescription(item: Record<string, any>) {
@@ -415,9 +659,17 @@ async function fetchServers() {
   loadingServers.value = true;
   try {
     servers.value = await getCaddyServerListApi();
-    if (servers.value.length > 0 && !selectedServerId.value) {
+    const preferredId = queryServerId();
+    if (
+      preferredId &&
+      servers.value.some((server) => Number(server.id) === preferredId)
+    ) {
+      selectedServerId.value = preferredId;
+    } else if (servers.value.length > 0 && !selectedServerId.value) {
       selectedServerId.value = Number(servers.value[0]?.id);
     }
+    // 节点被删后清理无效探测缓存，避免展示幽灵状态
+    pruneByServers(servers.value);
   } catch {
     message.error('获取服务器列表失败');
   } finally {
@@ -437,14 +689,24 @@ async function fetchConfig() {
     complexSiteSummaries.value = [];
     activeQuickSiteId.value = undefined;
     structuredAvailable.value = false;
+    // 切换配置时重置指标缓存（随后 debounce 重新拉取）
+    siteMetricsMap.value = new Map();
+    siteMetricsError.value = '';
+    siteMetricsLoaded.value = false;
 
     const loadedModules = loadModules(typeof data?.modules === 'string' ? data.modules : undefined);
     if (configContent.value.trim()) {
       const parsed = parseCaddyfileToBlocks(configContent.value);
       if (loadedModules) {
         mergePreservedBlocksFromRaw(parsed);
+        applyRouteModeDeepLink();
+        debouncedFetchSiteMetrics();
+        return;
       } else if (parsed.sites.length > 0 || parsed.global?.raw || parsed.preservedBlocks.length > 0) {
         applyDraft(parsed);
+        // 服务目录深链 mode 优先于 applyDraft 默认的 blocks
+        applyRouteModeDeepLink();
+        debouncedFetchSiteMetrics();
         return;
       }
     }
@@ -452,6 +714,9 @@ async function fetchConfig() {
     syncQuickStateFromForm(formModel.value);
     mode.value = 'blocks';
     lastEditMode.value = 'blocks';
+    // 深链 mode（如 waf）覆盖默认 blocks
+    applyRouteModeDeepLink();
+    debouncedFetchSiteMetrics();
   } catch {
     message.error('获取配置失败');
   } finally {
@@ -540,9 +805,167 @@ function addQuickSite() {
     domains: [],
     mode: 'reverse_proxy',
     upstream: 'localhost:8080',
+    lbPolicy: 'round_robin',
   });
   quickSiteDrafts.value.push(site);
   activeQuickSiteId.value = site.id;
+}
+
+/** 打开站点创建向导（域名 → 上游 → TLS → 可选 WAF → Preview → Apply） */
+function openSiteWizard() {
+  wizardLocalPreview.value = '';
+  pendingWizardWaf.value = null;
+  siteWizardOpen.value = true;
+}
+
+/** 打开 Docker 发现（label 扫描 → 会话候选；不落库、不 /load） */
+function openDockerDiscovery() {
+  dockerDiscoveryOpen.value = true;
+}
+
+/**
+ * 扫描 Docker labels（只读）。结果仅存会话 ref，不写平行 discovery DB。
+ */
+async function handleDockerDiscoveryScan() {
+  dockerDiscoveryScanning.value = true;
+  try {
+    const data = await discoverDockerServicesApi();
+    const list = (data?.list ?? []) as DockerDiscoveryCandidate[];
+    dockerDiscoveryResult.value = {
+      list: list as SessionDockerCandidate[],
+      scannedAt: data?.scannedAt || '',
+      message: data?.message || '',
+    };
+    if (!list.length) {
+      message.info(data?.message || '未发现带 logflux.enable 标签的容器');
+    } else {
+      message.success(data?.message || `发现 ${list.length} 个候选（会话草稿）`);
+    }
+  } catch (error) {
+    message.error(apiErrorMessage(error, 'Docker 发现扫描失败'));
+  } finally {
+    dockerDiscoveryScanning.value = false;
+  }
+}
+
+/**
+ * 将多份发现草稿合并进工作台（纯本地，不 /load）。
+ */
+function mergeDiscoveryDraftsIntoWorkbench(drafts: QuickSiteDraft[]) {
+  for (const draft of drafts) {
+    mergeWizardDraftIntoWorkbench(draft);
+  }
+  structuredAvailable.value = true;
+  lastEditMode.value = 'blocks';
+  mode.value = 'blocks';
+  wizardLocalPreview.value = formatCaddyfile(generatedConfig.value);
+}
+
+/** 发现：仅写入会话草稿 */
+function handleDiscoveryCommitDrafts(drafts: QuickSiteDraft[]) {
+  if (!drafts.length) return;
+  mergeDiscoveryDraftsIntoWorkbench(drafts);
+  message.success(`已写入 ${drafts.length} 个会话草稿（未调用 /load，未写 discovery DB）`);
+  dockerDiscoveryOpen.value = false;
+  debouncedFetchSiteMetrics();
+}
+
+/** 发现：dry-run Preview → 既有 previewBeforeSave（仅 /adapt） */
+async function handleDiscoveryPreview(drafts: QuickSiteDraft[]) {
+  if (!drafts.length) return;
+  mergeDiscoveryDraftsIntoWorkbench(drafts);
+  dockerDiscoveryOpen.value = false;
+  await previewBeforeSave('blocks');
+}
+
+/** 发现：用户确认后走既有 Apply_Path（Preview 确认弹窗，不直接 /load） */
+async function handleDiscoveryApply(drafts: QuickSiteDraft[]) {
+  if (!drafts.length) return;
+  mergeDiscoveryDraftsIntoWorkbench(drafts);
+  dockerDiscoveryOpen.value = false;
+  await previewBeforeSave('blocks');
+}
+
+/**
+ * 将向导草稿合并进 quickSiteDrafts（纯本地，不调用任何 API /load）。
+ */
+function mergeWizardDraftIntoWorkbench(
+  draft: QuickSiteDraft,
+  meta?: { waf?: SiteWizardWafDraft },
+) {
+  const next: QuickSiteDraft = {
+    ...draft,
+    id: draft.id || genId(),
+    domains: [...(draft.domains ?? [])],
+    healthCheck: draft.healthCheck
+      ? {
+          path: draft.healthCheck.path,
+          interval: draft.healthCheck.interval,
+          timeout: draft.healthCheck.timeout,
+        }
+      : undefined,
+  };
+  const idx = quickSiteDrafts.value.findIndex((s) => s.id === next.id);
+  if (idx >= 0) {
+    quickSiteDrafts.value[idx] = next;
+  } else {
+    quickSiteDrafts.value.push(next);
+  }
+  activeQuickSiteId.value = next.id;
+  structuredAvailable.value = true;
+  lastEditMode.value = 'blocks';
+  if (meta?.waf) {
+    pendingWizardWaf.value = meta.waf.enabled ? { ...meta.waf } : null;
+  }
+  wizardLocalPreview.value = formatCaddyfile(generatedConfig.value);
+  return next;
+}
+
+/**
+ * 向导仅写入草稿：合并进工作台后关闭向导，不调用 preview/push（无 /load）。
+ */
+function handleWizardCommitDraft(
+  draft: QuickSiteDraft,
+  meta: { waf: SiteWizardWafDraft },
+) {
+  mergeWizardDraftIntoWorkbench(draft, meta);
+  mode.value = 'blocks';
+  message.success(
+    pendingWizardWaf.value
+      ? '站点草稿已写入工作台（含 WAF 意图，未热加载）'
+      : '站点草稿已写入工作台（未调用 /load）',
+  );
+  siteWizardOpen.value = false;
+  debouncedFetchSiteMetrics();
+}
+
+/**
+ * 向导 Preview：合并草稿后走既有 previewBeforeSave（仅 /adapt，不 /load）。
+ */
+async function handleWizardPreview(draft: QuickSiteDraft) {
+  mergeWizardDraftIntoWorkbench(draft);
+  mode.value = 'blocks';
+  siteWizardOpen.value = false;
+  await previewBeforeSave('blocks');
+}
+
+/**
+ * 向导 Apply：合并草稿 → Preview 确认弹窗 → 用户确认后 confirmSave 才 /load。
+ * 绝不在向导内直接 push。
+ */
+async function handleWizardApply(
+  draft: QuickSiteDraft,
+  meta: { waf: SiteWizardWafDraft },
+) {
+  mergeWizardDraftIntoWorkbench(draft, meta);
+  mode.value = 'blocks';
+  siteWizardOpen.value = false;
+  await previewBeforeSave('blocks');
+  if (meta.waf?.enabled) {
+    message.info(
+      '站点已进入保存预览；WAF 意图请在「防火墙」页确认后单独应用，不会静默热加载。',
+    );
+  }
 }
 
 function duplicateQuickSite(site: QuickSiteDraft) {
@@ -577,10 +1000,57 @@ function removeUpstream(index: number) {
   formModel.value.upstreams.splice(index, 1);
 }
 
-function updatePreservedBlock(index: number, raw: string) {
-  const block = preservedBlocks.value[index];
-  if (!block) return;
-  preservedBlocks.value[index] = { ...block, raw };
+/** 上游池健康检查开关：启用时写入默认 path，关闭时清除 healthCheck */
+function isUpstreamHealthEnabled(index: number) {
+  const path = formModel.value.upstreams[index]?.healthCheck?.path?.trim();
+  return Boolean(path);
+}
+
+function setUpstreamHealthEnabled(index: number, enabled: boolean) {
+  const upstream = formModel.value.upstreams[index];
+  if (!upstream) return;
+  if (enabled) {
+    upstream.healthCheck = {
+      path: upstream.healthCheck?.path?.trim() || defaultHealthCheck().path,
+      interval: upstream.healthCheck?.interval || defaultHealthCheck().interval,
+      timeout: upstream.healthCheck?.timeout || defaultHealthCheck().timeout,
+    };
+  } else {
+    upstream.healthCheck = undefined;
+  }
+}
+
+function ensureUpstreamHealth(index: number): HealthCheck {
+  const upstream = formModel.value.upstreams[index];
+  if (!upstream) return defaultHealthCheck();
+  if (!upstream.healthCheck) {
+    upstream.healthCheck = defaultHealthCheck();
+  }
+  return upstream.healthCheck;
+}
+
+/** Simple reverse_proxy 站点级（handle 级）健康检查开关 */
+function isSiteHealthEnabled(site: QuickSiteDraft) {
+  return Boolean(site.healthCheck?.path?.trim());
+}
+
+function setSiteHealthEnabled(site: QuickSiteDraft, enabled: boolean) {
+  if (enabled) {
+    site.healthCheck = {
+      path: site.healthCheck?.path?.trim() || defaultHealthCheck().path,
+      interval: site.healthCheck?.interval || defaultHealthCheck().interval,
+      timeout: site.healthCheck?.timeout || defaultHealthCheck().timeout,
+    };
+  } else {
+    site.healthCheck = undefined;
+  }
+}
+
+function ensureSiteHealth(site: QuickSiteDraft): HealthCheck {
+  if (!site.healthCheck) {
+    site.healthCheck = defaultHealthCheck();
+  }
+  return site.healthCheck;
 }
 
 function applyPreset() {
@@ -590,6 +1060,7 @@ function applyPreset() {
     mode: 'reverse_proxy',
     name: '默认站点',
     upstream: 'localhost:8080',
+    lbPolicy: 'round_robin',
   });
   formModel.value = {
     schemaVersion: 1,
@@ -877,10 +1348,21 @@ watch(mode, (value) => {
   }
 });
 
+/** 站点域名集合变化时 debounce 刷新近窗指标（避免键入 thrash） */
+const siteHostsKey = computed(() => collectSiteHosts().sort().join('|'));
+watch(siteHostsKey, () => {
+  debouncedFetchSiteMetrics();
+});
+
 onMounted(async () => {
   await fetchServers();
   if (selectedServerId.value) {
     await fetchConfig();
+  }
+  // fetchConfig 内已 applyRouteModeDeepLink；此处兜底（无配置时仍切换 mode）
+  applyRouteModeDeepLink();
+  if (mode.value === 'waf') {
+    await fetchWafConfig();
   }
 });
 </script>
@@ -899,7 +1381,26 @@ onMounted(async () => {
               class="server-select"
               @change="handleServerChange"
             />
-            <Button @click="fetchServers">刷新</Button>
+            <Tooltip v-if="selectedServerStatus" :title="statusTooltip(selectedServerStatus)">
+              <Tag :color="statusTagColor(selectedServerStatus)">
+                {{ statusLabel(selectedServerStatus) }}
+                <template v-if="selectedServerStatus.reachable">
+                  · {{ formatLatency(selectedServerStatus.latencyMs) }}
+                </template>
+              </Tag>
+            </Tooltip>
+            <Tag v-else-if="serverStatusLoaded" color="default">未探测</Tag>
+            <Button @click="fetchServers" :loading="loadingServers">刷新列表</Button>
+            <Button
+              :loading="loadingServerStatus"
+              :disabled="servers.length === 0"
+              @click="handleRefreshServerStatus"
+            >
+              探测当前节点
+            </Button>
+            <Button type="link" @click="router.push({ name: 'CaddyCatalog' })">
+              服务目录总览
+            </Button>
             <Button type="primary" ghost @click="openAddServerModal">添加</Button>
             <Button :disabled="!selectedServerId" @click="openEditServerModal">编辑</Button>
             <Button danger :disabled="!selectedServerId" @click="deleteCurrentServer">删除</Button>
@@ -907,6 +1408,8 @@ onMounted(async () => {
           <div class="toolbar-group actions">
             <Button :disabled="!selectedServerId" @click="openHistory">历史</Button>
             <Button @click="applyPreset">默认模板</Button>
+            <Button type="primary" ghost @click="openSiteWizard">站点向导</Button>
+            <Button type="primary" ghost @click="openDockerDiscovery">Docker 发现</Button>
             <Button :disabled="!configContent.trim()" @click="parseRawToBlocks(true)">从原始配置解析</Button>
             <Button
               v-if="mode === 'raw'"
@@ -931,7 +1434,7 @@ onMounted(async () => {
 
         <Spin :spinning="loadingConfig">
           <div v-if="servers.length === 0" class="empty-state">
-            <Empty description="未找到 Caddy 服务器">
+            <Empty description="未找到 Caddy 服务器，请先添加节点">
               <Button type="primary" @click="openAddServerModal">添加服务器</Button>
             </Empty>
           </div>
@@ -975,7 +1478,12 @@ onMounted(async () => {
                   </CollapsePanel>
 
                   <CollapsePanel v-if="globalPreservedBlocks.length" key="global-preserved" header="Snippet / 保留块">
-                    <Alert class="mb-3" type="warning" show-icon message="snippet、全局片段和无法归类的配置会原样保留，可在这里直接编辑。" />
+                    <Alert
+                      class="mb-3"
+                      type="warning"
+                      show-icon
+                      message="snippet、全局片段和无法归类的配置只读保留原文，简单模式合并不会改写这些块。"
+                    />
                     <Collapse
                       :default-active-key="globalPreservedBlocks.map((item) => item.block.id)"
                       class="inner-collapse"
@@ -990,12 +1498,12 @@ onMounted(async () => {
                             <span>{{ item.block.title }}</span>
                           </div>
                         </template>
-                        <div class="text-muted mb-2">{{ item.block.reason }}</div>
+                        <div class="text-muted mb-2">原因：{{ item.block.reason || '无法安全结构化编辑' }}</div>
                         <Input.TextArea
                           :value="item.block.raw"
                           :auto-size="{ minRows: 5, maxRows: 14 }"
                           class="code-textarea"
-                          @update:value="(value: string) => updatePreservedBlock(item.index, value)"
+                          readonly
                         />
                       </CollapsePanel>
                     </Collapse>
@@ -1008,13 +1516,57 @@ onMounted(async () => {
                         <Button size="small" @click.stop="addUpstream">新增</Button>
                       </div>
                     </template>
-                    <div class="panel-subtitle mb-3">复用后端目标和负载策略。</div>
+                    <div class="panel-subtitle mb-3">
+                      复用后端目标、负载策略与健康检查。站点引用池名时，可在此统一配置探测；站点级健康检查优先于池级。
+                    </div>
                     <Empty v-if="formModel.upstreams.length === 0" description="暂无上游池" />
-                    <div v-for="(upstream, index) in formModel.upstreams" :key="index" class="upstream-row">
-                      <Input v-model:value="upstream.name" placeholder="名称" />
-                      <Select v-model:value="upstream.lbPolicy" :options="lbPolicyOptions" />
-                      <Select v-model:value="upstream.targets" mode="tags" placeholder="目标地址" />
-                      <Button danger size="small" @click="removeUpstream(index)">删除</Button>
+                    <div
+                      v-for="(upstream, index) in formModel.upstreams"
+                      :key="index"
+                      class="upstream-card"
+                    >
+                      <div class="upstream-row">
+                        <Input v-model:value="upstream.name" placeholder="池名称" />
+                        <Select
+                          v-model:value="upstream.lbPolicy"
+                          :options="lbPolicyOptions"
+                          placeholder="负载策略"
+                        />
+                        <Select
+                          v-model:value="upstream.targets"
+                          mode="tags"
+                          placeholder="目标地址"
+                        />
+                        <Button danger size="small" @click="removeUpstream(index)">删除</Button>
+                      </div>
+                      <div class="health-row">
+                        <div class="health-toggle">
+                          <span class="health-label">健康检查</span>
+                          <Switch
+                            :checked="isUpstreamHealthEnabled(index)"
+                            checked-children="开"
+                            un-checked-children="关"
+                            @change="(checked: any) => setUpstreamHealthEnabled(index, Boolean(checked))"
+                          />
+                        </div>
+                        <template v-if="isUpstreamHealthEnabled(index)">
+                          <Input
+                            :value="ensureUpstreamHealth(index).path"
+                            placeholder="探测路径，如 /health"
+                            @update:value="(value: string) => { ensureUpstreamHealth(index).path = value; }"
+                          />
+                          <Input
+                            :value="ensureUpstreamHealth(index).interval"
+                            placeholder="间隔，如 10s"
+                            @update:value="(value: string) => { ensureUpstreamHealth(index).interval = value; }"
+                          />
+                          <Input
+                            :value="ensureUpstreamHealth(index).timeout"
+                            placeholder="超时，如 5s"
+                            @update:value="(value: string) => { ensureUpstreamHealth(index).timeout = value; }"
+                          />
+                        </template>
+                      </div>
                     </div>
                   </CollapsePanel>
                 </Collapse>
@@ -1029,13 +1581,38 @@ onMounted(async () => {
                     <template #header>
                       <div class="panel-header-line">
                         <span>站点</span>
-                        <Button size="small" type="primary" @click.stop="addQuickSite">新建站点</Button>
+                        <Space @click.stop>
+                          <Button
+                            size="small"
+                            type="link"
+                            :loading="loadingSiteMetrics"
+                            @click="handleRefreshSiteMetrics"
+                          >
+                            刷新指标
+                          </Button>
+                          <Button size="small" @click="openDockerDiscovery">Docker 发现</Button>
+                          <Button size="small" @click="openSiteWizard">向导</Button>
+                          <Button size="small" type="primary" @click="addQuickSite">新建站点</Button>
+                        </Space>
                       </div>
                     </template>
-                    <div class="panel-subtitle mb-3">右侧只维护站点能力；global 和 snippet 在左侧。</div>
+                    <div class="panel-subtitle mb-3">
+                      右侧只维护站点能力；global 和 snippet 在左侧。卡片展示近 {{ SITE_METRICS_WINDOW_MINUTES }} 分钟 5xx/4xx。
+                    </div>
+                    <Alert
+                      v-if="siteMetricsError"
+                      class="mb-3"
+                      type="warning"
+                      show-icon
+                      :message="`${siteMetricsError}（已降级显示，不影响配置编辑）`"
+                    />
                     <div v-if="quickSiteDrafts.length === 0" class="sidebar-empty">
                       <Empty description="暂无简单站点">
-                        <Button size="small" type="primary" @click="addQuickSite">新建站点</Button>
+                        <Space>
+                          <Button size="small" @click="openDockerDiscovery">Docker 发现</Button>
+                          <Button size="small" @click="openSiteWizard">站点向导</Button>
+                          <Button size="small" type="primary" @click="addQuickSite">新建站点</Button>
+                        </Space>
                       </Empty>
                     </div>
                     <div v-else class="site-list">
@@ -1049,6 +1626,47 @@ onMounted(async () => {
                       >
                         <span class="site-name">{{ site.name || '未命名站点' }}</span>
                         <span class="site-domain">{{ site.domains[0] || '未配置域名' }}</span>
+                        <div class="site-metrics">
+                          <span class="site-metric">
+                            <span class="meta-label">近窗 5xx</span>
+                            <Tag
+                              class="site-metric-tag"
+                              :color="metricCountColor(siteMetricsForDomains(site.domains)?.count5xx, '5xx')"
+                            >
+                              {{
+                                loadingSiteMetrics && !siteMetricsLoaded
+                                  ? '…'
+                                  : siteMetricsError
+                                    ? '—'
+                                    : formatMetricCount(siteMetricsForDomains(site.domains)?.count5xx)
+                              }}
+                            </Tag>
+                          </span>
+                          <span class="site-metric">
+                            <span class="meta-label">近窗 4xx</span>
+                            <Tag
+                              class="site-metric-tag"
+                              :color="metricCountColor(siteMetricsForDomains(site.domains)?.count4xx, '4xx')"
+                            >
+                              {{
+                                loadingSiteMetrics && !siteMetricsLoaded
+                                  ? '…'
+                                  : siteMetricsError
+                                    ? '—'
+                                    : formatMetricCount(siteMetricsForDomains(site.domains)?.count4xx)
+                              }}
+                            </Tag>
+                          </span>
+                          <Button
+                            v-if="sitePrimaryHost(site.domains)"
+                            size="small"
+                            type="link"
+                            class="site-log-link"
+                            @click="(e: Event) => openAccessLogs(site.domains, e)"
+                          >
+                            查看日志
+                          </Button>
+                        </div>
                         <Tag class="site-state" :color="site.enabled ? 'green' : 'default'">
                           {{ site.enabled ? '启用' : '停用' }}
                         </Tag>
@@ -1060,7 +1678,7 @@ onMounted(async () => {
                       class="mt-3"
                       show-icon
                       type="warning"
-                      :message="`检测到 ${complexSiteSummaries.length} 个复杂站点，已在右侧保留站点中原样保留。`"
+                      :message="`检测到 ${complexSiteSummaries.length} 个复杂站点，已在下方「保留站点 / 复杂站点」中只读展示，不可通过简单模式改写。`"
                     />
                   </CollapsePanel>
 
@@ -1076,7 +1694,7 @@ onMounted(async () => {
                         </Space>
                       </div>
                     </template>
-                    <div class="panel-subtitle mb-3">域名、站点类型、TLS 和目标地址。</div>
+                    <div class="panel-subtitle mb-3">域名、站点类型、TLS、负载策略与可选健康检查。</div>
 
                     <Empty v-if="!activeQuickSite" description="请选择或新建一个站点" />
                     <Form v-else layout="vertical">
@@ -1110,11 +1728,72 @@ onMounted(async () => {
                             <Select v-model:value="activeQuickSite.tlsMode" :options="tlsModeOptions" />
                           </Form.Item>
                         </Col>
-                        <Col v-if="activeQuickSite.mode === 'reverse_proxy'" :xs="24">
-                          <Form.Item label="代理目标">
-                            <Input v-model:value="activeQuickSite.upstream" placeholder="127.0.0.1:8080 或 https://backend.internal" />
-                          </Form.Item>
-                        </Col>
+                        <template v-if="activeQuickSite.mode === 'reverse_proxy'">
+                          <Col :xs="24" :md="12">
+                            <Form.Item label="上游地址或池名">
+                              <Input
+                                v-model:value="activeQuickSite.upstream"
+                                placeholder="127.0.0.1:8080 或上游池名称"
+                              />
+                              <div v-if="upstreamPoolOptions.length" class="upstream-pool-hints">
+                                <span class="text-muted">点击填入上游池：</span>
+                                <Tag
+                                  v-for="opt in upstreamPoolOptions"
+                                  :key="opt.value"
+                                  class="pool-hint-tag"
+                                  color="blue"
+                                  @click="activeQuickSite.upstream = String(opt.value)"
+                                >
+                                  {{ opt.value }}
+                                </Tag>
+                              </div>
+                            </Form.Item>
+                          </Col>
+                          <Col :xs="24" :md="12">
+                            <Form.Item label="负载策略">
+                              <Select
+                                :value="activeQuickSite.lbPolicy || 'round_robin'"
+                                :options="lbPolicyOptions"
+                                placeholder="负载策略"
+                                @change="(value: any) => { activeQuickSite.lbPolicy = value; }"
+                              />
+                            </Form.Item>
+                          </Col>
+                          <Col :xs="24">
+                            <Form.Item
+                              label="站点级健康检查（可选，启用后覆盖上游池配置）"
+                            >
+                              <div class="health-row site-health-row">
+                                <div class="health-toggle">
+                                  <span class="health-label">启用</span>
+                                  <Switch
+                                    :checked="isSiteHealthEnabled(activeQuickSite)"
+                                    checked-children="开"
+                                    un-checked-children="关"
+                                    @change="(checked: any) => setSiteHealthEnabled(activeQuickSite, Boolean(checked))"
+                                  />
+                                </div>
+                                <template v-if="isSiteHealthEnabled(activeQuickSite)">
+                                  <Input
+                                    :value="ensureSiteHealth(activeQuickSite).path"
+                                    placeholder="探测路径，如 /health"
+                                    @update:value="(value: string) => { ensureSiteHealth(activeQuickSite).path = value; }"
+                                  />
+                                  <Input
+                                    :value="ensureSiteHealth(activeQuickSite).interval"
+                                    placeholder="间隔，如 10s"
+                                    @update:value="(value: string) => { ensureSiteHealth(activeQuickSite).interval = value; }"
+                                  />
+                                  <Input
+                                    :value="ensureSiteHealth(activeQuickSite).timeout"
+                                    placeholder="超时，如 5s"
+                                    @update:value="(value: string) => { ensureSiteHealth(activeQuickSite).timeout = value; }"
+                                  />
+                                </template>
+                              </div>
+                            </Form.Item>
+                          </Col>
+                        </template>
                         <template v-if="activeQuickSite.mode === 'file_server'">
                           <Col :xs="24" :md="18">
                             <Form.Item label="站点根目录">
@@ -1143,9 +1822,83 @@ onMounted(async () => {
                     </Form>
                   </CollapsePanel>
 
-                  <CollapsePanel v-if="preservedSiteBlocks.length" key="site-preserved" header="保留站点">
-                    <Alert class="mb-3" type="warning" show-icon message="复杂站点无法结构化编辑，会跟随分块配置一起保存。" />
+                  <CollapsePanel
+                    v-if="preservedSiteBlocks.length || complexSiteSummaries.length"
+                    key="site-preserved"
+                    header="保留站点 / 复杂站点"
+                  >
+                    <Alert
+                      class="mb-3"
+                      type="warning"
+                      show-icon
+                      message="复杂站点与保留块只读展示原文与中文原因，简单模式合并不得改写保留块。"
+                    />
+
+                    <div v-if="complexSiteSummaries.length" class="complex-summary-list mb-3">
+                      <div
+                        v-for="item in complexSiteSummaries"
+                        :key="`complex-${item.id}`"
+                        class="complex-summary-item"
+                      >
+                        <div class="complex-summary-title">
+                          <span>{{ item.name || '未命名复杂站点' }}</span>
+                          <Tag color="orange">复杂站点</Tag>
+                        </div>
+                        <div class="text-muted mb-1">
+                          {{ item.domains.join(', ') || '未配置域名' }}
+                        </div>
+                        <div class="site-metrics complex-site-metrics mb-2">
+                          <span class="site-metric">
+                            <span class="meta-label">近窗 5xx</span>
+                            <Tag
+                              class="site-metric-tag"
+                              :color="metricCountColor(siteMetricsForDomains(item.domains)?.count5xx, '5xx')"
+                            >
+                              {{
+                                loadingSiteMetrics && !siteMetricsLoaded
+                                  ? '…'
+                                  : siteMetricsError
+                                    ? '—'
+                                    : formatMetricCount(siteMetricsForDomains(item.domains)?.count5xx)
+                              }}
+                            </Tag>
+                          </span>
+                          <span class="site-metric">
+                            <span class="meta-label">近窗 4xx</span>
+                            <Tag
+                              class="site-metric-tag"
+                              :color="metricCountColor(siteMetricsForDomains(item.domains)?.count4xx, '4xx')"
+                            >
+                              {{
+                                loadingSiteMetrics && !siteMetricsLoaded
+                                  ? '…'
+                                  : siteMetricsError
+                                    ? '—'
+                                    : formatMetricCount(siteMetricsForDomains(item.domains)?.count4xx)
+                              }}
+                            </Tag>
+                          </span>
+                          <Button
+                            v-if="sitePrimaryHost(item.domains)"
+                            size="small"
+                            type="link"
+                            class="site-log-link"
+                            @click="(e: Event) => openAccessLogs(item.domains, e)"
+                          >
+                            查看日志
+                          </Button>
+                        </div>
+                        <div class="text-muted mb-1">无法在简单模式编辑，原因：</div>
+                        <ul class="complex-reason-list">
+                          <li v-for="(reason, rIndex) in item.reasons" :key="rIndex">
+                            {{ reason }}
+                          </li>
+                        </ul>
+                      </div>
+                    </div>
+
                     <Collapse
+                      v-if="preservedSiteBlocks.length"
                       :default-active-key="preservedSiteBlocks.map((item) => item.block.id)"
                       class="inner-collapse"
                     >
@@ -1159,12 +1912,12 @@ onMounted(async () => {
                             <span>{{ item.block.title }}</span>
                           </div>
                         </template>
-                        <div class="text-muted mb-2">{{ item.block.reason }}</div>
+                        <div class="text-muted mb-2">原因：{{ item.block.reason || '复杂配置，只读保留原文' }}</div>
                         <Input.TextArea
                           :value="item.block.raw"
                           :auto-size="{ minRows: 5, maxRows: 14 }"
                           class="code-textarea"
-                          @update:value="(value: string) => updatePreservedBlock(item.index, value)"
+                          readonly
                         />
                       </CollapsePanel>
                     </Collapse>
@@ -1255,6 +2008,28 @@ onMounted(async () => {
         </Spin>
       </Card>
     </div>
+
+    <SiteWizardModal
+      v-model:open="siteWizardOpen"
+      :base-form-model="mergedQuickFormModel"
+      :previewing="previewing"
+      :applying="previewing"
+      :has-server="Boolean(selectedServerId)"
+      :upstream-pool-options="upstreamPoolOptions"
+      @commit-draft="handleWizardCommitDraft"
+      @preview="handleWizardPreview"
+      @apply="handleWizardApply"
+    />
+
+    <DockerDiscoveryModal
+      v-model:open="dockerDiscoveryOpen"
+      :scanning="dockerDiscoveryScanning"
+      :scan-result="dockerDiscoveryResult"
+      @scan="handleDockerDiscoveryScan"
+      @commit-drafts="handleDiscoveryCommitDrafts"
+      @preview="handleDiscoveryPreview"
+      @apply="handleDiscoveryApply"
+    />
 
     <Modal
       v-model:open="serverModalVisible"
@@ -1406,6 +2181,10 @@ onMounted(async () => {
   min-width: 260px;
 }
 
+.meta-label {
+  color: #98a2b3;
+}
+
 .mode-strip {
   display: flex;
   align-items: center;
@@ -1523,7 +2302,7 @@ onMounted(async () => {
 .site-item {
   position: relative;
   width: 100%;
-  min-height: 72px;
+  min-height: 96px;
   padding: 12px 72px 12px 12px;
   text-align: left;
   cursor: pointer;
@@ -1566,11 +2345,118 @@ onMounted(async () => {
   font-size: 12px;
 }
 
+.site-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin-top: 8px;
+}
+
+.site-metric {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.site-metric-tag {
+  margin-inline-end: 0;
+  line-height: 18px;
+}
+
+.site-log-link {
+  height: auto;
+  padding: 0 2px;
+  font-size: 12px;
+}
+
+.complex-site-metrics {
+  margin-top: 4px;
+}
+
 .upstream-row {
   display: grid;
   grid-template-columns: minmax(110px, 0.8fr) minmax(120px, 0.7fr) minmax(160px, 1fr) auto;
   gap: 8px;
   margin-bottom: 8px;
+}
+
+.upstream-card {
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid #eef0f4;
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
+.health-row {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 1fr) minmax(90px, 0.7fr) minmax(90px, 0.7fr);
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.site-health-row {
+  width: 100%;
+}
+
+.health-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.health-label {
+  color: #475467;
+  font-size: 13px;
+}
+
+.upstream-pool-hints {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.pool-hint-tag {
+  cursor: pointer;
+}
+
+.complex-summary-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.complex-summary-item {
+  padding: 12px;
+  border: 1px solid #f3d19e;
+  border-radius: 8px;
+  background: #fffbe6;
+}
+
+.complex-summary-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.complex-reason-list {
+  margin: 0;
+  padding-left: 18px;
+  color: #667085;
+  font-size: 12px;
+}
+
+.complex-reason-list li + li {
+  margin-top: 2px;
 }
 
 .empty-state {
@@ -1655,6 +2541,10 @@ onMounted(async () => {
   }
 
   .upstream-row {
+    grid-template-columns: 1fr;
+  }
+
+  .health-row {
     grid-template-columns: 1fr;
   }
 }

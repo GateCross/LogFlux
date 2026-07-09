@@ -275,3 +275,36 @@ docker compose -f docker/docker-compose.yml down
 1. 在 UI 先执行 `校验`，定位是 `adapt` 阶段还是 `load` 阶段失败。
 2. 查看 `任务日志` 和后端返回的中文错误信息。
 3. 如发布中断，确认是否已自动回退到 `last_good`，必要时手动回滚发布记录。
+
+
+## 10. Docker 发现标签（Caddy 配置工作台 · 可选）
+
+LogFlux 支持按容器 labels 扫描会话候选草稿（**不**建平行 discovery DB，**不**自动 `/load`）。
+
+在目标业务容器上打标示例：
+
+```yaml
+services:
+  my-app:
+    image: my-app:latest
+    labels:
+      logflux.enable: "true"
+      logflux.host: "app.example.com"
+      logflux.port: "8080"
+      # 可选
+      logflux.name: "My App"
+      logflux.tls: "auto"           # auto | off | internal
+      logflux.lb_policy: "round_robin"
+      logflux.health.path: "/health"
+      logflux.health.interval: "10s"
+      logflux.health.timeout: "5s"
+```
+
+若 LogFlux 以容器运行，需挂载 Docker socket 才能扫描本机容器，例如：
+
+```yaml
+volumes:
+  - /var/run/docker.sock:/var/run/docker.sock:ro
+```
+
+或在宿主机设置 `DOCKER_HOST=tcp://...`。扫描结果仅存管理端会话；写入草稿后仍走 Preview → 确认 → Apply_Path。

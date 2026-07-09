@@ -1,7 +1,8 @@
 <script lang="ts" setup>
 import type { CaddyServerApi } from '#/api/caddy/server';
 
-import { computed, h, onMounted, reactive, ref } from 'vue';
+import { computed, h, onMounted, reactive, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 
 import {
   Button,
@@ -39,6 +40,9 @@ type ColumnWidthKey =
   | 'status'
   | 'uri';
 
+const route = useRoute();
+const router = useRouter();
+
 const loading = ref(false);
 const clearing = ref(false);
 const logs = ref<CaddyLog[]>([]);
@@ -48,6 +52,8 @@ const sortState = ref<{ order: SortOrder }>({ order: 'descend' });
 
 const filters = reactive({
   keyword: '',
+  /** 精确 host 过滤（深链 / 独立筛选） */
+  host: '',
   status: -1,
   timeRange: undefined as [Dayjs, Dayjs] | undefined,
 });
@@ -186,6 +192,13 @@ function formatRangeTime(value: Dayjs | undefined) {
   return dayjs(value).format('YYYY-MM-DD HH:mm:ss');
 }
 
+/** 从路由 query 读取 host 过滤（工作台深链） */
+function applyHostFromRoute() {
+  const raw = route.query.host;
+  const host = Array.isArray(raw) ? String(raw[0] ?? '') : String(raw ?? '');
+  filters.host = host.trim();
+}
+
 async function fetchLogs() {
   loading.value = true;
   try {
@@ -193,7 +206,8 @@ async function fetchLogs() {
     const data = await getCaddyLogsApi({
       page: pagination.current,
       pageSize: pagination.pageSize,
-      keyword: filters.keyword,
+      keyword: filters.keyword || undefined,
+      host: filters.host || undefined,
       status: filters.status,
       startTime: formatRangeTime(start),
       endTime: formatRangeTime(end),
@@ -215,17 +229,38 @@ async function fetchLogs() {
   }
 }
 
+function syncHostQueryToRoute() {
+  const nextHost = filters.host.trim();
+  const current =
+    typeof route.query.host === 'string'
+      ? route.query.host
+      : Array.isArray(route.query.host)
+        ? String(route.query.host[0] ?? '')
+        : '';
+  if (nextHost === current) return;
+  const query = { ...route.query };
+  if (nextHost) {
+    query.host = nextHost;
+  } else {
+    delete query.host;
+  }
+  router.replace({ query });
+}
+
 function handleSearch() {
   pagination.current = 1;
+  syncHostQueryToRoute();
   fetchLogs();
 }
 
 function handleReset() {
   filters.keyword = '';
+  filters.host = '';
   filters.status = -1;
   filters.timeRange = undefined;
   pagination.current = 1;
   sortState.value = { order: 'descend' };
+  syncHostQueryToRoute();
   fetchLogs();
 }
 
@@ -265,7 +300,18 @@ function openDetail(record: CaddyLog) {
   detailVisible.value = true;
 }
 
+// 支持从工作台深链 /caddy/log?host=example.com 进入
+watch(
+  () => route.query.host,
+  () => {
+    applyHostFromRoute();
+    pagination.current = 1;
+    fetchLogs();
+  },
+);
+
 onMounted(() => {
+  applyHostFromRoute();
   fetchLogs();
 });
 </script>
@@ -282,6 +328,15 @@ onMounted(() => {
               style="width: 240px"
               allow-clear
               @search="handleSearch"
+            />
+          </FormItem>
+          <FormItem label="域名">
+            <Input
+              v-model:value="filters.host"
+              placeholder="精确域名 host"
+              style="width: 200px"
+              allow-clear
+              @press-enter="handleSearch"
             />
           </FormItem>
           <FormItem label="状态">
@@ -313,6 +368,11 @@ onMounted(() => {
             </Space>
           </FormItem>
         </Form>
+
+        <div v-if="filters.host" class="mb-3 text-sm text-gray-500">
+          当前按域名过滤：
+          <Tag color="blue">{{ filters.host }}</Tag>
+        </div>
 
         <div class="access-log-table-wrap">
           <Table

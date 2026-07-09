@@ -1,6 +1,7 @@
 export const routeTitleMap: Record<string, string> = {
   caddy: 'Caddy 配置',
   caddy_access: '访问控制',
+  caddy_catalog: '服务目录',
   caddy_config: '配置管理',
   caddy_log: '访问日志',
   caddy_source: '来源管理',

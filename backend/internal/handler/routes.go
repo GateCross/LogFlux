@@ -43,6 +43,76 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 			[]rest.Middleware{serverCtx.Permission},
 			[]rest.Route{
 				{
+					Method:  http.MethodGet,
+					Path:    "/caddy/discovery/docker",
+					Handler: caddy.DiscoverDockerServicesHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/caddy/server",
+					Handler: caddy.GetCaddyServersHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/caddy/server",
+					Handler: caddy.AddCaddyServerHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPut,
+					Path:    "/caddy/server/:id",
+					Handler: caddy.UpdateCaddyServerHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodDelete,
+					Path:    "/caddy/server/:id",
+					Handler: caddy.DeleteCaddyServerHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/caddy/server/:serverId/config",
+					Handler: caddy.GetCaddyConfigHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/caddy/server/:serverId/config",
+					Handler: caddy.UpdateCaddyConfigHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/caddy/server/:serverId/config/history",
+					Handler: caddy.GetCaddyConfigHistoryHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/caddy/server/:serverId/config/history/:historyId",
+					Handler: caddy.GetCaddyConfigHistoryDetailHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/caddy/server/:serverId/config/preview",
+					Handler: caddy.PreviewCaddyConfigHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/caddy/server/:serverId/config/rollback",
+					Handler: caddy.RollbackCaddyConfigHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/caddy/server/status",
+					Handler: caddy.GetCaddyServerStatusHandler(serverCtx),
+				},
+			}...,
+		),
+		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
+		rest.WithPrefix("/api"),
+	)
+
+	server.AddRoutes(
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.Permission},
+			[]rest.Route{
+				{
 					Method:  http.MethodPost,
 					Path:    "/caddy/waf/engine/check",
 					Handler: caddy.CheckWafEngineHandler(serverCtx),
@@ -149,66 +219,6 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 			[]rest.Route{
 				{
 					Method:  http.MethodGet,
-					Path:    "/caddy/server",
-					Handler: caddy.GetCaddyServersHandler(serverCtx),
-				},
-				{
-					Method:  http.MethodPost,
-					Path:    "/caddy/server",
-					Handler: caddy.AddCaddyServerHandler(serverCtx),
-				},
-				{
-					Method:  http.MethodPut,
-					Path:    "/caddy/server/:id",
-					Handler: caddy.UpdateCaddyServerHandler(serverCtx),
-				},
-				{
-					Method:  http.MethodDelete,
-					Path:    "/caddy/server/:id",
-					Handler: caddy.DeleteCaddyServerHandler(serverCtx),
-				},
-				{
-					Method:  http.MethodGet,
-					Path:    "/caddy/server/:serverId/config",
-					Handler: caddy.GetCaddyConfigHandler(serverCtx),
-				},
-				{
-					Method:  http.MethodPost,
-					Path:    "/caddy/server/:serverId/config",
-					Handler: caddy.UpdateCaddyConfigHandler(serverCtx),
-				},
-				{
-					Method:  http.MethodGet,
-					Path:    "/caddy/server/:serverId/config/history",
-					Handler: caddy.GetCaddyConfigHistoryHandler(serverCtx),
-				},
-				{
-					Method:  http.MethodGet,
-					Path:    "/caddy/server/:serverId/config/history/:historyId",
-					Handler: caddy.GetCaddyConfigHistoryDetailHandler(serverCtx),
-				},
-				{
-					Method:  http.MethodPost,
-					Path:    "/caddy/server/:serverId/config/preview",
-					Handler: caddy.PreviewCaddyConfigHandler(serverCtx),
-				},
-				{
-					Method:  http.MethodPost,
-					Path:    "/caddy/server/:serverId/config/rollback",
-					Handler: caddy.RollbackCaddyConfigHandler(serverCtx),
-				},
-			}...,
-		),
-		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
-		rest.WithPrefix("/api"),
-	)
-
-	server.AddRoutes(
-		rest.WithMiddlewares(
-			[]rest.Middleware{serverCtx.Permission},
-			[]rest.Route{
-				{
-					Method:  http.MethodGet,
 					Path:    "/cron/log",
 					Handler: cron.GetCronLogListHandler(serverCtx),
 				},
@@ -291,6 +301,11 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					Method:  http.MethodPost,
 					Path:    "/caddy/logs/clear",
 					Handler: log.ClearCaddyLogsHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/caddy/logs/site-metrics",
+					Handler: log.GetSiteMetricsHandler(serverCtx),
 				},
 			}...,
 		),

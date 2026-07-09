@@ -3,11 +3,11 @@ syntax = "v1"
 import "base.api"
 
 type (
-	// Caddy Management
+	// Caddy 管理
 	CaddyServerReq {
 		Name     string `json:"name"`
-		Url      string `json:"url"` // http://localhost:2019 or remote IP
-		Token    string `json:"token,optional"` // For remote auth if needed
+		Url      string `json:"url"` // http://localhost:2019 或远程 IP
+		Token    string `json:"token,optional"` // 远程鉴权（如需要）
 		Type     string `json:"type,default=local"` // local | remote
 		Username string `json:"username,optional"`
 		Password string `json:"password,optional"`
@@ -31,7 +31,41 @@ type (
 		Username string `json:"username,optional"`
 		Password string `json:"password,optional"`
 	}
-	// Proxy Config
+	// 服务器状态探测（只读；复用 GET /config/）
+	CaddyServerStatusItem {
+		ServerId     uint   `json:"serverId"`
+		Name         string `json:"name"`
+		Reachable    bool   `json:"reachable"`
+		LatencyMs    int64  `json:"latencyMs"`
+		ProbedAt     string `json:"probedAt"`
+		ErrorMessage string `json:"errorMessage,optional"`
+	}
+	CaddyServerStatusListResp {
+		List []CaddyServerStatusItem `json:"list"`
+	}
+	// Docker 发现：标签扫描 → 仅会话级候选（无发现库，永不自动 /load）
+	DockerDiscoveryCandidate {
+		CandidateId    string   `json:"candidateId"`
+		ContainerId    string   `json:"containerId"`
+		ContainerName  string   `json:"containerName"`
+		Status         string   `json:"status"`
+		Name           string   `json:"name"`
+		Domains        []string `json:"domains"`
+		Upstream       string   `json:"upstream"`
+		LbPolicy       string   `json:"lbPolicy,optional"`
+		TlsMode        string   `json:"tlsMode"`
+		HealthPath     string   `json:"healthPath,optional"`
+		HealthInterval string   `json:"healthInterval,optional"`
+		HealthTimeout  string   `json:"healthTimeout,optional"`
+		Reason         string   `json:"reason,optional"`
+		Valid          bool     `json:"valid"`
+	}
+	DockerDiscoveryResp {
+		List      []DockerDiscoveryCandidate `json:"list"`
+		ScannedAt string                     `json:"scannedAt"`
+		Message   string                     `json:"message,optional"`
+	}
+	// 代理配置
 	CaddyConfigReq {
 		ServerId uint `path:"serverId"`
 	}
@@ -101,6 +135,12 @@ type (
 service logflux-api {
 	@handler GetCaddyServers
 	get /caddy/server returns (CaddyServerListResp)
+
+	@handler GetCaddyServerStatus
+	get /caddy/server/status returns (CaddyServerStatusListResp)
+
+	@handler DiscoverDockerServices
+	get /caddy/discovery/docker returns (DockerDiscoveryResp)
 
 	@handler AddCaddyServer
 	post /caddy/server (CaddyServerReq) returns (BaseResp)

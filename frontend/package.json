@@ -69,6 +69,7 @@
     "cross-env": "catalog:",
     "cspell": "catalog:",
     "eslint": "catalog:",
+    "fast-check": "^4.9.0",
     "happy-dom": "catalog:",
     "is-ci": "catalog:",
     "lefthook": "catalog:",

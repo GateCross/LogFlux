@@ -33,6 +33,16 @@ const KNOWN_SITE_DIRECTIVES = new Set([
   'handle', 'import', 'geoip2_vars', 'encode', 'tls', 'root', 'log_append'
 ]);
 
+// reverse_proxy 块内已知子指令（parser 已处理，不视为未知）
+const KNOWN_REVERSE_PROXY_INNER = new Set([
+  'transport',
+  'tls_insecure_skip_verify',
+  'lb_policy',
+  'health_uri',
+  'health_interval',
+  'health_timeout'
+]);
+
 /**
  * 检测站点原始 Caddyfile 文本中是否含有 parser 未处理的 directive。
  * parser 会忽略未知指令，导致 round-trip 丢数据；有未知指令的站点必须整体保留。
@@ -44,8 +54,16 @@ function siteHasUnknownDirectives(raw: string): boolean {
     if (!trimmed || trimmed === '{' || trimmed === '}') continue;
     // 跳过 matcher 定义行
     if (trimmed.startsWith('@')) continue;
-    // 跳过 handle 子块内的闭合
+    // 跳过 reverse_proxy 子块内已知指令
     if (trimmed.startsWith('transport ') || trimmed.includes('tls_insecure_skip_verify')) continue;
+    if (
+      trimmed.startsWith('lb_policy ') ||
+      trimmed.startsWith('health_uri ') ||
+      trimmed.startsWith('health_interval ') ||
+      trimmed.startsWith('health_timeout ')
+    ) {
+      continue;
+    }
 
     const firstWord = trimmed.split(/\s+/)[0];
     if (!firstWord) continue;
@@ -53,6 +71,7 @@ function siteHasUnknownDirectives(raw: string): boolean {
     if (firstWord === '{' || firstWord === '}') continue;
     // 域名行（站点头）
     if (firstWord.includes('.') || firstWord.startsWith(':')) continue;
+    if (KNOWN_REVERSE_PROXY_INNER.has(firstWord)) continue;
 
     if (!KNOWN_SITE_DIRECTIVES.has(firstWord)) {
       return true;
@@ -553,6 +572,19 @@ function extractStandaloneSnippets(config: string): PreservedCaddyBlock[] {
 
 /** 将 Site 对象转回简化 Caddyfile 文本（兜底用） */
 function buildSiteRaw(site: Site): string {
+  // 优先走完整生成器，保证 health/lb 与主路径一致
+  const full = buildCaddyfile(
+    {
+      schemaVersion: 1,
+      global: {},
+      upstreams: [],
+      sites: [site]
+    },
+    { includeGlobal: false }
+  );
+  if (full && full !== '# No sites defined' && full !== '# No routes defined') {
+    return full;
+  }
   const lines: string[] = [];
   lines.push(`${site.domains.join(' ')} {`);
   for (const route of site.routes) {

@@ -6,12 +6,19 @@ import (
 	caddymodel "logflux/model/caddy"
 	ingestmodel "logflux/model/ingest"
 	"strings"
+	"time"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
 	"logflux/internal/utils"
 	"logflux/internal/utils/logger"
 	"logflux/internal/xerr"
+)
+
+// 站点近窗指标约束（与 design：hosts 上限、默认近窗一致）
+const (
+	siteMetricsMaxHosts             = 50
+	siteMetricsDefaultWindowMinutes = 15
 )
 
 // LogService 负责日志查询与响应组装。
@@ -81,6 +88,90 @@ func (s *LogService) GetCaddyLogs(req *types.CaddyLogReq) (*types.CaddyLogResp, 
 		})
 	}
 	return &types.CaddyLogResp{List: list, Total: total}, nil
+}
+
+// 按 host 批量返回近窗 4xx/5xx 计数。
+// 无日志 host 补 0，不因单 host 无数据失败整批。
+func (s *LogService) GetSiteMetrics(req *types.SiteMetricsReq) (*types.SiteMetricsResp, error) {
+	if req == nil {
+		return nil, xerr.NewBusinessErrorWith("请求参数无效")
+	}
+
+	hosts := normalizeSiteMetricHosts(req.Hosts)
+	if len(hosts) == 0 {
+		return nil, xerr.NewBusinessErrorWith("hosts 不能为空")
+	}
+	if len(hosts) > siteMetricsMaxHosts {
+		return nil, xerr.NewBusinessErrorWith(fmt.Sprintf("hosts 数量不能超过 %d", siteMetricsMaxHosts))
+	}
+
+	windowMinutes := req.WindowMinutes
+	if windowMinutes <= 0 {
+		windowMinutes = siteMetricsDefaultWindowMinutes
+	}
+
+	end := time.Now()
+	start := end.Add(-time.Duration(windowMinutes) * time.Minute)
+
+	logModel := s.caddyLogModel()
+	rows4xx, err := logModel.CountStatusByHosts(s.ctx, start, end, hosts, 400, 500)
+	if err != nil {
+		return nil, xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "统计站点 4xx 失败", err)
+	}
+	rows5xx, err := logModel.CountStatusByHosts(s.ctx, start, end, hosts, 500, 600)
+	if err != nil {
+		return nil, xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "统计站点 5xx 失败", err)
+	}
+
+	return &types.SiteMetricsResp{
+		List: mergeHostStatusCounts(hosts, rows4xx, rows5xx),
+	}, nil
+}
+
+// 将 model 返回的稀疏计数合并为请求 hosts 的完整列表，缺失补 0。
+// 导出给测试用于验证 Property 6 的聚合语义。
+func mergeHostStatusCounts(hosts []string, rows4xx, rows5xx []caddymodel.HostStatusCount) []types.SiteMetricsItem {
+	count4xx := hostCountMap(rows4xx)
+	count5xx := hostCountMap(rows5xx)
+
+	list := make([]types.SiteMetricsItem, 0, len(hosts))
+	for _, host := range hosts {
+		list = append(list, types.SiteMetricsItem{
+			Host:     host,
+			Count4xx: count4xx[host],
+			Count5xx: count5xx[host],
+		})
+	}
+	return list
+}
+
+func hostCountMap(rows []caddymodel.HostStatusCount) map[string]int64 {
+	out := make(map[string]int64, len(rows))
+	for _, row := range rows {
+		out[row.Host] = row.Count
+	}
+	return out
+}
+
+// 去空白并去重，保持首次出现顺序。
+func normalizeSiteMetricHosts(hosts []string) []string {
+	if len(hosts) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(hosts))
+	out := make([]string, 0, len(hosts))
+	for _, h := range hosts {
+		host := strings.TrimSpace(h)
+		if host == "" {
+			continue
+		}
+		if _, ok := seen[host]; ok {
+			continue
+		}
+		seen[host] = struct{}{}
+		out = append(out, host)
+	}
+	return out
 }
 
 func (s *LogService) resolveCaddyLogRegion(logItem caddymodel.CaddyLog) (country, province, city string) {

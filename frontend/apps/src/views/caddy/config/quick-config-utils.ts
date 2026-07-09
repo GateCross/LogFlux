@@ -1,8 +1,13 @@
-import type { CaddyFormModel, Handle, Route, Site } from './types';
+import type { CaddyFormModel, Handle, HealthCheck, Route, Site } from './types';
 
 export type QuickSiteMode = 'reverse_proxy' | 'file_server' | 'redirect';
 
 export type QuickTlsMode = 'auto' | 'off' | 'internal';
+
+export type QuickLbPolicy = 'round_robin' | 'least_conn' | 'ip_hash';
+
+/** Simple 路径允许的负载策略（不单独判 complex） */
+const SIMPLE_LB_POLICIES = new Set<string>(['round_robin', 'least_conn', 'ip_hash']);
 
 export interface QuickSiteDraft {
   id: string;
@@ -16,6 +21,10 @@ export interface QuickSiteDraft {
   browse: boolean;
   redirectTo: string;
   redirectCode: number;
+  /** reverse_proxy 负载策略；round-trip 不得静默丢弃 */
+  lbPolicy?: QuickLbPolicy;
+  /** reverse_proxy 健康检查；round-trip 不得静默丢弃 */
+  healthCheck?: HealthCheck;
 }
 
 export interface ComplexSiteSummary {
@@ -106,7 +115,15 @@ export function createQuickSiteDraft(partial?: Partial<QuickSiteDraft>): QuickSi
     root: partial?.root ?? '',
     browse: partial?.browse ?? false,
     redirectTo: partial?.redirectTo ?? '',
-    redirectCode: partial?.redirectCode ?? 302
+    redirectCode: partial?.redirectCode ?? 302,
+    lbPolicy: partial?.lbPolicy,
+    healthCheck: partial?.healthCheck
+      ? {
+          path: partial.healthCheck.path,
+          interval: partial.healthCheck.interval,
+          timeout: partial.healthCheck.timeout
+        }
+      : undefined
   };
 }
 
@@ -129,13 +146,14 @@ function hasRouteMatchers(route: Route) {
   );
 }
 
-function analyzeHandleMode(handle: Handle, upstreamNames: Set<string>, reasons: Set<string>): QuickSiteMode | null {
+function analyzeHandleMode(handle: Handle, _upstreamNames: Set<string>, reasons: Set<string>): QuickSiteMode | null {
   if (handle.type === 'reverse_proxy') {
-    if (handle.healthCheck) reasons.add('反向代理包含健康检查');
+    // healthCheck、已定义上游池引用、常见 lbPolicy 不再单独判 complex（Req 2.1）
     if (handle.transportProtocol) reasons.add('反向代理包含自定义传输协议');
     if (handle.tlsInsecureSkipVerify) reasons.add('反向代理包含 TLS 跳过校验');
-    if (handle.lbPolicy && handle.lbPolicy !== 'round_robin') reasons.add('反向代理包含负载策略');
-    if (handle.upstream && upstreamNames.has(handle.upstream)) reasons.add('反向代理引用了上游池');
+    if (handle.lbPolicy && !SIMPLE_LB_POLICIES.has(handle.lbPolicy)) {
+      reasons.add('反向代理包含负载策略');
+    }
     return 'reverse_proxy';
   }
 
@@ -152,7 +170,7 @@ function analyzeHandleMode(handle: Handle, upstreamNames: Set<string>, reasons: 
 }
 
 function buildQuickDraftFromSite(site: Site, handle: Handle, mode: QuickSiteMode): QuickSiteDraft {
-  return createQuickSiteDraft({
+  const draft = createQuickSiteDraft({
     id: site.id,
     name: normalizeSiteName(site),
     enabled: site.enabled,
@@ -165,6 +183,21 @@ function buildQuickDraftFromSite(site: Site, handle: Handle, mode: QuickSiteMode
     redirectTo: handle.to ?? '',
     redirectCode: handle.code ?? 302
   });
+
+  if (mode === 'reverse_proxy') {
+    if (handle.lbPolicy && SIMPLE_LB_POLICIES.has(handle.lbPolicy)) {
+      draft.lbPolicy = handle.lbPolicy as QuickLbPolicy;
+    }
+    if (handle.healthCheck) {
+      draft.healthCheck = {
+        path: handle.healthCheck.path,
+        interval: handle.healthCheck.interval,
+        timeout: handle.healthCheck.timeout
+      };
+    }
+  }
+
+  return draft;
 }
 
 export function analyzeSiteForQuickConfig(site: Site, upstreamNames: Set<string>) {
@@ -263,7 +296,16 @@ export function buildSiteFromQuickDraft(draft: QuickSiteDraft): Site {
             type: 'reverse_proxy',
             enabled: true,
             upstream: draft.upstream.trim(),
-            lbPolicy: 'round_robin',
+            // 保留草稿中的 lbPolicy；未设置时默认 round_robin，禁止静默覆盖已有策略
+            lbPolicy: draft.lbPolicy ?? 'round_robin',
+            // 保留健康检查语义，不得丢弃为空
+            healthCheck: draft.healthCheck
+              ? {
+                  path: draft.healthCheck.path,
+                  interval: draft.healthCheck.interval,
+                  timeout: draft.healthCheck.timeout
+                }
+              : undefined,
             tlsInsecureSkipVerify: false,
             transportProtocol: ''
           };

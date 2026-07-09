@@ -1,7 +1,118 @@
-import type { CaddyFormModel, Route, RouteMatch, Site } from './types';
+import type { CaddyFormModel, Handle, HealthCheck, Route, RouteMatch, Site, Upstream } from './types';
 import { genId, isSiteToken } from './caddy-config-utils';
 import { normalizeModules } from './caddy-config-diff';
 
+/** 健康检查 interval/timeout：正整数 + 单位 ms|s|m|h */
+export const HEALTH_DURATION_RE = /^[1-9]\d*(ms|s|m|h)$/;
+
+export function isValidHealthDuration(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) return true;
+  return HEALTH_DURATION_RE.test(trimmed);
+}
+
+/** path 非空时须以 / 开头；interval/timeout 空或合法 duration */
+export function validateHealthCheckFields(
+  healthCheck: HealthCheck | undefined,
+  fieldLabel = '健康检查'
+): string[] {
+  if (!healthCheck) return [];
+  const errors: string[] = [];
+  const path = (healthCheck.path ?? '').trim();
+  if (path && !path.startsWith('/')) {
+    errors.push(`${fieldLabel}路径必须以 / 开头`);
+  }
+  const interval = (healthCheck.interval ?? '').trim();
+  if (interval && !HEALTH_DURATION_RE.test(interval)) {
+    errors.push(`${fieldLabel}间隔格式无效，应为正整数加单位（ms|s|m|h）`);
+  }
+  const timeout = (healthCheck.timeout ?? '').trim();
+  if (timeout && !HEALTH_DURATION_RE.test(timeout)) {
+    errors.push(`${fieldLabel}超时格式无效，应为正整数加单位（ms|s|m|h）`);
+  }
+  return errors;
+}
+
+/** 是否有可写出的 health：path 非空（关闭或全空则省略） */
+export function hasEmittableHealthCheck(healthCheck?: HealthCheck | null): boolean {
+  return Boolean(healthCheck?.path?.trim());
+}
+
+/**
+ * 解析有效 HealthCheck：handle 级优先于 pool 级（Req 3.4）。
+ * 仅当 path 非空时视为有效。
+ */
+export function resolveEffectiveHealthCheck(
+  handle: Pick<Handle, 'healthCheck'>,
+  pool?: Pick<Upstream, 'healthCheck'> | null
+): HealthCheck | undefined {
+  if (hasEmittableHealthCheck(handle.healthCheck)) {
+    return {
+      path: handle.healthCheck!.path.trim(),
+      interval: handle.healthCheck!.interval?.trim() || undefined,
+      timeout: handle.healthCheck!.timeout?.trim() || undefined
+    };
+  }
+  if (hasEmittableHealthCheck(pool?.healthCheck)) {
+    return {
+      path: pool!.healthCheck!.path.trim(),
+      interval: pool!.healthCheck!.interval?.trim() || undefined,
+      timeout: pool!.healthCheck!.timeout?.trim() || undefined
+    };
+  }
+  return undefined;
+}
+
+export function resolveEffectiveLbPolicy(
+  handle: Pick<Handle, 'lbPolicy'>,
+  pool?: Pick<Upstream, 'lbPolicy'> | null
+): Handle['lbPolicy'] | undefined {
+  if (handle.lbPolicy) return handle.lbPolicy;
+  if (pool?.lbPolicy) return pool.lbPolicy;
+  return undefined;
+}
+
+/** 将 reverse_proxy 块内 health/lb/transport 指令写入 lines（缩进已含） */
+export function appendReverseProxyBlockLines(
+  lines: string[],
+  indent: string,
+  opts: {
+    healthCheck?: HealthCheck;
+    lbPolicy?: string;
+    transportProtocol?: string;
+    tlsInsecureSkipVerify?: boolean;
+  }
+): void {
+  if (opts.lbPolicy) {
+    lines.push(`${indent}lb_policy ${opts.lbPolicy}`);
+  }
+  if (hasEmittableHealthCheck(opts.healthCheck)) {
+    const path = opts.healthCheck!.path.trim();
+    lines.push(`${indent}health_uri ${path}`);
+    const interval = opts.healthCheck!.interval?.trim();
+    if (interval) lines.push(`${indent}health_interval ${interval}`);
+    const timeout = opts.healthCheck!.timeout?.trim();
+    if (timeout) lines.push(`${indent}health_timeout ${timeout}`);
+  }
+  const transport = opts.transportProtocol || (opts.tlsInsecureSkipVerify ? 'http' : '');
+  if (transport) {
+    lines.push(`${indent}transport ${transport} {`);
+    if (opts.tlsInsecureSkipVerify) lines.push(`${indent}  tls_insecure_skip_verify`);
+    lines.push(`${indent}}`);
+  }
+}
+
+function reverseProxyNeedsBlock(opts: {
+  healthCheck?: HealthCheck;
+  lbPolicy?: string;
+  transportProtocol?: string;
+  tlsInsecureSkipVerify?: boolean;
+}): boolean {
+  if (opts.lbPolicy) return true;
+  if (hasEmittableHealthCheck(opts.healthCheck)) return true;
+  if (opts.transportProtocol || opts.tlsInsecureSkipVerify) return true;
+  return false;
+}
 function extractGlobalOptionsBlock(content: string): { raw: string; rest: string } {
   const lines = content.split('\n');
   const globalLines: string[] = [];
@@ -133,6 +244,41 @@ export function parseCaddyfileToModules(content: string): CaddyFormModel {
       if (line.includes('tls_insecure_skip_verify') && currentReverseProxy) {
         currentReverseProxy.tlsInsecureSkipVerify = true;
       }
+      if (line.startsWith('lb_policy ') && currentReverseProxy) {
+        const policy = line.replace('lb_policy ', '').trim();
+        if (policy === 'round_robin' || policy === 'least_conn' || policy === 'ip_hash') {
+          currentReverseProxy.lbPolicy = policy;
+        }
+      }
+      if (line.startsWith('health_uri ') && currentReverseProxy) {
+        const path = line.replace('health_uri ', '').trim();
+        if (path) {
+          currentReverseProxy.healthCheck = {
+            ...(currentReverseProxy.healthCheck ?? { path: '' }),
+            path
+          };
+        }
+      }
+      if (line.startsWith('health_interval ') && currentReverseProxy) {
+        const interval = line.replace('health_interval ', '').trim();
+        if (interval) {
+          currentReverseProxy.healthCheck = {
+            path: currentReverseProxy.healthCheck?.path ?? '',
+            interval,
+            timeout: currentReverseProxy.healthCheck?.timeout
+          };
+        }
+      }
+      if (line.startsWith('health_timeout ') && currentReverseProxy) {
+        const timeout = line.replace('health_timeout ', '').trim();
+        if (timeout) {
+          currentReverseProxy.healthCheck = {
+            path: currentReverseProxy.healthCheck?.path ?? '',
+            interval: currentReverseProxy.healthCheck?.interval,
+            timeout
+          };
+        }
+      }
       depth += openCount - closeCount;
       if (depth < reverseProxyDepth) {
         reverseProxyDepth = null;
@@ -172,7 +318,7 @@ export function parseCaddyfileToModules(content: string): CaddyFormModel {
     }
 
     if (currentSite) {
-      // matcher block: @m { host ... }
+      // matcher 块：@m { host ... }
       if (line.startsWith('@') && line.includes('{')) {
         const name = (line.split('{')[0] ?? '').trim().slice(1);
         if (name) {
@@ -624,14 +770,17 @@ export function buildCaddyfile(
         if (h.type === 'reverse_proxy') {
           const up = h.upstream ? upstreamMap.get(h.upstream) : undefined;
           const targets = up?.targets.length ? up.targets.join(' ') : h.upstream ? h.upstream : 'localhost:8080';
-          const transport = h.transportProtocol || (h.tlsInsecureSkipVerify ? 'http' : '');
-          if (transport || h.tlsInsecureSkipVerify) {
+          const healthCheck = resolveEffectiveHealthCheck(h, up);
+          const lbPolicy = resolveEffectiveLbPolicy(h, up);
+          const blockOpts = {
+            healthCheck,
+            lbPolicy,
+            transportProtocol: h.transportProtocol,
+            tlsInsecureSkipVerify: h.tlsInsecureSkipVerify
+          };
+          if (reverseProxyNeedsBlock(blockOpts)) {
             lines.push(`    reverse_proxy ${targets} {`);
-            if (transport) {
-              lines.push(`      transport ${transport} {`);
-              if (h.tlsInsecureSkipVerify) lines.push(`        tls_insecure_skip_verify`);
-              lines.push(`      }`);
-            }
+            appendReverseProxyBlockLines(lines, '      ', blockOpts);
             lines.push(`    }`);
           } else {
             lines.push(`    reverse_proxy ${targets}`);
