@@ -1,7 +1,4 @@
-/**
- * 服务目录纯函数工具：复用 MVP 站点卡片 / probe / metrics 语义，
- * 不新建平行 discovery 数据源。
- */
+/** 服务目录纯函数：复用工作台站点/指标语义，不建平行 discovery 数据源 */
 
 import type { SiteMetricsItem } from '#/api/caddy/server';
 
@@ -101,13 +98,6 @@ export function metricCountColor(
   if (count === undefined || count === null) return 'default';
   if (Number(count) <= 0) return 'default';
   return kind === '5xx' ? 'error' : 'warning';
-}
-
-export function apiErrorMessage(error: unknown, fallback: string): string {
-  const data = (error as any)?.response?.data ?? (error as any)?.data ?? {};
-  const detail = data?.message ?? data?.msg ?? data?.error ?? (error as any)?.message;
-  if (typeof detail === 'string' && detail.trim()) return detail.trim();
-  return fallback;
 }
 
 /** 将 API metrics 列表转为 host → 计数 map（无日志 host 补 0） */

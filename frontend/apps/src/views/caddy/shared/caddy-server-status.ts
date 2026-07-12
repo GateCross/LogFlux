@@ -1,7 +1,4 @@
-/**
- * Caddy 节点状态探测 — 纯函数工具。
- * 配置管理与服务目录共用展示语义；探测仍走 GET /caddy/server/status。
- */
+/** 节点状态探测纯函数（配置管理 / 服务目录共用） */
 
 import type { CaddyServerApi } from '#/api/caddy/server';
 

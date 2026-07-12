@@ -1,10 +1,4 @@
-/**
- * Docker 发现 → 会话候选草稿（纯函数层）
- *
- * 约束（Req 1.2 / design Phase 2）：
- * - 仅内存/会话候选，不建平行 discovery DB
- * - 默认不 /load；dry-run Preview → 用户确认 → 既有 Apply_Path
- */
+/** Docker 发现：仅会话候选，不落库、默认不 /load */
 
 import {
   createQuickSiteDraft,

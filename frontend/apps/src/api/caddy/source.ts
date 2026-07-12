@@ -1,10 +1,42 @@
+import type { RequestClientConfig } from '@vben/request';
+
 import { requestClient } from '#/api/request';
 
 import { listOf } from '../_utils';
 
 export namespace CaddyWafSourceApi {
+  /** WAF 源列表项 — 对齐 backend WafSourceItem */
   export interface WafSource {
-    [key: string]: any;
+    id: number;
+    name: string;
+    kind: string;
+    mode: string;
+    url: string;
+    checksumUrl?: string;
+    proxyUrl?: string;
+    authType?: string;
+    schedule?: string;
+    enabled?: boolean;
+    autoCheck?: boolean;
+    autoDownload?: boolean;
+    autoActivate?: boolean;
+    lastRelease?: string;
+    lastError?: string;
+    createdAt?: string;
+    updatedAt?: string;
+    /** 页面历史字段：部分 UI 仍用 type 展示 kind */
+    type?: string;
+    status?: string;
+  }
+
+  /** 创建/更新载荷（页面表单字段） */
+  export interface WafSourceWrite {
+    name: string;
+    url?: string;
+    kind?: string;
+    mode?: string;
+    type?: string;
+    enabled?: boolean;
   }
 
   export interface WafSourceListResult {
@@ -12,17 +44,25 @@ export namespace CaddyWafSourceApi {
     total: number;
   }
 
+  /** WAF 引擎状态 — 对齐 backend WafEngineStatusResp */
   export interface WafEngineStatus {
-    [key: string]: any;
+    serverId: number;
+    currentVersion?: string;
+    latestVersion?: string;
+    canUpgrade: boolean;
+    checkedAt?: string;
+    source?: string;
+    message?: string;
   }
 }
 
 /**
  * 获取 WAF 源列表 — GET /caddy/waf/source
  */
-export async function getWafSourceListApi() {
+export async function getWafSourceListApi(config?: RequestClientConfig) {
   const resp = await requestClient.get<CaddyWafSourceApi.WafSourceListResult>(
     '/caddy/waf/source',
+    config,
   );
   return listOf(resp);
 }
@@ -30,8 +70,16 @@ export async function getWafSourceListApi() {
 /**
  * 创建 WAF 源 — POST /caddy/waf/source
  */
-export async function createWafSourceApi(data: CaddyWafSourceApi.WafSource) {
-  return requestClient.post<void>('/caddy/waf/source', data);
+export async function createWafSourceApi(
+  data: CaddyWafSourceApi.WafSourceWrite,
+) {
+  return requestClient.post<void>('/caddy/waf/source', {
+    name: data.name,
+    url: data.url,
+    kind: data.kind ?? data.type ?? 'crs',
+    mode: data.mode ?? 'remote',
+    enabled: data.enabled,
+  });
 }
 
 /**
@@ -39,9 +87,15 @@ export async function createWafSourceApi(data: CaddyWafSourceApi.WafSource) {
  */
 export async function updateWafSourceApi(
   id: number,
-  data: CaddyWafSourceApi.WafSource,
+  data: CaddyWafSourceApi.WafSourceWrite,
 ) {
-  return requestClient.put<void>(`/caddy/waf/source/${id}`, data);
+  return requestClient.put<void>(`/caddy/waf/source/${id}`, {
+    name: data.name,
+    url: data.url,
+    kind: data.kind ?? data.type,
+    mode: data.mode,
+    enabled: data.enabled,
+  });
 }
 
 /**
@@ -79,9 +133,10 @@ export async function uploadWafPackageApi(formData: FormData) {
 /**
  * 获取 WAF 引擎状态 — GET /caddy/waf/engine/status
  */
-export async function getWafEngineStatusApi() {
+export async function getWafEngineStatusApi(config?: RequestClientConfig) {
   return requestClient.get<CaddyWafSourceApi.WafEngineStatus>(
     '/caddy/waf/engine/status',
+    config,
   );
 }
 

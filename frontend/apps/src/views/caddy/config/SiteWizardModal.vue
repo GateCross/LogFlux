@@ -6,6 +6,7 @@ import {
   Button,
   Col,
   Form,
+  FormItem,
   Input,
   Modal,
   Row,
@@ -14,7 +15,7 @@ import {
   Steps,
   Switch,
   Tag,
-} from 'ant-design-vue';
+} from 'antdv-next';
 
 import type { QuickSiteDraft } from './quick-config-utils';
 import {
@@ -193,7 +194,7 @@ function fillPool(name: string) {
     title="站点创建向导"
     width="920px"
     :footer="null"
-    destroy-on-close
+    destroy-on-hidden
     @cancel="close"
   >
     <div class="site-wizard">
@@ -224,19 +225,19 @@ function fillPool(name: string) {
         <Form layout="vertical">
           <Row :gutter="16">
             <Col :span="12">
-              <Form.Item label="站点名称" required>
+              <FormItem label="站点名称" required>
                 <Input v-model:value="formState.name" placeholder="例如：官网反代" />
-              </Form.Item>
+              </FormItem>
             </Col>
             <Col :span="12">
-              <Form.Item label="域名 / 监听地址" required>
+              <FormItem label="域名 / 监听地址" required>
                 <Select
                   v-model:value="formState.domains"
                   mode="tags"
                   placeholder="example.com 或 :8080，回车添加"
                   :token-separators="[',', ' ']"
                 />
-              </Form.Item>
+              </FormItem>
             </Col>
           </Row>
         </Form>
@@ -247,7 +248,7 @@ function fillPool(name: string) {
         <Form layout="vertical">
           <Row :gutter="16">
             <Col :span="12">
-              <Form.Item label="上游地址或池名" required>
+              <FormItem label="上游地址或池名" required>
                 <Input
                   v-model:value="formState.upstream"
                   placeholder="127.0.0.1:8080 或上游池名称"
@@ -264,15 +265,15 @@ function fillPool(name: string) {
                     {{ opt.value }}
                   </Tag>
                 </div>
-              </Form.Item>
+              </FormItem>
             </Col>
             <Col :span="12">
-              <Form.Item label="负载策略">
+              <FormItem label="负载策略">
                 <Select v-model:value="formState.lbPolicy" :options="lbPolicyOptions" />
-              </Form.Item>
+              </FormItem>
             </Col>
             <Col :span="24">
-              <Form.Item label="站点级健康检查（可选）">
+              <FormItem label="站点级健康检查（可选）">
                 <div class="health-row">
                   <div class="health-toggle">
                     <span>启用</span>
@@ -288,7 +289,7 @@ function fillPool(name: string) {
                     <Input v-model:value="formState.healthTimeout" placeholder="超时，如 5s" />
                   </template>
                 </div>
-              </Form.Item>
+              </FormItem>
             </Col>
           </Row>
         </Form>
@@ -297,9 +298,9 @@ function fillPool(name: string) {
       <!-- 3. TLS -->
       <div v-show="activeStepKey === 'tls'" class="wizard-pane">
         <Form layout="vertical">
-          <Form.Item label="TLS 模式">
+          <FormItem label="TLS 模式">
             <Select v-model:value="formState.tlsMode" :options="tlsModeOptions" style="max-width: 320px" />
-          </Form.Item>
+          </FormItem>
           <div class="hint-text">
             简单模式支持自动 HTTPS、内部证书或关闭 TLS；高级证书路径请在复杂/原始配置中维护。
           </div>
@@ -309,13 +310,13 @@ function fillPool(name: string) {
       <!-- 4. 可选 WAF -->
       <div v-show="activeStepKey === 'waf'" class="wizard-pane">
         <Form layout="vertical">
-          <Form.Item label="启用 WAF 意图（可选）">
+          <FormItem label="启用 WAF 意图（可选）">
             <Switch
               v-model:checked="formState.waf.enabled"
               checked-children="开"
               un-checked-children="关"
             />
-          </Form.Item>
+          </FormItem>
           <Alert
             class="mb-3"
             type="warning"
@@ -324,19 +325,19 @@ function fillPool(name: string) {
           />
           <Row v-if="formState.waf.enabled" :gutter="16">
             <Col :span="8">
-              <Form.Item label="引擎模式">
+              <FormItem label="引擎模式">
                 <Select v-model:value="formState.waf.mode" :options="wafModeOptions" />
-              </Form.Item>
+              </FormItem>
             </Col>
             <Col :span="8">
-              <Form.Item label="规则强度">
+              <FormItem label="规则强度">
                 <Select v-model:value="formState.waf.strength" :options="wafStrengthOptions" />
-              </Form.Item>
+              </FormItem>
             </Col>
             <Col :span="8">
-              <Form.Item label="审计日志">
+              <FormItem label="审计日志">
                 <Select v-model:value="formState.waf.audit" :options="wafAuditOptions" />
-              </Form.Item>
+              </FormItem>
             </Col>
           </Row>
         </Form>

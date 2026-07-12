@@ -78,3 +78,173 @@
 .ant-app .form-valid-error .ant-picker-focused {
   box-shadow: 0 0 0 2px rgb(255 38 5 / 6%);
 }
+
+
+/* 表格操作列统一按钮（柔和配色、语义分色）
+ * 变体选择器必须高于默认，否则 !important 会互相盖住
+ */
+.ant-app .table-action-btn.ant-btn,
+.ant-app button.table-action-btn,
+.ant-app .table-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  min-width: 52px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  color: #047857 !important;
+  cursor: pointer;
+  background: #ecfdf5 !important;
+  border: 1px solid #a7f3d0 !important;
+  border-radius: 6px;
+  box-shadow: none !important;
+}
+
+.ant-app .table-action-btn.ant-btn:hover,
+.ant-app .table-action-btn.ant-btn:focus,
+.ant-app button.table-action-btn:hover,
+.ant-app button.table-action-btn:focus,
+.ant-app .table-action-btn:hover,
+.ant-app .table-action-btn:focus {
+  color: #065f46 !important;
+  background: #d1fae5 !important;
+  border-color: #6ee7b7 !important;
+}
+
+.ant-app .table-action-btn.ant-btn:active,
+.ant-app button.table-action-btn:active,
+.ant-app .table-action-btn:active {
+  color: #064e3b !important;
+  background: #a7f3d0 !important;
+  border-color: #34d399 !important;
+}
+
+.ant-app .table-action-btn.ant-btn:disabled,
+.ant-app .table-action-btn.ant-btn.ant-btn-disabled,
+.ant-app button.table-action-btn:disabled,
+.ant-app .table-action-btn:disabled {
+  color: #6b7280 !important;
+  cursor: not-allowed;
+  background: #f3f4f6 !important;
+  border-color: #e5e7eb !important;
+  opacity: 0.7;
+}
+
+/* 次要：灰（编辑 / 复制 / 日志等） */
+.ant-app .table-action-btn.table-action-btn--secondary.ant-btn,
+.ant-app .table-action-btn.table-action-btn--secondary,
+.ant-app button.table-action-btn.table-action-btn--secondary {
+  color: #334155 !important;
+  background: #f1f5f9 !important;
+  border-color: #e2e8f0 !important;
+}
+
+.ant-app .table-action-btn.table-action-btn--secondary.ant-btn:hover,
+.ant-app .table-action-btn.table-action-btn--secondary.ant-btn:focus,
+.ant-app .table-action-btn.table-action-btn--secondary:hover,
+.ant-app .table-action-btn.table-action-btn--secondary:focus,
+.ant-app button.table-action-btn.table-action-btn--secondary:hover,
+.ant-app button.table-action-btn.table-action-btn--secondary:focus {
+  color: #0f172a !important;
+  background: #e2e8f0 !important;
+  border-color: #cbd5e1 !important;
+}
+
+.ant-app .table-action-btn.table-action-btn--secondary.ant-btn:active,
+.ant-app .table-action-btn.table-action-btn--secondary:active,
+.ant-app button.table-action-btn.table-action-btn--secondary:active {
+  color: #0f172a !important;
+  background: #cbd5e1 !important;
+  border-color: #94a3b8 !important;
+}
+
+/* 主操作：蓝（执行 / 测试 / 激活 / 解冻） */
+.ant-app .table-action-btn.table-action-btn--primary.ant-btn,
+.ant-app .table-action-btn.table-action-btn--primary,
+.ant-app button.table-action-btn.table-action-btn--primary {
+  color: #1d4ed8 !important;
+  background: #eff6ff !important;
+  border-color: #bfdbfe !important;
+}
+
+.ant-app .table-action-btn.table-action-btn--primary.ant-btn:hover,
+.ant-app .table-action-btn.table-action-btn--primary.ant-btn:focus,
+.ant-app .table-action-btn.table-action-btn--primary:hover,
+.ant-app .table-action-btn.table-action-btn--primary:focus,
+.ant-app button.table-action-btn.table-action-btn--primary:hover,
+.ant-app button.table-action-btn.table-action-btn--primary:focus {
+  color: #1e40af !important;
+  background: #dbeafe !important;
+  border-color: #93c5fd !important;
+}
+
+.ant-app .table-action-btn.table-action-btn--primary.ant-btn:active,
+.ant-app .table-action-btn.table-action-btn--primary:active,
+.ant-app button.table-action-btn.table-action-btn--primary:active {
+  color: #1e3a8a !important;
+  background: #bfdbfe !important;
+  border-color: #60a5fa !important;
+}
+
+/* 警告：琥珀（冻结） */
+.ant-app .table-action-btn.table-action-btn--warning.ant-btn,
+.ant-app .table-action-btn.table-action-btn--warning,
+.ant-app button.table-action-btn.table-action-btn--warning {
+  color: #b45309 !important;
+  background: #fffbeb !important;
+  border-color: #fde68a !important;
+}
+
+.ant-app .table-action-btn.table-action-btn--warning.ant-btn:hover,
+.ant-app .table-action-btn.table-action-btn--warning.ant-btn:focus,
+.ant-app .table-action-btn.table-action-btn--warning:hover,
+.ant-app .table-action-btn.table-action-btn--warning:focus,
+.ant-app button.table-action-btn.table-action-btn--warning:hover,
+.ant-app button.table-action-btn.table-action-btn--warning:focus {
+  color: #92400e !important;
+  background: #fef3c7 !important;
+  border-color: #fcd34d !important;
+}
+
+.ant-app .table-action-btn.table-action-btn--warning.ant-btn:active,
+.ant-app .table-action-btn.table-action-btn--warning:active,
+.ant-app button.table-action-btn.table-action-btn--warning:active {
+  color: #78350f !important;
+  background: #fde68a !important;
+  border-color: #fbbf24 !important;
+}
+
+/* 危险：红（删除 / 回滚） */
+.ant-app .table-action-btn.table-action-btn--danger.ant-btn,
+.ant-app .table-action-btn.table-action-btn--danger,
+.ant-app .table-action-btn.ant-btn-dangerous,
+.ant-app button.table-action-btn.table-action-btn--danger {
+  color: #b91c1c !important;
+  background: #fef2f2 !important;
+  border-color: #fecaca !important;
+}
+
+.ant-app .table-action-btn.table-action-btn--danger.ant-btn:hover,
+.ant-app .table-action-btn.table-action-btn--danger.ant-btn:focus,
+.ant-app .table-action-btn.table-action-btn--danger:hover,
+.ant-app .table-action-btn.table-action-btn--danger:focus,
+.ant-app .table-action-btn.ant-btn-dangerous:hover,
+.ant-app .table-action-btn.ant-btn-dangerous:focus,
+.ant-app button.table-action-btn.table-action-btn--danger:hover,
+.ant-app button.table-action-btn.table-action-btn--danger:focus {
+  color: #991b1b !important;
+  background: #fee2e2 !important;
+  border-color: #fca5a5 !important;
+}
+
+.ant-app .table-action-btn.table-action-btn--danger.ant-btn:active,
+.ant-app .table-action-btn.table-action-btn--danger:active,
+.ant-app .table-action-btn.ant-btn-dangerous:active,
+.ant-app button.table-action-btn.table-action-btn--danger:active {
+  color: #7f1d1d !important;
+  background: #fecaca !important;
+  border-color: #f87171 !important;
+}

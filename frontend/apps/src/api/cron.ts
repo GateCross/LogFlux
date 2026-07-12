@@ -1,3 +1,5 @@
+import type { RequestClientConfig } from '@vben/request';
+
 import { requestClient } from '#/api/request';
 
 import type { ListResult } from './_utils';
@@ -98,10 +100,13 @@ function toListResult<T>(resp: ListResult<T> | T[]): CronApi.ListResult<T> {
   };
 }
 
-export async function getCronTaskListApi(params?: CronApi.TaskListParams) {
+export async function getCronTaskListApi(
+  params?: CronApi.TaskListParams,
+  config?: RequestClientConfig,
+) {
   const resp = await requestClient.get<CronApi.ListResult<CronApi.Task>>(
     '/cron/task',
-    { params },
+    { params, ...config },
   );
   return toListResult<CronApi.Task>(resp);
 }
@@ -143,10 +148,11 @@ export async function triggerCronTaskApi(id: number) {
 export async function getCronScriptHistoryApi(
   taskId: number,
   params?: CronApi.ListParams,
+  config?: RequestClientConfig,
 ) {
   const resp = await requestClient.get<CronApi.ListResult<CronApi.ScriptFile>>(
     `/cron/task/${taskId}/script/history`,
-    { params },
+    { params, ...config },
   );
   return toListResult<CronApi.ScriptFile>(resp);
 }
@@ -163,14 +169,20 @@ export async function activateCronScriptApi(taskId: number, fileId: number) {
   );
 }
 
-export async function getCronLogListApi(params?: CronApi.LogListParams) {
+export async function getCronLogListApi(
+  params?: CronApi.LogListParams,
+  config?: RequestClientConfig,
+) {
   const resp = await requestClient.get<CronApi.ListResult<CronApi.Log>>(
     '/cron/log',
-    { params },
+    { params, ...config },
   );
   return toListResult<CronApi.Log>(resp);
 }
 
-export async function getCronLogDetailApi(id: number) {
-  return requestClient.get<CronApi.Log>(`/cron/log/${id}`);
+export async function getCronLogDetailApi(
+  id: number,
+  config?: RequestClientConfig,
+) {
+  return requestClient.get<CronApi.Log>(`/cron/log/${id}`, config);
 }

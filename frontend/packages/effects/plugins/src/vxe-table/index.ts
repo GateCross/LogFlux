@@ -1,10 +1,10 @@
 export { setupVbenVxeTable } from './init';
-export type { VxeTableGridColumns, VxeTableGridOptions } from './types';
+export type {
+  VxeGridProps,
+  VxeTableGridColumns,
+  VxeTableGridOptions,
+} from './types';
 export * from './use-vxe-grid';
 
 export { default as VbenVxeGrid } from './use-vxe-grid.vue';
-export type {
-  VxeGridListeners,
-  VxeGridProps,
-  VxeGridPropTypes,
-} from 'vxe-table';
+export type { VxeGridListeners, VxeGridPropTypes } from 'vxe-table';

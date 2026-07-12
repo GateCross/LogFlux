@@ -1,6 +1,7 @@
 @reference "@vben/tailwind-config/theme";
 
-:root .vxe-grid {
+:root .vxe-grid,
+:root .vxe-table-custom-wrapper {
   --vxe-ui-font-color: hsl(var(--foreground));
   --vxe-ui-font-primary-color: hsl(var(--primary));
 
@@ -50,8 +51,6 @@
   --vxe-ui-font-primary-tinge-color: hsl(var(--primary));
   --vxe-ui-font-primary-lighten-color: hsl(var(--primary) / 60%);
   --vxe-ui-font-primary-darken-color: hsl(var(--primary));
-
-  height: auto !important;
 
   /* --vxe-ui-table-fixed-scrolling-box-shadow-color: rgb(0 0 0 / 80%); */
 }

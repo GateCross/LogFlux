@@ -1,41 +1,45 @@
 # LogFlux Icon Guide
 
 ## Allowed Icon Sets
-We strictly use **Iconify** with offline bundling. Do NOT use online URLs.
+We strictly use **Iconify offline**. Do NOT use online CDN/API.
 
-**Pre-installed Icon Sets** (found in `package.json`):
-- `mdi` (Material Design Icons)
-- `carbon` (Carbon Design System)
+**Installed Icon Sets** (`packages/icons/package.json`):
+- `mdi`
+- `carbon`
 - `ant-design`
-- `heroicons`
-- `ic` (Google Material Icons)
-- `line-md`
-- `majesticons`
+- `ic`
+- `ep`
+- `fluent-mdl2`
+- `lucide`
 - `material-symbols`
-- `ph` (Phosphor)
 
-## Import Convention
-All icons must be registered in `frontend/src/plugins/iconify.ts`.
+## Registration
+All collections are registered in:
 
-### format
+`frontend/packages/icons/src/iconify/load.ts`
+
 ```typescript
-// 1. Import
-import IconName from '@iconify/icons-<set>/<icon-name>';
+import { icons as mdi } from '@iconify-json/mdi';
+import { addCollection, registerIconNames } from '@vben-core/icons';
 
-// 2. Register
-addIcon('<set>:<icon-name>', IconName);
+addCollection(mdi);
+registerIconNames(mdi.prefix, Object.keys(mdi.icons));
 ```
 
-### Example
-To use `mdi:home`:
-```typescript
-import Home from '@iconify/icons-mdi/home';
+## Usage
+```vue
+<script setup>
+import { IconifyIcon } from '@vben/icons';
+// 或
+import { Icon } from '@iconify/vue/offline';
+</script>
 
-// ... inside setupIconifyOffline function
-addIcon('mdi:home', Home);
+<template>
+  <IconifyIcon icon="mdi:home" />
+</template>
 ```
 
 ## Strict Rules
-1. **No Mixed Styles**: Stick to the existing sets.
-2. **Offline Only**: Use `@iconify/icons-*` packages.
-3. **Naming**: Variable name should be PascalCase of the icon name (e.g., `account-box` -> `AccountBox`).
+1. **Offline Only**: never import default `@iconify/vue` Icon (online).
+2. **Register First**: new prefixes must be added to `load.ts`.
+3. **Naming**: use `prefix:name` (e.g. `carbon:settings`).

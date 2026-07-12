@@ -1,3 +1,5 @@
+import type { RequestClientConfig } from '@vben/request';
+
 import { requestClient } from '#/api/request';
 
 import { listOf } from '../_utils';
@@ -41,8 +43,11 @@ export namespace MenuApi {
   }
 }
 
-export async function getMenuListApi() {
-  const resp = await requestClient.get<MenuApi.MenuListResult>('/menu/list');
+export async function getMenuListApi(config?: RequestClientConfig) {
+  const resp = await requestClient.get<MenuApi.MenuListResult>(
+    '/menu/list',
+    config,
+  );
   return listOf(resp);
 }
 

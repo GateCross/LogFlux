@@ -1,326 +1,328 @@
-<script lang="ts" setup>
+<script setup lang="ts">
+import type { VbenFormSchema } from '#/adapter/form';
+import type { VxeTableGridColumns } from '#/adapter/vxe-table';
+
 import type { RoleApi } from '#/api/system/role';
 
-import { computed, onMounted, ref } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
+import { useQueryClient } from '@tanstack/vue-query';
 
 import {
+  Alert,
   Button,
-  Card,
   Checkbox,
   CheckboxGroup,
-  Form,
-  FormItem,
   message,
   Modal,
-  Table,
+  Space,
   Tag,
   Tooltip,
-} from 'ant-design-vue';
+} from 'antdv-next';
 
+import { useVbenForm } from '#/adapter/form';
+import { useVbenVxeGrid } from '#/adapter/vxe-table';
 import {
   getRoleListApi,
   updateRolePermissionsApi,
 } from '#/api/system/role';
+import { withListDetailErrorMode } from '#/api/list-detail';
+import { invalidateListDetailQueries } from '#/api/list-detail-mutation';
+import { qk } from '#/api/query-keys';
+import { apiErrorMessage } from '#/utils/api-error-message';
+
+import {
+  createAdminCrudGridOptions,
+  useAdminCrudForm,
+} from '../_pattern';
+import {
+  buildVisiblePermissionGroups,
+  hasVisiblePermissions,
+  hiddenPermissionSummaries,
+  uniquePermissions,
+  visiblePermissionSummaries,
+} from './permission-utils';
 
 defineOptions({ name: 'ManageRole' });
 
-const loading = ref(false);
-const dataSource = ref<RoleApi.RoleItem[]>([]);
+type RoleItem = RoleApi.RoleItem;
 
-const modalVisible = ref(false);
-const currentRoleId = ref<number | null>(null);
-const currentRoleName = ref('');
-const currentPermissions = ref<string[]>([]);
-const submitting = ref(false);
-const hiddenPermissionValues = new Set(['caddy_source', 'user_center']);
-
-interface PermissionOption {
-  label: string;
-  value: string;
+interface RolePermissionFormValues extends Record<string, unknown> {
+  permissions: string[];
 }
 
-interface PermissionGroup {
-  label: string;
-  options: PermissionOption[];
-}
+const queryClient = useQueryClient();
+const listErrorMessage = ref<string | null>(null);
 
-interface PermissionSummary {
-  details: string[];
-  group: string;
-  label: string;
-}
-
-const permissionGroups: PermissionGroup[] = [
+const columns: VxeTableGridColumns<RoleItem> = [
+  { field: 'id', title: 'ID', width: 80 },
+  { field: 'name', title: '角色名', width: 140 },
+  { field: 'displayName', title: '显示名称', width: 160 },
+  { field: 'description', title: '描述', minWidth: 120 },
   {
-    label: '仪表盘',
-    options: [{ label: '仪表盘', value: 'dashboard' }],
+    field: 'permissions',
+    title: '权限',
+    align: 'left',
+    headerAlign: 'center',
+    showOverflow: false,
+    width: 280,
+    slots: { default: 'permissions' },
   },
+  { field: 'createdAt', title: '创建时间', width: 180 },
   {
-    label: 'Caddy 配置',
-    options: [
-      { label: 'Caddy 菜单', value: 'caddy' },
-      { label: '配置管理', value: 'caddy_config' },
-      { label: '访问控制', value: 'caddy_access' },
-      { label: '访问日志', value: 'logs_caddy' },
-    ],
-  },
-  {
-    label: '日志与审计',
-    options: [{ label: '系统日志', value: 'logs' }],
-  },
-  {
-    label: '定时任务',
-    options: [{ label: '定时任务', value: 'cron' }],
-  },
-  {
-    label: '系统管理',
-    options: [
-      { label: '系统管理', value: 'manage' },
-      { label: '用户管理', value: 'manage_user' },
-      { label: '角色管理', value: 'manage_role' },
-      { label: '菜单管理', value: 'manage_menu' },
-    ],
-  },
-  {
-    label: '通知管理',
-    options: [
-      { label: '通知管理', value: 'notification' },
-      { label: '通知渠道', value: 'notification_channel' },
-      { label: '通知规则', value: 'notification_rule' },
-      { label: '通知模板', value: 'notification_template' },
-      { label: '发送日志', value: 'notification_log' },
-    ],
+    field: 'action',
+    title: '操作',
+    width: 180,
+    fixed: 'right',
+    slots: { default: 'action' },
   },
 ];
 
-const permissionOptionMap = new Map(
-  permissionGroups.flatMap((group) =>
-    group.options.map((option) => [option.value, { ...option, group: group.label }] as const),
+const [Grid, gridApi] = useVbenVxeGrid(
+  createAdminCrudGridOptions<RoleItem>({
+    tableTitle: '角色管理',
+    columns,
+    pageSize: 100,
+    query: async () => {
+      listErrorMessage.value = null;
+      try {
+        const list = await queryClient.fetchQuery({
+          queryKey: qk.system.roles(),
+          queryFn: () => getRoleListApi(withListDetailErrorMode()),
+        });
+        const items = Array.isArray(list) ? list : [];
+        return { items, total: items.length };
+      } catch (error) {
+        listErrorMessage.value = apiErrorMessage(error, '加载角色列表失败');
+        return { items: [], total: 0 };
+      }
+    },
+    gridOptions: {
+      // 角色列表为全量接口，无服务端分页
+      pagerConfig: {
+        enabled: false,
+      },
+    },
+  }),
+);
+
+const form = useAdminCrudForm<RolePermissionFormValues>({
+  createDefaults: () => ({
+    permissions: [],
+  }),
+  mapRecordToValues: (record) => {
+    const row = record as RoleItem;
+    return {
+      permissions: uniquePermissions(row.permissions),
+    };
+  },
+  submit: async ({ values, record }) => {
+    const row = record as RoleItem | null;
+    if (!row?.id) {
+      throw new Error('未选择角色');
+    }
+    await updateRolePermissionsApi(
+      row.id,
+      uniquePermissions(values.permissions),
+    );
+    message.success('权限更新成功');
+    await invalidateListDetailQueries(queryClient, ['system', 'roles']);
+  },
+  errorFallback: '操作失败',
+});
+
+const modalTitle = computed(() => {
+  const row = form.editingRecord.value as RoleItem | null;
+  if (!row) return '编辑权限';
+  const name = row.displayName || row.name;
+  return name ? `编辑权限 - ${name}` : '编辑权限';
+});
+
+/** 打开弹层时的权限值驱动「其他权限」分组；勾选过程不改分组结构 */
+const visiblePermissionGroups = computed(() =>
+  buildVisiblePermissionGroups(
+    (form.initialValues.value as RolePermissionFormValues).permissions ?? [],
   ),
 );
 
-const columns = [
-  { dataIndex: 'id', key: 'id', title: 'ID', width: 80 },
-  { dataIndex: 'name', key: 'name', title: '角色名', width: 140 },
-  { dataIndex: 'displayName', key: 'displayName', title: '显示名称', width: 160 },
-  { dataIndex: 'description', key: 'description', title: '描述' },
-  { dataIndex: 'permissions', key: 'permissions', title: '权限', width: 260 },
-  { dataIndex: 'createdAt', key: 'createdAt', title: '创建时间', width: 180 },
-  { key: 'actions', title: '操作', width: 120 },
+const formSchema: VbenFormSchema[] = [
+  {
+    component: 'CheckboxGroup',
+    fieldName: 'permissions',
+    label: '权限列表',
+    formItemClass: 'items-start',
+    componentProps: {
+      class: 'permission-checkbox-group w-full',
+    },
+  },
 ];
 
-const modalTitle = computed(() =>
-  currentRoleName.value ? `编辑权限 - ${currentRoleName.value}` : '编辑权限',
+const [Form, formApi] = useVbenForm({
+  commonConfig: {
+    componentProps: {
+      class: 'w-full',
+    },
+  },
+  layout: 'vertical',
+  schema: formSchema,
+  showDefaultActions: false,
+  handleSubmit: async (values) => {
+    const ok = await form.handleSubmit(values as RolePermissionFormValues);
+    if (ok) {
+      await gridApi.reload();
+    }
+  },
+});
+
+async function syncFormOpen() {
+  await nextTick();
+  await formApi.setValues(
+    form.initialValues.value as RolePermissionFormValues,
+  );
+}
+
+watch(
+  () => form.open.value,
+  async (open) => {
+    if (open) {
+      await syncFormOpen();
+    }
+  },
 );
 
-const visiblePermissionGroups = computed<PermissionGroup[]>(() => {
-  const extraOptions = uniquePermissions(currentPermissions.value)
-    .filter((permission) => !permissionOptionMap.has(permission))
-    .map((permission) => ({
-      label: permission,
-      value: permission,
-    }));
-
-  if (extraOptions.length === 0) {
-    return permissionGroups;
-  }
-
-  return [
-    ...permissionGroups,
-    {
-      label: '其他权限',
-      options: extraOptions,
-    },
-  ];
-});
-
-function uniquePermissions(permissions?: string[]) {
-  const seen = new Set<string>();
-  const result: string[] = [];
-  for (const permission of permissions ?? []) {
-    const value = String(permission || '').trim();
-    if (!value || seen.has(value) || hiddenPermissionValues.has(value)) continue;
-    seen.add(value);
-    result.push(value);
-  }
-  return result;
+function handleEditPermissions(record: RoleItem) {
+  form.openEdit(record);
 }
 
-function permissionLabelOf(permission: string) {
-  return permissionOptionMap.get(permission)?.label || permission;
+function handleModalOk() {
+  void formApi.validateAndSubmitForm();
 }
 
-function buildPermissionSummaries(permissions?: string[]): PermissionSummary[] {
-  const selected = new Set(uniquePermissions(permissions));
-  const summaries: PermissionSummary[] = [];
-
-  for (const group of permissionGroups) {
-    const details = group.options
-      .filter((option) => selected.has(option.value))
-      .map((option) => option.label);
-    if (details.length === 0) continue;
-
-    summaries.push({
-      details,
-      group: group.label,
-      label: details.length === 1 ? details[0]! : `${group.label} ${details.length}项`,
-    });
-  }
-
-  const extraDetails = [...selected]
-    .filter((permission) => !permissionOptionMap.has(permission))
-    .map(permissionLabelOf);
-
-  if (extraDetails.length > 0) {
-    summaries.push({
-      details: extraDetails,
-      group: '其他权限',
-      label: extraDetails.length === 1 ? extraDetails[0]! : `其他权限 ${extraDetails.length}项`,
-    });
-  }
-
-  return summaries;
+function handleModalCancel() {
+  form.close();
 }
 
-function visiblePermissionSummaries(permissions?: string[]) {
-  return buildPermissionSummaries(permissions).slice(0, 3);
+function slotPermissionValue(slotProps: Record<string, any>): string[] {
+  const raw = slotProps?.value ?? slotProps?.modelValue;
+  return Array.isArray(raw) ? raw : [];
 }
 
-function hiddenPermissionSummaries(permissions?: string[]) {
-  return buildPermissionSummaries(permissions).slice(3);
+function setSlotPermissionValue(
+  slotProps: Record<string, any>,
+  next: string[],
+) {
+  const updater =
+    slotProps?.['onUpdate:value'] ?? slotProps?.['onUpdate:modelValue'];
+  updater?.(next);
 }
-
-function hasVisiblePermissions(permissions?: string[]) {
-  return uniquePermissions(permissions).length > 0;
-}
-
-async function fetchData() {
-  loading.value = true;
-  try {
-    dataSource.value = await getRoleListApi();
-  } catch {
-    message.error('加载角色列表失败');
-  } finally {
-    loading.value = false;
-  }
-}
-
-function openPermissionModal(record: RoleApi.RoleItem) {
-  currentRoleId.value = record.id;
-  currentRoleName.value = record.displayName || record.name;
-  currentPermissions.value = uniquePermissions(record.permissions);
-  modalVisible.value = true;
-}
-
-async function handleSubmit() {
-  if (!currentRoleId.value) return;
-
-  submitting.value = true;
-  try {
-    await updateRolePermissionsApi(currentRoleId.value, uniquePermissions(currentPermissions.value));
-    message.success('权限更新成功');
-    modalVisible.value = false;
-    await fetchData();
-  } catch {
-    message.error('权限更新失败');
-  } finally {
-    submitting.value = false;
-  }
-}
-
-onMounted(() => {
-  void fetchData();
-});
 </script>
 
 <template>
   <div class="p-5">
-    <Card title="角色管理">
-      <template #extra>
-        <Button @click="fetchData">刷新</Button>
-      </template>
+    <Alert
+      v-if="listErrorMessage"
+      type="error"
+      show-icon
+      class="mb-3"
+      :message="listErrorMessage"
+      closable
+      @close="listErrorMessage = null"
+    />
 
-      <Table
-        :columns="columns"
-        :data-source="dataSource"
-        :loading="loading"
-        row-key="id"
-        size="middle"
-      >
-        <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'permissions'">
-            <div v-if="hasVisiblePermissions(record.permissions)" class="permission-summary">
-              <Tooltip
-                v-for="summary in visiblePermissionSummaries(record.permissions)"
-                :key="summary.group"
-              >
-                <template #title>{{ summary.details.join('、') }}</template>
-                <Tag color="blue">{{ summary.label }}</Tag>
-              </Tooltip>
-              <Tooltip v-if="hiddenPermissionSummaries(record.permissions).length">
-                <template #title>
-                  <div class="permission-tooltip-list">
-                    <div
-                      v-for="summary in hiddenPermissionSummaries(record.permissions)"
-                      :key="summary.group"
-                    >
-                      {{ summary.label }}：{{ summary.details.join('、') }}
-                    </div>
-                  </div>
-                </template>
-                <Tag class="permission-more-tag">+{{ hiddenPermissionSummaries(record.permissions).length }}</Tag>
-              </Tooltip>
-            </div>
-            <Tag v-else>无</Tag>
-          </template>
-
-          <template v-if="column.key === 'actions'">
-            <Button
-              type="link"
-              size="small"
-              @click="openPermissionModal(record as RoleApi.RoleItem)"
-            >
-              编辑权限
-            </Button>
-          </template>
-        </template>
-      </Table>
-    </Card>
-
-    <Modal
-      :confirm-loading="submitting"
-      :open="modalVisible"
-      :title="modalTitle"
-      :width="680"
-      @cancel="modalVisible = false"
-      @ok="handleSubmit"
-    >
-      <Form layout="vertical" class="mt-4">
-        <FormItem label="权限列表">
-          <CheckboxGroup v-model:value="currentPermissions" class="permission-checkbox-group">
-            <div class="permission-groups">
-              <div
-                v-for="group in visiblePermissionGroups"
-                :key="group.label"
-                class="permission-group"
-              >
-                <div class="permission-group-title">
-                  {{ group.label }}
-                </div>
-                <div class="permission-options">
-                  <Checkbox
-                    v-for="option in group.options"
-                    :key="option.value"
-                    :value="option.value"
-                  >
-                    {{ option.label }}
-                  </Checkbox>
+    <Grid>
+      <template #permissions="{ row }">
+        <div
+          v-if="hasVisiblePermissions(row.permissions)"
+          class="permission-summary"
+        >
+          <Tooltip
+            v-for="summary in visiblePermissionSummaries(row.permissions)"
+            :key="summary.group"
+          >
+            <template #title>{{ summary.details.join('、') }}</template>
+            <Tag color="blue">{{ summary.label }}</Tag>
+          </Tooltip>
+          <Tooltip v-if="hiddenPermissionSummaries(row.permissions).length">
+            <template #title>
+              <div class="permission-tooltip-list">
+                <div
+                  v-for="summary in hiddenPermissionSummaries(row.permissions)"
+                  :key="summary.group"
+                >
+                  {{ summary.label }}：{{ summary.details.join('、') }}
                 </div>
               </div>
-            </div>
-          </CheckboxGroup>
-        </FormItem>
-      </Form>
+            </template>
+            <Tag class="permission-more-tag">
+              +{{ hiddenPermissionSummaries(row.permissions).length }}
+            </Tag>
+          </Tooltip>
+        </div>
+        <Tag v-else>无</Tag>
+      </template>
+
+      <template #action="{ row }">
+        <Space :size="6">
+          <Button
+            size="small"
+            class="table-action-btn"
+            @click="handleEditPermissions(row as RoleItem)"
+          >
+            编辑权限
+          </Button>
+        </Space>
+      </template>
+    </Grid>
+
+    <Modal
+      :open="form.open.value"
+      :title="modalTitle"
+      :confirm-loading="form.submitLoading.value"
+      :width="680"
+      destroy-on-hidden
+      @cancel="handleModalCancel"
+      @ok="handleModalOk"
+    >
+      <Alert
+        v-if="form.errorMessage.value"
+        type="error"
+        show-icon
+        class="mb-3"
+        :message="form.errorMessage.value"
+      />
+      <div class="pt-2">
+        <Form>
+          <template #permissions="slotProps">
+            <CheckboxGroup
+              class="permission-checkbox-group w-full"
+              :value="slotPermissionValue(slotProps)"
+              @update:value="
+                (v: string[]) => setSlotPermissionValue(slotProps, v)
+              "
+            >
+              <div class="permission-groups">
+                <div
+                  v-for="group in visiblePermissionGroups"
+                  :key="group.label"
+                  class="permission-group"
+                >
+                  <div class="permission-group-title">
+                    {{ group.label }}
+                  </div>
+                  <div class="permission-options">
+                    <Checkbox
+                      v-for="option in group.options"
+                      :key="option.value"
+                      :value="option.value"
+                    >
+                      {{ option.label }}
+                    </Checkbox>
+                  </div>
+                </div>
+              </div>
+            </CheckboxGroup>
+          </template>
+        </Form>
+      </div>
     </Modal>
   </div>
 </template>
@@ -328,8 +330,9 @@ onMounted(() => {
 <style scoped>
 .permission-summary {
   display: flex;
-  max-width: 280px;
+  width: 100%;
   flex-wrap: wrap;
+  justify-content: flex-start;
   gap: 6px;
 }
 
@@ -341,14 +344,11 @@ onMounted(() => {
   cursor: help;
 }
 
-.permission-checkbox-group {
-  width: 100%;
-}
-
 .permission-groups {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px 24px;
+  width: 100%;
 }
 
 .permission-group-title {

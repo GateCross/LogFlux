@@ -13,7 +13,7 @@ import {
   Table,
   Tag,
   message,
-} from 'ant-design-vue';
+} from 'antdv-next';
 
 import {
   DOCKER_DISCOVERY_LABEL_HELP,
@@ -158,7 +158,7 @@ function handleApply() {
     title="Docker 发现 → 会话候选草稿"
     width="980px"
     :footer="null"
-    destroy-on-close
+    destroy-on-hidden
     @cancel="close"
   >
     <div class="docker-discovery">

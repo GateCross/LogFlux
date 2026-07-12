@@ -80,11 +80,11 @@ function defineApplicationConfig(userConfigPromise?: DefineApplicationOptions) {
         host: true,
         port,
         warmup: {
-          // 预热文件
+          // 预热文件（仅代码，避免 api 目录下 .md 被 import-analysis 当 JS 解析）
           clientFiles: [
             './index.html',
             './src/bootstrap.ts',
-            './src/{views,layouts,router,store,api,adapter}/*',
+            './src/{views,layouts,router,store,api,adapter}/*.{ts,tsx,vue,js,jsx}',
           ],
         },
       },

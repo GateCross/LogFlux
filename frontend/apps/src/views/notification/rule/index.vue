@@ -1,9 +1,11 @@
 <script lang="ts" setup>
 import type { NotificationApi } from '#/api/notification';
 
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
+import { useQueryClient } from '@tanstack/vue-query';
 
 import {
+  Alert,
   Button,
   Card,
   Form,
@@ -17,7 +19,7 @@ import {
   Table,
   Tag,
   message,
-} from 'ant-design-vue';
+} from 'antdv-next';
 
 import {
   createNotificationRuleApi,
@@ -28,68 +30,86 @@ import {
   getNotificationTemplatesApi,
   updateNotificationRuleApi,
 } from '#/api/notification';
+import { withListDetailErrorMode } from '#/api/list-detail';
+import { invalidateListDetailQueries } from '#/api/list-detail-mutation';
+import { qk } from '#/api/query-keys';
+import { useListDetailQuery } from '#/composables/use-list-detail-query';
 
 defineOptions({ name: 'NotificationRule' });
 
-// ── List state ──────────────────────────────────────────────
+const queryClient = useQueryClient();
 
-const loading = ref(false);
-const rules = ref<NotificationApi.Rule[]>([]);
+const {
+  data: rulesData,
+  loading,
+  errorMessage,
+  refetch: refetchRules,
+} = useListDetailQuery({
+  queryKey: qk.notification.rules(),
+  queryFn: () => getNotificationRulesApi(withListDetailErrorMode()),
+  errorFallback: '加载通知规则失败',
+});
 
-async function fetchRules() {
-  loading.value = true;
-  try {
-    rules.value = await getNotificationRulesApi();
-  } finally {
-    loading.value = false;
+const rules = computed(() => rulesData.value ?? []);
+
+const { data: channelsData } = useListDetailQuery({
+  queryKey: qk.notification.channels({ for: 'rule-ref' }),
+  queryFn: () => getNotificationChannelsApi(withListDetailErrorMode()),
+  errorFallback: '加载渠道失败',
+});
+
+const { data: templatesData } = useListDetailQuery({
+  queryKey: qk.notification.templates({ for: 'rule-ref' }),
+  queryFn: () => getNotificationTemplatesApi(withListDetailErrorMode()),
+  errorFallback: '加载模板失败',
+});
+
+const { data: eventsData } = useListDetailQuery({
+  queryKey: qk.notification.events(),
+  queryFn: () => getNotificationEventsApi(withListDetailErrorMode()),
+  errorFallback: '加载事件失败',
+});
+
+const channelOptions = computed(() =>
+  (channelsData.value ?? []).map((c) => ({ label: c.name, value: String(c.id) })),
+);
+const templateOptions = computed(() =>
+  (templatesData.value ?? []).map((t) => ({ label: t.name, value: t.name })),
+);
+
+const levelOptions = computed(() => {
+  const options = [{ label: '不限', value: '*' }];
+  for (const e of eventsData.value ?? []) {
+    if (e.group === '事件级别') {
+      options.push({ label: e.label, value: e.value });
+    }
   }
-}
+  return options;
+});
 
-// ── Reference data (channels & templates for selects) ───────
-
-const channelOptions = ref<{ label: string; value: string }[]>([]);
-const templateOptions = ref<{ label: string; value: string }[]>([]);
-const levelOptions = ref<{ label: string; value: string }[]>([]);
-const eventTypeOptions = ref<{ label: string; options: { label: string; value: string }[] }[]>([]);
-const flatEventTypeOptions = ref<{ label: string; value: string }[]>([]);
-
-async function fetchReferenceData() {
-  try {
-    const [channels, templates, events] = await Promise.all([
-      getNotificationChannelsApi(),
-      getNotificationTemplatesApi(),
-      getNotificationEventsApi(),
-    ]);
-    channelOptions.value = channels.map((c) => ({ label: c.name, value: String(c.id) }));
-    templateOptions.value = templates.map((t) => ({ label: t.name, value: t.name }));
-
-    levelOptions.value = [];
-    flatEventTypeOptions.value = [];
-
-    const groups = new Map<string, { label: string; value: string }[]>();
-    events.forEach((e) => {
-      if (e.group === '事件级别') {
-        levelOptions.value.push({ label: e.label, value: e.value });
-      } else {
-        const opts = groups.get(e.group) || [];
-        opts.push({ label: e.label, value: e.value });
-        groups.set(e.group, opts);
-        flatEventTypeOptions.value.push({ label: e.label, value: e.value });
-      }
-    });
-    // 追加“不限”选项到等级
-    levelOptions.value.unshift({ label: '不限', value: '*' });
-
-    eventTypeOptions.value = Array.from(groups.entries()).map(([label, options]) => ({
-      label,
-      options,
-    }));
-  } catch {
-    // Non-critical; selects will just be empty
+const eventTypeOptions = computed(() => {
+  const groups = new Map<string, { label: string; value: string }[]>();
+  for (const e of eventsData.value ?? []) {
+    if (e.group === '事件级别') continue;
+    const opts = groups.get(e.group) || [];
+    opts.push({ label: e.label, value: e.value });
+    groups.set(e.group, opts);
   }
-}
+  return Array.from(groups.entries()).map(([label, options]) => ({
+    label,
+    options,
+  }));
+});
 
-// ── Table columns ───────────────────────────────────────────
+const flatEventTypeOptions = computed(() => {
+  const list: { label: string; value: string }[] = [];
+  for (const e of eventsData.value ?? []) {
+    if (e.group !== '事件级别') {
+      list.push({ label: e.label, value: e.value });
+    }
+  }
+  return list;
+});
 
 const columns = [
   { dataIndex: 'name', key: 'name', title: '名称' },
@@ -97,14 +117,12 @@ const columns = [
   { dataIndex: 'eventTypes', key: 'eventTypes', title: '特定事件' },
   { dataIndex: 'channelId', key: 'channelId', title: '渠道' },
   { dataIndex: 'enabled', key: 'enabled', title: '启用' },
-  { key: 'actions', title: '操作', width: 180 },
+  { key: 'actions', title: '操作', width: 200 },
 ];
 
 function channelName(id: string) {
   return channelOptions.value.find((c) => c.value === id)?.label ?? id;
 }
-
-// ── 创建 / 编辑 modal ─────────────────────────────────────
 
 const modalVisible = ref(false);
 const modalLoading = ref(false);
@@ -164,7 +182,8 @@ async function handleSubmit() {
       message.success('通知规则已创建');
     }
     modalVisible.value = false;
-    await fetchRules();
+    await invalidateListDetailQueries(queryClient, qk.notification.rules());
+    await refetchRules();
   } catch {
     message.error('操作失败');
   } finally {
@@ -172,13 +191,12 @@ async function handleSubmit() {
   }
 }
 
-// ── 删除 ──────────────────────────────────────────────────
-
 async function handleDelete(id: string) {
   try {
     await deleteNotificationRuleApi(id);
     message.success('通知规则已删除');
-    await fetchRules();
+    await invalidateListDetailQueries(queryClient, qk.notification.rules());
+    await refetchRules();
   } catch {
     message.error('删除失败');
   }
@@ -192,21 +210,20 @@ function levelLabel(level: string) {
 function typeLabel(type: string) {
   return flatEventTypeOptions.value.find((item) => item.value === type)?.label ?? type;
 }
-
-// ── Init ────────────────────────────────────────────────────
-
-onMounted(async () => {
-  await Promise.all([fetchRules(), fetchReferenceData()]);
-});
 </script>
 
 <template>
   <div class="p-5">
+    <Alert
+      v-if="errorMessage"
+      class="mb-4"
+      type="error"
+      show-icon
+      :message="errorMessage"
+    />
     <Card title="通知规则">
       <template #extra>
-        <Button type="primary" @click="openCreate">
-          新增规则
-        </Button>
+        <Button type="primary" @click="openCreate">新增规则</Button>
       </template>
 
       <Table
@@ -258,19 +275,16 @@ onMounted(async () => {
           </template>
 
           <template v-if="column.key === 'actions'">
-            <Space>
+            <Space :size="6">
               <Button
                 size="small"
-                type="link"
+                class="table-action-btn"
                 @click="openEdit(record as NotificationApi.Rule)"
               >
                 编辑
               </Button>
-              <Popconfirm
-                title="确认删除该通知规则？"
-                @confirm="handleDelete(record.id)"
-              >
-                <Button size="small" type="link" danger>
+              <Popconfirm title="确认删除该通知规则？" @confirm="handleDelete(record.id)">
+                <Button size="small" danger class="table-action-btn table-action-btn--danger">
                   删除
                 </Button>
               </Popconfirm>
@@ -280,7 +294,6 @@ onMounted(async () => {
       </Table>
     </Card>
 
-    <!-- ── 创建 / 编辑 modal ──────────────────────────────── -->
     <Modal
       v-model:open="modalVisible"
       :confirm-loading="modalLoading"
@@ -288,11 +301,7 @@ onMounted(async () => {
       :width="560"
       @ok="handleSubmit"
     >
-      <Form
-        :label-col="{ span: 6 }"
-        :wrapper-col="{ span: 18 }"
-        class="mt-4"
-      >
+      <Form :label-col="{ span: 6 }" :wrapper-col="{ span: 18 }" class="mt-4">
         <FormItem label="名称" required>
           <Input v-model:value="formState.name" placeholder="规则名称" />
         </FormItem>
@@ -310,7 +319,10 @@ onMounted(async () => {
             :options="eventTypeOptions"
             placeholder="选择特定事件（可多选），留空表示不限"
             show-search
-            :filter-option="(input, option) => (option?.label as string)?.toLowerCase().includes(input.toLowerCase()) ?? false"
+            :filter-option="
+              (input, option) =>
+                (option?.label as string)?.toLowerCase().includes(input.toLowerCase()) ?? false
+            "
           />
         </FormItem>
         <FormItem label="渠道" required>
@@ -319,7 +331,10 @@ onMounted(async () => {
             :options="channelOptions"
             placeholder="选择通知渠道"
             show-search
-            :filter-option="(input: string, option: any) => option.label.toLowerCase().includes(input.toLowerCase())"
+            :filter-option="
+              (input: string, option: any) =>
+                option.label.toLowerCase().includes(input.toLowerCase())
+            "
           />
         </FormItem>
         <FormItem label="模板">
@@ -329,7 +344,10 @@ onMounted(async () => {
             placeholder="选择模板（可选）"
             allow-clear
             show-search
-            :filter-option="(input: string, option: any) => option.label.toLowerCase().includes(input.toLowerCase())"
+            :filter-option="
+              (input: string, option: any) =>
+                option.label.toLowerCase().includes(input.toLowerCase())
+            "
           />
         </FormItem>
         <FormItem label="启用">
@@ -339,3 +357,9 @@ onMounted(async () => {
     </Modal>
   </div>
 </template>
+
+<style scoped>
+.mb-4 {
+  margin-bottom: 16px;
+}
+</style>

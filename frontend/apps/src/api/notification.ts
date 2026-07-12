@@ -1,3 +1,5 @@
+import type { RequestClientConfig } from '@vben/request';
+
 import { requestClient } from '#/api/request';
 
 import { listOf } from './_utils';
@@ -266,8 +268,13 @@ function rulePayload(data: NotificationApi.RuleParams) {
 /**
  * 获取通知渠道列表 — GET /notification/channel
  */
-export async function getNotificationChannelsApi() {
-  const resp = await requestClient.get<ListResp<any>>('/notification/channel');
+export async function getNotificationChannelsApi(
+  config?: RequestClientConfig,
+) {
+  const resp = await requestClient.get<ListResp<any>>(
+    '/notification/channel',
+    config,
+  );
   return listOf(resp).map((item) => normalizeChannel(item));
 }
 
@@ -321,9 +328,10 @@ export async function testNotificationChannelApi(
 /**
  * 获取通知事件列表 — GET /notification/event
  */
-export async function getNotificationEventsApi() {
+export async function getNotificationEventsApi(config?: RequestClientConfig) {
   const resp = await requestClient.get<ListResp<NotificationApi.EventItem>>(
     '/notification/event',
+    config,
   );
   return listOf(resp);
 }
@@ -333,9 +341,10 @@ export async function getNotificationEventsApi() {
 /**
  * 获取通知规则列表 — GET /notification/rule
  */
-export async function getNotificationRulesApi() {
+export async function getNotificationRulesApi(config?: RequestClientConfig) {
   const resp = await requestClient.get<ListResp<NotificationApi.Rule>>(
     '/notification/rule',
+    config,
   );
   return listOf(resp).map((item) => normalizeRule(item));
 }
@@ -377,9 +386,12 @@ export async function deleteNotificationRuleApi(id: string) {
 /**
  * 获取通知模板列表 — GET /notification/template
  */
-export async function getNotificationTemplatesApi() {
+export async function getNotificationTemplatesApi(
+  config?: RequestClientConfig,
+) {
   const resp = await requestClient.get<ListResp<NotificationApi.Template>>(
     '/notification/template',
+    config,
   );
   return listOf(resp);
 }
@@ -439,10 +451,11 @@ export async function previewNotificationTemplateApi(
  */
 export async function getNotificationLogsApi(
   params?: NotificationApi.LogQueryParams,
+  config?: RequestClientConfig,
 ) {
   return requestClient.get<ListResp<NotificationApi.NotificationLog>>(
     '/notification/log',
-    { params },
+    { params, ...config },
   );
 }
 

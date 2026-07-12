@@ -26,6 +26,13 @@ type ExtendOptions<T = any> = {
    * - data: 解构响应的BODY数据，只返回其中的data节点数据（会检查status和code是否为成功状态）。
    */
   responseReturn?: 'body' | 'data' | 'raw';
+  /**
+   * 错误提示模式（vben 风格 / LogFlux Option A）。
+   * - message（默认/未设置）：由 errorMessageResponseInterceptor 弹出全局 toast 至多一次
+   * - none：抑制全局 toast，由调用方本地处理（list-detail Toast 策略 A / task 9.2）
+   * - modal：预留；当前与 message 等价（仍走 makeErrorMessage 回调）
+   */
+  errorMessageMode?: 'message' | 'modal' | 'none';
 };
 type RequestClientConfig<T = any> = AxiosRequestConfig<T> & ExtendOptions<T>;
 

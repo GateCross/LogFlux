@@ -1,12 +1,14 @@
 <script lang="ts" setup>
 import type { SystemLogApi } from '#/api/system/log';
-import type { TableColumnsType } from 'ant-design-vue';
+import type { TableColumnsType } from 'antdv-next';
 
-import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
+import { useQueryClient } from '@tanstack/vue-query';
 
 import { Page } from '@vben/common-ui';
 
 import {
+  Alert,
   Button,
   Card,
   DatePicker,
@@ -20,19 +22,26 @@ import {
   Table,
   Tag,
   message,
-} from 'ant-design-vue';
+} from 'antdv-next';
 
 import { clearSystemLogsApi, getSystemLogsApi } from '#/api/system/log';
+import { withListDetailErrorMode } from '#/api/list-detail';
+import { invalidateListDetailQueries } from '#/api/list-detail-mutation';
+import { qk } from '#/api/query-keys';
+import { useListDetailQuery } from '#/composables/use-list-detail-query';
 
 type SortOrder = 'ascend' | 'descend' | false;
 type SystemLog = SystemLogApi.LogItem;
 
-const loading = ref(false);
+const queryClient = useQueryClient();
 const clearing = ref(false);
-const dataSource = ref<SystemLog[]>([]);
 const selectedLog = ref<SystemLog | null>(null);
 const detailVisible = ref(false);
 const autoRefreshTimer = ref<number | null>(null);
+function loadAutoRefreshSeconds() {
+  const saved = Number(localStorage.getItem('logflux:system-log.autoRefreshSeconds') || 0);
+  return saved === 5 || saved === 10 ? saved : 0;
+}
 const autoRefreshSeconds = ref(loadAutoRefreshSeconds());
 const tableWrapRef = ref<HTMLElement | null>(null);
 const tableScrollY = ref<number>();
@@ -60,16 +69,57 @@ const pagination = reactive({
   total: 0,
 });
 
+const sortState = ref<{ columnKey: string; order: SortOrder }>({
+  columnKey: 'logTime',
+  order: 'descend',
+});
+
+const listParams = computed(() => {
+  const [startTime, endTime] = filters.timeRange ?? [undefined, undefined];
+  return {
+    endTime,
+    keyword: filters.keyword,
+    level: filters.level || undefined,
+    order:
+      sortState.value.order === 'ascend'
+        ? 'asc'
+        : sortState.value.order === 'descend'
+          ? 'desc'
+          : undefined,
+    page: pagination.current,
+    pageSize: pagination.pageSize,
+    sortBy: sortState.value.order ? 'logTime' : undefined,
+    source: filters.source || undefined,
+    startTime,
+  };
+});
+
+const {
+  data: logsPage,
+  loading,
+  errorMessage,
+  refetch,
+} = useListDetailQuery({
+  queryKey: computed(() => qk.caddy.systemLog(listParams.value)),
+  queryFn: () => getSystemLogsApi(listParams.value, withListDetailErrorMode()),
+  errorFallback: '获取系统日志失败',
+});
+
+const dataSource = computed(() => logsPage.value?.list ?? []);
+watch(
+  logsPage,
+  (page) => {
+    pagination.total = page?.total ?? 0;
+    void nextTick(updateTableScrollY);
+  },
+  { immediate: true },
+);
+
 const hasLogs = computed(() => dataSource.value.length > 0);
 
 const tableScroll = computed(() => {
   if (!hasLogs.value || !tableScrollY.value) return { x: 1310 };
   return { x: 1310, y: tableScrollY.value };
-});
-
-const sortState = ref<{ columnKey: string; order: SortOrder }>({
-  columnKey: 'logTime',
-  order: 'descend',
 });
 
 const sourceOptions = [
@@ -88,9 +138,9 @@ const levelOptions = [
 ];
 
 const autoRefreshOptions = [
-  { label: '自动刷新: 关', value: 0 },
-  { label: '自动刷新: 5秒', value: 5 },
-  { label: '自动刷新: 10秒', value: 10 },
+  { label: '关闭自动刷新', value: 0 },
+  { label: '每 5 秒刷新', value: 5 },
+  { label: '每 10 秒刷新', value: 10 },
 ];
 
 const quickPresetOptions = [
@@ -156,47 +206,14 @@ const columns: TableColumnsType<SystemLog> = [
     width: 160,
   },
   {
-    fixed: 'right',
     key: 'actions',
     title: '操作',
-    width: 130,
+    width: 180,
   },
 ];
 
 async function fetchLogs() {
-  if (loading.value) return;
-  loading.value = true;
-  try {
-    const [startTime, endTime] = filters.timeRange ?? [undefined, undefined];
-    const data = await getSystemLogsApi({
-      endTime,
-      keyword: filters.keyword,
-      level: filters.level || undefined,
-      order:
-        sortState.value.order === 'ascend'
-          ? 'asc'
-          : sortState.value.order === 'descend'
-            ? 'desc'
-            : undefined,
-      page: pagination.current,
-      pageSize: pagination.pageSize,
-      sortBy: sortState.value.order ? 'logTime' : undefined,
-      source: filters.source || undefined,
-      startTime,
-    });
-    dataSource.value = data.list ?? [];
-    pagination.total = data.total ?? 0;
-  } catch {
-    message.error('获取系统日志失败');
-  } finally {
-    loading.value = false;
-    void nextTick(updateTableScrollY);
-  }
-}
-
-function loadAutoRefreshSeconds() {
-  const saved = Number(localStorage.getItem('logflux:system-log.autoRefreshSeconds') || 0);
-  return saved === 5 || saved === 10 ? saved : 0;
+  await refetch();
 }
 
 function clearAutoRefresh() {
@@ -225,7 +242,6 @@ function handleAutoRefreshChange(value: number) {
 
 function handleSearch() {
   pagination.current = 1;
-  void fetchLogs();
 }
 
 function handleReset() {
@@ -235,7 +251,6 @@ function handleReset() {
   filters.timeRange = undefined;
   pagination.current = 1;
   sortState.value = { columnKey: 'logTime', order: 'descend' };
-  void fetchLogs();
 }
 
 async function handleClearLogs() {
@@ -247,9 +262,7 @@ async function handleClearLogs() {
     selectedLog.value = null;
     detailVisible.value = false;
     pagination.current = 1;
-    dataSource.value = [];
-    pagination.total = 0;
-    await fetchLogs();
+    await invalidateListDetailQueries(queryClient, ['caddy', 'system-log']);
   } catch {
     message.error('清空系统日志失败');
   } finally {
@@ -265,7 +278,6 @@ function handleTableChange(pag: any, _filters: any, sorter: any) {
     columnKey: normalized?.columnKey ? String(normalized.columnKey) : 'logTime',
     order: normalized?.order === 'ascend' || normalized?.order === 'descend' ? normalized.order : false,
   };
-  void fetchLogs();
 }
 
 function openDetail(row: SystemLog) {
@@ -279,7 +291,6 @@ function applyQuickPreset(preset: { level: string; source: string }) {
   filters.source = preset.source;
   filters.level = preset.level;
   pagination.current = 1;
-  void fetchLogs();
 }
 
 function handleAutoRefreshSelectChange(value: unknown) {
@@ -411,7 +422,6 @@ function updateTableScrollY() {
 }
 
 onMounted(() => {
-  void fetchLogs();
   restartAutoRefresh();
   tableResizeObserver = new ResizeObserver(() => updateTableScrollY());
   if (tableWrapRef.value) tableResizeObserver.observe(tableWrapRef.value);
@@ -427,7 +437,14 @@ onUnmounted(() => {
 <template>
   <Page auto-content-height content-class="overflow-hidden">
     <div class="system-log-page">
-      <Card :bordered="false" class="system-log-card" title="系统日志">
+      <Card variant="borderless" class="system-log-card" title="系统日志">
+        <Alert
+          v-if="errorMessage"
+          type="error"
+          show-icon
+          class="mb-3"
+          :message="errorMessage"
+        />
         <div class="log-filter-panel">
           <div class="log-filter-main">
             <Input.Search
@@ -473,20 +490,22 @@ onUnmounted(() => {
                 {{ item.label }}
               </Button>
             </div>
-            <Select
-              :options="autoRefreshOptions"
-              :value="autoRefreshSeconds"
-              class="toolbar-refresh"
-              @change="handleAutoRefreshSelectChange"
-            />
-            <Popconfirm
-              title="确认清空全部系统日志？此操作不可恢复。"
-              @confirm="handleClearLogs"
-            >
-              <Button danger :loading="clearing">
-                清空日志
-              </Button>
-            </Popconfirm>
+            <div class="log-filter-actions">
+              <Select
+                :options="autoRefreshOptions"
+                :value="autoRefreshSeconds"
+                class="toolbar-refresh"
+                @change="handleAutoRefreshSelectChange"
+              />
+              <Popconfirm
+                title="确认清空全部系统日志？此操作不可恢复。"
+                @confirm="handleClearLogs"
+              >
+                <Button danger :loading="clearing">
+                  清空日志
+                </Button>
+              </Popconfirm>
+            </div>
           </div>
         </div>
 
@@ -510,9 +529,21 @@ onUnmounted(() => {
                 <Tag :color="sourceTagColor(record.source)">{{ sourceLabel(record.source) }}</Tag>
               </template>
               <template v-if="column.key === 'actions'">
-                <Space>
-                  <Button size="small" type="link" @click="openDetail(record as SystemLog)">详情</Button>
-                  <Button size="small" type="link" @click="copySingleLog(record as SystemLog)">复制</Button>
+                <Space :size="6">
+                  <Button
+                    size="small"
+                    class="table-action-btn"
+                    @click="openDetail(record as SystemLog)"
+                  >
+                    详情
+                  </Button>
+                  <Button
+                    size="small"
+                    class="table-action-btn table-action-btn--secondary"
+                    @click="copySingleLog(record as SystemLog)"
+                  >
+                    复制
+                  </Button>
                 </Space>
               </template>
             </template>
@@ -613,9 +644,11 @@ onUnmounted(() => {
   width: 330px;
 }
 
-.preset-actions {
+.preset-actions,
+.log-filter-actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
 }
 
@@ -633,7 +666,8 @@ onUnmounted(() => {
     flex-direction: column;
   }
 
-  .preset-actions {
+  .preset-actions,
+  .log-filter-actions {
     width: 100%;
   }
 }

@@ -1,16 +1,12 @@
-/**
- * Caddy 节点状态探测 composable。
- * - 仅手动刷新 + debounce，禁止导航 thrash 自动全量探测
- * - 配置管理：只读当前选中节点摘要
- * - 服务目录：完整节点状态总览
- */
+/** 节点状态探测：仅手动刷新 + debounce，禁止导航 thrash 自动全量探测 */
 
 import { computed, ref, type Ref } from 'vue';
 
 import { useDebounceFn } from '@vueuse/core';
-import { message } from 'ant-design-vue';
+import { message } from 'antdv-next';
 
 import { getCaddyServerStatusApi } from '#/api/caddy/server';
+import { apiErrorMessage } from '#/utils/api-error-message';
 
 import {
   mergeServerStatusRows,
@@ -104,13 +100,7 @@ export function useCaddyServerStatus(options: UseCaddyServerStatusOptions) {
         serverStatusError.value = '';
       }
     } catch (error) {
-      const data = (error as any)?.response?.data ?? (error as any)?.data ?? {};
-      const detail =
-        data?.message ?? data?.msg ?? data?.error ?? (error as any)?.message;
-      serverStatusError.value =
-        typeof detail === 'string' && detail.trim()
-          ? detail.trim()
-          : '探测节点状态失败';
+      serverStatusError.value = apiErrorMessage(error, '探测节点状态失败');
       if (toastOnError) {
         message.error(serverStatusError.value);
       }

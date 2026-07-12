@@ -1,3 +1,5 @@
+import type { RequestClientConfig } from '@vben/request';
+
 import { requestClient } from '#/api/request';
 
 export namespace CaddySimpleWafApi {
@@ -5,8 +7,25 @@ export namespace CaddySimpleWafApi {
   export type SimpleWafMode = 'detectiononly' | 'off' | 'on';
   export type SimpleWafStrength = 'balanced' | 'high_blocking' | 'low_fp';
 
+  /** 简易 WAF 配置读响应 — 对齐 backend SimpleWafConfigResp */
   export interface SimpleWafConfig {
-    [key: string]: any;
+    serverId: number;
+    enabled: boolean;
+    integrated?: boolean;
+    mode: SimpleWafMode | string;
+    strength: SimpleWafStrength | string;
+    audit: SimpleWafAudit | string;
+    requestBodyAccess: boolean;
+    requestBodyLimit: number;
+    requestBodyNoFilesLimit: number;
+    siteAddresses: string[];
+    availableSites: string[];
+    corazaVersion?: string;
+    crsVersion?: string;
+    actions?: string[];
+    directives?: string;
+    config?: string;
+    message?: string;
   }
 
   export interface SimpleWafConfigPayload {
@@ -25,10 +44,13 @@ export namespace CaddySimpleWafApi {
 /**
  * 获取简易 WAF 配置 — GET /caddy/waf/simple-config
  */
-export async function getSimpleWafConfigApi(serverId?: number) {
+export async function getSimpleWafConfigApi(
+  serverId?: number,
+  config?: RequestClientConfig,
+) {
   return requestClient.get<CaddySimpleWafApi.SimpleWafConfig>(
     '/caddy/waf/simple-config',
-    { params: serverId ? { serverId } : undefined },
+    { params: serverId ? { serverId } : undefined, ...config },
   );
 }
 

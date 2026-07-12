@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { Icon } from '@iconify/vue';
+import { Icon } from '@iconify/vue/offline';
 import type { StatCard } from '../data';
 
 interface Props {

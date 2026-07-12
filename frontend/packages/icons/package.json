@@ -17,6 +17,14 @@
     }
   },
   "dependencies": {
+    "@iconify-json/ant-design": "^1.2.8",
+    "@iconify-json/carbon": "^1.2.24",
+    "@iconify-json/ep": "^1.2.4",
+    "@iconify-json/fluent-mdl2": "^1.2.1",
+    "@iconify-json/ic": "^1.2.4",
+    "@iconify-json/lucide": "^1.2.116",
+    "@iconify-json/material-symbols": "^1.2.83",
+    "@iconify-json/mdi": "^1.2.3",
     "@vben-core/icons": "workspace:*"
   }
 }

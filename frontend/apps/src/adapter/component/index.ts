@@ -1,6 +1,5 @@
 /**
- * 通用组件共同的使用的基础组件，原先放在 adapter/form 内部，限制了使用范围，这里提取出来，方便其他地方使用
- * 可用于 vben-form、vben-modal、vben-drawer 等组件使用,
+ * 通用组件适配（表单/弹窗等），UI kit：antdv-next
  */
 
 /* eslint-disable vue/one-component-per-file */
@@ -18,6 +17,7 @@ import type {
   MentionsProps,
   RadioGroupProps,
   RadioProps,
+  RangePickerProps,
   RateProps,
   SelectProps,
   SpaceProps,
@@ -28,8 +28,7 @@ import type {
   UploadChangeParam,
   UploadFile,
   UploadProps,
-} from 'ant-design-vue';
-import type { RangePickerProps } from 'ant-design-vue/es/date-picker';
+} from 'antdv-next';
 
 import type { Component, Ref } from 'vue';
 
@@ -66,7 +65,7 @@ import { IconifyIcon } from '@vben/icons';
 import { $t } from '@vben/locales';
 import { isEmpty } from '@vben/utils';
 
-import { message, Modal, notification } from 'ant-design-vue';
+import { message, Modal, notification } from 'antdv-next';
 
 type AdapterUploadProps = UploadProps & {
   aspectRatio?: string;
@@ -78,57 +77,69 @@ type AdapterUploadProps = UploadProps & {
   onHandleChange?: (event: UploadChangeParam) => void;
 };
 
+// antdv-next 的组件发布为 dist/<component>/index.js；显式目录入口避免 exports
+// 通配符优先匹配不存在的 dist/<component>.js，导致 Vite 无法回退到 index.js。
 const AutoComplete = defineAsyncComponent(
-  () => import('ant-design-vue/es/auto-complete'),
+  () => import('antdv-next/dist/auto-complete/index'),
 );
-const Button = defineAsyncComponent(() => import('ant-design-vue/es/button'));
+const Button = defineAsyncComponent(
+  () => import('antdv-next/dist/button/index'),
+);
 const Checkbox = defineAsyncComponent(
-  () => import('ant-design-vue/es/checkbox'),
+  () => import('antdv-next/dist/checkbox/index'),
 );
 const CheckboxGroup = defineAsyncComponent(() =>
-  import('ant-design-vue/es/checkbox').then((res) => res.CheckboxGroup),
+  import('antdv-next/dist/checkbox/index').then((res) => res.CheckboxGroup),
 );
 const DatePicker = defineAsyncComponent(
-  () => import('ant-design-vue/es/date-picker'),
+  () => import('antdv-next/dist/date-picker/index'),
 );
-const Divider = defineAsyncComponent(() => import('ant-design-vue/es/divider'));
-const Input = defineAsyncComponent(() => import('ant-design-vue/es/input'));
+const Divider = defineAsyncComponent(
+  () => import('antdv-next/dist/divider/index'),
+);
+const Input = defineAsyncComponent(() => import('antdv-next/dist/input/index'));
 const InputNumber = defineAsyncComponent(
-  () => import('ant-design-vue/es/input-number'),
+  () => import('antdv-next/dist/input-number/index'),
 );
 const InputPassword = defineAsyncComponent(() =>
-  import('ant-design-vue/es/input').then((res) => res.InputPassword),
+  import('antdv-next/dist/input/index').then((res) => res.InputPassword),
 );
 const Mentions = defineAsyncComponent(
-  () => import('ant-design-vue/es/mentions'),
+  () => import('antdv-next/dist/mentions/index'),
 );
-const Radio = defineAsyncComponent(() => import('ant-design-vue/es/radio'));
+const Radio = defineAsyncComponent(() => import('antdv-next/dist/radio/index'));
 const RadioGroup = defineAsyncComponent(() =>
-  import('ant-design-vue/es/radio').then((res) => res.RadioGroup),
+  import('antdv-next/dist/radio/index').then((res) => res.RadioGroup),
 );
+// antdv-next 根/模块导出为 DateRangePicker（亦挂在 DatePicker.RangePicker）
 const RangePicker = defineAsyncComponent(() =>
-  import('ant-design-vue/es/date-picker').then((res) => res.RangePicker),
+  import('antdv-next/dist/date-picker/index').then(
+    (res) => res.DateRangePicker ?? (res.default as any)?.RangePicker,
+  ),
 );
-const Rate = defineAsyncComponent(() => import('ant-design-vue/es/rate'));
-const Select = defineAsyncComponent(() => import('ant-design-vue/es/select'));
-const Space = defineAsyncComponent(() => import('ant-design-vue/es/space'));
-const Switch = defineAsyncComponent(() => import('ant-design-vue/es/switch'));
+const Rate = defineAsyncComponent(() => import('antdv-next/dist/rate/index'));
+const Select = defineAsyncComponent(() => import('antdv-next/dist/select/index'));
+const Space = defineAsyncComponent(() => import('antdv-next/dist/space/index'));
+const Switch = defineAsyncComponent(() => import('antdv-next/dist/switch/index'));
+// antdv-next 命名为 TextArea（A 大写）
 const Textarea = defineAsyncComponent(() =>
-  import('ant-design-vue/es/input').then((res) => res.Textarea),
+  import('antdv-next/dist/input/index').then((res) => res.TextArea),
 );
 const TimePicker = defineAsyncComponent(
-  () => import('ant-design-vue/es/time-picker'),
+  () => import('antdv-next/dist/time-picker/index'),
 );
 const TreeSelect = defineAsyncComponent(
-  () => import('ant-design-vue/es/tree-select'),
+  () => import('antdv-next/dist/tree-select/index'),
 );
 const Cascader = defineAsyncComponent(
-  () => import('ant-design-vue/es/cascader'),
+  () => import('antdv-next/dist/cascader/index'),
 );
-const Upload = defineAsyncComponent(() => import('ant-design-vue/es/upload'));
-const Image = defineAsyncComponent(() => import('ant-design-vue/es/image'));
+const Upload = defineAsyncComponent(() => import('antdv-next/dist/upload/index'));
+const Image = defineAsyncComponent(() => import('antdv-next/dist/image/index'));
 const PreviewGroup = defineAsyncComponent(() =>
-  import('ant-design-vue/es/image').then((res) => res.ImagePreviewGroup),
+  import('antdv-next/dist/image/index').then(
+    (res) => res.ImagePreviewGroup ?? (res.default as any)?.PreviewGroup,
+  ),
 );
 
 const withDefaultPlaceholder = (
@@ -365,7 +376,7 @@ function cropImage(file: File, aspectRatio: string | undefined) {
               closable: false,
               cancelText: $t('common.cancel'),
               okText: $t('ui.crop.confirm'),
-              destroyOnClose: true,
+              destroyOnHidden: true,
               onOk: async () => {
                 const cropper = cropperRef.value;
                 if (!cropper) {
@@ -729,11 +740,11 @@ async function initComponentAdapter() {
 
   // 定义全局共享状态中的消息提示
   globalShareState.defineMessage({
-    // 复制成功消息提示
+    // 复制成功消息提示（antdv-next ArgsProps 使用 title，非 v4 的 message）
     copyPreferencesSuccess: (title, content) => {
       notification.success({
         description: content,
-        message: title,
+        title,
         placement: 'bottomRight',
       });
     },

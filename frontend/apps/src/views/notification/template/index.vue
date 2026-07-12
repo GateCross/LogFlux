@@ -1,9 +1,11 @@
 <script lang="ts" setup>
 import type { NotificationApi } from '#/api/notification';
 
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
+import { useQueryClient } from '@tanstack/vue-query';
 
 import {
+  Alert,
   Button,
   Card,
   Drawer,
@@ -17,7 +19,7 @@ import {
   Table,
   Tag,
   message,
-} from 'ant-design-vue';
+} from 'antdv-next';
 
 import {
   createNotificationTemplateApi,
@@ -26,33 +28,34 @@ import {
   previewNotificationTemplateApi,
   updateNotificationTemplateApi,
 } from '#/api/notification';
+import { withListDetailErrorMode } from '#/api/list-detail';
+import { invalidateListDetailQueries } from '#/api/list-detail-mutation';
+import { qk } from '#/api/query-keys';
+import { useListDetailQuery } from '#/composables/use-list-detail-query';
 
 defineOptions({ name: 'NotificationTemplate' });
 
-// ── List state ──────────────────────────────────────────────
+const queryClient = useQueryClient();
 
-const loading = ref(false);
-const templates = ref<NotificationApi.Template[]>([]);
+const {
+  data: templatesData,
+  loading,
+  errorMessage,
+  refetch,
+} = useListDetailQuery({
+  queryKey: qk.notification.templates(),
+  queryFn: () => getNotificationTemplatesApi(withListDetailErrorMode()),
+  errorFallback: '加载通知模板失败',
+});
 
-async function fetchTemplates() {
-  loading.value = true;
-  try {
-    templates.value = await getNotificationTemplatesApi();
-  } finally {
-    loading.value = false;
-  }
-}
-
-// ── Table columns ───────────────────────────────────────────
+const templates = computed(() => templatesData.value ?? []);
 
 const columns = [
   { dataIndex: 'name', key: 'name', title: '名称' },
   { dataIndex: 'type', key: 'type', title: '类型' },
   { dataIndex: 'subject', key: 'subject', title: '主题', ellipsis: true },
-  { key: 'actions', title: '操作', width: 240 },
+  { key: 'actions', title: '操作', width: 280 },
 ];
-
-// ── Template format options ───────────────────────────────────
 
 const templateFormatOptions = [
   { label: '文本 (Text)', value: 'text' },
@@ -65,8 +68,6 @@ const templateTypeLabels: Record<string, string> = {
   system: '系统',
   user: '自定义',
 };
-
-// ── 创建 / 编辑 modal ─────────────────────────────────────
 
 const modalVisible = ref(false);
 const modalLoading = ref(false);
@@ -113,7 +114,8 @@ async function handleSubmit() {
       message.success('通知模板已创建');
     }
     modalVisible.value = false;
-    await fetchTemplates();
+    await invalidateListDetailQueries(queryClient, qk.notification.templates());
+    await refetch();
   } catch {
     message.error('操作失败');
   } finally {
@@ -121,25 +123,21 @@ async function handleSubmit() {
   }
 }
 
-// ── 删除 ──────────────────────────────────────────────────
-
 async function handleDelete(id: string) {
   try {
     await deleteNotificationTemplateApi(id);
     message.success('通知模板已删除');
-    await fetchTemplates();
+    await invalidateListDetailQueries(queryClient, qk.notification.templates());
+    await refetch();
   } catch {
     message.error('删除失败');
   }
 }
 
-// ── Preview drawer ──────────────────────────────────────────
-
 const previewDrawerVisible = ref(false);
 const previewLoading = ref(false);
 const previewContent = ref('');
 const previewTemplate = ref<NotificationApi.Template | null>(null);
-
 const previewVariables = ref('{}');
 
 async function openPreview(record: NotificationApi.Template) {
@@ -175,21 +173,20 @@ async function handlePreview() {
 function templateFormatLabel(format: string) {
   return templateFormatOptions.find((item) => item.value === format)?.label ?? format;
 }
-
-// ── Init ────────────────────────────────────────────────────
-
-onMounted(() => {
-  fetchTemplates();
-});
 </script>
 
 <template>
   <div class="p-5">
+    <Alert
+      v-if="errorMessage"
+      class="mb-4"
+      type="error"
+      show-icon
+      :message="errorMessage"
+    />
     <Card title="通知模板">
       <template #extra>
-        <Button type="primary" @click="openCreate">
-          新增模板
-        </Button>
+        <Button type="primary" @click="openCreate">新增模板</Button>
       </template>
 
       <Table
@@ -211,30 +208,28 @@ onMounted(() => {
           </template>
 
           <template v-if="column.key === 'subject'">
-            {{ record.content?.substring(0, 60) }}{{ record.content?.length > 60 ? '...' : '' }}
+            {{ record.content?.substring(0, 60)
+            }}{{ record.content?.length > 60 ? '...' : '' }}
           </template>
 
           <template v-if="column.key === 'actions'">
-            <Space>
+            <Space :size="6">
               <Button
                 size="small"
-                type="link"
+                class="table-action-btn table-action-btn--secondary"
                 @click="openPreview(record as NotificationApi.Template)"
               >
                 预览
               </Button>
               <Button
                 size="small"
-                type="link"
+                class="table-action-btn"
                 @click="openEdit(record as NotificationApi.Template)"
               >
                 编辑
               </Button>
-              <Popconfirm
-                title="确认删除该通知模板？"
-                @confirm="handleDelete(record.id)"
-              >
-                <Button size="small" type="link" danger>
+              <Popconfirm title="确认删除该通知模板？" @confirm="handleDelete(record.id)">
+                <Button size="small" danger class="table-action-btn table-action-btn--danger">
                   删除
                 </Button>
               </Popconfirm>
@@ -244,7 +239,6 @@ onMounted(() => {
       </Table>
     </Card>
 
-    <!-- ── 创建 / 编辑 modal ──────────────────────────────── -->
     <Modal
       v-model:open="modalVisible"
       :confirm-loading="modalLoading"
@@ -252,13 +246,13 @@ onMounted(() => {
       :width="640"
       @ok="handleSubmit"
     >
-      <Form
-        :label-col="{ span: 4 }"
-        :wrapper-col="{ span: 20 }"
-        class="mt-4"
-      >
+      <Form :label-col="{ span: 4 }" :wrapper-col="{ span: 20 }" class="mt-4">
         <FormItem label="名称" required>
-          <Input v-model:value="formState.name" placeholder="模板名称" :disabled="formState.type === 'system'" />
+          <Input
+            v-model:value="formState.name"
+            placeholder="模板名称"
+            :disabled="formState.type === 'system'"
+          />
         </FormItem>
         <FormItem label="格式" required>
           <Select
@@ -267,11 +261,13 @@ onMounted(() => {
             placeholder="选择模板格式"
           />
         </FormItem>
-        <FormItem label="类型" v-if="isEditing">
+        <FormItem v-if="isEditing" label="类型">
           <Tag :color="formState.type === 'system' ? 'purple' : 'blue'">
             {{ templateTypeLabels[formState.type] ?? formState.type }}
           </Tag>
-          <span v-if="formState.type === 'system'" class="text-gray-400 text-xs ml-2">系统模板仅可修改格式和内容</span>
+          <span v-if="formState.type === 'system'" class="text-gray-400 text-xs ml-2">
+            系统模板仅可修改格式和内容
+          </span>
         </FormItem>
         <FormItem label="内容" required>
           <Input.TextArea
@@ -283,12 +279,7 @@ onMounted(() => {
       </Form>
     </Modal>
 
-    <!-- ── Preview drawer ───────────────────────────────────── -->
-    <Drawer
-      v-model:open="previewDrawerVisible"
-      title="模板预览"
-      :width="640"
-    >
+    <Drawer v-model:open="previewDrawerVisible" title="模板预览" :size="640">
       <Form :label-col="{ span: 6 }" :wrapper-col="{ span: 18 }">
         <FormItem label="变量 JSON">
           <Input.TextArea
@@ -304,7 +295,7 @@ onMounted(() => {
         </FormItem>
       </Form>
 
-      <div style="margin-top: 16px;">
+      <div style="margin-top: 16px">
         <h4>渲染结果：</h4>
         <div
           style="
@@ -325,3 +316,9 @@ onMounted(() => {
     </Drawer>
   </div>
 </template>
+
+<style scoped>
+.mb-4 {
+  margin-bottom: 16px;
+}
+</style>

@@ -1,3 +1,5 @@
+import type { RequestClientConfig } from '@vben/request';
+
 import { requestClient } from '#/api/request';
 
 import { listOf } from '../_utils';
@@ -20,8 +22,11 @@ export namespace RoleApi {
 /**
  * 获取角色列表 — GET /role/list
  */
-export async function getRoleListApi() {
-  const resp = await requestClient.get<RoleApi.RoleListResult>('/role/list');
+export async function getRoleListApi(config?: RequestClientConfig) {
+  const resp = await requestClient.get<RoleApi.RoleListResult>(
+    '/role/list',
+    config,
+  );
   return listOf(resp);
 }
 

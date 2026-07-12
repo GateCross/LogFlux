@@ -1,22 +1,33 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
+import { useQueryClient } from '@tanstack/vue-query';
+
+import { Page } from '@vben/common-ui';
 
 import {
   Alert,
   Button,
   Card,
   Form,
+  FormItem,
   Input,
   Radio,
+  RadioGroup,
   Select,
   Space,
   Spin,
   Switch,
   Tag,
   message,
-} from 'ant-design-vue';
+} from 'antdv-next';
 
 import { getIpRegionConfigApi, updateIpRegionConfigApi } from '#/api/caddy/ip-region';
+import { withListDetailErrorMode } from '#/api/list-detail';
+import { invalidateListDetailQueries } from '#/api/list-detail-mutation';
+import { qk } from '#/api/query-keys';
+import { useListDetailQuery } from '#/composables/use-list-detail-query';
+
+defineOptions({ name: 'CaddyAccess' });
 
 type ChinaScope = 'all' | 'custom';
 
@@ -25,13 +36,14 @@ interface ChinaRegionRule {
   province: string;
 }
 
-const loading = ref(false);
+const queryClient = useQueryClient();
 const saving = ref(false);
 const enabled = ref(true);
 const allowList = ref<string[]>(['中国']);
 const selectedCountries = ref<string[]>(['中国']);
 const chinaScope = ref<ChinaScope>('all');
 const chinaRules = ref<ChinaRegionRule[]>([]);
+const seeded = ref(false);
 
 const editingRule = reactive({
   city: '',
@@ -173,7 +185,9 @@ function parseAllowList(values: string[]) {
     countries.push(country);
   }
 
-  selectedCountries.value = Array.from(new Set(hasChinaAll || rules.length > 0 ? ['中国', ...countries] : countries));
+  selectedCountries.value = Array.from(
+    new Set(hasChinaAll || rules.length > 0 ? ['中国', ...countries] : countries),
+  );
   chinaScope.value = hasChinaAll || rules.length === 0 ? 'all' : 'custom';
   chinaRules.value = dedupeChinaRules(rules);
 }
@@ -204,21 +218,28 @@ function buildAllowList() {
   return Array.from(new Set(next.map(normalizeRuleValue).filter(Boolean)));
 }
 
-async function loadConfig() {
-  loading.value = true;
-  try {
-    const data = await getIpRegionConfigApi();
-    if (data) {
-      enabled.value = data.enabled;
-      allowList.value = data.allowList?.length ? [...data.allowList] : ['中国'];
-      parseAllowList(allowList.value);
-    }
-  } catch {
-    // error handled by request interceptor
-  } finally {
-    loading.value = false;
-  }
-}
+const {
+  data: remoteConfig,
+  loading,
+  errorMessage,
+  refetch,
+} = useListDetailQuery({
+  queryKey: qk.caddy.ipRegion(),
+  queryFn: () => getIpRegionConfigApi(withListDetailErrorMode()),
+  errorFallback: '加载访问控制配置失败',
+});
+
+watch(
+  remoteConfig,
+  (data) => {
+    if (!data || seeded.value) return;
+    enabled.value = data.enabled;
+    allowList.value = data.allowList?.length ? [...data.allowList] : ['中国'];
+    parseAllowList(allowList.value);
+    seeded.value = true;
+  },
+  { immediate: true },
+);
 
 async function handleSave() {
   saving.value = true;
@@ -231,6 +252,9 @@ async function handleSave() {
     allowList.value = nextAllowList;
     parseAllowList(nextAllowList);
     message.success('保存成功');
+    seeded.value = false;
+    await invalidateListDetailQueries(queryClient, qk.caddy.ipRegion());
+    await refetch();
   } catch {
     message.error('保存失败');
   } finally {
@@ -267,117 +291,129 @@ watch(chinaSelected, (selected) => {
     chinaRules.value = [];
   }
 });
-
-onMounted(loadConfig);
 </script>
 
 <template>
-  <div class="access-page">
-    <Card title="访问控制" :bordered="false">
-      <template #extra>
-        <Tag :color="enabled ? 'green' : 'default'">
-          {{ enabled ? '已启用' : '已禁用' }}
-        </Tag>
-      </template>
+  <Page>
+    <div class="access-page">
+      <Card title="访问控制" variant="borderless" class="access-shell">
+        <template #extra>
+          <Tag :color="enabled ? 'green' : 'default'">
+            {{ enabled ? '已启用' : '已禁用' }}
+          </Tag>
+        </template>
 
-      <Spin :spinning="loading">
-        <Form layout="vertical" class="access-form">
-          <Form.Item label="启用 IP 区域限制">
-            <Switch v-model:checked="enabled" />
-          </Form.Item>
+        <Spin :spinning="loading">
+          <Alert
+            v-if="errorMessage"
+            class="mb-4"
+            type="error"
+            show-icon
+            :message="errorMessage"
+          />
+          <Form layout="vertical" class="access-form">
+            <FormItem label="启用 IP 区域限制">
+              <Switch v-model:checked="enabled" />
+            </FormItem>
 
-          <Form.Item label="允许访问的国家或地区">
-            <Select
-              v-model:value="selectedCountries"
-              :options="countryOptions"
-              :disabled="!enabled"
-              mode="multiple"
-              placeholder="选择允许访问的国家或地区"
-            />
-          </Form.Item>
-
-          <Form.Item v-if="chinaSelected" label="中国访问范围">
-            <Radio.Group v-model:value="chinaScope" :disabled="!enabled">
-              <Radio value="all">全国</Radio>
-              <Radio value="custom">按省/市限制</Radio>
-            </Radio.Group>
-          </Form.Item>
-
-          <div v-if="chinaSelected && chinaScope === 'custom'" class="china-region-panel">
-            <div class="china-rule-editor">
+            <FormItem label="允许访问的国家或地区">
               <Select
-                v-model:value="editingRule.province"
+                v-model:value="selectedCountries"
+                :options="countryOptions"
                 :disabled="!enabled"
-                :options="provinceOptions"
-                class="region-control"
-                placeholder="选择省份"
+                mode="multiple"
                 show-search
+                placeholder="选择允许访问的国家或地区"
               />
-              <Select
-                v-model:value="editingRule.city"
-                :disabled="!enabled || !editingRule.province"
-                :options="editingCityOptions"
-                allow-clear
-                class="region-control"
-                placeholder="选择城市，可留空表示全省"
-                show-search
-              />
-              <Input
-                v-model:value="editingRule.city"
-                :disabled="!enabled || !editingRule.province"
-                class="region-control"
-                placeholder="或手动输入城市"
-              />
-              <Button :disabled="!enabled" class="region-add-button" @click="handleAddChinaRule">
-                添加
+            </FormItem>
+
+            <FormItem v-if="chinaSelected" label="中国访问范围">
+              <RadioGroup v-model:value="chinaScope" :disabled="!enabled">
+                <Radio value="all">全国</Radio>
+                <Radio value="custom">按省/市限制</Radio>
+              </RadioGroup>
+            </FormItem>
+
+            <div v-if="chinaSelected && chinaScope === 'custom'" class="china-region-panel">
+              <div class="china-rule-editor">
+                <Select
+                  v-model:value="editingRule.province"
+                  :disabled="!enabled"
+                  :options="provinceOptions"
+                  class="region-control"
+                  placeholder="选择省份"
+                  show-search
+                />
+                <Select
+                  v-model:value="editingRule.city"
+                  :disabled="!enabled || !editingRule.province"
+                  :options="editingCityOptions"
+                  allow-clear
+                  class="region-control"
+                  placeholder="选择城市，可留空表示全省"
+                  show-search
+                />
+                <Input
+                  v-model:value="editingRule.city"
+                  :disabled="!enabled || !editingRule.province"
+                  class="region-control"
+                  placeholder="或手动输入城市"
+                />
+                <Button :disabled="!enabled" class="region-add-button" @click="handleAddChinaRule">
+                  添加
+                </Button>
+              </div>
+
+              <div class="china-rule-list">
+                <Tag
+                  v-for="(rule, index) in chinaRules"
+                  :key="`${rule.province}-${rule.city || 'all'}`"
+                  closable
+                  @close.prevent="handleRemoveChinaRule(index)"
+                >
+                  {{ rule.city ? `${rule.province} / ${rule.city}` : `${rule.province} / 全省` }}
+                </Tag>
+                <span v-if="chinaRules.length === 0" class="empty-tip">
+                  还没有添加省市规则，保存时将按全国放行处理。
+                </span>
+              </div>
+            </div>
+
+            <FormItem label="当前生效范围">
+              <Space wrap>
+                <Tag v-for="item in effectiveAllowList" :key="item" color="blue">
+                  {{ item.replaceAll('/', ' / ') }}
+                </Tag>
+              </Space>
+            </FormItem>
+
+            <FormItem label="说明">
+              <Alert type="info" :show-icon="true">
+                <template #message>
+                  配置后，仅允许列表中的地区 IP 访问系统。选择“中国/省份”会放行整个省，选择“中国/省份/城市”只放行对应城市。修改后立即生效，无需重启服务。
+                </template>
+              </Alert>
+            </FormItem>
+
+            <FormItem>
+              <Button type="primary" :loading="saving" :disabled="loading" @click="handleSave">
+                保存
               </Button>
-            </div>
-
-            <div class="china-rule-list">
-              <Tag
-                v-for="(rule, index) in chinaRules"
-                :key="`${rule.province}-${rule.city || 'all'}`"
-                closable
-                @close.prevent="handleRemoveChinaRule(index)"
-              >
-                {{ rule.city ? `${rule.province} / ${rule.city}` : `${rule.province} / 全省` }}
-              </Tag>
-              <span v-if="chinaRules.length === 0" class="empty-tip">
-                还没有添加省市规则，保存时将按全国放行处理。
-              </span>
-            </div>
-          </div>
-
-          <Form.Item label="当前生效范围">
-            <Space wrap>
-              <Tag v-for="item in effectiveAllowList" :key="item" color="blue">
-                {{ item.replaceAll('/', ' / ') }}
-              </Tag>
-            </Space>
-          </Form.Item>
-
-          <Form.Item label="说明">
-            <Alert type="info" :show-icon="true">
-              <template #message>
-                配置后，仅允许列表中的地区 IP 访问系统。选择“中国/省份”会放行整个省，选择“中国/省份/城市”只放行对应城市。修改后立即生效，无需重启服务。
-              </template>
-            </Alert>
-          </Form.Item>
-
-          <Form.Item>
-            <Button type="primary" :loading="saving" :disabled="loading" @click="handleSave">
-              保存
-            </Button>
-          </Form.Item>
-        </Form>
-      </Spin>
-    </Card>
-  </div>
+            </FormItem>
+          </Form>
+        </Spin>
+      </Card>
+    </div>
+  </Page>
 </template>
 
 <style scoped>
 .access-page {
   padding: 16px;
+}
+
+.access-shell {
+  min-height: calc(100vh - 140px);
 }
 
 .access-form {

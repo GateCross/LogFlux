@@ -1,10 +1,19 @@
 import { requestClient } from '#/api/request';
 
 export namespace CaddyWafIntegrationApi {
+  /** WAF 集成状态 — 对齐 backend WafIntegrationStatusResp。 */
   export interface IntegrationStatus {
-    [key: string]: any;
+    availableSites: string[];
+    directiveReady: boolean;
+    importedSites: string[];
+    integrated: boolean;
+    message?: string;
+    orderReady: boolean;
+    serverId: number;
+    snippetReady: boolean;
   }
 
+  /** WAF 集成应用请求 — 对齐 backend WafIntegrationApplyReq。 */
   export interface IntegrationApplyPayload {
     applyAll?: boolean;
     dryRun?: boolean;
@@ -13,8 +22,15 @@ export namespace CaddyWafIntegrationApi {
     siteAddresses?: string[];
   }
 
+  /** WAF 集成应用结果 — 对齐 backend WafIntegrationApplyResp。 */
   export interface IntegrationApplyResult {
-    [key: string]: any;
+    actions: string[];
+    changed: boolean;
+    config?: string;
+    enabled: boolean;
+    importedSites: string[];
+    message?: string;
+    serverId: number;
   }
 }
 
@@ -30,10 +46,6 @@ export async function getWafIntegrationStatusApi() {
 /**
  * 应用 WAF 集成 — POST /caddy/waf/integration/apply
  */
-export async function applyWafIntegrationApi() {
-  return requestClient.post<void>('/caddy/waf/integration/apply');
-}
-
 export async function applyWafIntegrationApiWithPayload(
   data: CaddyWafIntegrationApi.IntegrationApplyPayload,
 ) {

@@ -1,3 +1,5 @@
+import type { RequestClientConfig } from '@vben/request';
+
 import { requestClient } from '#/api/request';
 
 export namespace UserManageApi {
@@ -27,13 +29,17 @@ export namespace UserManageApi {
 }
 
 /** 获取用户列表 — GET /user/list */
-export async function getUserListApi(params?: {
-  page?: number;
-  pageSize?: number;
-  username?: string;
-}) {
+export async function getUserListApi(
+  params?: {
+    page?: number;
+    pageSize?: number;
+    username?: string;
+  },
+  config?: RequestClientConfig,
+) {
   return requestClient.get<UserManageApi.UserListResp>('/user/list', {
     params,
+    ...config,
   });
 }
 

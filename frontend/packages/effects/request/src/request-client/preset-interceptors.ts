@@ -118,6 +118,15 @@ export const errorMessageResponseInterceptor = (
         return Promise.reject(error);
       }
 
+      // Option A: 调用方设置 errorMessageMode: 'none' 时抑制全局 toast
+      // config 可能在 error.config（AxiosError）或 error 自身（业务码 throw 的 response 形对象）
+      const errorMessageMode =
+        error?.config?.errorMessageMode ??
+        error?.response?.config?.errorMessageMode;
+      if (errorMessageMode === 'none') {
+        return Promise.reject(error);
+      }
+
       const err: string = error?.toString?.() ?? '';
       let errMsg = '';
       if (err?.includes('Network Error')) {

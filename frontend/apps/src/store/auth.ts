@@ -7,11 +7,12 @@ import { LOGIN_PATH } from '@vben/constants';
 import { preferences } from '@vben/preferences';
 import { resetAllStores, useAccessStore, useUserStore } from '@vben/stores';
 
-import { notification } from 'ant-design-vue';
+import { notification } from 'antdv-next';
 import { defineStore } from 'pinia';
 
 import { getAccessCodesApi, getUserInfoApi, loginApi } from '#/api';
 import { $t } from '#/locales';
+import { clearRefreshToken, setRefreshToken } from '#/store/refresh-token';
 import { getDefaultAvatarDataUrl } from '#/utils/avatar';
 
 export const useAuthStore = defineStore('auth', () => {
@@ -74,11 +75,9 @@ export const useAuthStore = defineStore('auth', () => {
         // 存储 token 到 accessStore（自动持久化到 localStorage）
         accessStore.setAccessToken(token);
 
-        // 存储 refreshToken
+        // 登录成功仅经 Refresh_Token_Store 写入 refreshToken
         if (refreshToken) {
-          accessStore.setRefreshToken?.(refreshToken);
-          // 同时存储到 LF_ 前缀的 key，供 refreshTokenApi 使用
-          localStorage.setItem('LF_refreshToken', refreshToken);
+          setRefreshToken(refreshToken);
         }
 
         // 获取用户信息和权限码
@@ -102,7 +101,8 @@ export const useAuthStore = defineStore('auth', () => {
         notification.success({
           description: `${$t('authentication.loginSuccessDesc')}: ${userInfo.username}`,
           duration: 3,
-          message: $t('authentication.loginSuccess'),
+          // antdv-next: ArgsProps.title（v4 曾用 message）
+          title: $t('authentication.loginSuccess'),
         });
       }
     } finally {
@@ -114,11 +114,10 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function logout(redirect: boolean = true) {
     // LogFlux 无独立登出接口，直接清理本地状态
+    clearRefreshToken();
+    accessStore.setAccessToken(null);
     resetAllStores();
     accessStore.setLoginExpired(false);
-
-    // 清理 LF_ 前缀的 refreshToken
-    localStorage.removeItem('LF_refreshToken');
 
     await router.replace({
       path: LOGIN_PATH,

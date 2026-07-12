@@ -7,7 +7,7 @@ import type {
 import { generateAccessible } from '@vben/access';
 import { preferences } from '@vben/preferences';
 
-import { message } from 'ant-design-vue';
+import { message } from 'antdv-next';
 
 import { getUserRoutesApi } from '#/api';
 import { BasicLayout, IFrameView } from '#/layouts';

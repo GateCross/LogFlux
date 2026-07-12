@@ -5,8 +5,9 @@ import { registerLoadingDirective } from '@vben/common-ui/es/loading';
 import { preferences } from '@vben/preferences';
 import { initStores } from '@vben/stores';
 import '@vben/styles';
-import '@vben/styles/antd';
+import '@vben/styles/antdv-next';
 
+import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query';
 import { useTitle } from '@vueuse/core';
 
 import { $t, setupI18n } from '#/locales';
@@ -16,7 +17,21 @@ import { initSetupVbenForm } from './adapter/form';
 import App from './app.vue';
 import { router } from './router';
 
+/** Vue Query 默认配置 */
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
+
 async function bootstrap(namespace: string) {
+  // 离线注册 Iconify 图标（必须在路由/布局渲染前完成）
+  await import('@vben/icons');
+
   // 初始化组件适配器
   await initComponentAdapter();
 
@@ -53,6 +68,9 @@ async function bootstrap(namespace: string) {
   const { initTippy } = await import('@vben/common-ui/es/tippy');
   initTippy(app);
 
+  // 安装 Vue Query
+  app.use(VueQueryPlugin, { queryClient });
+
   // 配置路由及路由守卫
   app.use(router);
 
@@ -73,4 +91,4 @@ async function bootstrap(namespace: string) {
   app.mount('#app');
 }
 
-export { bootstrap };
+export { bootstrap, queryClient };

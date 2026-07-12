@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, onUnmounted, ref } from 'vue';
 import { useDebounceFn } from '@vueuse/core';
-import { Icon } from '@iconify/vue';
-import { Button, Card, Col, Row, Space } from 'ant-design-vue';
-import type {
-  DashboardSummaryResp,
-} from '#/api/dashboard';
+import { Icon } from '@iconify/vue/offline';
+import { Alert, Button, Card, Col, Row, Space } from 'antdv-next';
 import { getDashboardSummaryApi } from '#/api/dashboard';
+import { withListDetailErrorMode } from '#/api/list-detail';
+import { qk } from '#/api/query-keys';
+import { useListDetailQuery } from '#/composables/use-list-detail-query';
 import HeaderBanner from './modules/header-banner.vue';
 import StatCard from './modules/stat-card.vue';
 import TrendChart from './modules/trend-chart.vue';
@@ -15,7 +15,6 @@ import type { StatCard as StatCardItem } from './data';
 
 defineOptions({ name: 'Dashboard' });
 
-const summary = ref<DashboardSummaryResp | null>(null);
 const refreshTimer = ref<ReturnType<typeof setInterval> | null>(null);
 
 const timeRanges = [
@@ -46,11 +45,57 @@ const activeInterval = computed(
     intervalOptions.find((item) => item.key === activeIntervalKey.value) ?? intervalOptions[1]!,
 );
 
+function formatDateTime(value: Date) {
+  const pad = (num: number) => String(num).padStart(2, '0');
+  const yyyy = value.getFullYear();
+  const MM = pad(value.getMonth() + 1);
+  const dd = pad(value.getDate());
+  const hh = pad(value.getHours());
+  const mm = pad(value.getMinutes());
+  const ss = pad(value.getSeconds());
+  return `${yyyy}-${MM}-${dd} ${hh}:${mm}:${ss}`;
+}
+
+const summaryParams = computed(() => {
+  const now = new Date();
+  const start = new Date(now.getTime() - activeRange.value.hours * 3600 * 1000);
+  return {
+    startTime: formatDateTime(start),
+    endTime: formatDateTime(now),
+    intervalSec: activeInterval.value.seconds,
+    topN: 6,
+    rangeKey: activeRangeKey.value,
+    intervalKey: activeIntervalKey.value,
+  };
+});
+
+const {
+  data: summaryData,
+  errorMessage,
+  refetch,
+} = useListDetailQuery({
+  queryKey: computed(() => qk.dashboard.summary(summaryParams.value)),
+  queryFn: () =>
+    getDashboardSummaryApi(
+      {
+        startTime: summaryParams.value.startTime,
+        endTime: summaryParams.value.endTime,
+        intervalSec: summaryParams.value.intervalSec,
+        topN: summaryParams.value.topN,
+      },
+      withListDetailErrorMode(),
+    ),
+  errorFallback: '加载仪表盘数据失败',
+});
+
+const summary = computed(() => summaryData.value ?? null);
+
 const rangeText = computed(() => {
-  if (!summary.value) {
+  const range = summary.value?.range;
+  if (!range?.startTime || !range?.endTime) {
     return `最近 ${activeRange.value.label}`;
   }
-  return `${summary.value.range.startTime} ~ ${summary.value.range.endTime}`;
+  return `${range.startTime} ~ ${range.endTime}`;
 });
 
 const headerStats = computed(() => {
@@ -159,55 +204,27 @@ const trendValues = computed(() => summary.value?.trend?.map((item) => item.valu
 const geoWorldData = computed(() => summary.value?.geo ?? []);
 const geoChinaData = computed(() => summary.value?.geoProvince ?? []);
 
-function formatDateTime(value: Date) {
-  const pad = (num: number) => String(num).padStart(2, '0');
-  const yyyy = value.getFullYear();
-  const MM = pad(value.getMonth() + 1);
-  const dd = pad(value.getDate());
-  const hh = pad(value.getHours());
-  const mm = pad(value.getMinutes());
-  const ss = pad(value.getSeconds());
-  return `${yyyy}-${MM}-${dd} ${hh}:${mm}:${ss}`;
-}
-
-async function loadSummary() {
-  try {
-    const now = new Date();
-    const start = new Date(now.getTime() - activeRange.value.hours * 3600 * 1000);
-    const data = await getDashboardSummaryApi({
-      startTime: formatDateTime(start),
-      endTime: formatDateTime(now),
-      intervalSec: activeInterval.value.seconds,
-      topN: 6,
-    });
-    if (data) {
-      summary.value = data;
-    }
-  } catch {
-    // error handled by request interceptor
-  }
-}
-
-const debouncedLoadSummary = useDebounceFn(loadSummary, 300);
+const debouncedRefetch = useDebounceFn(() => {
+  void refetch();
+}, 300);
 
 function handleRangeChange(key: string) {
   if (key === activeRangeKey.value) return;
   activeRangeKey.value = key;
   localStorage.setItem('logflux:dashboard.range', key);
-  debouncedLoadSummary();
+  debouncedRefetch();
 }
 
 function handleIntervalChange(key: string) {
   if (key === activeIntervalKey.value) return;
   activeIntervalKey.value = key;
   localStorage.setItem('logflux:dashboard.interval', key);
-  debouncedLoadSummary();
+  debouncedRefetch();
 }
 
-onMounted(() => {
-  loadSummary();
-  refreshTimer.value = setInterval(loadSummary, 30_000);
-});
+refreshTimer.value = setInterval(() => {
+  void refetch();
+}, 30_000);
 
 onUnmounted(() => {
   if (refreshTimer.value) {
@@ -219,13 +236,19 @@ onUnmounted(() => {
 <template>
   <div class="dashboard-page h-full overflow-y-auto p-4">
     <Space direction="vertical" :size="16" class="min-h-full w-full">
+      <Alert
+        v-if="errorMessage"
+        type="error"
+        show-icon
+        :message="errorMessage"
+      />
       <HeaderBanner :range-text="rangeText" :stats="headerStats" />
 
-      <Card :bordered="false" class="rounded-2xl shadow-sm">
+      <Card variant="borderless" class="rounded-2xl shadow-sm">
         <div class="flex flex-wrap items-center justify-between gap-4">
           <div class="flex flex-wrap items-center gap-3">
             <div class="text-sm text-gray-500">时间范围</div>
-            <Button.Group size="small">
+            <div class="inline-flex">
               <Button
                 v-for="item in timeRanges"
                 :key="item.key"
@@ -234,11 +257,11 @@ onUnmounted(() => {
               >
                 {{ item.label }}
               </Button>
-            </Button.Group>
+            </div>
           </div>
           <div class="flex flex-wrap items-center gap-3">
             <div class="text-sm text-gray-500">采样时间</div>
-            <Button.Group size="small">
+            <div class="inline-flex">
               <Button
                 v-for="item in intervalOptions"
                 :key="item.key"
@@ -247,7 +270,7 @@ onUnmounted(() => {
               >
                 {{ item.label }}
               </Button>
-            </Button.Group>
+            </div>
           </div>
         </div>
       </Card>

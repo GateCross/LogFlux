@@ -1,7 +1,4 @@
-/**
- * LogFlux 请求客户端配置
- * 适配 LogFlux 后端的响应格式和认证机制
- */
+/** LogFlux 请求客户端：鉴权、响应格式与错误 toast */
 import type { RequestClientOptions } from '@vben/request';
 
 import { useAppConfig } from '@vben/hooks';
@@ -14,9 +11,11 @@ import {
 } from '@vben/request';
 import { useAccessStore } from '@vben/stores';
 
-import { message } from 'ant-design-vue';
+import { message } from 'antdv-next';
 
 import { useAuthStore } from '#/store';
+import { clearRefreshToken, setRefreshToken } from '#/store/refresh-token';
+import { apiErrorMessage } from '#/utils/api-error-message';
 
 import { refreshTokenApi } from './core';
 
@@ -36,9 +35,8 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
     const accessStore = useAccessStore();
     const authStore = useAuthStore();
     const isAccessChecked = accessStore.isAccessChecked;
+    clearRefreshToken();
     accessStore.setAccessToken(null);
-    accessStore.setRefreshToken(null);
-    localStorage.removeItem('LF_refreshToken');
 
     if (
       preferences.app.loginExpiredMode === 'modal' &&
@@ -62,17 +60,20 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
       const newToken = resp?.token ?? null;
       if (newToken) {
         accessStore.setAccessToken(newToken);
-        // 同时更新 refreshToken（如果返回了的话）
+        // 刷新成功仅经 Refresh_Token_Store 写入 refreshToken
         const newRefreshToken = resp?.refreshToken;
         if (newRefreshToken) {
-          accessStore.setRefreshToken?.(newRefreshToken);
-          // 同步到 LF_ 前缀 key，供 refreshTokenApi 读取
-          localStorage.setItem('LF_refreshToken', newRefreshToken);
+          setRefreshToken(newRefreshToken);
         }
         return newToken;
       }
+      // 刷新失败：清理 access + refresh
+      clearRefreshToken();
+      accessStore.setAccessToken(null);
       return '';
     } catch {
+      clearRefreshToken();
+      accessStore.setAccessToken(null);
       return '';
     }
   }
@@ -126,15 +127,12 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
     }),
   );
 
-  // 通用的错误处理
+  // 通用的错误处理（全局 toast ≤1；errorMessageMode: 'none' 时不 toast）
   // LogFlux 错误响应：{ code: 4xx/5xx, message: "错误描述" }
   client.addResponseInterceptor(
     errorMessageResponseInterceptor((msg: string, error) => {
-      const responseData = error?.response?.data ?? {};
-      // LogFlux 使用 message 或 msg 字段（后端兼容旧前端）
-      const errorMessage =
-        responseData?.message ?? responseData?.msg ?? responseData?.error ?? '';
-      message.error(errorMessage || msg);
+      // 文案统一经 apiErrorMessage（双参 fallback）；拦截器层已保证同一失败只回调一次
+      message.error(apiErrorMessage(error, msg));
     }),
   );
 
@@ -146,3 +144,8 @@ export const requestClient = createRequestClient(apiURL, {
 });
 
 export const baseRequestClient = new RequestClient({ baseURL: apiURL });
+
+/** 抑制全局错误 toast（errorMessageMode: 'none'） */
+export const suppressGlobalErrorToast = {
+  errorMessageMode: 'none',
+} as const;

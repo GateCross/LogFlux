@@ -1,10 +1,14 @@
 <script lang="ts" setup>
 import type { CaddyServerApi } from '#/api/caddy/server';
 
-import { computed, h, onMounted, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useQueryClient } from '@tanstack/vue-query';
+
+import { Page } from '@vben/common-ui';
 
 import {
+  Alert,
   Button,
   Card,
   DatePicker,
@@ -20,11 +24,15 @@ import {
   Space,
   Table,
   Tag,
-} from 'ant-design-vue';
+} from 'antdv-next';
 import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
 
 import { clearCaddyLogsApi, getCaddyLogsApi } from '#/api/caddy/server';
+import { withListDetailErrorMode } from '#/api/list-detail';
+import { invalidateListDetailQueries } from '#/api/list-detail-mutation';
+import { qk } from '#/api/query-keys';
+import { useListDetailQuery } from '#/composables/use-list-detail-query';
 
 defineOptions({ name: 'CaddyAccessLog' });
 
@@ -42,17 +50,18 @@ type ColumnWidthKey =
 
 const route = useRoute();
 const router = useRouter();
+const queryClient = useQueryClient();
 
-const loading = ref(false);
 const clearing = ref(false);
-const logs = ref<CaddyLog[]>([]);
 const selectedLog = ref<CaddyLog | null>(null);
 const detailVisible = ref(false);
 const sortState = ref<{ order: SortOrder }>({ order: 'descend' });
+const tableWrapRef = ref<HTMLElement | null>(null);
+const tableScrollY = ref<number>();
+let tableResizeObserver: ResizeObserver | null = null;
 
 const filters = reactive({
   keyword: '',
-  /** 精确 host 过滤（深链 / 独立筛选） */
   host: '',
   status: -1,
   timeRange: undefined as [Dayjs, Dayjs] | undefined,
@@ -67,11 +76,65 @@ const pagination = reactive({
   total: 0,
 });
 
+function formatRangeTime(value: Dayjs | undefined) {
+  if (!value) return undefined;
+  return dayjs(value).format('YYYY-MM-DD HH:mm:ss');
+}
+
+function applyHostFromRoute() {
+  const raw = route.query.host;
+  const host = Array.isArray(raw) ? String(raw[0] ?? '') : String(raw ?? '');
+  filters.host = host.trim();
+}
+
+const listParams = computed<CaddyServerApi.CaddyLogQuery>(() => {
+  const [start, end] = filters.timeRange || [];
+  return {
+    page: pagination.current,
+    pageSize: pagination.pageSize,
+    keyword: filters.keyword || undefined,
+    host: filters.host || undefined,
+    status: filters.status,
+    startTime: formatRangeTime(start),
+    endTime: formatRangeTime(end),
+    sortBy: sortState.value.order ? ('logTime' as const) : undefined,
+    order:
+      sortState.value.order === 'ascend'
+        ? 'asc'
+        : sortState.value.order === 'descend'
+          ? 'desc'
+          : undefined,
+  };
+});
+
+const {
+  data: logsPage,
+  loading,
+  errorMessage,
+  refetch,
+} = useListDetailQuery({
+  queryKey: computed(() => qk.caddy.logs(listParams.value)),
+  queryFn: () =>
+    getCaddyLogsApi(listParams.value, withListDetailErrorMode()),
+  errorFallback: '获取访问日志失败',
+});
+
+const logs = computed(() => logsPage.value?.list ?? []);
+
+watch(
+  logsPage,
+  (page) => {
+    pagination.total = page?.total ?? 0;
+    scheduleUpdateTableScrollY();
+  },
+  { immediate: true },
+);
+
 const hasLogs = computed(() => logs.value.length > 0);
 
 const tableScroll = computed(() => {
-  if (!hasLogs.value) return undefined;
-  return { x: 1400, y: 'calc(100vh - 430px)' };
+  if (!hasLogs.value || !tableScrollY.value) return { x: 1400 };
+  return { x: 1400, y: tableScrollY.value };
 });
 
 const statusOptions = [
@@ -114,10 +177,33 @@ function normalizeLogText(value?: string) {
   }
 }
 
+/** 地区展示：优先 location，否则 country/province/city 拼接 */
+function formatLocation(record: CaddyLog) {
+  return (
+    record.location ||
+    [record.country, record.province, record.city].filter(Boolean).join(' ') ||
+    '-'
+  );
+}
+
+function methodTagColor(method?: string) {
+  if (method === 'GET') return 'blue';
+  if (method === 'POST') return 'green';
+  return 'orange';
+}
+
+function statusTagColor(status?: number) {
+  if (status == null) return 'default';
+  if (status >= 200 && status < 300) return 'green';
+  if (status >= 300 && status < 400) return 'orange';
+  if (status >= 400) return 'red';
+  return 'default';
+}
+
 const columns = computed(() => {
   const columnWidths: Partial<Record<ColumnWidthKey, number>> = hasLogs.value
     ? {
-        actions: 90,
+        actions: 100,
         clientIp: 150,
         host: 180,
         location: 180,
@@ -138,23 +224,12 @@ const columns = computed(() => {
       width: columnWidths.logTime,
     },
     {
-      customRender: ({ text }: { text: string }) => {
-        const color = text === 'GET' ? 'blue' : text === 'POST' ? 'green' : 'orange';
-        return h(Tag, { color }, () => text || '-');
-      },
       dataIndex: 'method',
       key: 'method',
       title: '方法',
       width: columnWidths.method,
     },
     {
-      customRender: ({ text }: { text: number }) => {
-        let color = 'default';
-        if (text >= 200 && text < 300) color = 'green';
-        else if (text >= 300 && text < 400) color = 'orange';
-        else if (text >= 400) color = 'red';
-        return h(Tag, { color }, () => String(text ?? '-'));
-      },
       dataIndex: 'status',
       key: 'status',
       title: '状态',
@@ -170,10 +245,8 @@ const columns = computed(() => {
       width: columnWidths.clientIp,
     },
     {
-      customRender: ({ record }: { record: CaddyLog }) =>
-        record.location ||
-        [record.country, record.province, record.city].filter(Boolean).join(' ') ||
-        '-',
+      dataIndex: 'location',
+      ellipsis: true,
       key: 'location',
       title: '地区',
       width: columnWidths.location,
@@ -186,48 +259,6 @@ const columns = computed(() => {
     },
   ];
 });
-
-function formatRangeTime(value: Dayjs | undefined) {
-  if (!value) return undefined;
-  return dayjs(value).format('YYYY-MM-DD HH:mm:ss');
-}
-
-/** 从路由 query 读取 host 过滤（工作台深链） */
-function applyHostFromRoute() {
-  const raw = route.query.host;
-  const host = Array.isArray(raw) ? String(raw[0] ?? '') : String(raw ?? '');
-  filters.host = host.trim();
-}
-
-async function fetchLogs() {
-  loading.value = true;
-  try {
-    const [start, end] = filters.timeRange || [];
-    const data = await getCaddyLogsApi({
-      page: pagination.current,
-      pageSize: pagination.pageSize,
-      keyword: filters.keyword || undefined,
-      host: filters.host || undefined,
-      status: filters.status,
-      startTime: formatRangeTime(start),
-      endTime: formatRangeTime(end),
-      sortBy: sortState.value.order ? 'logTime' : undefined,
-      order:
-        sortState.value.order === 'ascend'
-          ? 'asc'
-          : sortState.value.order === 'descend'
-            ? 'desc'
-            : undefined,
-    });
-
-    logs.value = data.list ?? [];
-    pagination.total = data.total ?? 0;
-  } catch {
-    message.error('获取访问日志失败');
-  } finally {
-    loading.value = false;
-  }
-}
 
 function syncHostQueryToRoute() {
   const nextHost = filters.host.trim();
@@ -250,7 +281,6 @@ function syncHostQueryToRoute() {
 function handleSearch() {
   pagination.current = 1;
   syncHostQueryToRoute();
-  fetchLogs();
 }
 
 function handleReset() {
@@ -261,7 +291,6 @@ function handleReset() {
   pagination.current = 1;
   sortState.value = { order: 'descend' };
   syncHostQueryToRoute();
-  fetchLogs();
 }
 
 async function handleClearLogs() {
@@ -273,9 +302,7 @@ async function handleClearLogs() {
     selectedLog.value = null;
     detailVisible.value = false;
     pagination.current = 1;
-    logs.value = [];
-    pagination.total = 0;
-    await fetchLogs();
+    await invalidateListDetailQueries(queryClient, ['caddy', 'logs']);
   } catch {
     message.error('清空访问日志失败');
   } finally {
@@ -292,7 +319,7 @@ function handleTableChange(pag: any, _filters: any, sorter: any) {
   sortState.value = {
     order: order === 'ascend' || order === 'descend' ? order : false,
   };
-  fetchLogs();
+  scheduleUpdateTableScrollY();
 }
 
 function openDetail(record: CaddyLog) {
@@ -300,26 +327,83 @@ function openDetail(record: CaddyLog) {
   detailVisible.value = true;
 }
 
-// 支持从工作台深链 /caddy/log?host=example.com 进入
+/** 按表格容器实际高度计算 body 滚动区，避免下方大块空白 */
+function updateTableScrollY() {
+  const wrap = tableWrapRef.value;
+  if (!wrap || !hasLogs.value) {
+    tableScrollY.value = undefined;
+    return;
+  }
+
+  const available = wrap.clientHeight;
+  if (available <= 0) {
+    tableScrollY.value = undefined;
+    return;
+  }
+
+  const header = wrap.querySelector<HTMLElement>('.ant-table-thead');
+  const paginationEl = wrap.querySelector<HTMLElement>('.ant-pagination');
+  const headerHeight = header?.offsetHeight ?? 55;
+  const paginationHeight = paginationEl
+    ? paginationEl.offsetHeight + 16
+    : 56;
+  const nextY = available - headerHeight - paginationHeight;
+  tableScrollY.value = Math.max(200, Math.floor(nextY));
+
+  const bodies = wrap.querySelectorAll<HTMLElement>(
+    '.ant-table-body, .ant-table-body-outer',
+  );
+  bodies.forEach((el) => {
+    el.style.height = `${tableScrollY.value}px`;
+    el.style.maxHeight = `${tableScrollY.value}px`;
+  });
+}
+
+function scheduleUpdateTableScrollY() {
+  void nextTick(() => {
+    updateTableScrollY();
+    requestAnimationFrame(() => updateTableScrollY());
+  });
+}
+
 watch(
   () => route.query.host,
   () => {
     applyHostFromRoute();
     pagination.current = 1;
-    fetchLogs();
+  },
+  { immediate: true },
+);
+
+watch(
+  () => [filters.host, loading.value, logs.value.length] as const,
+  () => {
+    scheduleUpdateTableScrollY();
   },
 );
 
 onMounted(() => {
-  applyHostFromRoute();
-  fetchLogs();
+  tableResizeObserver = new ResizeObserver(() => updateTableScrollY());
+  if (tableWrapRef.value) tableResizeObserver.observe(tableWrapRef.value);
+  scheduleUpdateTableScrollY();
+});
+
+onUnmounted(() => {
+  tableResizeObserver?.disconnect();
 });
 </script>
 
 <template>
-  <div class="h-full overflow-x-hidden overflow-y-auto p-4">
-    <Card title="Caddy 访问日志" :bordered="false" class="access-log-card h-full rounded-lg shadow-sm">
-      <div class="flex h-full min-h-0 flex-col">
+  <Page auto-content-height content-class="overflow-hidden">
+    <div class="access-log-page">
+      <Card title="Caddy 访问日志" variant="borderless" class="access-log-card">
+        <Alert
+          v-if="errorMessage"
+          type="error"
+          show-icon
+          class="mb-3"
+          :message="errorMessage"
+        />
         <Form layout="inline" class="access-log-filter-form">
           <FormItem label="搜索">
             <Input.Search
@@ -357,7 +441,7 @@ onMounted(() => {
           <FormItem>
             <Space>
               <Button type="primary" @click="handleSearch">搜索</Button>
-              <Button @click="fetchLogs">刷新</Button>
+              <Button @click="() => refetch()">刷新</Button>
               <Button @click="handleReset">重置</Button>
               <Popconfirm
                 title="确认清空全部访问日志？此操作不可恢复。"
@@ -374,7 +458,7 @@ onMounted(() => {
           <Tag color="blue">{{ filters.host }}</Tag>
         </div>
 
-        <div class="access-log-table-wrap">
+        <div ref="tableWrapRef" class="access-log-table-wrap">
           <Table
             :columns="columns"
             :data-source="logs"
@@ -387,63 +471,129 @@ onMounted(() => {
             @change="handleTableChange"
           >
             <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'actions'">
-                <Button type="link" size="small" @click="openDetail(record as CaddyLog)">
+              <template v-if="column.key === 'method'">
+                <Tag :color="methodTagColor((record as CaddyLog).method)">
+                  {{ (record as CaddyLog).method || '-' }}
+                </Tag>
+              </template>
+              <template v-else-if="column.key === 'status'">
+                <Tag :color="statusTagColor((record as CaddyLog).status)">
+                  {{ (record as CaddyLog).status ?? '-' }}
+                </Tag>
+              </template>
+              <template v-else-if="column.key === 'location'">
+                {{ formatLocation(record as CaddyLog) }}
+              </template>
+              <template v-else-if="column.key === 'actions'">
+                <button
+                  type="button"
+                  class="table-action-btn"
+                  @click="openDetail(record as CaddyLog)"
+                >
                   详情
-                </Button>
+                </button>
               </template>
             </template>
           </Table>
         </div>
-      </div>
-    </Card>
+      </Card>
 
-    <Modal v-model:open="detailVisible" title="日志详情" width="760px" :footer="null">
-      <div class="max-h-[70vh] overflow-auto">
-        <Descriptions v-if="selectedLog" bordered :column="1" size="small">
-          <DescriptionsItem label="时间">{{ selectedLog.logTime }}</DescriptionsItem>
-          <DescriptionsItem label="方法">{{ selectedLog.method }}</DescriptionsItem>
-          <DescriptionsItem label="状态">{{ selectedLog.status }}</DescriptionsItem>
-          <DescriptionsItem label="域名">{{ selectedLog.host }}</DescriptionsItem>
-          <DescriptionsItem label="路径">{{ selectedLog.uri }}</DescriptionsItem>
-          <DescriptionsItem label="大小">{{ selectedLog.size }}</DescriptionsItem>
-          <DescriptionsItem label="远端 IP">{{ selectedLog.remoteIp }}</DescriptionsItem>
-          <DescriptionsItem label="客户端 IP">{{ selectedLog.clientIp }}</DescriptionsItem>
-          <DescriptionsItem label="地区">
-            {{
-              selectedLog.location ||
-              [selectedLog.country, selectedLog.province, selectedLog.city].filter(Boolean).join(' ') ||
-              '-'
-            }}
-          </DescriptionsItem>
-          <DescriptionsItem label="User Agent">
-            {{ selectedLog.userAgent || '-' }}
-          </DescriptionsItem>
-          <DescriptionsItem label="原始日志">
-            <pre class="log-detail-pre">{{ rawLogText }}</pre>
-          </DescriptionsItem>
-        </Descriptions>
-      </div>
-    </Modal>
-  </div>
+      <Modal v-model:open="detailVisible" title="日志详情" width="760px" :footer="null">
+        <div class="max-h-[70vh] overflow-auto">
+          <Descriptions v-if="selectedLog" bordered :column="1" size="small">
+            <DescriptionsItem label="时间">{{ selectedLog.logTime }}</DescriptionsItem>
+            <DescriptionsItem label="方法">{{ selectedLog.method }}</DescriptionsItem>
+            <DescriptionsItem label="状态">{{ selectedLog.status }}</DescriptionsItem>
+            <DescriptionsItem label="域名">{{ selectedLog.host }}</DescriptionsItem>
+            <DescriptionsItem label="路径">{{ selectedLog.uri }}</DescriptionsItem>
+            <DescriptionsItem label="大小">{{ selectedLog.size }}</DescriptionsItem>
+            <DescriptionsItem label="远端 IP">{{ selectedLog.remoteIp }}</DescriptionsItem>
+            <DescriptionsItem label="客户端 IP">{{ selectedLog.clientIp }}</DescriptionsItem>
+            <DescriptionsItem label="地区">
+              {{ formatLocation(selectedLog) }}
+            </DescriptionsItem>
+            <DescriptionsItem label="User Agent">
+              {{ selectedLog.userAgent || '-' }}
+            </DescriptionsItem>
+            <DescriptionsItem label="原始日志">
+              <pre class="log-detail-pre">{{ rawLogText }}</pre>
+            </DescriptionsItem>
+          </Descriptions>
+        </div>
+      </Modal>
+    </div>
+  </Page>
 </template>
 
 <style scoped>
-.access-log-filter-form {
-  row-gap: 12px;
-  margin-bottom: 24px;
+.access-log-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.access-log-card {
+ display: flex;
+ flex: 1;
+ flex-direction: column;
+ height: 100%;
+ min-height: 0;
 }
 
 .access-log-card :deep(.ant-card-body) {
-  height: calc(100% - 57px);
-  min-width: 0;
-  overflow: hidden;
-}
-
-.access-log-table-wrap {
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
+}
+
+.access-log-filter-form {
+  row-gap: 12px;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+
+.access-log-table-wrap {
+ display: flex;
+ flex: 1;
+ flex-direction: column;
+ min-width: 0;
+ min-height: 0;
+ overflow: hidden;
+}
+
+.access-log-table {
+ flex: 1;
+ height: 100%;
+ min-height: 0;
+}
+
+.access-log-table :deep(.ant-spin-nested-loading),
+.access-log-table :deep(.ant-spin-container) {
+ height: 100%;
+}
+
+.access-log-table :deep(.ant-spin-container) {
+ display: flex;
+ flex-direction: column;
+ height: 100%;
+}
+
+.access-log-table :deep(.ant-table) {
+  flex: 1;
+  min-height: 0;
+}
+
+.access-log-table :deep(.ant-table-container) {
+ height: 100%;
+}
+
+.access-log-table :deep(.ant-table-pagination.ant-pagination) {
+ flex-shrink: 0;
+ margin: 12px 0 0;
 }
 
 .access-log-table :deep(.ant-table-cell) {

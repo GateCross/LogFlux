@@ -15,6 +15,7 @@ import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
 import TextAlign from '@tiptap/extension-text-align';
 import { Color, TextStyle } from '@tiptap/extension-text-style';
+import Underline from '@tiptap/extension-underline';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import StarterKit from '@tiptap/starter-kit';
 
@@ -417,6 +418,7 @@ export function createDefaultTiptapExtensions(
     Color.configure({
       types: ['textStyle'],
     }),
+    Underline,
     Highlight.configure({
       multicolor: true,
     }),

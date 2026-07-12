@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { Icon } from '@iconify/vue';
+import { Icon } from '@iconify/vue/offline';
 import { useUserStore } from '@vben/stores';
-import { Avatar } from 'ant-design-vue';
+import { Avatar } from 'antdv-next';
 
 import { resolveAvatar } from '#/utils/avatar';
 

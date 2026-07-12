@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from 'vue';
-import { Card, Tag } from 'ant-design-vue';
+import { Card, Tag } from 'antdv-next';
 import * as echarts from 'echarts/core';
 import { LineChart } from 'echarts/charts';
 import { GridComponent, TooltipComponent } from 'echarts/components';
@@ -29,7 +29,9 @@ function buildOption(): echarts.EChartsCoreOption {
       right: '2%',
       top: '10%',
       bottom: '2%',
-      containLabel: true,
+      // ECharts 6: containLabel 已弃用，等价迁移到 outerBounds
+      outerBoundsMode: 'same',
+      outerBoundsContain: 'axisLabel',
     },
     xAxis: {
       type: 'category',

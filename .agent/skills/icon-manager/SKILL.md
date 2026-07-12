@@ -1,7 +1,7 @@
 ---
 name: icon-manager
 description: 管理前端 Iconify 图标。使用场景："添加图标"、"图标不显示"、"图标报错"。
-version: 2.0.0
+version: 3.0.0
 ---
 
 # 图标管理专家
@@ -12,49 +12,49 @@ version: 2.0.0
 
 ## 背景
 
-本项目使用 `frontend/src/plugins/iconify.ts` 离线注册图标，**不依赖**运行时 API 调用。
+本项目使用 **离线 Iconify**：
 
-已安装的图标集（检查 `package.json`）：
-- `@iconify-json/mdi` - Material Design Icons
-- `@iconify-json/carbon` - Carbon Icons
-- `@iconify-json/ic` - Google Material Icons
-- `@iconify-json/ant-design` - Ant Design Icons
-- 更多请查看 `frontend/package.json`
+1. 组件使用 `@iconify/vue/offline`（不会请求 CDN）
+2. 图标集通过 `@iconify-json/*` 本地打包
+3. 启动时在 `packages/icons/src/iconify/load.ts` 中 `addCollection` 注册
+
+**禁止**运行时请求 `api.unisvg.com` / `api.iconify.design`。
+
+已安装的图标集（见 `packages/icons/package.json`）：
+- `@iconify-json/mdi`
+- `@iconify-json/carbon`
+- `@iconify-json/ic`
+- `@iconify-json/ant-design`
+- `@iconify-json/ep`
+- `@iconify-json/fluent-mdl2`
+- `@iconify-json/lucide`
+- `@iconify-json/material-symbols`
 
 ---
 
-## 能力一：添加新图标
+## 能力一：添加新图标集
 
 ### 工作流
 
-1. **确认图标集已安装**
+1. **安装图标集**
    ```bash
-   grep "@iconify-json/<set-name>" frontend/package.json
-   ```
-   如未安装，先安装：`pnpm add @iconify-json/<set-name> -D`
-
-2. **搜索图标名称**
-   ```bash
-   # 示例：在 mdi 图标集中搜索 'home'
-   ls frontend/node_modules/@iconify-json/mdi/icons/*.json | head -20
+   cd frontend && pnpm add @iconify-json/<set-name> --filter @vben/icons
    ```
 
-3. **注册图标**
+2. **注册图标集**
 
-   编辑 `frontend/src/plugins/iconify.ts`：
-   
+   编辑 `frontend/packages/icons/src/iconify/load.ts`：
    ```typescript
-   // 1. 添加导入
-   import HomeIcon from '@iconify/icons-mdi/home';
-   
-   // 2. 在 setupIconifyOffline() 中注册
-   addIcon('mdi:home', HomeIcon);
+   import { icons as newSet } from '@iconify-json/<set-name>';
+   // 在 setupIconifyOffline() 中：
+   registerCollection(newSet);
    ```
 
-4. **验证**
-   ```bash
-   cd frontend && pnpm typecheck
+3. **使用**
+   ```vue
+   <IconifyIcon icon="prefix:icon-name" />
    ```
+   或路由 meta：`icon: 'prefix:icon-name'`
 
 ---
 
@@ -62,19 +62,18 @@ version: 2.0.0
 
 ### "图标不显示" 诊断步骤
 
-1. **检查注册**：确认 `iconify.ts` 中已调用 `addIcon('prefix:name', Icon)`
-2. **检查命名**：组件中使用的名称必须与注册的 key 完全匹配
-   - ✅ `icon="mdi:home"`
-   - ❌ `icon="mdi-home"` （分隔符错误）
-3. **检查控制台**：查看是否有关于丢失图标的警告
+1. **检查是否离线注册**：`load.ts` 中是否 `addCollection` 对应前缀
+2. **检查命名**：`mdi:home` 正确；`mdi-home` 错误
+3. **检查入口**：组件应使用 `@iconify/vue/offline` 或 `@vben/icons` 的 `IconifyIcon`
+4. **检查控制台**：若出现 `api.unisvg.com` 请求，说明某处仍引用了在线 `@iconify/vue`
 
 ### 常见问题
 
 | 问题 | 原因 | 解决方案 |
 |------|------|---------|
-| 图标显示为空白 | 未注册或名称不匹配 | 检查 `iconify.ts` 注册 |
-| Console 报 404 | 运行时尝试远程加载 | 确认已离线注册 |
-| TypeScript 报错 | 图标集未安装 | 安装对应 `@iconify-json/*` |
+| 图标空白 | 图标集未注册 | 在 `load.ts` 中 addCollection |
+| Console 请求 unisvg/iconify | 使用了在线 Icon 组件 | 改为 `@iconify/vue/offline` |
+| TypeScript 报错 | 图标集未安装 | `pnpm add @iconify-json/* --filter @vben/icons` |
 
 ---
 
@@ -82,6 +81,7 @@ version: 2.0.0
 
 | 功能 | 路径 |
 |------|------|
-| **图标注册文件** | `frontend/src/plugins/iconify.ts` |
-| **图标依赖** | `frontend/package.json` |
-| **图标组件使用** | 搜索 `<icon-*` 或 `SvgIcon` |
+| **离线注册** | `frontend/packages/icons/src/iconify/load.ts` |
+| **图标组件封装** | `frontend/packages/@core/base/icons/src/` |
+| **图标依赖** | `frontend/packages/icons/package.json` |
+| **启动钩子** | `frontend/apps/src/bootstrap.ts`（import `@vben/icons`） |

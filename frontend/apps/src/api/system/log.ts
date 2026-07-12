@@ -1,3 +1,5 @@
+import type { RequestClientConfig } from '@vben/request';
+
 import { requestClient } from '#/api/request';
 
 export namespace SystemLogApi {
@@ -16,8 +18,14 @@ export namespace SystemLogApi {
 /**
  * 查询系统日志 — GET /system/logs
  */
-export async function getSystemLogsApi(params?: SystemLogApi.LogQuery) {
-  return requestClient.get<SystemLogApi.LogListResult>('/system/logs', { params });
+export async function getSystemLogsApi(
+  params?: SystemLogApi.LogQuery,
+  config?: RequestClientConfig,
+) {
+  return requestClient.get<SystemLogApi.LogListResult>('/system/logs', {
+    params,
+    ...config,
+  });
 }
 
 /**

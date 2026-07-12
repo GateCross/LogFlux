@@ -9,7 +9,7 @@ import {
   useVbenVxeGrid as useGrid,
 } from '@vben/plugins/vxe-table';
 
-import { Button, Image } from 'ant-design-vue';
+import { Button, Image } from 'antdv-next';
 
 import { useVbenForm } from './form';
 
@@ -21,6 +21,12 @@ setupVbenVxeTable({
         border: false,
         columnConfig: {
           resizable: true,
+        },
+        // 列设置菜单挂载到 body，避免受表格滚动容器裁剪。
+        customConfig: {
+          popupOptions: {
+            transfer: true,
+          },
         },
         minHeight: 180,
         formConfig: {

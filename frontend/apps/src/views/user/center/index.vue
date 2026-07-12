@@ -1,11 +1,13 @@
 <script lang="ts" setup>
-import type { UploadProps } from 'ant-design-vue';
+import type { UploadProps } from 'antdv-next';
 
 import { computed, reactive, watch } from 'vue';
+import { useQueryClient } from '@tanstack/vue-query';
 
 import { useUserStore } from '@vben/stores';
 
 import {
+  Alert,
   Avatar,
   Button,
   Card,
@@ -17,14 +19,18 @@ import {
   Input,
   Row,
   Select,
+  SelectOption,
   Space,
   Tag,
-  Textarea,
   Upload,
   message,
-} from 'ant-design-vue';
+} from 'antdv-next';
 
-import { updateUserPreferencesApi } from '#/api/core/user';
+import { getUserInfoApi, updateUserPreferencesApi } from '#/api/core/user';
+import { withListDetailErrorMode } from '#/api/list-detail';
+import { invalidateListDetailQueries } from '#/api/list-detail-mutation';
+import { qk } from '#/api/query-keys';
+import { useListDetailQuery } from '#/composables/use-list-detail-query';
 
 defineOptions({ name: 'UserCenter' });
 
@@ -43,6 +49,12 @@ interface UserProfile {
 }
 
 const userStore = useUserStore();
+const queryClient = useQueryClient();
+
+function avatarDataUrl(primary: string, secondary: string, text: string) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160"><rect width="160" height="160" rx="32" fill="${secondary}"/><circle cx="80" cy="64" r="34" fill="${primary}"/><path d="M32 142c8-30 25-46 48-46s40 16 48 46" fill="${primary}" opacity=".9"/><text x="80" y="74" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="white">${text}</text></svg>`;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
 
 const defaultAvatars = [
   {
@@ -80,17 +92,34 @@ const prefs = reactive({
   introduction: '',
 });
 
-const userInfo = computed<UserProfile>(() => userStore.userInfo ?? {});
+const {
+  data: centerUser,
+  errorMessage: centerErrorMessage,
+} = useListDetailQuery({
+  queryKey: qk.user.center(),
+  queryFn: () => getUserInfoApi(withListDetailErrorMode()),
+  errorFallback: '加载个人中心失败',
+});
+
+const userInfo = computed<UserProfile>(() => {
+  const remote = centerUser.value;
+  const store = (userStore.userInfo ?? {}) as UserProfile;
+  if (!remote) return store;
+  return {
+    ...store,
+    avatar: remote.avatar ?? store.avatar,
+    preferences: remote.preferences ?? store.preferences,
+    roles: remote.roles ?? store.roles,
+    userId: remote.userId ?? store.userId,
+    username: remote.username ?? store.username,
+  };
+});
+
 const currentAvatar = computed(() => prefs.avatar || userInfo.value.avatar);
 const currentDisplayName = computed(
   () => prefs.displayName || userInfo.value.realName || userInfo.value.username || 'LogFlux 用户',
 );
 const roleLabels = computed(() => userInfo.value.roles ?? []);
-
-function avatarDataUrl(primary: string, secondary: string, text: string) {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160"><rect width="160" height="160" rx="32" fill="${secondary}"/><circle cx="80" cy="64" r="34" fill="${primary}"/><path d="M32 142c8-30 25-46 48-46s40 16 48 46" fill="${primary}" opacity=".9"/><text x="80" y="74" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="white">${text}</text></svg>`;
-  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
-}
 
 function parsePreferences(value?: string) {
   if (!value) return {};
@@ -140,6 +169,7 @@ async function handleSavePreferences() {
     await updateUserPreferencesApi(JSON.stringify(buildPreferencesPayload()));
     updateLocalUserInfo();
     message.success('个人资料已保存');
+    await invalidateListDetailQueries(queryClient, qk.user.center());
   } catch {
     message.error('保存个人资料失败');
   } finally {
@@ -205,17 +235,24 @@ const beforeAvatarUpload: UploadProps['beforeUpload'] = async (file) => {
 };
 
 watch(
-  () => userStore.userInfo,
+  () => [userStore.userInfo, centerUser.value] as const,
   () => syncPreferences(),
-  { immediate: true },
+  { immediate: true, deep: true },
 );
 </script>
 
 <template>
   <div class="user-center-page">
+    <Alert
+      v-if="centerErrorMessage"
+      type="error"
+      show-icon
+      class="mb-3"
+      :message="centerErrorMessage"
+    />
     <Row :gutter="[16, 16]">
       <Col :xs="24" :lg="8">
-        <Card :bordered="false">
+        <Card variant="borderless">
           <div class="profile-summary">
             <Avatar :size="96" :src="currentAvatar">
               {{ currentDisplayName.slice(0, 1) }}
@@ -244,7 +281,7 @@ watch(
       </Col>
 
       <Col :xs="24" :lg="16">
-        <Card :bordered="false" title="个人资料">
+        <Card variant="borderless" title="个人资料">
           <Form
             :model="prefs"
             :label-col="{ span: 5 }"
@@ -293,13 +330,13 @@ watch(
 
             <FormItem label="语言">
               <Select v-model:value="prefs.language">
-                <Select.Option value="zh-CN">简体中文</Select.Option>
-                <Select.Option value="en-US">English</Select.Option>
+                <SelectOption value="zh-CN">简体中文</SelectOption>
+                <SelectOption value="en-US">English</SelectOption>
               </Select>
             </FormItem>
 
             <FormItem label="个人简介">
-              <Textarea
+              <Input.TextArea
                 v-model:value="prefs.introduction"
                 :rows="4"
                 placeholder="写一点个人介绍，方便团队成员识别你"

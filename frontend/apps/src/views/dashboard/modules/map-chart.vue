@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
-import { Button, Card } from 'ant-design-vue';
+import { Button, Card } from 'antdv-next';
 import * as echarts from 'echarts/core';
 import type { MapSeriesOption } from 'echarts/charts';
 import type { TooltipComponentOption } from 'echarts/components';
@@ -249,15 +249,15 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <Card class="h-full rounded-2xl shadow-sm" :body-style="{ position: 'relative' }">
+  <Card class="h-full rounded-2xl shadow-sm" :styles="{ body: { position: 'relative' } }">
     <template #title>
       <div class="flex items-center justify-between">
         <span>访问地理分布</span>
         <div>
-          <Button.Group size="small">
+          <div class="inline-flex">
             <Button :type="mode === 'china' ? 'primary' : 'default'" @click="mode = 'china'">国内</Button>
             <Button :type="mode === 'world' ? 'primary' : 'default'" @click="mode = 'world'">国际</Button>
-          </Button.Group>
+          </div>
         </div>
       </div>
     </template>

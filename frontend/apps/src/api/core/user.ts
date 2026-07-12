@@ -1,3 +1,5 @@
+import type { RequestClientConfig } from '@vben/request';
+
 import { requestClient } from '#/api/request';
 
 export namespace UserApi {
@@ -15,8 +17,8 @@ export namespace UserApi {
 /**
  * 获取用户信息 — GET /user/info
  */
-export async function getUserInfoApi() {
-  return requestClient.get<UserApi.UserInfo>('/user/info');
+export async function getUserInfoApi(config?: RequestClientConfig) {
+  return requestClient.get<UserApi.UserInfo>('/user/info', config);
 }
 
 /**

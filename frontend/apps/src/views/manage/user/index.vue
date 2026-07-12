@@ -1,18 +1,23 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue';
+import type { VbenFormSchema } from '#/adapter/form';
+import type { VxeTableGridColumns } from '#/adapter/vxe-table';
+
+import type { UserManageApi } from '#/api/system/user';
+
+import { nextTick, onMounted, ref, watch } from 'vue';
+import { useQueryClient } from '@tanstack/vue-query';
+
 import {
+  Alert,
   Button,
-  Card,
-  Form,
-  Input,
   message,
   Modal,
-  Popconfirm,
-  Select,
   Space,
-  Table,
   Tag,
-} from 'ant-design-vue';
+} from 'antdv-next';
+
+import { useVbenForm, z } from '#/adapter/form';
+import { useVbenVxeGrid } from '#/adapter/vxe-table';
 import {
   createUserApi,
   deleteUserApi,
@@ -21,126 +26,261 @@ import {
   updateUserApi,
 } from '#/api/system/user';
 import { getRoleListApi } from '#/api/system/role';
+import { withListDetailErrorMode } from '#/api/list-detail';
+import { invalidateListDetailQueries } from '#/api/list-detail-mutation';
+import { qk } from '#/api/query-keys';
+import { apiErrorMessage } from '#/utils/api-error-message';
+import { toPageParams } from '#/utils/pagination';
+
+import UserActionCell from './components/UserActionCell.vue';
+
+import {
+  createAdminCrudGridOptions,
+  toVxeProxyResult,
+  useAdminCrudForm,
+} from '../_pattern';
 
 defineOptions({ name: 'ManageUser' });
 
-interface UserItem {
-  id: number;
+type UserItem = UserManageApi.UserItem;
+
+interface UserFormValues extends Record<string, unknown> {
   username: string;
+  password: string;
   roles: string[];
-  status: number;
-  createdAt: string;
 }
 
-const loading = ref(false);
-const dataSource = ref<UserItem[]>([]);
-const total = ref(0);
-const searchUsername = ref('');
-
-const pagination = reactive({
-  current: 1,
-  pageSize: 20,
-  showSizeChanger: true,
-  pageSizeOptions: ['10', '20', '50', '100'],
-  showTotal: (t: number) => `共 ${t} 条`,
-});
-
-const showModal = ref(false);
-const modalType = ref<'add' | 'edit'>('add');
-const submitLoading = ref(false);
-const formState = reactive({
-  id: 0,
-  username: '',
-  password: '',
-  roles: [] as string[],
-});
-
-const roleOptions = ref<Array<{ label: string; value: string }>>([]);
-
-const roleMap: Record<string, string> = {
+const ROLE_LABEL: Record<string, string> = {
   admin: '管理员',
   analyst: '分析师',
   viewer: '访客',
 };
 
-const columns = [
-  { dataIndex: 'id', key: 'id', title: 'ID', width: 80 },
-  { dataIndex: 'username', key: 'username', title: '用户名', width: 150 },
-  { key: 'roles', title: '角色', width: 200 },
-  { key: 'status', title: '状态', width: 100 },
-  { dataIndex: 'createdAt', key: 'createdAt', title: '创建时间', width: 180 },
-  { key: 'actions', title: '操作', width: 200 },
+const queryClient = useQueryClient();
+const roleOptions = ref<Array<{ label: string; value: string }>>([]);
+const listErrorMessage = ref<string | null>(null);
+
+const querySchema: VbenFormSchema[] = [
+  {
+    component: 'Input',
+    fieldName: 'username',
+    label: '用户名',
+    componentProps: {
+      allowClear: true,
+      placeholder: '搜索用户名',
+    },
+  },
 ];
 
-async function fetchRoleOptions() {
-  try {
-    const list = await getRoleListApi();
-    if (Array.isArray(list)) {
-      roleOptions.value = list.map((role: any) => ({
-        label: role.displayName || role.name,
-        value: role.name,
-      }));
-    }
-  } catch {
-    // error handled by interceptor
-  }
+const columns: VxeTableGridColumns<UserItem> = [
+  { field: 'id', title: 'ID', width: 80 },
+  { field: 'username', title: '用户名', minWidth: 160 },
+  {
+    field: 'roles',
+    title: '角色',
+    minWidth: 200,
+    slots: { default: 'roles' },
+  },
+  {
+    field: 'status',
+    title: '状态',
+    width: 100,
+    slots: { default: 'status' },
+  },
+  { field: 'createdAt', title: '创建时间', minWidth: 180 },
+  {
+    field: 'action',
+    title: '操作',
+    width: 280,
+    fixed: 'right',
+    slots: { default: 'action' },
+  },
+];
+
+const [Grid, gridApi] = useVbenVxeGrid(
+  createAdminCrudGridOptions<UserItem>({
+    tableTitle: '用户管理',
+    columns,
+    querySchema,
+    pageSize: 20,
+    query: async ({ page, pageSize, formValues }) => {
+      listErrorMessage.value = null;
+      try {
+        const username =
+          typeof formValues.username === 'string'
+            ? formValues.username.trim()
+            : '';
+        const params = {
+          ...toPageParams({ page, pageSize }),
+          ...(username ? { username } : {}),
+        };
+        const data = await queryClient.fetchQuery({
+          queryKey: qk.system.users(params),
+          queryFn: () => getUserListApi(params, withListDetailErrorMode()),
+        });
+        return toVxeProxyResult(data);
+      } catch (error) {
+        listErrorMessage.value = apiErrorMessage(error, '加载失败');
+        return { items: [], total: 0 };
+      }
+    },
+  }),
+);
+
+async function invalidateUsers() {
+  await invalidateListDetailQueries(queryClient, ['system', 'users']);
 }
 
-async function fetchData() {
-  loading.value = true;
-  try {
-    const params: Record<string, any> = {
-      page: pagination.current,
-      pageSize: pagination.pageSize,
+const form = useAdminCrudForm<UserFormValues>({
+  createDefaults: () => ({
+    username: '',
+    password: '',
+    roles: ['viewer'],
+  }),
+  mapRecordToValues: (record) => {
+    const row = record as UserItem;
+    return {
+      username: row.username,
+      password: '',
+      roles: Array.isArray(row.roles) ? [...row.roles] : [],
     };
-    if (searchUsername.value) {
-      params.username = searchUsername.value;
+  },
+  submit: async ({ mode, values, record }) => {
+    if (mode === 'create') {
+      await createUserApi({
+        username: values.username,
+        password: values.password,
+        roles: values.roles,
+      });
+      message.success('新增成功');
+      await invalidateUsers();
+      return;
     }
-    const data = await getUserListApi(params);
-    dataSource.value = data?.list ?? [];
-    total.value = data?.total ?? 0;
-  } catch {
-    message.error('加载失败');
-  } finally {
-    loading.value = false;
+    const row = record as UserItem;
+    const payload: UserManageApi.UpdateUserParams = {
+      roles: values.roles,
+    };
+    if (values.password) {
+      payload.password = values.password;
+    }
+    await updateUserApi(row.id, payload);
+    message.success('编辑成功');
+    await invalidateUsers();
+  },
+  errorFallback: '操作失败',
+});
+
+function buildFormSchema(mode: 'create' | 'edit'): VbenFormSchema[] {
+  const isEdit = mode === 'edit';
+  return [
+    {
+      component: 'Input',
+      fieldName: 'username',
+      label: '用户名',
+      componentProps: {
+        disabled: isEdit,
+        placeholder: '请输入用户名',
+      },
+      rules: z.string().min(1, { message: '请输入用户名' }),
+    },
+    {
+      component: 'InputPassword',
+      fieldName: 'password',
+      label: isEdit ? '新密码（留空则不修改）' : '密码',
+      componentProps: {
+        placeholder: '请输入密码',
+      },
+      rules: isEdit
+        ? z.string().optional()
+        : z.string().min(1, { message: '请输入密码' }),
+    },
+    {
+      component: 'Select',
+      fieldName: 'roles',
+      label: '角色',
+      componentProps: {
+        mode: 'multiple',
+        options: roleOptions.value,
+        placeholder: '请选择角色',
+        class: 'w-full',
+      },
+    },
+  ];
+}
+
+const [Form, formApi] = useVbenForm({
+  commonConfig: {
+    componentProps: {
+      class: 'w-full',
+    },
+  },
+  layout: 'vertical',
+  schema: buildFormSchema('create'),
+  showDefaultActions: false,
+  handleSubmit: async (values) => {
+    const ok = await form.handleSubmit(values as UserFormValues);
+    if (ok) {
+      await gridApi.reload();
+    }
+  },
+});
+
+async function syncFormOpen() {
+  formApi.setState({ schema: buildFormSchema(form.mode.value) });
+  await nextTick();
+  await formApi.setValues(form.initialValues.value as UserFormValues);
+}
+
+watch(
+  () => form.open.value,
+  async (open) => {
+    if (open) {
+      await syncFormOpen();
+    }
+  },
+);
+
+// 角色选项异步加载后，刷新已打开表单中的 Select options
+watch(roleOptions, () => {
+  if (form.open.value) {
+    formApi.updateSchema([
+      {
+        fieldName: 'roles',
+        componentProps: {
+          mode: 'multiple',
+          options: roleOptions.value,
+          placeholder: '请选择角色',
+          class: 'w-full',
+        },
+      },
+    ]);
   }
-}
-
-function handleSearch() {
-  pagination.current = 1;
-  fetchData();
-}
-
-function handleTableChange(pag: any) {
-  pagination.current = pag.current;
-  pagination.pageSize = pag.pageSize;
-  fetchData();
-}
+});
 
 function handleAdd() {
-  modalType.value = 'add';
-  formState.username = '';
-  formState.password = '';
-  formState.roles = ['viewer'];
-  showModal.value = true;
+  form.openCreate();
 }
 
 function handleEdit(record: UserItem) {
-  modalType.value = 'edit';
-  formState.id = record.id;
-  formState.username = record.username;
-  formState.password = '';
-  formState.roles = [...record.roles];
-  showModal.value = true;
+  form.openEdit(record);
+}
+
+function handleModalOk() {
+  void formApi.validateAndSubmitForm();
+}
+
+function handleModalCancel() {
+  form.close();
 }
 
 async function handleDelete(id: number) {
   try {
     await deleteUserApi(id);
     message.success('删除成功');
-    fetchData();
-  } catch {
-    message.error('删除失败');
+    await invalidateUsers();
+    await gridApi.reload();
+  } catch (error) {
+    message.error(apiErrorMessage(error, '删除失败'));
   }
 }
 
@@ -148,156 +288,104 @@ async function handleToggleStatus(record: UserItem) {
   try {
     await toggleUserStatusApi(record.id);
     message.success(record.status === 1 ? '用户已冻结' : '用户已解冻');
-    fetchData();
-  } catch {
-    message.error('操作失败');
+    await invalidateUsers();
+    await gridApi.reload();
+  } catch (error) {
+    message.error(apiErrorMessage(error, '操作失败'));
   }
 }
 
-async function handleSubmit() {
-  if (!formState.username) {
-    message.warning('请输入用户名');
-    return;
-  }
-  if (modalType.value === 'add' && !formState.password) {
-    message.warning('请输入密码');
-    return;
-  }
+function roleLabel(role: string) {
+  return ROLE_LABEL[role] || role;
+}
 
-  submitLoading.value = true;
+async function fetchRoleOptions() {
   try {
-    if (modalType.value === 'add') {
-      await createUserApi({
-        username: formState.username,
-        password: formState.password,
-        roles: formState.roles,
-      });
-      message.success('新增成功');
-    } else {
-      const payload: Record<string, any> = { roles: formState.roles };
-      if (formState.password) {
-        payload.password = formState.password;
-      }
-      await updateUserApi(formState.id, payload);
-      message.success('编辑成功');
+    const list = await queryClient.fetchQuery({
+      queryKey: qk.system.roles({ for: 'user-form' }),
+      queryFn: () => getRoleListApi(withListDetailErrorMode()),
+    });
+    if (Array.isArray(list)) {
+      roleOptions.value = list.map((role) => ({
+        label: role.displayName || role.name,
+        value: role.name,
+      }));
     }
-    showModal.value = false;
-    fetchData();
   } catch {
-    message.error('操作失败');
-  } finally {
-    submitLoading.value = false;
+    // 选项为空时表单仍可打开；错误已 suppress，不双 toast
   }
 }
 
 onMounted(() => {
-  fetchRoleOptions();
-  fetchData();
+  void fetchRoleOptions();
 });
 </script>
 
 <template>
   <div class="p-5">
-    <Card title="用户管理">
-      <template #extra>
+    <Alert
+      v-if="listErrorMessage"
+      type="error"
+      show-icon
+      class="mb-3"
+      :message="listErrorMessage"
+      closable
+      @close="listErrorMessage = null"
+    />
+
+    <Grid>
+      <template #toolbar-tools>
+        <Button type="primary" class="mr-2" @click="handleAdd">
+          新增用户
+        </Button>
+      </template>
+
+      <template #roles="{ row }">
         <Space>
-          <Input
-            v-model:value="searchUsername"
-            placeholder="搜索用户名"
-            allow-clear
-            @press-enter="handleSearch"
-          />
-          <Button type="primary" @click="handleSearch">搜索</Button>
-          <Button type="primary" ghost @click="handleAdd">新增用户</Button>
+          <Tag
+            v-for="role in row.roles"
+            :key="role"
+            :color="role === 'admin' ? 'green' : 'blue'"
+          >
+            {{ roleLabel(role) }}
+          </Tag>
         </Space>
       </template>
 
-      <Table
-        :columns="columns"
-        :data-source="dataSource"
-        :loading="loading"
-        :pagination="{ ...pagination, total }"
-        row-key="id"
-        size="middle"
-        @change="handleTableChange"
-      >
-        <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'roles'">
-            <Space>
-              <Tag
-                v-for="role in record.roles"
-                :key="role"
-                :color="role === 'admin' ? 'green' : 'blue'"
-              >
-                {{ roleMap[role] || role }}
-              </Tag>
-            </Space>
-          </template>
-          <template v-if="column.key === 'status'">
-            <Tag :color="record.status === 1 ? 'green' : 'red'">
-              {{ record.status === 1 ? '启用' : '禁用' }}
-            </Tag>
-          </template>
-          <template v-if="column.key === 'actions'">
-            <Space>
-              <Button type="link" size="small" @click="handleEdit(record as UserItem)">
-                编辑
-              </Button>
-              <Button
-                type="link"
-                size="small"
-                :style="{ color: record.status === 1 ? '#faad14' : '#52c41a' }"
-                @click="handleToggleStatus(record as UserItem)"
-              >
-                {{ record.status === 1 ? '冻结' : '解冻' }}
-              </Button>
-              <Popconfirm
-                title="确认永久删除该用户吗？此操作无法恢复！"
-                ok-text="确认"
-                cancel-text="取消"
-                @confirm="handleDelete(record.id)"
-              >
-                <Button type="link" size="small" danger>删除</Button>
-              </Popconfirm>
-            </Space>
-          </template>
-        </template>
-      </Table>
-    </Card>
+      <template #status="{ row }">
+        <Tag :color="row.status === 1 ? 'green' : 'red'">
+          {{ row.status === 1 ? '启用' : '禁用' }}
+        </Tag>
+      </template>
+
+      <template #action="{ row }">
+        <UserActionCell
+          :row="row as UserItem"
+          @edit="handleEdit(row as UserItem)"
+          @toggle-status="handleToggleStatus(row as UserItem)"
+          @delete="handleDelete"
+        />
+      </template>
+    </Grid>
 
     <Modal
-      :open="showModal"
-      :title="modalType === 'add' ? '新增用户' : '编辑用户'"
-      :confirm-loading="submitLoading"
-      @cancel="showModal = false"
-      @ok="handleSubmit"
+      :open="form.open.value"
+      :title="form.mode.value === 'create' ? '新增用户' : '编辑用户'"
+      :confirm-loading="form.submitLoading.value"
+      destroy-on-hidden
+      @cancel="handleModalCancel"
+      @ok="handleModalOk"
     >
-      <Form layout="vertical" style="margin-top: 16px;">
-        <Form.Item label="用户名" required>
-          <Input
-            v-model:value="formState.username"
-            :disabled="modalType === 'edit'"
-            placeholder="请输入用户名"
-          />
-        </Form.Item>
-        <Form.Item
-          :label="modalType === 'edit' ? '新密码（留空则不修改）' : '密码'"
-          :required="modalType === 'add'"
-        >
-          <Input.Password
-            v-model:value="formState.password"
-            placeholder="请输入密码"
-          />
-        </Form.Item>
-        <Form.Item label="角色">
-          <Select
-            v-model:value="formState.roles"
-            mode="multiple"
-            :options="roleOptions"
-            placeholder="请选择角色"
-          />
-        </Form.Item>
-      </Form>
+      <Alert
+        v-if="form.errorMessage.value"
+        type="error"
+        show-icon
+        class="mb-3"
+        :message="form.errorMessage.value"
+      />
+      <div class="pt-2">
+        <Form />
+      </div>
     </Modal>
   </div>
 </template>

@@ -22,6 +22,7 @@
     "#/*": "./src/*"
   },
   "dependencies": {
+    "@tanstack/vue-query": "catalog:",
     "@vben/access": "workspace:*",
     "@vben/common-ui": "workspace:*",
     "@vben/constants": "workspace:*",
@@ -37,13 +38,12 @@
     "@vben/types": "workspace:*",
     "@vben/utils": "workspace:*",
     "@vueuse/core": "catalog:",
-    "ant-design-vue": "catalog:",
+    "antdv-next": "catalog:",
     "dayjs": "catalog:",
     "echarts": "catalog:",
     "@iconify/vue": "catalog:",
     "@surbowl/world-geo-json-zh": "^2.1.5",
     "echarts-china-map": "^1.0.4",
-    "vue-draggable-plus": "^0.6.1",
     "@guolao/vue-monaco-editor": "^1.6.0",
     "pinia": "catalog:",
     "vue": "catalog:",

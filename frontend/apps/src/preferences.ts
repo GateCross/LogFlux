@@ -6,8 +6,6 @@ import {
 interface WebAntdPreferencesExtension {
   defaultTableSize: number;
   enableFormFullscreen: boolean;
-  reportTitle: string;
-  tenantMode: 'multi' | 'single';
 }
 
 /**
@@ -38,22 +36,6 @@ export const preferencesExtension =
         tip: 'preferences.antd.fields.enableFormFullscreen.tip',
       },
       {
-        component: 'select',
-        defaultValue: 'single',
-        key: 'tenantMode',
-        label: 'preferences.antd.fields.tenantMode.label',
-        options: [
-          {
-            label: 'preferences.antd.fields.tenantMode.options.single.label',
-            value: 'single',
-          },
-          {
-            label: 'preferences.antd.fields.tenantMode.options.multi.label',
-            value: 'multi',
-          },
-        ],
-      },
-      {
         component: 'number',
         componentProps: {
           max: 200,
@@ -63,13 +45,6 @@ export const preferencesExtension =
         defaultValue: 20,
         key: 'defaultTableSize',
         label: 'preferences.antd.fields.defaultTableSize.label',
-      },
-      {
-        component: 'input',
-        defaultValue: '',
-        key: 'reportTitle',
-        label: 'preferences.antd.fields.reportTitle.label',
-        placeholder: 'preferences.antd.fields.reportTitle.placeholder',
       },
     ],
   });

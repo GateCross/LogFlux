@@ -61,13 +61,7 @@ function modelWithReverseProxy(opts: {
   };
 }
 
-/**
- * Task 10 / 10.1 回归：
- * - Preserved / Complex 合并保真（Req 6.1）
- * - 非法 health path 中文错误（Req 3.5）
- * - 前后端共享 health 契约用例（Req 3.6）——与后端 TestSharedHealthContractCases 同输入
- * **Validates: Requirements 6.1, 6.2, 3.5, 3.6**
- */
+/** preserved / health 回归 */
 describe('service-status-discovery regression: preserved + health', () => {
   it('Preserved/Complex 原文在 Simple 扩展 merge 后保持不变', () => {
     // complex：多 handle + import → preserved

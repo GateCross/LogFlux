@@ -1,3 +1,5 @@
+import type { RequestClientConfig } from '@vben/request';
+
 import { requestClient } from '#/api/request';
 
 export interface DashboardStats {
@@ -43,13 +45,17 @@ export interface DashboardSummaryResp {
 /**
  * 获取仪表盘汇总数据 — GET /dashboard/summary
  */
-export async function getDashboardSummaryApi(params?: {
-  startTime?: string;
-  endTime?: string;
-  intervalSec?: number;
-  topN?: number;
-}) {
+export async function getDashboardSummaryApi(
+  params?: {
+    startTime?: string;
+    endTime?: string;
+    intervalSec?: number;
+    topN?: number;
+  },
+  config?: RequestClientConfig,
+) {
   return requestClient.get<DashboardSummaryResp>('/dashboard/summary', {
     params,
+    ...config,
   });
 }
