@@ -423,8 +423,8 @@ watch(chinaSelected, (selected) => {
 .china-region-panel {
   padding: 12px;
   margin-bottom: 24px;
-  background: #fafafa;
-  border: 1px solid #f0f0f0;
+  background: hsl(var(--muted));
+  border: 1px solid hsl(var(--border));
   border-radius: 6px;
 }
 
@@ -440,6 +440,23 @@ watch(chinaSelected, (selected) => {
   min-width: 0;
 }
 
+/* 多选选中项：深色下避免浅底发灰/发白 */
+.access-form :deep(.ant-select-selection-item) {
+  color: hsl(var(--foreground));
+  background: hsl(var(--accent));
+  border-color: hsl(var(--border));
+}
+
+.access-form :deep(.ant-select-selection-item-remove) {
+  color: hsl(var(--muted-foreground));
+}
+
+.china-rule-list :deep(.ant-tag) {
+  color: hsl(var(--foreground));
+  background: hsl(var(--accent));
+  border-color: hsl(var(--border));
+}
+
 .region-add-button {
   width: 100%;
 }
@@ -452,7 +469,7 @@ watch(chinaSelected, (selected) => {
 }
 
 .empty-tip {
-  color: #667085;
+  color: hsl(var(--muted-foreground));
   font-size: 13px;
 }
 
