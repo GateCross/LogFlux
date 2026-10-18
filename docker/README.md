@@ -92,7 +92,7 @@ docker build -f docker/caddy.Dockerfile \
 ```bash
 docker build -f docker/Dockerfile \
   --build-arg CADDY_IMAGE=logflux-caddy:local \
-  --build-arg CORAZA_CURRENT_VERSION=v2.5.0 \
+  --build-arg CORAZA_CURRENT_VERSION=v2.6.2 \
   -t logflux:local .
 ```
 

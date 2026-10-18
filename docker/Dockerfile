@@ -2,7 +2,7 @@
 # Global build args (must be before first FROM)
 # ==========================================
 ARG CADDY_IMAGE=ghcr.io/gatecross/logflux-caddy:latest
-ARG CORAZA_CURRENT_VERSION=v2.5.0
+ARG CORAZA_CURRENT_VERSION=v2.6.2
 
 # ==========================================
 # Stage 1: Build Frontend
