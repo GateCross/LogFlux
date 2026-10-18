@@ -102,7 +102,7 @@ docker build -f docker/Dockerfile \
 
 ### 5.1 CRS 与 Coraza 的边界
 
-- **CRS**：支持更新源管理、同步、上传、激活、回滚。
+- **CRS**：支持更新源管理、同步、上传、激活、回滚。激活后 Caddy 会真正加载新规则。
 - **Coraza 引擎**：不走“更新源配置”，仅支持版本检查（GitHub Release），不支持在线替换引擎。
 
 ### 5.2 WAF 文件目录
@@ -111,14 +111,52 @@ docker build -f docker/Dockerfile \
 
 关键子目录：
 
-- `/config/security/packages`
-- `/config/security/releases`
+- `/config/security/packages`：下载的规则包
+- `/config/security/releases/<version>`：解压后的各版本规则
+- `/config/security/active`：**当前生效的规则布局**，Caddyfile 从这里加载
 
 compose 已默认持久化：
 
 - `security_data:/config/security`
 
-### 5.3 Coraza 版本来源与优先级
+### 5.3 规则加载方式
+
+Caddyfile 通过绝对路径从 `/config/security/active/rules/` 加载规则：
+
+```
+Include /config/security/active/rules/@coraza.conf-recommended
+Include /config/security/active/rules/@crs-setup.conf.example
+Include /config/security/active/rules/@owasp_crs/*.conf
+```
+
+`@` 前缀路径由 coreruleset 内嵌文件系统提供；`load_owasp_crs` 开启时 coraza-caddy
+会把内嵌文件系统与 OS 文件系统合并，绝对路径落到 OS 层，因此可以加载本项目
+自己管理的规则。
+
+布局由「激活 CRS 版本」生成：`releases/<version>` 里的官方规则包会被重构成
+
+```
+active/rules/@coraza.conf-recommended   由 coraza 仓库提供，激活时补齐
+active/rules/@crs-setup.conf.example
+active/rules/@owasp_crs/*.conf
+active/rules/@owasp_crs/*.data
+```
+
+规则文件内部以 `@pmFromFile xxx.data` 引用同目录的数据文件，因此 `.conf` 与
+`.data` 必须位于同一目录，重构时二者统一放进 `@owasp_crs`。
+
+> 布局目录为生成物，不落在 `releases/` 内，以免污染版本内容、阻碍回滚。
+
+### 5.4 首次启动的兜底规则
+
+全新部署或持久化卷为空时，`/config/security/active` 尚不存在，Caddy 会因找不到
+规则文件而启动失败。镜像内在 `/app/etc/crs-rules` 烘焙了一份与构建期
+`CORAZA_CRS_VERSION` 一致的规则，entrypoint 会在启动时将其复制到
+`/config/security/active` 作为兜底。
+
+之后在后端同步并激活 CRS 版本时，该布局会被替换为在线更新得到的规则。
+
+### 5.5 Coraza 版本来源与优先级
 
 后端“当前版本”读取优先级：
 
@@ -130,7 +168,7 @@ compose 已默认持久化：
 
 - `Waf.CorazaReleaseAPI`（默认 `https://api.github.com/repos/corazawaf/coraza-caddy/releases/latest`）
 
-### 5.4 GitHub Release 检查代理
+### 5.6 GitHub Release 检查代理
 
 可通过以下方式配置代理：
 
@@ -139,7 +177,7 @@ compose 已默认持久化：
 
 检查逻辑：**优先代理，请求失败自动回退直连**。
 
-### 5.5 简单 WAF 设置（默认入口）
+### 5.7 简单 WAF 设置（默认入口）
 
 前端入口：`Caddy管理` -> `Caddy配置` -> `防火墙`
 
@@ -173,7 +211,7 @@ compose 已默认持久化：
 - 落库失败时会尝试回滚到 `last_good` Caddy 配置。
 - 会记录 `simple_waf_last_good` / `simple_waf_apply` 配置历史动作。
 
-### 5.6 高级安全管理（默认隐藏）
+### 5.8 高级安全管理（默认隐藏）
 
 高级安全管理页面仍保留代码与路由，但默认不显示在侧边菜单中。它包含：
 

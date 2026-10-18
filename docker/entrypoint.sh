@@ -16,6 +16,38 @@ term_handler() {
   exit 143; # 128 + 15 -- SIGTERM
 }
 
+# 准备 WAF 规则布局
+#
+# Caddyfile 中的 coraza_waf 从 /config/security/active/rules/ 加载规则，
+# 该目录由后端激活 CRS 版本时生成。全新部署或持久化卷为空时目录不存在，
+# Caddy 会因找不到规则文件而启动失败，这里先用镜像内烘焙的规则兜底。
+# 之后在后端同步并激活 CRS 版本时，会被替换为在线更新得到的规则。
+prepare_waf_layout() {
+  RULES_SRC="/app/etc/crs-rules"
+  LAYOUT_DIR="/config/security/active"
+  RULES_DST="${LAYOUT_DIR}/rules"
+
+  if [ -d "$RULES_DST/@owasp_crs" ] && [ -n "$(ls -A "$RULES_DST/@owasp_crs" 2>/dev/null)" ]; then
+    echo "WAF rules layout already present, skipping bootstrap."
+    return 0
+  fi
+
+  if [ ! -d "$RULES_SRC/@owasp_crs" ]; then
+    echo "WARNING: bundled CRS rules not found at $RULES_SRC, WAF may fail to start."
+    return 0
+  fi
+
+  echo "Bootstrapping WAF rules layout from bundled rules..."
+  mkdir -p "$RULES_DST" || return 0
+  cp -RL "$RULES_SRC/." "$RULES_DST/" 2>/dev/null || cp -rL "$RULES_SRC/." "$RULES_DST/" 2>/dev/null || {
+    echo "WARNING: failed to copy bundled CRS rules."
+    return 0
+  }
+  chown -R logflux:logflux /config/security 2>/dev/null || true
+}
+
+prepare_waf_layout
+
 # 启动 LogFlux 后端 (使用 logflux 用户)
 echo "Starting LogFlux Backend..."
 su-exec logflux /app/logflux-api -f /app/etc/config.yaml &

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	caddymodel "logflux/model/caddy"
 	commonmodel "logflux/model/common"
 	wafmodel "logflux/model/waf"
@@ -336,6 +337,96 @@ func (helper *wafLogicHelper) resolveJobTriggerMode(defaultMode string) string {
 	}
 }
 
+// buildCRSReleaseLayout 把 CRS 发布目录重构成 Caddy 可加载的布局。
+//
+// 在线下载到的 coreruleset 发布包只含 rules/ 与 crs-setup.conf.example，
+// 不含 Coraza 基线配置（@coraza.conf-recommended 由 coraza 仓库单独提供），
+// 因此这里在规则就绪后补上基线配置，否则 Caddyfile 的第一个 Include 会失败。
+func (helper *wafLogicHelper) buildCRSReleaseLayout(releaseDir, layoutRoot string) error {
+	layout, err := waf.BuildCRSLayout(releaseDir, layoutRoot)
+	if err != nil {
+		return err
+	}
+
+	if err := helper.ensureCorazaBaselineConfig(layout); err != nil {
+		return err
+	}
+
+	helper.logger.Infof(
+		"CRS 规则布局已就绪: root=%s rules=%d data=%d",
+		layout.Root, len(layout.RuleFiles), len(layout.DataFiles),
+	)
+	return nil
+}
+
+// ensureCorazaBaselineConfig 保证布局中存在 @coraza.conf-recommended。
+//
+// 优先沿用布局里已有的文件（上传的包可能自带），否则从镜像烘焙目录复制；
+// 两者都没有时返回错误，让激活失败并回滚，而不是留一个加载即崩溃的配置。
+func (helper *wafLogicHelper) ensureCorazaBaselineConfig(layout *waf.CRSLayout) error {
+	if layout == nil {
+		return fmt.Errorf("CRS 布局为空")
+	}
+	if layout.CorazaConfigPath() != "" {
+		return nil
+	}
+
+	sources := []string{
+		filepath.Join(filepath.Dir(layout.Root), waf.CRSCorazaConfigName),
+		filepath.Join(managedCRSRulesRoot, "rules", waf.CRSCorazaConfigName),
+		filepath.Join(bundledCRSRulesDir, waf.CRSCorazaConfigName),
+	}
+
+	target := filepath.Join(layout.RulesDir, waf.CRSCorazaConfigName)
+	for _, source := range sources {
+		if !fileExists(source) {
+			continue
+		}
+		if err := copyCRSFile(source, target); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	return fmt.Errorf("缺少 Coraza 基线配置 %s，请检查镜像内置规则或手动上传", waf.CRSCorazaConfigName)
+}
+
+// bundledCRSRulesDir 是镜像内烘焙的初始规则目录，由 docker/caddy.Dockerfile 生成。
+const bundledCRSRulesDir = "/app/etc/crs-rules"
+
+// fileExists 判断是否为已存在的普通文件。
+func fileExists(path string) bool {
+	info, err := os.Stat(strings.TrimSpace(path))
+	if err != nil {
+		return false
+	}
+	return !info.IsDir()
+}
+
+// copyCRSFile 复制单个规则配置文件。
+func copyCRSFile(sourcePath, targetPath string) error {
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+		return fmt.Errorf("创建规则目录失败: %w", err)
+	}
+
+	source, err := os.Open(sourcePath)
+	if err != nil {
+		return fmt.Errorf("打开规则文件失败: %w", err)
+	}
+	defer source.Close()
+
+	target, err := os.Create(targetPath)
+	if err != nil {
+		return fmt.Errorf("创建规则文件失败: %w", err)
+	}
+	defer target.Close()
+
+	if _, err := io.Copy(target, source); err != nil {
+		return fmt.Errorf("复制规则文件失败: %w", err)
+	}
+	return nil
+}
+
 func (helper *wafLogicHelper) primaryCaddyServer() (*caddymodel.CaddyServer, error) {
 	var server caddymodel.CaddyServer
 	err := helper.svcCtx.DB.WithContext(helper.ctx).Where("type = ?", "local").Order("id asc").First(&server).Error
@@ -382,6 +473,9 @@ func (helper *wafLogicHelper) activateRelease(release *wafmodel.WafRelease) erro
 	activator := &waf.Activator{
 		Store:       helper.store,
 		CaddyLoader: &wafCaddyLoader{server: server},
+		LayoutBuilder: func(releaseDir, layoutRoot string) error {
+			return helper.buildCRSReleaseLayout(releaseDir, layoutRoot)
+		},
 	}
 
 	timeoutSec := helper.activateTimeoutSeconds()

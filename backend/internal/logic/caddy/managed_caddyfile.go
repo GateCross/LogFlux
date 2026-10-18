@@ -18,6 +18,25 @@ const (
 	managedCaddyDefaultFrontend    = "/app/frontend"
 	managedCaddyDefaultAccessLog   = "/var/log/caddy/access.log"
 	managedCaddyDefaultWafAuditLog = "/var/log/caddy/waf_audit.log"
+
+	// managedCRSRulesRoot 是文件系统 CRS 规则根目录，与 docker/Caddyfile 保持一致。
+	//
+	// coraza-caddy 在 load_owasp_crs 开启时会把 coreruleset.FS 与 OSFS 合并，
+	// 其中 OSFS 直接使用 os.Open，因此这里的绝对路径可以读到本项目自己管理
+	// 的规则文件，从而让 CRS 在线更新机制真正生效。
+	managedCRSRulesRoot = "/config/security/current"
+
+	// managedCRSCorazaConfigInclude 是 Coraza 基线配置的加载路径。
+	managedCRSCorazaConfigInclude = managedCRSRulesRoot + "/rules/@coraza.conf-recommended"
+
+	// managedCRSSetupConfigInclude 是 CRS setup 配置的加载路径。
+	managedCRSSetupConfigInclude = managedCRSRulesRoot + "/rules/@crs-setup.conf.example"
+
+	// managedCRSRulesInclude 是 OWASP CRS 规则文件的加载路径。
+	//
+	// 规则内部以 @pmFromFile php-variables.data 之类的相对文件名引用同目录的
+	// 数据文件，因此规则文件与数据文件必须位于同一目录。
+	managedCRSRulesInclude = managedCRSRulesRoot + "/rules/@owasp_crs/*.conf"
 )
 
 type managedCaddyfileOptions struct {
@@ -183,8 +202,8 @@ func renderManagedWafSnippet(directives, auditLogPath string) string {
 
 func composeManagedCorazaDirectives(directives, auditLogPath string) string {
 	lines := []string{
-		"Include @coraza.conf-recommended",
-		"Include @crs-setup.conf.example",
+		fmt.Sprintf("Include %s", managedCRSCorazaConfigInclude),
+		fmt.Sprintf("Include %s", managedCRSSetupConfigInclude),
 		"",
 	}
 
@@ -202,16 +221,31 @@ func composeManagedCorazaDirectives(directives, auditLogPath string) string {
 	if !containsDirectiveName(lines, "SecAuditLog") {
 		lines = append(lines, fmt.Sprintf("SecAuditLog %s", strings.TrimSpace(auditLogPath)))
 	}
-	lines = append(lines, "", "Include @owasp_crs/*.conf")
+	lines = append(lines, "", fmt.Sprintf("Include %s", managedCRSRulesInclude))
 	return strings.Join(lines, "\n")
 }
 
+// isManagedCorazaBaseDirective 判断是否为规则加载类基础指令。
+//
+// 这类指令由 LogFlux 统一生成，用户策略里重复出现时需忽略，避免把规则加载
+// 路径指向别处。同时兼容历史的内嵌路径写法（@owasp_crs/*.conf），保证旧配置
+// 升级后不会残留失效的 Include。
 func isManagedCorazaBaseDirective(line string) bool {
 	normalized := strings.ToLower(strings.TrimSpace(line))
-	return strings.HasPrefix(normalized, "include @coraza.conf") ||
-		strings.HasPrefix(normalized, "include @crs-setup.conf") ||
-		strings.HasPrefix(normalized, "include @owasp_crs/") ||
-		strings.HasPrefix(normalized, "secauditlog ")
+	if !strings.HasPrefix(normalized, "include ") {
+		return strings.HasPrefix(normalized, "secauditlog ")
+	}
+	return isManagedCRSInclude(normalized)
+}
+
+// isManagedCRSInclude 判断一条 Include 是否指向 CRS 规则加载路径。
+func isManagedCRSInclude(normalizedInclude string) bool {
+	return strings.HasPrefix(normalizedInclude, "include @coraza.conf") ||
+		strings.HasPrefix(normalizedInclude, "include @crs-setup.conf") ||
+		strings.HasPrefix(normalizedInclude, "include @owasp_crs/") ||
+		strings.HasPrefix(normalizedInclude, "include "+strings.ToLower(managedCRSCorazaConfigInclude)) ||
+		strings.HasPrefix(normalizedInclude, "include "+strings.ToLower(managedCRSSetupConfigInclude)) ||
+		strings.HasPrefix(normalizedInclude, "include "+strings.ToLower(managedCRSRulesInclude))
 }
 
 func containsDirectiveName(lines []string, directiveName string) bool {

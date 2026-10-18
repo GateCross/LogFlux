@@ -109,16 +109,31 @@ func prepareActivatorStore(t *testing.T) (*Store, string, string) {
 
 	oldReleaseDir := store.ReleaseDir("v4.23.0")
 	newReleaseDir := store.ReleaseDir("v4.23.1")
-	if err := os.MkdirAll(oldReleaseDir, 0o755); err != nil {
-		t.Fatalf("create old release dir failed: %v", err)
-	}
-	if err := os.MkdirAll(newReleaseDir, 0o755); err != nil {
-		t.Fatalf("create new release dir failed: %v", err)
-	}
+	writeTestReleaseRules(t, oldReleaseDir)
+	writeTestReleaseRules(t, newReleaseDir)
 
 	if err := store.SetLink(store.CurrentLinkPath(), oldReleaseDir); err != nil {
 		t.Fatalf("set initial current link failed: %v", err)
 	}
 
 	return store, oldReleaseDir, newReleaseDir
+}
+
+// writeTestReleaseRules 在发布目录里写一份最小可用的 CRS 规则树。
+//
+// 激活流程会先把发布目录重构成布局再加载配置，因此发布目录必须含规则文件，
+// 否则激活会在构建布局阶段直接失败。
+func writeTestReleaseRules(t *testing.T, releaseDir string) {
+	t.Helper()
+
+	rulesDir := filepath.Join(releaseDir, "coreruleset-4.23.1", "rules")
+	if err := os.MkdirAll(rulesDir, 0o755); err != nil {
+		t.Fatalf("create rules dir failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(rulesDir, "REQUEST-901-INITIALIZATION.conf"), []byte("SecAction \"id:1,pass\"\n"), 0o644); err != nil {
+		t.Fatalf("write rule failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(rulesDir, "crs-setup.conf.example"), []byte("SecAction \"id:2,pass\"\n"), 0o644); err != nil {
+		t.Fatalf("write setup failed: %v", err)
+	}
 }

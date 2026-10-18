@@ -17,9 +17,25 @@ type Activator struct {
 	Store       *Store
 	CaddyLoader CaddyLoader
 	Lock        *sync.Mutex
+
+	// LayoutBuilder 在激活前把发布目录重构成 Caddy 可直接加载的布局。
+	//
+	// 为空时退化为仅切换符号链接，用于测试或规则已就绪的场景。
+	LayoutBuilder func(releaseDir, layoutRoot string) error
 }
 
 var defaultActivateLock sync.Mutex
+
+// LayoutRoot 返回激活版本的布局根目录。
+//
+// 布局必须落在 current 链接外部：current 指向 release 目录，而布局是生成物，
+// 若写进 release 目录会污染版本内容并阻碍回滚。
+func (activator *Activator) LayoutRoot() string {
+	if activator == nil || activator.Store == nil {
+		return ""
+	}
+	return filepath.Join(activator.Store.BaseDir, "active")
+}
 
 func (activator *Activator) ActivateVersion(version, caddyConfig string) error {
 	if activator == nil || activator.Store == nil {
@@ -43,6 +59,12 @@ func (activator *Activator) ActivateVersion(version, caddyConfig string) error {
 
 	currentLink := activator.Store.CurrentLinkPath()
 	lastGoodLink := activator.Store.LastGoodLinkPath()
+
+	// 布局必须先于 Caddy 加载构建完成：Caddyfile 中的 Include 指向布局路径，
+	// 若顺序颠倒，Adapt/Load 会因找不到规则文件而失败。
+	if err := activator.buildLayout(version, releaseDir); err != nil {
+		return err
+	}
 
 	previousCurrentTarget, _ := activator.Store.LinkTarget(currentLink)
 	if previousCurrentTarget != "" {
@@ -74,6 +96,27 @@ func (activator *Activator) ActivateVersion(version, caddyConfig string) error {
 	return nil
 }
 
+// buildLayout 在激活前把发布目录重构成 Caddy 可加载的布局。
+func (activator *Activator) buildLayout(version, releaseDir string) error {
+	layoutRoot := activator.LayoutRoot()
+	if strings.TrimSpace(layoutRoot) == "" {
+		return fmt.Errorf("布局目录为空")
+	}
+
+	// 先清理再重建，保证布局与当前版本严格一致，不残留上一个版本的文件。
+	if err := os.RemoveAll(layoutRoot); err != nil {
+		return fmt.Errorf("清理旧布局失败: %w", err)
+	}
+
+	if activator.LayoutBuilder != nil {
+		return activator.LayoutBuilder(releaseDir, layoutRoot)
+	}
+
+	// 默认实现：直接复用发布目录内的规则树，不额外拷贝。
+	return linkOrCopyCRSRules(releaseDir, layoutRoot)
+}
+
+// rollbackToPrevious 在激活失败时把 current 指回上一个版本并重载配置。
 func rollbackToPrevious(store *Store, previousCurrentTarget, caddyConfig string, loader CaddyLoader) error {
 	if strings.TrimSpace(previousCurrentTarget) == "" {
 		return fmt.Errorf("没有可回滚的上一版 current 目标")

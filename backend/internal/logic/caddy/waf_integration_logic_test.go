@@ -70,11 +70,15 @@ func TestApplyWafIntegrationDryRun(t *testing.T) {
 }
 
 func TestApplyWafIntegrationPersist(t *testing.T) {
+	// 只统计 adapt / load，应用成功后的日志源同步会异步读取 /config/，
+	// 若一并计入会与下面的断言形成竞态。
 	var requests []string
 	caddyMock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		_ = r.Body.Close()
-		requests = append(requests, r.URL.Path+"\n"+string(body))
+		if r.URL.Path == "/adapt" || r.URL.Path == "/load" {
+			requests = append(requests, r.URL.Path+"\n"+string(body))
+		}
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{}`))
 	}))

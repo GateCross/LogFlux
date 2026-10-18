@@ -8,8 +8,8 @@
   coraza_waf {
     load_owasp_crs
     directives `
-      Include @coraza.conf-recommended
-      Include @crs-setup.conf.example
+      Include /config/security/current/rules/@coraza.conf-recommended
+      Include /config/security/current/rules/@crs-setup.conf.example
 
       SecRuleEngine DetectionOnly
       SecAuditEngine RelevantOnly
@@ -20,7 +20,7 @@
       SecRequestBodyNoFilesLimit 1048576
       SecAuditLog /var/log/caddy/waf_audit.log
 
-      Include @owasp_crs/*.conf
+      Include /config/security/current/rules/@owasp_crs/*.conf
     `
   }
 }
