@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	caddymodel "logflux/model/caddy"
 	commonmodel "logflux/model/common"
 	wafmodel "logflux/model/waf"
@@ -379,10 +378,10 @@ func (helper *wafLogicHelper) ensureCorazaBaselineConfig(layout *waf.CRSLayout) 
 
 	target := filepath.Join(layout.RulesDir, waf.CRSCorazaConfigName)
 	for _, source := range sources {
-		if !fileExists(source) {
+		if !waf.FileExists(source) {
 			continue
 		}
-		if err := copyCRSFile(source, target); err != nil {
+		if err := waf.CopyFile(source, target); err != nil {
 			return err
 		}
 		return nil
@@ -393,39 +392,6 @@ func (helper *wafLogicHelper) ensureCorazaBaselineConfig(layout *waf.CRSLayout) 
 
 // bundledCRSRulesDir 是镜像内烘焙的初始规则目录，由 docker/caddy.Dockerfile 生成。
 const bundledCRSRulesDir = "/app/etc/crs-rules"
-
-// fileExists 判断是否为已存在的普通文件。
-func fileExists(path string) bool {
-	info, err := os.Stat(strings.TrimSpace(path))
-	if err != nil {
-		return false
-	}
-	return !info.IsDir()
-}
-
-// copyCRSFile 复制单个规则配置文件。
-func copyCRSFile(sourcePath, targetPath string) error {
-	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
-		return fmt.Errorf("创建规则目录失败: %w", err)
-	}
-
-	source, err := os.Open(sourcePath)
-	if err != nil {
-		return fmt.Errorf("打开规则文件失败: %w", err)
-	}
-	defer source.Close()
-
-	target, err := os.Create(targetPath)
-	if err != nil {
-		return fmt.Errorf("创建规则文件失败: %w", err)
-	}
-	defer target.Close()
-
-	if _, err := io.Copy(target, source); err != nil {
-		return fmt.Errorf("复制规则文件失败: %w", err)
-	}
-	return nil
-}
 
 func (helper *wafLogicHelper) primaryCaddyServer() (*caddymodel.CaddyServer, error) {
 	var server caddymodel.CaddyServer

@@ -110,36 +110,6 @@ func TestBuildCRSLayoutAcceptsRulesDir(t *testing.T) {
 	}
 }
 
-func TestLinkOrCopyCRSRules(t *testing.T) {
-	releaseDir := buildTestCRSRelease(t)
-	layoutRoot := filepath.Join(t.TempDir(), "active")
-
-	if err := linkOrCopyCRSRules(releaseDir, layoutRoot); err != nil {
-		t.Fatalf("linkOrCopyCRSRules() error = %v", err)
-	}
-
-	owaspDir := filepath.Join(layoutRoot, "rules", "@owasp_crs")
-	rulePath := filepath.Join(owaspDir, "REQUEST-901-INITIALIZATION.conf")
-	content, err := os.ReadFile(rulePath)
-	if err != nil {
-		t.Fatalf("读取规则文件失败: %v", err)
-	}
-	if !strings.Contains(string(content), "id:1001") {
-		t.Fatalf("unexpected rule content: %s", content)
-	}
-
-	// 数据文件必须与规则同目录，保证 @pmFromFile 可解析。
-	dataPath := filepath.Join(owaspDir, "php-variables.data")
-	if _, err := os.Stat(dataPath); err != nil {
-		t.Fatalf("数据文件缺失: %v", err)
-	}
-
-	setupPath := filepath.Join(layoutRoot, "rules", "@crs-setup.conf.example")
-	if _, err := os.Stat(setupPath); err != nil {
-		t.Fatalf("setup 配置缺失: %v", err)
-	}
-}
-
 func TestActivatorBuildsLayoutBeforeLoad(t *testing.T) {
 	store := NewStore(t.TempDir())
 	releaseDir := store.ReleaseDir("v4.25.0")

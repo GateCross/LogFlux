@@ -240,12 +240,9 @@ func isManagedCorazaBaseDirective(line string) bool {
 
 // isManagedCRSInclude 判断一条 Include 是否指向 CRS 规则加载路径。
 func isManagedCRSInclude(normalizedInclude string) bool {
-	return strings.HasPrefix(normalizedInclude, "include @coraza.conf") ||
-		strings.HasPrefix(normalizedInclude, "include @crs-setup.conf") ||
-		strings.HasPrefix(normalizedInclude, "include @owasp_crs/") ||
-		strings.HasPrefix(normalizedInclude, "include "+strings.ToLower(managedCRSCorazaConfigInclude)) ||
-		strings.HasPrefix(normalizedInclude, "include "+strings.ToLower(managedCRSSetupConfigInclude)) ||
-		strings.HasPrefix(normalizedInclude, "include "+strings.ToLower(managedCRSRulesInclude))
+	return strings.Contains(normalizedInclude, "@coraza.conf") ||
+		strings.Contains(normalizedInclude, "@crs-setup.conf") ||
+		strings.Contains(normalizedInclude, "@owasp_crs")
 }
 
 func containsDirectiveName(lines []string, directiveName string) bool {

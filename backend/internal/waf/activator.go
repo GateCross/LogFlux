@@ -112,8 +112,8 @@ func (activator *Activator) buildLayout(version, releaseDir string) error {
 		return activator.LayoutBuilder(releaseDir, layoutRoot)
 	}
 
-	// 默认实现：直接复用发布目录内的规则树，不额外拷贝。
-	return linkOrCopyCRSRules(releaseDir, layoutRoot)
+	_, err := BuildCRSLayout(releaseDir, layoutRoot)
+	return err
 }
 
 // rollbackToPrevious 在激活失败时把 current 指回上一个版本并重载配置。
