@@ -54,6 +54,11 @@ func main() {
 			Path:    "/api/internal/geo-check",
 			Handler: authhandler.GeoCheckHandler(),
 		},
+		{
+			Method:  http.MethodGet,
+			Path:    "/api/health",
+			Handler: authhandler.HealthHandler(ctx.DB),
+		},
 	})
 
 	if ctx.WafScheduler != nil {

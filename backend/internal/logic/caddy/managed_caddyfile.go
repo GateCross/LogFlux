@@ -121,7 +121,7 @@ func renderManagedCaddyfile(options managedCaddyfileOptions) (string, error) {
 	var builder strings.Builder
 	builder.WriteString(logfluxManagedCaddyfileMarker + "\n")
 	builder.WriteString("{\n")
-	builder.WriteString("  admin :2019\n")
+	builder.WriteString("  admin localhost:2019\n")
 	if options.WafEnabled {
 		builder.WriteString("  order coraza_waf first\n")
 	}
@@ -140,22 +140,21 @@ func renderManagedCaddyfile(options managedCaddyfileOptions) (string, error) {
 	builder.WriteString(fmt.Sprintf("    output file %s\n", options.AccessLogPath))
 	builder.WriteString("    format json\n")
 	builder.WriteString("  }\n\n")
-	builder.WriteString("  encode gzip\n\n")
+	builder.WriteString("  encode zstd gzip\n\n")
 	if options.ForwardAuthEnabled {
 		builder.WriteString(fmt.Sprintf("  forward_auth %s {\n", options.Backend))
 		builder.WriteString("    uri /api/internal/geo-check\n")
 		builder.WriteString("  }\n\n")
 	}
-	builder.WriteString("  handle /api/health {\n")
-	builder.WriteString("    respond \"OK\" 200\n")
-	builder.WriteString("  }\n\n")
 	builder.WriteString("  handle /api/* {\n")
 	builder.WriteString(fmt.Sprintf("    reverse_proxy %s\n", options.Backend))
 	builder.WriteString("  }\n\n")
 	builder.WriteString("  handle {\n")
 	builder.WriteString(fmt.Sprintf("    root * %s\n", options.FrontendRoot))
 	builder.WriteString("    try_files {path} /index.html\n")
-	builder.WriteString("    file_server\n")
+	builder.WriteString("    file_server {\n")
+	builder.WriteString("      precompressed gzip\n")
+	builder.WriteString("    }\n")
 	builder.WriteString("  }\n")
 	builder.WriteString("}\n")
 

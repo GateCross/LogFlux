@@ -76,6 +76,8 @@ func TestRenderManagedCaddyfile(t *testing.T) {
 
 	expectedFragments := []string{
 		logfluxManagedCaddyfileMarker,
+		"admin localhost:2019",
+		"encode zstd gzip",
 		"order coraza_waf first",
 		"import waf_protect",
 		managedCRSCorazaConfigInclude,
@@ -84,11 +86,20 @@ func TestRenderManagedCaddyfile(t *testing.T) {
 		"SecAuditLog /var/log/caddy/waf_audit.log",
 		"reverse_proxy localhost:8888",
 		"root * /app/frontend",
+		"precompressed gzip",
 	}
 	for _, fragment := range expectedFragments {
 		if !strings.Contains(config, fragment) {
 			t.Fatalf("managed config missing fragment %q, output=%s", fragment, config)
 		}
+	}
+
+	// /api/health 须落到后端反代，不能由 Caddy 静态应答，否则健康检查无法反映后端状态。
+	if strings.Contains(config, `respond "OK"`) {
+		t.Fatalf("managed config must not respond /api/health statically, output=%s", config)
+	}
+	if strings.Index(config, "handle /api/*") > strings.Index(config, "root * /app/frontend") {
+		t.Fatalf("API proxy must precede frontend fallback, output=%s", config)
 	}
 }
 

@@ -55,8 +55,7 @@ status:
 	@docker-compose -f docker/docker-compose.yml ps
 	@echo ""
 	@echo "访问地址:"
-	@echo "  HTTP:  http://localhost"
-	@echo "  HTTPS: https://localhost"
+	@echo "  HTTP:  http://localhost （默认端口 80，可通过 LOGFLUX_HTTP_PORT 调整）"
 
 clean:
 	@echo "清理构建文件和容器..."

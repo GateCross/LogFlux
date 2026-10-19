@@ -44,7 +44,7 @@ LogFlux 是一个日志流量分析、Caddy 图形化配置与 Coraza WAF 管理
 - Docker 一体化容器包含：前端静态资源、后端二进制、Caddy。
 - 默认入口：`http://localhost`
 - 容器内链路：`Client -> Caddy(:80) -> Frontend + Backend(:8888) -> PostgreSQL / Redis`
-- Docker Caddyfile 中 `/api/health` 由 Caddy 直接返回 `OK`。
+- `/api/health` 由后端应答，数据库探测失败时返回 503。
 - WAF 工作目录固定为 `/config/security`，包含 `packages` 与 `releases` 子目录。
 
 ## 3. 仓库结构

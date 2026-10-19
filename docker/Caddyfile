@@ -1,6 +1,6 @@
 # LogFlux managed Caddyfile
 {
-  admin :2019
+  admin localhost:2019
   order coraza_waf first
 }
 
@@ -32,7 +32,6 @@
   header {
     X-Frame-Options "DENY"
     X-Content-Type-Options "nosniff"
-    X-XSS-Protection "1; mode=block"
     Referrer-Policy "strict-origin-when-cross-origin"
     Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'"
     -Server
@@ -43,11 +42,7 @@
     format json
   }
 
-  encode gzip
-
-  handle /api/health {
-    respond "OK" 200
-  }
+  encode zstd gzip
 
   # IP 区域访问控制（启用时取消注释）
   # forward_auth localhost:8888 {
@@ -61,6 +56,8 @@
   handle {
     root * /app/frontend
     try_files {path} /index.html
-    file_server
+    file_server {
+      precompressed gzip
+    }
   }
 }
