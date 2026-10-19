@@ -100,8 +100,6 @@ const {
           @delete-server="deleteCurrentServer"
           @open-history="openHistory"
           @apply-preset="applyPreset"
-          @open-wizard="openSiteWizard"
-          @open-docker="openDockerDiscovery"
           @parse-raw="parseRawToBlocks(true)"
           @save-raw="previewBeforeSave('raw')"
           @save-blocks="previewBeforeSave('blocks')"

@@ -1,59 +1,83 @@
 <script lang="ts" setup>
-import { useRouter } from 'vue-router';
-import { Button, Select, Tag, Tooltip } from 'antdv-next';
-
 import type { ServerStatusItem } from '../../shared/caddy-server-status';
+import type { ServerFormState } from '../composables/useCaddyServers';
+
+import { computed } from 'vue';
+
+import { Button, Dropdown, Select, Tag, Tooltip } from 'antdv-next';
+
 import {
   formatLatency,
   statusLabel,
   statusTagColor,
   statusTooltip,
 } from '../../shared/caddy-server-status';
-import type { ServerFormState } from '../composables/useCaddyServers';
 import ServerFormModal from './ServerFormModal.vue';
 
 const props = defineProps<{
-  selectedServerId?: number;
+  configContent: string;
   loadingServers: boolean;
-  serverOptions: Array<{ label: string; value: number }>;
-  selectedServerStatus: ServerStatusItem | null | undefined;
-  serverStatusLoaded: boolean;
   loadingServerStatus: boolean;
-  serversCount: number;
   mode: string;
   previewing: boolean;
-  configContent: string;
+  selectedServerId?: number;
+  selectedServerStatus: null | ServerStatusItem | undefined;
+  serverForm: ServerFormState;
+  serverModalType: 'add' | 'edit';
   /** 服务器表单 modal 状态（由工具栏托管，不进入页面模板） */
   serverModalVisible: boolean;
-  serverModalType: 'add' | 'edit';
-  serverForm: ServerFormState;
+  serverOptions: Array<{ label: string; value: number }>;
+  serversCount: number;
+  serverStatusLoaded: boolean;
 }>();
 
 const emit = defineEmits<{
-  'update:selectedServerId': [value: number];
-  'update:serverModalVisible': [value: boolean];
-  refreshList: [];
-  refreshStatus: [];
+  applyPreset: [];
+  deleteServer: [];
   openAdd: [];
   openEdit: [];
-  deleteServer: [];
   openHistory: [];
-  applyPreset: [];
-  openWizard: [];
-  openDocker: [];
   parseRaw: [];
-  saveRaw: [];
+  refreshList: [];
+  refreshStatus: [];
   saveBlocks: [];
+  saveRaw: [];
   saveServer: [];
+  'update:selectedServerId': [value: number];
+  'update:serverModalVisible': [value: boolean];
 }>();
 
-const router = useRouter();
+/** 节点运维动作低频，收进下拉菜单，避免与配置主流程争抢视线 */
+const nodeMenuItems = computed(() => [
+  {
+    key: 'probe',
+    label: props.loadingServerStatus ? '探测中…' : '探测当前节点',
+    disabled: props.serversCount === 0 || props.loadingServerStatus,
+  },
+  { type: 'divider' as const, key: 'd1' },
+  { key: 'add', label: '添加节点' },
+  { key: 'edit', label: '编辑节点', disabled: !props.selectedServerId },
+  { key: 'delete', label: '删除节点', danger: true, disabled: !props.selectedServerId },
+]);
 
 function handleServerChange(value: unknown) {
   const next = Number(value);
   if (!Number.isFinite(next)) return;
   emit('update:selectedServerId', next);
 }
+
+function handleNodeMenuClick(info: { key: number | string }) {
+  const actions: Record<string, () => void> = {
+    probe: () => emit('refreshStatus'),
+    add: () => emit('openAdd'),
+    edit: () => emit('openEdit'),
+    delete: () => emit('deleteServer'),
+  };
+  actions[String(info.key)]?.();
+}
+
+/** 保存按钮文案随编辑视角变化；防火墙有独立保存动作 */
+const saveLabel = computed(() => (props.mode === 'raw' ? '保存原始配置' : '保存分块配置'));
 </script>
 
 <template>
@@ -76,44 +100,39 @@ function handleServerChange(value: unknown) {
         </Tag>
       </Tooltip>
       <Tag v-else-if="props.serverStatusLoaded" color="default">未探测</Tag>
-      <Button :loading="props.loadingServers" @click="emit('refreshList')">刷新列表</Button>
-      <Button
-        :loading="props.loadingServerStatus"
-        :disabled="props.serversCount === 0"
-        @click="emit('refreshStatus')"
+
+      <Tooltip title="刷新节点列表">
+        <Button :loading="props.loadingServers" @click="emit('refreshList')">刷新</Button>
+      </Tooltip>
+
+      <Dropdown
+        :menu="{ items: nodeMenuItems, onClick: handleNodeMenuClick }"
+        :trigger="['click']"
+        placement="bottomLeft"
       >
-        探测当前节点
-      </Button>
-      <Button type="link" @click="router.push({ name: 'CaddyCatalog' })">
-        服务目录总览
-      </Button>
-      <Button type="primary" ghost @click="emit('openAdd')">添加</Button>
-      <Button :disabled="!props.selectedServerId" @click="emit('openEdit')">编辑</Button>
-      <Button danger :disabled="!props.selectedServerId" @click="emit('deleteServer')">删除</Button>
+        <Button :loading="props.loadingServerStatus">节点管理</Button>
+      </Dropdown>
     </div>
+
     <div class="toolbar-group actions">
       <Button :disabled="!props.selectedServerId" @click="emit('openHistory')">历史</Button>
-      <Button @click="emit('applyPreset')">默认模板</Button>
-      <Button type="primary" ghost @click="emit('openWizard')">站点向导</Button>
-      <Button type="primary" ghost @click="emit('openDocker')">Docker 发现</Button>
-      <Button :disabled="!props.configContent.trim()" @click="emit('parseRaw')">从原始配置解析</Button>
+      <Button v-if="props.mode === 'blocks'" @click="emit('applyPreset')">默认模板</Button>
       <Button
         v-if="props.mode === 'raw'"
-        type="primary"
-        :loading="props.previewing"
-        :disabled="!props.selectedServerId"
-        @click="emit('saveRaw')"
+        :disabled="!props.configContent.trim()"
+        @click="emit('parseRaw')"
       >
-        保存原始配置
+        解析为分块配置
       </Button>
+      <!-- 防火墙有自己的保存动作，这里不显示 Caddyfile 保存按钮 -->
       <Button
-        v-else
+        v-if="props.mode !== 'waf'"
         type="primary"
         :loading="props.previewing"
         :disabled="!props.selectedServerId"
-        @click="emit('saveBlocks')"
+        @click="props.mode === 'raw' ? emit('saveRaw') : emit('saveBlocks')"
       >
-        保存分块配置
+        {{ saveLabel }}
       </Button>
     </div>
   </div>
@@ -130,12 +149,14 @@ function handleServerChange(value: unknown) {
 
 <style scoped>
 .caddy-toolbar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
   padding-bottom: 16px;
   margin-bottom: 16px;
-  border-bottom: 1px solid #eef0f4;
+  border-bottom: 1px solid hsl(var(--border));
 }
 
 .toolbar-group {
@@ -145,19 +166,11 @@ function handleServerChange(value: unknown) {
   align-items: center;
 }
 
-.toolbar-group.actions {
-  justify-content: flex-end;
-}
-
 .server-select {
-  min-width: 260px;
+  min-width: 220px;
 }
 
 @media (max-width: 960px) {
-  .caddy-toolbar {
-    grid-template-columns: 1fr;
-  }
-
   .toolbar-group.actions {
     justify-content: flex-start;
   }

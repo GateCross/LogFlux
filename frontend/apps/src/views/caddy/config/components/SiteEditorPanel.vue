@@ -164,12 +164,12 @@ const props = defineProps<{
 <style scoped>
 .panel-subtitle {
   margin-top: 2px;
-  color: #667085;
+  color: hsl(var(--muted-foreground));
   font-size: 12px;
 }
 
 .text-muted {
-  color: #667085;
+  color: hsl(var(--muted-foreground));
   font-size: 12px;
 }
 
@@ -193,7 +193,7 @@ const props = defineProps<{
 }
 
 .health-label {
-  color: #475467;
+  color: hsl(var(--foreground) / 80%);
   font-size: 13px;
 }
 

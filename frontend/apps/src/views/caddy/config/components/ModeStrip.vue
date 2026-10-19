@@ -1,7 +1,7 @@
 <script lang="ts" setup>
-import { RadioGroup, RadioButton } from 'antdv-next';
-
 import type { CaddyPageMode } from '../types';
+
+import { Button, RadioButton, RadioGroup } from 'antdv-next';
 
 const props = defineProps<{
   mode: CaddyPageMode;
@@ -27,15 +27,22 @@ function onModeChange(event: any) {
 
 <template>
   <div class="mode-strip">
-    <RadioGroup
-      :value="props.mode"
-      button-style="solid"
-      @change="onModeChange"
-    >
-      <RadioButton v-for="item in props.modeOptions" :key="item.value" :value="item.value">
-        {{ item.label }}
-      </RadioButton>
-    </RadioGroup>
+    <div class="mode-strip-left">
+      <!-- 编辑视角：同一份 Caddyfile 的三种查看方式 -->
+      <RadioGroup :value="props.mode" button-style="solid" @change="onModeChange">
+        <RadioButton v-for="item in props.modeOptions" :key="item.value" :value="item.value">
+          {{ item.label }}
+        </RadioButton>
+      </RadioGroup>
+      <span class="mode-divider"></span>
+      <!-- 防火墙是独立的业务功能，不与编辑视角并列成 Tab -->
+      <Button
+        :type="props.mode === 'waf' ? 'primary' : 'default'"
+        @click="emit('change', 'waf')"
+      >
+        防火墙
+      </Button>
+    </div>
     <span class="mode-summary">{{ summaries[props.mode] }}</span>
   </div>
 </template>
@@ -49,13 +56,26 @@ function onModeChange(event: any) {
   flex-wrap: wrap;
   margin-bottom: 16px;
   padding: 10px 12px;
-  border: 1px solid #eef0f4;
+  border: 1px solid hsl(var(--border));
   border-radius: 8px;
-  background: #fbfcfd;
+  background: hsl(var(--muted) / 40%);
+}
+
+.mode-strip-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.mode-divider {
+  width: 1px;
+  height: 20px;
+  background: hsl(var(--border));
 }
 
 .mode-summary {
-  color: #667085;
+  color: hsl(var(--muted-foreground));
   font-size: 12px;
 }
 </style>

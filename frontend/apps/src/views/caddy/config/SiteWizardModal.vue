@@ -446,7 +446,7 @@ function fillPool(name: string) {
   justify-content: flex-end;
   padding-top: 12px;
   margin-top: 8px;
-  border-top: 1px solid #eef0f4;
+  border-top: 1px solid hsl(var(--border));
 }
 
 .health-row {
@@ -477,21 +477,21 @@ function fillPool(name: string) {
 
 .hint-label,
 .hint-text {
-  color: #667085;
+  color: hsl(var(--muted-foreground));
   font-size: 12px;
 }
 
 .summary-card {
   padding: 12px 14px;
-  background: #fbfcfd;
-  border: 1px solid #eef0f4;
+  background: hsl(var(--muted) / 40%);
+  border: 1px solid hsl(var(--border));
   border-radius: 8px;
   line-height: 1.7;
 }
 
 .preview-label {
   margin-bottom: 6px;
-  color: #667085;
+  color: hsl(var(--muted-foreground));
   font-size: 12px;
 }
 

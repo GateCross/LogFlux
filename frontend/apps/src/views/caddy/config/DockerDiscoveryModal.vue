@@ -317,13 +317,13 @@ function handleApply() {
 
 .reason-text {
   margin-top: 2px;
-  color: #b42318;
+  color: hsl(var(--destructive));
   font-size: 12px;
   max-width: 160px;
 }
 
 .hint-text {
-  color: #667085;
+  color: hsl(var(--muted-foreground));
   font-size: 12px;
 }
 
@@ -336,7 +336,7 @@ function handleApply() {
   justify-content: flex-end;
   padding-top: 12px;
   margin-top: 12px;
-  border-top: 1px solid #eef0f4;
+  border-top: 1px solid hsl(var(--border));
 }
 
 .mb-3 {

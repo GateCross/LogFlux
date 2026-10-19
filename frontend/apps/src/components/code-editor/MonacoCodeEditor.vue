@@ -4,6 +4,8 @@
  */
 import { computed, ref } from 'vue';
 
+import { usePreferences } from '@vben/preferences';
+
 import { Alert, Input } from 'antdv-next';
 import { loader, VueMonacoEditor } from '@guolao/vue-monaco-editor';
 
@@ -45,6 +47,10 @@ const emit = defineEmits<{
 
 const editorAttempt = ref(0);
 const loadErrorMessage = '代码编辑器加载失败，已切换为纯文本编辑。';
+
+/** 跟随应用主题，避免深色模式下编辑器仍是白底 */
+const { isDark } = usePreferences();
+const editorTheme = computed(() => (isDark.value ? 'vs-dark' : 'vs'));
 
 const editorHeight = computed(() => {
   const h = props.height;
@@ -92,7 +98,7 @@ defineExpose({ getFullText });
       :key="editorAttempt"
       :value="props.modelValue"
       :language="props.language"
-      :theme="'vs'"
+      :theme="editorTheme"
       :height="editorHeight"
       :width="'100%'"
       :options="monacoOptions"
@@ -134,10 +140,10 @@ defineExpose({ getFullText });
 <style scoped>
 .monaco-code-editor {
   width: 100%;
-  border: 1px solid #e5e7eb;
+  border: 1px solid hsl(var(--border));
   border-radius: 8px;
   overflow: hidden;
-  background: #fff;
+  background: hsl(var(--card));
 }
 
 .monaco-code-editor__inner {
@@ -149,7 +155,7 @@ defineExpose({ getFullText });
   align-items: center;
   justify-content: center;
   min-height: 200px;
-  color: #667085;
+  color: hsl(var(--muted-foreground));
   font-size: 13px;
 }
 
@@ -172,14 +178,14 @@ defineExpose({ getFullText });
   margin-top: 8px;
   padding: 4px 12px;
   font-size: 13px;
-  color: #175cd3;
+  color: hsl(var(--primary));
   background: transparent;
-  border: 1px solid #b2ddff;
+  border: 1px solid hsl(var(--border));
   border-radius: 6px;
   cursor: pointer;
 }
 
 .monaco-code-editor__retry:hover {
-  background: #eff8ff;
+  background: hsl(var(--accent));
 }
 </style>

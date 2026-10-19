@@ -72,9 +72,9 @@ export function blockKindColor(kind: PreservedCaddyBlock['kind']) {
   return 'default';
 }
 
+/** 编辑视角三态：同一份 Caddyfile 的三种查看方式；防火墙是独立功能，不在此列 */
 export const modeOptions = [
   { label: '分块配置', value: 'blocks' },
-  { label: '防火墙', value: 'waf' },
   { label: '原始配置', value: 'raw' },
   { label: '预览', value: 'preview' },
 ];

@@ -200,7 +200,7 @@ const emit = defineEmits<{
   justify-content: space-between;
   gap: 12px;
   padding: 12px 0;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid hsl(var(--border));
 }
 
 .history-item:last-child {
@@ -218,7 +218,7 @@ const emit = defineEmits<{
 }
 
 .history-item-desc {
-  color: #667085;
+  color: hsl(var(--muted-foreground));
   font-size: 13px;
 }
 
@@ -228,7 +228,7 @@ const emit = defineEmits<{
 
 .history-empty {
   padding: 24px 0;
-  color: #98a2b3;
+  color: hsl(var(--muted-foreground) / 80%);
   text-align: center;
 }
 
@@ -243,7 +243,7 @@ const emit = defineEmits<{
 .diff-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  border: 1px solid #e5e7eb;
+  border: 1px solid hsl(var(--border));
   border-radius: 8px;
   overflow: hidden;
 }
@@ -254,7 +254,7 @@ const emit = defineEmits<{
 }
 
 .diff-column + .diff-column {
-  border-left: 1px solid #e5e7eb;
+  border-left: 1px solid hsl(var(--border));
 }
 
 .diff-line-row {
@@ -269,24 +269,24 @@ const emit = defineEmits<{
 }
 
 .diff-line-row.added {
-  color: #166534;
-  background: #dcfce7;
-  border-left-color: #16a34a;
+  color: hsl(var(--success));
+  background: hsl(var(--success) / 12%);
+  border-left-color: hsl(var(--success));
 }
 
 .diff-line-row.removed {
-  color: #991b1b;
-  background: #fee2e2;
-  border-left-color: #b91c1c;
+  color: hsl(var(--destructive));
+  background: hsl(var(--destructive) / 12%);
+  border-left-color: hsl(var(--destructive));
 }
 
 .diff-line-row.blank {
   color: transparent;
-  background: #f8fafc;
+  background: hsl(var(--muted) / 40%);
 }
 
 .diff-no {
-  color: #98a2b3;
+  color: hsl(var(--muted-foreground) / 80%);
   text-align: right;
   user-select: none;
 }

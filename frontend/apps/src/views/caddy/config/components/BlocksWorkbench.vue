@@ -431,20 +431,20 @@ const emit = defineEmits<{
 }
 
 .config-collapse {
-  border: 1px solid #eef0f4;
+  border: 1px solid hsl(var(--border));
   border-radius: 8px;
   overflow: hidden;
-  background: #fff;
+  background: hsl(var(--card));
 }
 
 .config-collapse :deep(.ant-collapse-item) {
-  border-bottom-color: #eef0f4;
+  border-bottom-color: hsl(var(--border));
 }
 
 .config-collapse :deep(.ant-collapse-header) {
   align-items: center;
   padding: 12px 16px;
-  color: #1f2937;
+  color: hsl(var(--foreground));
   font-weight: 600;
 }
 
@@ -453,8 +453,8 @@ const emit = defineEmits<{
 }
 
 .inner-collapse {
-  border-color: #eef0f4;
-  background: #fbfcfd;
+  border-color: hsl(var(--border));
+  background: hsl(var(--muted) / 40%);
 }
 
 .inner-collapse :deep(.ant-collapse-header) {
@@ -476,7 +476,7 @@ const emit = defineEmits<{
 
 .panel-subtitle {
   margin-top: 2px;
-  color: #667085;
+  color: hsl(var(--muted-foreground));
   font-size: 12px;
 }
 
@@ -510,8 +510,8 @@ const emit = defineEmits<{
   padding: 12px 72px 12px 12px;
   text-align: left;
   cursor: pointer;
-  background: #fbfcfd;
-  border: 1px solid #eef0f4;
+  background: hsl(var(--muted) / 40%);
+  border: 1px solid hsl(var(--border));
   border-radius: 6px;
   transition:
     border-color 0.16s ease,
@@ -520,9 +520,9 @@ const emit = defineEmits<{
 }
 
 .site-item.active {
-  border-color: #1677ff;
-  background: #f0f7ff;
-  box-shadow: 0 0 0 2px rgb(22 119 255 / 8%);
+  border-color: hsl(var(--primary));
+  background: hsl(var(--primary) / 10%);
+  box-shadow: 0 0 0 2px hsl(var(--primary) / 8%);
 }
 
 .site-state {
@@ -545,7 +545,7 @@ const emit = defineEmits<{
 
 .site-domain {
   margin-top: 4px;
-  color: #667085;
+  color: hsl(var(--muted-foreground));
   font-size: 12px;
 }
 
@@ -580,11 +580,11 @@ const emit = defineEmits<{
 }
 
 .meta-label {
-  color: #98a2b3;
+  color: hsl(var(--muted-foreground) / 80%);
 }
 
 .text-muted {
-  color: #667085;
+  color: hsl(var(--muted-foreground));
   font-size: 12px;
 }
 
@@ -598,9 +598,9 @@ const emit = defineEmits<{
 .upstream-card {
   margin-bottom: 12px;
   padding: 12px;
-  border: 1px solid #eef0f4;
+  border: 1px solid hsl(var(--border));
   border-radius: 8px;
-  background: #fbfcfd;
+  background: hsl(var(--muted) / 40%);
 }
 
 .health-row {
@@ -619,7 +619,7 @@ const emit = defineEmits<{
 }
 
 .health-label {
-  color: #475467;
+  color: hsl(var(--foreground) / 80%);
   font-size: 13px;
 }
 
@@ -631,9 +631,9 @@ const emit = defineEmits<{
 
 .complex-summary-item {
   padding: 12px;
-  border: 1px solid #f3d19e;
+  border: 1px solid hsl(var(--warning) / 40%);
   border-radius: 8px;
-  background: #fffbe6;
+  background: hsl(var(--warning) / 12%);
 }
 
 .complex-summary-title {
@@ -648,7 +648,7 @@ const emit = defineEmits<{
 .complex-reason-list {
   margin: 0;
   padding-left: 18px;
-  color: #667085;
+  color: hsl(var(--muted-foreground));
   font-size: 12px;
 }
 
