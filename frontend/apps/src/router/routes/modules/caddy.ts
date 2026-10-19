@@ -42,7 +42,6 @@ const routes: RouteRecordRaw[] = [
         path: '/caddy/source',
         component: () => import('#/views/caddy/source/index.vue'),
         meta: {
-          hideInMenu: true,
           icon: 'mdi:source-branch',
           title: '来源管理',
         },

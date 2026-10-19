@@ -113,6 +113,9 @@ WORKDIR /app
 # 复制 Caddy 二进制文件
 COPY --from=caddy-binary --chown=${APP_USER}:${APP_GROUP} /usr/bin/caddy /usr/bin/caddy
 
+# 复制镜像内烘焙的 CRS 规则，供 entrypoint 在 /config/security/active 缺失时兜底
+COPY --from=caddy-binary --chown=${APP_USER}:${APP_GROUP} /app/etc/crs-rules /app/etc/crs-rules
+
 # 复制前端构建产物
 COPY --from=frontend-builder --chown=${APP_USER}:${APP_GROUP} /app/apps/dist /app/frontend
 

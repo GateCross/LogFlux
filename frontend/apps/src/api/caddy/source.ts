@@ -114,11 +114,13 @@ export async function checkWafSourceApi(id: number) {
 
 /**
  * 从 WAF 源同步/下载（超时 240 秒） — POST /caddy/waf/source/:id/sync
+ *
+ * activateNow 为 true 时后端下载完成后立即重构布局并热加载 Caddy。
  */
-export async function syncWafSourceApi(id: number) {
+export async function syncWafSourceApi(id: number, activateNow = true) {
   return requestClient.post<void>(
     `/caddy/waf/source/${id}/sync`,
-    undefined,
+    { activateNow },
     { timeout: 240_000 },
   );
 }

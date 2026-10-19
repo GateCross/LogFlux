@@ -556,6 +556,13 @@ func initRBACData(db *gorm2.DB) {
 			RequiredRoles: []string{"admin"},
 		},
 		{
+			Name:          "caddy_source",
+			Path:          "/caddy/source",
+			Component:     "view.caddy_source",
+			Meta:          `{"title":"caddy_source","i18nKey":"route.caddy_source","icon":"carbon:package"}`,
+			RequiredRoles: []string{"admin"},
+		},
+		{
 			Name:          "manage_user",
 			Path:          "/manage/user",
 			Component:     "view.manage_user",
@@ -677,6 +684,7 @@ func initRBACData(db *gorm2.DB) {
 	setParent("notification_log", "notification")
 	setParentForce("caddy_system_log", "manage")
 	setParentForce("caddy_access", "caddy")
+	setParentForce("caddy_source", "caddy")
 	// setParent("cron", "manage") // moved to top level
 
 	// 兼容：强制校正服务目录菜单的父子关系与组件路径
@@ -691,7 +699,6 @@ func initRBACData(db *gorm2.DB) {
 	db.Where("name = ?", "home").Delete(&menumodel.Menu{})
 	db.Where("path = ?", "/home").Delete(&menumodel.Menu{})
 	db.Where("component = ?", "home").Delete(&menumodel.Menu{})
-	db.Where("name = ?", "caddy_source").Delete(&menumodel.Menu{})
 	db.Where("name = ?", "caddy_waf").Delete(&menumodel.Menu{})
 	db.Where("name in ?", []string{"security", "waf", "waf_security", "crs", "security_access"}).Delete(&menumodel.Menu{})
 	db.Where("path = ? OR path LIKE ?", "/security", "/security/%").Delete(&menumodel.Menu{})

@@ -1,8 +1,11 @@
 <script lang="ts" setup>
+import type { CaddyWafSourceApi } from '#/api/caddy/source';
+
 import { computed, h, reactive, ref } from 'vue';
-import { useQueryClient } from '@tanstack/vue-query';
 
 import { Page } from '@vben/common-ui';
+
+import { useQueryClient } from '@tanstack/vue-query';
 import {
   Alert,
   Button,
@@ -17,17 +20,18 @@ import {
   Tag,
 } from 'antdv-next';
 
-import type { CaddyWafSourceApi } from '#/api/caddy/source';
 import {
   createWafSourceApi,
   deleteWafSourceApi,
   getWafSourceListApi,
+  syncWafSourceApi,
   updateWafSourceApi,
 } from '#/api/caddy/source';
 import { withListDetailErrorMode } from '#/api/list-detail';
 import { invalidateListDetailQueries } from '#/api/list-detail-mutation';
 import { qk } from '#/api/query-keys';
 import { useListDetailQuery } from '#/composables/use-list-detail-query';
+import { apiErrorMessage } from '#/utils/api-error-message';
 
 defineOptions({ name: 'CaddySource' });
 
@@ -40,7 +44,7 @@ const formState = reactive({
   url: '',
   type: '',
 });
-const editingId = ref<number | null>(null);
+const editingId = ref<null | number>(null);
 
 const {
   data: sourcesData,
@@ -76,7 +80,7 @@ const columns = [
       const enabled = record.enabled;
       const text =
         record.status ??
-        (enabled === false ? 'inactive' : enabled ? 'active' : 'unknown');
+        (enabled === false ? 'inactive' : (enabled ? 'active' : 'unknown'));
       const colorMap: Record<string, string> = {
         active: 'green',
         inactive: 'default',
@@ -86,7 +90,7 @@ const columns = [
       return h(Tag, { color: colorMap[text] ?? 'default' }, () => text);
     },
   },
-  { title: '操作', key: 'actions', width: 180, fixed: 'right' as const },
+  { title: '操作', key: 'actions', width: 280, fixed: 'right' as const },
 ];
 
 function handleAdd() {
@@ -146,6 +150,22 @@ function handleDelete(record: CaddyWafSourceApi.WafSource) {
     },
   });
 }
+
+/** 下载规则包并激活，激活后 /config/security/active 才会有规则文件 */
+const syncingId = ref<null | number>(null);
+async function handleSync(record: CaddyWafSourceApi.WafSource) {
+  syncingId.value = record.id;
+  try {
+    await syncWafSourceApi(record.id, true);
+    message.success('同步并激活成功');
+    await invalidateListDetailQueries(queryClient, qk.caddy.source());
+    await refetch();
+  } catch (error) {
+    message.error(apiErrorMessage(error, '同步失败'));
+  } finally {
+    syncingId.value = null;
+  }
+}
 </script>
 
 <template>
@@ -173,6 +193,15 @@ function handleDelete(record: CaddyWafSourceApi.WafSource) {
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'actions'">
             <Space :size="6">
+              <Button
+                size="small"
+                type="primary"
+                :loading="syncingId === record.id"
+                class="table-action-btn"
+                @click="handleSync(record as CaddyWafSourceApi.WafSource)"
+              >
+                同步并激活
+              </Button>
               <Button
                 size="small"
                 class="table-action-btn"

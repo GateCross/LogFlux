@@ -45,6 +45,9 @@ WORKDIR /app
 # 使用 --chown 直接设置权限，避免额外的层
 COPY --from=caddy-binary --chown=${APP_USER}:${APP_GROUP} /usr/bin/caddy /usr/bin/caddy
 
+# 复制镜像内烘焙的 CRS 规则，供 entrypoint 在 /config/security/active 缺失时兜底
+COPY --from=caddy-binary --chown=${APP_USER}:${APP_GROUP} /app/etc/crs-rules /app/etc/crs-rules
+
 ARG CADDYFILE=docker/Caddyfile
 COPY --chown=${APP_USER}:${APP_GROUP} ${CADDYFILE} /etc/caddy/Caddyfile
 

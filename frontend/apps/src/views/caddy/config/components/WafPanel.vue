@@ -69,6 +69,10 @@ function goToWafLogs() {
   router.push('/caddy/log?onlyWaf=true');
 }
 
+function goToSourceManage() {
+  router.push('/caddy/source');
+}
+
 const ruleColumns = [
   { title: '规则文件', dataIndex: 'file', key: 'file', width: 320 },
   { title: '安全分类', dataIndex: 'category', key: 'category', width: 160 },
@@ -217,6 +221,20 @@ const ruleColumns = [
       <div class="mb-3 text-sm text-gray-500">
         共挂载 <strong>{{ props.wafStatus?.rulesInfo?.total || 0 }}</strong> 个规则模块文件，按防护等级（Paranoia Level）与异常评分机制（Anomaly Scoring）执行实时流量分析。
       </div>
+      <Alert
+        v-if="!props.wafStatus?.rulesInfo?.total"
+        class="mb-3"
+        type="warning"
+        show-icon
+        message="尚未挂载任何 CRS 规则文件"
+      >
+        <template #description>
+          <div class="flex items-center gap-3">
+            <span>规则目录为空，WAF 实际不会拦截流量。请到来源管理下载规则包并激活。</span>
+            <Button size="small" type="primary" @click="goToSourceManage">去同步规则</Button>
+          </div>
+        </template>
+      </Alert>
       <Table
         :columns="ruleColumns"
         :data-source="props.wafStatus?.rulesInfo?.rules || []"
