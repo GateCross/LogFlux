@@ -24,7 +24,7 @@ const (
 	// coraza-caddy 在 load_owasp_crs 开启时会把 coreruleset.FS 与 OSFS 合并，
 	// 其中 OSFS 直接使用 os.Open，因此这里的绝对路径可以读到本项目自己管理
 	// 的规则文件，从而让 CRS 在线更新机制真正生效。
-	managedCRSRulesRoot = "/config/security/current"
+	managedCRSRulesRoot = "/config/security/active"
 
 	// managedCRSCorazaConfigInclude 是 Coraza 基线配置的加载路径。
 	managedCRSCorazaConfigInclude = managedCRSRulesRoot + "/rules/@coraza.conf-recommended"

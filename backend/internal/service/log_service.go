@@ -56,6 +56,7 @@ func (s *LogService) GetCaddyLogs(req *types.CaddyLogReq) (*types.CaddyLogResp, 
 		Order:    req.Order,
 		Page:     req.Page,
 		PageSize: req.PageSize,
+		OnlyWaf:  req.OnlyWaf,
 	})
 	if err != nil {
 		return nil, xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "查询 Caddy 日志失败", err)
@@ -85,6 +86,7 @@ func (s *LogService) GetCaddyLogs(req *types.CaddyLogReq) (*types.CaddyLogResp, 
 			ClientIP:  logItem.ClientIP,
 			UserAgent: logItem.UserAgent,
 			RawLog:    logItem.RawLog,
+			ExtraData: logItem.ExtraData,
 		})
 	}
 	return &types.CaddyLogResp{List: list, Total: total}, nil

@@ -119,6 +119,8 @@ export namespace CaddyServerApi {
     clientIp: string;
     userAgent: string;
     rawLog: string;
+    /** WAF 审计元数据原始 JSON，用 parseWafLog 解析 */
+    extraData?: string;
   }
 
   /** CaddyLogReq 的受限查询参数；未传字段由后端默认值处理。 */
@@ -133,6 +135,7 @@ export namespace CaddyServerApi {
     startTime?: string;
     /** -1 表示不过滤状态码。 */
     status?: number;
+    onlyWaf?: boolean;
   }
 
   export interface CaddyLogPageResult {

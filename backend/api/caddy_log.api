@@ -3,15 +3,16 @@ syntax = "v1"
 type (
 	// 日志查询
 	CaddyLogReq {
-		Page     int    `form:"page,default=1"`
-		PageSize int    `form:"pageSize,default=20"`
-		Keyword  string `form:"keyword,optional"` // 在 host、uri、ip 中搜索
-		Host     string `form:"host,optional"`
-		Status   int    `form:"status,default=-1"`
+		Page      int    `form:"page,default=1"`
+		PageSize  int    `form:"pageSize,default=20"`
+		Keyword   string `form:"keyword,optional"` // 在 host、uri、ip 中搜索
+		Host      string `form:"host,optional"`
+		Status    int    `form:"status,default=-1"`
 		StartTime string `form:"startTime,optional"`
 		EndTime   string `form:"endTime,optional"`
-		SortBy   string `form:"sortBy,optional"`   // logTime
-		Order    string `form:"order,optional"`    // asc|desc
+		SortBy    string `form:"sortBy,optional"` // logTime
+		Order     string `form:"order,optional"`  // asc|desc
+		OnlyWaf   bool   `form:"onlyWaf,optional"` // 仅查询 WAF 防护/拦截日志
 	}
 	CaddyLogItem {
 		ID        uint   `json:"id"`
@@ -29,6 +30,8 @@ type (
 		ClientIP  string `json:"clientIp"`
 		UserAgent string `json:"userAgent"`
 		RawLog    string `json:"rawLog"`
+		// WAF 审计元数据原始 JSON，含 source/interrupted/matched_rules
+		ExtraData string `json:"extraData,optional"`
 	}
 	CaddyLogResp {
 		List  []CaddyLogItem `json:"list"`

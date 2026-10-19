@@ -103,6 +103,8 @@ type CaddyLogItem struct {
 	ClientIP  string `json:"clientIp"`
 	UserAgent string `json:"userAgent"`
 	RawLog    string `json:"rawLog"`
+	// ExtraData 为 WAF 审计元数据原始 JSON（含 source/interrupted/matched_rules），由前端按需解析。
+	ExtraData string `json:"extraData,optional"`
 }
 
 type CaddyLogReq struct {
@@ -115,6 +117,7 @@ type CaddyLogReq struct {
 	EndTime   string `form:"endTime,optional"`
 	SortBy    string `form:"sortBy,optional"` // logTime
 	Order     string `form:"order,optional"`  // asc|desc
+	OnlyWaf   bool   `form:"onlyWaf,optional"` // 仅查询 WAF 防护/拦截日志
 }
 
 type CaddyLogResp struct {
@@ -592,24 +595,36 @@ type SimpleWafConfigReq struct {
 	ServerId uint `form:"serverId,optional"` // 为空时使用默认 Caddy 服务器
 }
 
+type CrsRuleItem struct {
+	File     string `json:"file"`
+	Category string `json:"category"`
+}
+
+type CrsRuleSummary struct {
+	Total      int           `json:"total"`
+	Categories []string      `json:"categories"`
+	Rules      []CrsRuleItem `json:"rules"`
+}
+
 type SimpleWafConfigResp struct {
-	ServerId                uint     `json:"serverId"`
-	Enabled                 bool     `json:"enabled"`
-	Integrated              bool     `json:"integrated"`
-	Mode                    string   `json:"mode"`
-	Strength                string   `json:"strength"`
-	Audit                   string   `json:"audit"`
-	RequestBodyAccess       bool     `json:"requestBodyAccess"`
-	RequestBodyLimit        int64    `json:"requestBodyLimit"`
-	RequestBodyNoFilesLimit int64    `json:"requestBodyNoFilesLimit"`
-	SiteAddresses           []string `json:"siteAddresses"`
-	AvailableSites          []string `json:"availableSites"`
-	CorazaVersion           string   `json:"corazaVersion,optional"`
-	CrsVersion              string   `json:"crsVersion,optional"`
-	Actions                 []string `json:"actions,optional"`
-	Directives              string   `json:"directives,optional"`
-	Config                  string   `json:"config,optional"`
-	Message                 string   `json:"message,optional"`
+	ServerId                uint            `json:"serverId"`
+	Enabled                 bool            `json:"enabled"`
+	Integrated              bool            `json:"integrated"`
+	Mode                    string          `json:"mode"`
+	Strength                string          `json:"strength"`
+	Audit                   string          `json:"audit"`
+	RequestBodyAccess       bool            `json:"requestBodyAccess"`
+	RequestBodyLimit        int64           `json:"requestBodyLimit"`
+	RequestBodyNoFilesLimit int64           `json:"requestBodyNoFilesLimit"`
+	SiteAddresses           []string        `json:"siteAddresses"`
+	AvailableSites          []string        `json:"availableSites"`
+	CorazaVersion           string          `json:"corazaVersion,optional"`
+	CrsVersion              string          `json:"crsVersion,optional"`
+	Actions                 []string        `json:"actions,optional"`
+	Directives              string          `json:"directives,optional"`
+	Config                  string          `json:"config,optional"`
+	Message                 string          `json:"message,optional"`
+	RulesInfo               *CrsRuleSummary `json:"rulesInfo,optional"`
 }
 
 type SimpleWafConfigUpdateReq struct {

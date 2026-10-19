@@ -7,6 +7,17 @@ export namespace CaddySimpleWafApi {
   export type SimpleWafMode = 'detectiononly' | 'off' | 'on';
   export type SimpleWafStrength = 'balanced' | 'high_blocking' | 'low_fp';
 
+  export interface CrsRuleItem {
+    file: string;
+    category: string;
+  }
+
+  export interface CrsRuleSummary {
+    total: number;
+    categories: string[];
+    rules: CrsRuleItem[];
+  }
+
   /** 简易 WAF 配置读响应 — 对齐 backend SimpleWafConfigResp */
   export interface SimpleWafConfig {
     serverId: number;
@@ -26,6 +37,7 @@ export namespace CaddySimpleWafApi {
     directives?: string;
     config?: string;
     message?: string;
+    rulesInfo?: CrsRuleSummary;
   }
 
   export interface SimpleWafConfigPayload {

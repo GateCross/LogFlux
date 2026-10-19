@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"logflux/internal/svc"
+	"logflux/internal/types"
 	"logflux/internal/utils/safego"
 	"logflux/internal/waf"
 
@@ -392,6 +393,62 @@ func (helper *wafLogicHelper) ensureCorazaBaselineConfig(layout *waf.CRSLayout) 
 
 // bundledCRSRulesDir 是镜像内烘焙的初始规则目录，由 docker/caddy.Dockerfile 生成。
 const bundledCRSRulesDir = "/app/etc/crs-rules"
+
+// crsRuleCategories 按 CRS 规则文件编号给出中文分类，未命中的归入「扩展规则」。
+var crsRuleCategories = map[string]string{
+	"901": "基础规则", "905": "白名单与例外", "911": "协议规范", "913": "威胁情报",
+	"920": "协议规范", "921": "协议规范", "930": "应用攻击防护", "931": "应用攻击防护",
+	"932": "高危漏洞防御", "933": "应用攻击防护", "934": "应用攻击防护", "941": "Web攻击防护",
+	"942": "高危漏洞防御", "943": "Web攻击防护", "944": "应用攻击防护", "950": "出站安全",
+	"951": "出站安全", "952": "出站安全", "953": "出站安全", "954": "出站安全",
+	"959": "评分引擎", "980": "日志告警",
+}
+
+// mountedCRSRulesSummary 列出当前生效布局里的 CRS 规则文件。
+//
+// 只枚举真实存在的文件，不编造内容：目录缺失时返回空摘要，由前端显示未挂载。
+func (helper *wafLogicHelper) mountedCRSRulesSummary() *types.CrsRuleSummary {
+	summary := &types.CrsRuleSummary{Rules: []types.CrsRuleItem{}, Categories: []string{}}
+	dirs := []string{
+		filepath.Join(managedCRSRulesRoot, "rules", waf.CRSOWASPDirName),
+		filepath.Join(bundledCRSRulesDir, waf.CRSOWASPDirName),
+	}
+
+	for _, dir := range dirs {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		seen := make(map[string]bool, len(summary.Categories))
+		for _, cat := range summary.Categories {
+			seen[cat] = true
+		}
+		for _, e := range entries {
+			name := e.Name()
+			if e.IsDir() || !strings.HasSuffix(name, ".conf") || strings.HasSuffix(name, ".example") {
+				continue
+			}
+			// CRS 文件名为 REQUEST-942-APPLICATION-ATTACK-SQLI.conf，第二段即规则编号。
+			category := "扩展规则"
+			if parts := strings.Split(name, "-"); len(parts) > 1 {
+				if cat, ok := crsRuleCategories[parts[1]]; ok {
+					category = cat
+				}
+			}
+			summary.Rules = append(summary.Rules, types.CrsRuleItem{File: name, Category: category})
+			if !seen[category] {
+				seen[category] = true
+				summary.Categories = append(summary.Categories, category)
+			}
+		}
+		if len(summary.Rules) > 0 {
+			break
+		}
+	}
+
+	summary.Total = len(summary.Rules)
+	return summary
+}
 
 func (helper *wafLogicHelper) primaryCaddyServer() (*caddymodel.CaddyServer, error) {
 	var server caddymodel.CaddyServer

@@ -205,7 +205,7 @@ curl -X POST http://localhost:8888/api/caddy/waf/release/clear \
 
 ```bash
 # 1) 查看 current/last_good 指向
-ls -l /config/security/current /config/security/last_good
+ls -l /config/security/active /config/security/last_good
 
 # 2) 查看 release 目录
 ls -lah /config/security/releases

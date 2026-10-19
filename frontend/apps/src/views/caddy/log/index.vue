@@ -33,6 +33,7 @@ import { withListDetailErrorMode } from '#/api/list-detail';
 import { invalidateListDetailQueries } from '#/api/list-detail-mutation';
 import { qk } from '#/api/query-keys';
 import { useListDetailQuery } from '#/composables/use-list-detail-query';
+import { parseWafLog } from '#/views/caddy/shared/waf-log';
 
 defineOptions({ name: 'CaddyAccessLog' });
 
@@ -65,6 +66,7 @@ const filters = reactive({
   host: '',
   status: -1,
   timeRange: undefined as [Dayjs, Dayjs] | undefined,
+  logType: 'all' as 'all' | 'waf',
 });
 
 const pagination = reactive({
@@ -81,10 +83,13 @@ function formatRangeTime(value: Dayjs | undefined) {
   return dayjs(value).format('YYYY-MM-DD HH:mm:ss');
 }
 
-function applyHostFromRoute() {
+function applyFiltersFromRoute() {
   const raw = route.query.host;
   const host = Array.isArray(raw) ? String(raw[0] ?? '') : String(raw ?? '');
   filters.host = host.trim();
+
+  const rawOnlyWaf = route.query.onlyWaf;
+  filters.logType = rawOnlyWaf === 'true' || rawOnlyWaf === '1' ? 'waf' : 'all';
 }
 
 const listParams = computed<CaddyServerApi.CaddyLogQuery>(() => {
@@ -95,6 +100,7 @@ const listParams = computed<CaddyServerApi.CaddyLogQuery>(() => {
     keyword: filters.keyword || undefined,
     host: filters.host || undefined,
     status: filters.status,
+    onlyWaf: filters.logType === 'waf' ? true : undefined,
     startTime: formatRangeTime(start),
     endTime: formatRangeTime(end),
     sortBy: sortState.value.order ? ('logTime' as const) : undefined,
@@ -186,6 +192,16 @@ function formatLocation(record: CaddyLog) {
   );
 }
 
+/** 表格行 = 日志 + 预先解析好的 WAF 信息，避免模板里重复 JSON.parse */
+type LogRow = CaddyLog & { waf: ReturnType<typeof parseWafLog> };
+const logRows = computed<LogRow[]>(() =>
+  logs.value.map((item) => ({ ...item, waf: parseWafLog(item.extraData) })),
+);
+
+const selectedWafInfo = computed(() =>
+  selectedLog.value ? parseWafLog(selectedLog.value.extraData) : null,
+);
+
 function methodTagColor(method?: string) {
   if (method === 'GET') return 'blue';
   if (method === 'POST') return 'green';
@@ -260,27 +276,25 @@ const columns = computed(() => {
   ];
 });
 
-function syncHostQueryToRoute() {
+function syncFiltersToRoute() {
   const nextHost = filters.host.trim();
-  const current =
-    typeof route.query.host === 'string'
-      ? route.query.host
-      : Array.isArray(route.query.host)
-        ? String(route.query.host[0] ?? '')
-        : '';
-  if (nextHost === current) return;
   const query = { ...route.query };
   if (nextHost) {
     query.host = nextHost;
   } else {
     delete query.host;
   }
+  if (filters.logType === 'waf') {
+    query.onlyWaf = 'true';
+  } else {
+    delete query.onlyWaf;
+  }
   router.replace({ query });
 }
 
 function handleSearch() {
   pagination.current = 1;
-  syncHostQueryToRoute();
+  syncFiltersToRoute();
 }
 
 function handleReset() {
@@ -288,9 +302,10 @@ function handleReset() {
   filters.host = '';
   filters.status = -1;
   filters.timeRange = undefined;
+  filters.logType = 'all';
   pagination.current = 1;
   sortState.value = { order: 'descend' };
-  syncHostQueryToRoute();
+  syncFiltersToRoute();
 }
 
 async function handleClearLogs() {
@@ -367,9 +382,9 @@ function scheduleUpdateTableScrollY() {
 }
 
 watch(
-  () => route.query.host,
+  () => [route.query.host, route.query.onlyWaf] as const,
   () => {
-    applyHostFromRoute();
+    applyFiltersFromRoute();
     pagination.current = 1;
   },
   { immediate: true },
@@ -431,6 +446,17 @@ onUnmounted(() => {
               @change="handleSearch"
             />
           </FormItem>
+          <FormItem label="类型">
+            <Select
+              v-model:value="filters.logType"
+              :options="[
+                { label: '全部日志', value: 'all' },
+                { label: '🛡️ 仅 WAF 防护日志', value: 'waf' },
+              ]"
+              style="width: 175px"
+              @change="handleSearch"
+            />
+          </FormItem>
           <FormItem label="时间">
             <DatePicker.RangePicker
               v-model:value="filters.timeRange"
@@ -453,15 +479,16 @@ onUnmounted(() => {
           </FormItem>
         </Form>
 
-        <div v-if="filters.host" class="mb-3 text-sm text-gray-500">
-          当前按域名过滤：
-          <Tag color="blue">{{ filters.host }}</Tag>
+        <div v-if="filters.host || filters.logType === 'waf'" class="mb-3 flex items-center gap-2 text-sm text-gray-500">
+          <span>当前过滤条件：</span>
+          <Tag v-if="filters.host" color="blue">域名: {{ filters.host }}</Tag>
+          <Tag v-if="filters.logType === 'waf'" color="red">🛡️ 仅 WAF 防护日志</Tag>
         </div>
 
         <div ref="tableWrapRef" class="access-log-table-wrap">
           <Table
             :columns="columns"
-            :data-source="logs"
+            :data-source="logRows"
             :loading="loading"
             :pagination="pagination"
             :scroll="tableScroll"
@@ -477,9 +504,30 @@ onUnmounted(() => {
                 </Tag>
               </template>
               <template v-else-if="column.key === 'status'">
-                <Tag :color="statusTagColor((record as CaddyLog).status)">
-                  {{ (record as CaddyLog).status ?? '-' }}
-                </Tag>
+                <Space size="small" wrap>
+                  <Tag :color="statusTagColor((record as CaddyLog).status)">
+                    {{ (record as CaddyLog).status ?? '-' }}
+                  </Tag>
+                  <Tag
+                    v-if="(record as LogRow).waf"
+                    :color="(record as LogRow).waf?.interrupted ? 'error' : 'warning'"
+                  >
+                    {{ (record as LogRow).waf?.interrupted ? 'WAF 阻断' : 'WAF 告警' }}
+                  </Tag>
+                </Space>
+              </template>
+              <template v-else-if="column.key === 'uri'">
+                <div class="max-w-[360px]">
+                  <div class="truncate" :title="(record as CaddyLog).uri">
+                    {{ (record as CaddyLog).uri }}
+                  </div>
+                  <div v-if="(record as LogRow).waf?.ruleId" class="mt-0.5">
+                    <Tag color="purple" class="text-xs">
+                      Rule {{ (record as LogRow).waf?.ruleId }}:
+                      {{ (record as LogRow).waf?.ruleMsg || '命中防护规则' }}
+                    </Tag>
+                  </div>
+                </div>
               </template>
               <template v-else-if="column.key === 'location'">
                 {{ formatLocation(record as CaddyLog) }}
@@ -501,6 +549,20 @@ onUnmounted(() => {
       <Modal v-model:open="detailVisible" title="日志详情" width="760px" :footer="null">
         <div class="max-h-[70vh] overflow-auto">
           <Descriptions v-if="selectedLog" bordered :column="1" size="small">
+            <template v-if="selectedWafInfo">
+              <DescriptionsItem label="🛡️ WAF 处置动作">
+                <Tag :color="selectedWafInfo.interrupted ? 'error' : 'warning'">
+                  {{ selectedWafInfo.interrupted ? '已阻断拦截 (Blocked)' : '仅检测记录 (Detected)' }}
+                </Tag>
+              </DescriptionsItem>
+              <DescriptionsItem v-if="selectedWafInfo.ruleId" label="🛡️ 触发安全规则">
+                <Tag color="purple">Rule ID: {{ selectedWafInfo.ruleId }}</Tag>
+                <span class="ml-2 font-medium">{{ selectedWafInfo.ruleMsg }}</span>
+              </DescriptionsItem>
+              <DescriptionsItem v-if="selectedWafInfo.severity" label="🛡️ 威胁告警等级">
+                <Tag color="orange">{{ selectedWafInfo.severity }}</Tag>
+              </DescriptionsItem>
+            </template>
             <DescriptionsItem label="时间">{{ selectedLog.logTime }}</DescriptionsItem>
             <DescriptionsItem label="方法">{{ selectedLog.method }}</DescriptionsItem>
             <DescriptionsItem label="状态">{{ selectedLog.status }}</DescriptionsItem>
@@ -514,6 +576,9 @@ onUnmounted(() => {
             </DescriptionsItem>
             <DescriptionsItem label="User Agent">
               {{ selectedLog.userAgent || '-' }}
+            </DescriptionsItem>
+            <DescriptionsItem v-if="selectedLog.extraData && selectedLog.extraData !== '{}'" label="WAF 审计元数据">
+              <pre class="log-detail-pre">{{ normalizeLogText(selectedLog.extraData) }}</pre>
             </DescriptionsItem>
             <DescriptionsItem label="原始日志">
               <pre class="log-detail-pre">{{ rawLogText }}</pre>

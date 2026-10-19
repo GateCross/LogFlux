@@ -19,6 +19,7 @@ type CaddyLogQuery struct {
 	Order    string
 	Page     int
 	PageSize int
+	OnlyWaf  bool
 }
 
 // DashboardTrendRow 是看板趋势聚合行。
@@ -99,6 +100,9 @@ func (m *defaultCaddyLogModel) List(ctx context.Context, query CaddyLogQuery) ([
 	}
 	if query.End != nil {
 		db = db.Where("log_time <= ?", *query.End)
+	}
+	if query.OnlyWaf {
+		db = db.Where("extra_data ->> 'source' = ?", "waf")
 	}
 
 	var total int64

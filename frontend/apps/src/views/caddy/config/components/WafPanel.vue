@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import { ref } from 'vue';
+import { useRouter } from 'vue-router';
 import {
   Alert,
   Button,
@@ -8,6 +10,7 @@ import {
   DescriptionsItem,
   Drawer,
   Form,
+  FormItem,
   Input,
   InputNumber,
   Row,
@@ -15,8 +18,8 @@ import {
   Space,
   Spin,
   Switch,
+  Table,
   Tag,
-  FormItem,
 } from 'antdv-next';
 
 import type { CaddySimpleWafApi } from '#/api/caddy/simple-waf';
@@ -39,6 +42,7 @@ const props = defineProps<{
   wafPreviewing: boolean;
   wafStatusText: string;
   wafStatusColor: string;
+  wafStatus?: CaddySimpleWafApi.SimpleWafConfig | null;
   /** 读失败页内错误 */
   wafErrorMessage?: string | null;
   wafForm: WafFormState;
@@ -57,6 +61,18 @@ const emit = defineEmits<{
   apply: [];
   refresh: [];
 }>();
+
+const router = useRouter();
+const rulesDrawerVisible = ref(false);
+
+function goToWafLogs() {
+  router.push('/caddy/log?onlyWaf=true');
+}
+
+const ruleColumns = [
+  { title: '规则文件', dataIndex: 'file', key: 'file', width: 320 },
+  { title: '安全分类', dataIndex: 'category', key: 'category', width: 160 },
+];
 </script>
 
 <template>
@@ -69,10 +85,43 @@ const emit = defineEmits<{
         show-icon
         :message="props.wafErrorMessage"
       />
-      <Card title="简易 WAF">
+
+      <!-- WAF 配置 + 已挂载规则概览 -->
+      <Card title="WAF 防护配置" size="small">
         <template #extra>
-          <Tag :color="props.wafStatusColor">{{ props.wafStatusText }}</Tag>
+          <Space>
+            <Tag :color="props.wafStatusColor">{{ props.wafStatusText }}</Tag>
+            <Button size="small" @click="rulesDrawerVisible = true">挂载规则清单</Button>
+            <Button size="small" type="primary" @click="goToWafLogs">WAF 防护日志</Button>
+          </Space>
         </template>
+
+        <div class="flex flex-wrap items-center gap-4 mb-2.5 text-sm">
+          <div>
+            <span class="text-gray-500">CRS 版本：</span>
+            <Tag color="blue">{{ props.wafStatus?.crsVersion || '-' }}</Tag>
+          </div>
+          <div>
+            <span class="text-gray-500">Coraza 引擎：</span>
+            <Tag color="cyan">{{ props.wafStatus?.corazaVersion || '-' }}</Tag>
+          </div>
+          <div>
+            <span class="text-gray-500">已挂载规则文件：</span>
+            <Tag color="purple">{{ props.wafStatus?.rulesInfo?.total || 0 }} 个</Tag>
+          </div>
+        </div>
+
+        <div
+          v-if="props.wafStatus?.rulesInfo?.categories?.length"
+          class="bg-gray-50 dark:bg-gray-900 p-2.5 mb-3 rounded border border-gray-100 dark:border-gray-800"
+        >
+          <Space wrap size="small">
+            <Tag v-for="cat in props.wafStatus.rulesInfo.categories" :key="cat" color="geekblue">
+              {{ cat }}
+            </Tag>
+          </Space>
+        </div>
+
         <Form layout="vertical">
           <Row :gutter="16">
             <Col :xs="24" :md="8">
@@ -155,8 +204,38 @@ const emit = defineEmits<{
           </Space>
         </Form>
       </Card>
+
     </Spin>
 
+    <!-- 挂载规则清单 Drawer -->
+    <Drawer
+      :open="rulesDrawerVisible"
+      title="当前挂载的 OWASP CRS 防护规则清单"
+      :size="800"
+      @update:open="rulesDrawerVisible = $event"
+    >
+      <div class="mb-3 text-sm text-gray-500">
+        共挂载 <strong>{{ props.wafStatus?.rulesInfo?.total || 0 }}</strong> 个规则模块文件，按防护等级（Paranoia Level）与异常评分机制（Anomaly Scoring）执行实时流量分析。
+      </div>
+      <Table
+        :columns="ruleColumns"
+        :data-source="props.wafStatus?.rulesInfo?.rules || []"
+        :pagination="false"
+        row-key="file"
+        size="small"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'file'">
+            <code class="text-xs bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded">{{ record.file }}</code>
+          </template>
+          <template v-else-if="column.key === 'category'">
+            <Tag color="geekblue">{{ record.category }}</Tag>
+          </template>
+        </template>
+      </Table>
+    </Drawer>
+
+    <!-- 变更预览 Drawer -->
     <Drawer
       :open="props.wafPreviewVisible"
       title="WAF 变更预览"

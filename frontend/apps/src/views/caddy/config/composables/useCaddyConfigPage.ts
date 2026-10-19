@@ -283,6 +283,7 @@ export function useCaddyConfigPage() {
     wafSaving: wafSaving.value,
     wafApplying: wafApplying.value,
     wafPreviewing: wafPreviewing.value,
+    wafStatus: wafStatus.value,
     wafStatusText: wafStatusText.value,
     wafStatusColor: wafStatusColor.value,
     wafErrorMessage: wafErrorMessage.value,

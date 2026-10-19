@@ -57,7 +57,7 @@ Admin UI
 ```
 
 `docker/Caddyfile` 中固定引用：
-- `Include /config/security/current/...`
+- `Include /config/security/active/...`
 
 这样无需新增 compose 挂载即可持久化规则与版本切换。
 
@@ -242,7 +242,7 @@ Coraza 在线热更新不可行，建议流程：
 7. `backend/internal/waf/`
    - fetcher、verifier、extractor、activator
 8. `docker/Caddyfile`
-   - 固定 include 到 `/config/security/current`
+   - 固定 include 到 `/config/security/active`
 
 ## 12. 验收标准（DoD）
 
