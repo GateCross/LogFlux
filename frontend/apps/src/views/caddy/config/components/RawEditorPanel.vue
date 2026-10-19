@@ -21,7 +21,7 @@ function onUpdateValue(value: string) {
     <MonacoCodeEditor
       :model-value="props.modelValue"
       :readonly="props.readonly"
-      language="plaintext"
+      language="shell"
       :height="props.readonly ? 520 : 560"
       @update:model-value="onUpdateValue"
     />

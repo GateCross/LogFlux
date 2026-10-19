@@ -135,7 +135,7 @@ const emit = defineEmits<{
     <MonacoCodeEditor
       :model-value="formatCaddyfile(props.historyDetail?.config || '')"
       readonly
-      language="plaintext"
+      language="shell"
       :height="480"
     />
   </Modal>
