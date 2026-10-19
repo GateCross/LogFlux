@@ -238,8 +238,8 @@ function onKindFilterChange(value: unknown) {
   justify-content: space-between;
   margin-bottom: 20px;
   padding: 12px 14px;
-  background: #fafbfc;
-  border: 1px solid #f0f0f0;
+  background: hsl(var(--muted) / 40%);
+  border: 1px solid hsl(var(--border));
   border-radius: 8px;
 }
 
@@ -262,7 +262,7 @@ function onKindFilterChange(value: unknown) {
 }
 
 .site-card.complex {
-  border-color: #ffd591;
+  border-color: hsl(var(--warning) / 50%);
 }
 
 .site-card-header {
@@ -340,7 +340,7 @@ function onKindFilterChange(value: unknown) {
 
 .meta-label {
   font-size: 12px;
-  color: #8c8c8c;
+  color: hsl(var(--muted-foreground));
 }
 
 .site-metric-tag {
@@ -366,7 +366,7 @@ function onKindFilterChange(value: unknown) {
 }
 
 .text-muted {
-  color: #8c8c8c;
+  color: hsl(var(--muted-foreground));
 }
 
 .mb-3 {

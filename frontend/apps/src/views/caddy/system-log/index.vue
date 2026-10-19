@@ -604,8 +604,8 @@ onUnmounted(() => {
 .log-filter-panel {
   padding: 12px;
   margin-bottom: 12px;
-  background: #f8fafc;
-  border: 1px solid #eef2f7;
+  background: hsl(var(--muted) / 40%);
+  border: 1px solid hsl(var(--border));
   border-radius: 6px;
 }
 
@@ -621,7 +621,7 @@ onUnmounted(() => {
   justify-content: space-between;
   padding-top: 10px;
   margin-top: 10px;
-  border-top: 1px solid #eef2f7;
+  border-top: 1px solid hsl(var(--border));
 }
 
 .toolbar-keyword {
@@ -717,7 +717,8 @@ onUnmounted(() => {
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-all;
-  background: #f5f5f5;
+  background: hsl(var(--muted) / 50%);
+  border: 1px solid hsl(var(--border));
   border-radius: 6px;
 }
 </style>

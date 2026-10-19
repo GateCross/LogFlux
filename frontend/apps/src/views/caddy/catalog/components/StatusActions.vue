@@ -99,7 +99,7 @@ const emit = defineEmits<{
 <style scoped>
 .server-status-card {
   margin-bottom: 24px;
-  border-color: #eef0f4;
+  border-color: hsl(var(--border));
   border-radius: 8px;
 }
 
@@ -124,8 +124,8 @@ const emit = defineEmits<{
   padding: 12px 14px;
   text-align: left;
   cursor: pointer;
-  background: #fbfcfd;
-  border: 1px solid #eef0f4;
+  background: hsl(var(--muted) / 40%);
+  border: 1px solid hsl(var(--border));
   border-radius: 8px;
   transition:
     border-color 0.16s ease,
@@ -134,21 +134,21 @@ const emit = defineEmits<{
 }
 
 .server-status-item:hover {
-  border-color: #c7d7fe;
+  border-color: hsl(var(--primary) / 60%);
 }
 
 .server-status-item.active {
-  background: #f0f7ff;
-  border-color: #1677ff;
-  box-shadow: 0 0 0 2px rgb(22 119 255 / 8%);
+  background: hsl(var(--primary) / 10%);
+  border-color: hsl(var(--primary));
+  box-shadow: 0 0 0 2px hsl(var(--primary) / 8%);
 }
 
 .server-status-item.online {
-  border-left: 3px solid #52c41a;
+  border-left: 3px solid hsl(var(--success));
 }
 
 .server-status-item.offline {
-  border-left: 3px solid #ff4d4f;
+  border-left: 3px solid hsl(var(--destructive));
 }
 
 .server-status-name-line {
@@ -195,7 +195,7 @@ const emit = defineEmits<{
 
 .meta-label {
   font-size: 12px;
-  color: #8c8c8c;
+  color: hsl(var(--muted-foreground));
 }
 
 .sidebar-empty {
@@ -203,11 +203,11 @@ const emit = defineEmits<{
 }
 
 .text-muted {
-  color: #8c8c8c;
+  color: hsl(var(--muted-foreground));
 }
 
 .text-error {
-  color: #ff4d4f;
+  color: hsl(var(--destructive));
 }
 
 .mb-3 {

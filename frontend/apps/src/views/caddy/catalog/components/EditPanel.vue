@@ -103,10 +103,10 @@ function handleServerChange(value: unknown) {
 .catalog-secondary {
   margin-top: 16px;
   padding-top: 12px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid hsl(var(--border));
 }
 
 .text-muted {
-  color: #8c8c8c;
+  color: hsl(var(--muted-foreground));
 }
 </style>

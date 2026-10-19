@@ -683,7 +683,8 @@ onUnmounted(() => {
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-all;
-  background: #f5f5f5;
+  background: hsl(var(--muted) / 50%);
+  border: 1px solid hsl(var(--border));
   border-radius: 6px;
 }
 </style>
