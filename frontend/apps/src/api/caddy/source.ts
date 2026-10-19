@@ -26,7 +26,6 @@ export namespace CaddyWafSourceApi {
     updatedAt?: string;
     /** 页面历史字段：部分 UI 仍用 type 展示 kind */
     type?: string;
-    status?: string;
   }
 
   /** 创建/更新载荷（页面表单字段） */

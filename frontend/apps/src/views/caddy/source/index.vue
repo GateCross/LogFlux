@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { CaddyWafSourceApi } from '#/api/caddy/source';
 
-import { computed, h, reactive, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
 
 import { Page } from '@vben/common-ui';
 
@@ -63,33 +63,8 @@ const columns = [
   { title: 'ID', dataIndex: 'id', key: 'id', width: 70 },
   { title: '名称', dataIndex: 'name', key: 'name', width: 200 },
   { title: 'URL', dataIndex: 'url', key: 'url', ellipsis: true },
-  {
-    title: '类型',
-    dataIndex: 'kind',
-    key: 'type',
-    width: 100,
-    customRender: ({ record }: { record: CaddyWafSourceApi.WafSource }) =>
-      record.kind || record.type || '-',
-  },
-  {
-    title: '状态',
-    dataIndex: 'enabled',
-    key: 'status',
-    width: 100,
-    customRender: ({ record }: { record: CaddyWafSourceApi.WafSource }) => {
-      const enabled = record.enabled;
-      const text =
-        record.status ??
-        (enabled === false ? 'inactive' : (enabled ? 'active' : 'unknown'));
-      const colorMap: Record<string, string> = {
-        active: 'green',
-        inactive: 'default',
-        error: 'red',
-        synced: 'blue',
-      };
-      return h(Tag, { color: colorMap[text] ?? 'default' }, () => text);
-    },
-  },
+  { title: '类型', dataIndex: 'kind', key: 'type', width: 100 },
+  { title: '状态', dataIndex: 'enabled', key: 'status', width: 100 },
   { title: '操作', key: 'actions', width: 280, fixed: 'right' as const },
 ];
 
@@ -191,6 +166,11 @@ async function handleSync(record: CaddyWafSourceApi.WafSource) {
         size="middle"
       >
         <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'status'">
+            <Tag :color="record.enabled ? 'green' : 'default'">
+              {{ record.enabled ? '启用' : '停用' }}
+            </Tag>
+          </template>
           <template v-if="column.key === 'actions'">
             <Space :size="6">
               <Button
