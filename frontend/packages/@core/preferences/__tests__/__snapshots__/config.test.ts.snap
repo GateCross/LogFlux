@@ -43,8 +43,8 @@ exports[`defaultPreferences immutability test > should not modify the config obj
     "styleType": "normal",
   },
   "copyright": {
-    "companyName": "Vben",
-    "companySiteLink": "https://www.vben.pro",
+    "companyName": "LogFlux",
+    "companySiteLink": "",
     "date": "2024",
     "enable": true,
     "icp": "",
@@ -66,7 +66,7 @@ exports[`defaultPreferences immutability test > should not modify the config obj
   "logo": {
     "enable": true,
     "fit": "contain",
-    "source": "https://unpkg.com/@vbenjs/static-source@0.1.7/source/logo-v1.webp",
+    "source": "/logo.svg",
   },
   "navigation": {
     "accordion": true,

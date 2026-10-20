@@ -1,3 +1,5 @@
+import { fileURLToPath } from 'node:url';
+
 import { defineConfig } from '@vben/vite-config';
 
 export default defineConfig(async () => {
@@ -5,6 +7,15 @@ export default defineConfig(async () => {
     application: {},
     vite: {
       resolve: {
+        alias: {
+          // 原 loader 内置 jsdelivr CDN 地址，替换为直接返回本地实例的实现
+          '@monaco-editor/loader': fileURLToPath(
+            new URL(
+              './src/components/code-editor/monaco-loader.ts',
+              import.meta.url,
+            ),
+          ),
+        },
         preserveSymlinks: false,
       },
       server: {

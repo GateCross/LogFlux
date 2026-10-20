@@ -44,7 +44,8 @@ export function sanitizeCachedPreferences() {
   updatePreferences({
     logo: {
       source: isRemote(source) ? LOCAL_LOGO : source,
-      sourceDark: isRemote(sourceDark) ? undefined : sourceDark,
+      // defu 会忽略 undefined，清空必须用空串
+      sourceDark: isRemote(sourceDark) ? '' : sourceDark,
     },
   });
 }

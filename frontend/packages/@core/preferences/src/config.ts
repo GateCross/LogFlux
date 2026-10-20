@@ -42,8 +42,8 @@ const defaultPreferences: Preferences = {
     styleType: 'normal',
   },
   copyright: {
-    companyName: 'Vben',
-    companySiteLink: 'https://www.vben.pro',
+    companyName: 'LogFlux',
+    companySiteLink: '',
     date: '2024',
     enable: true,
     icp: '',
