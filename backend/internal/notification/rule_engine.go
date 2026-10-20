@@ -124,6 +124,12 @@ func (t *ThresholdEvaluator) Evaluate(ctx context.Context, condition commonmodel
 		return false, fmt.Errorf("阈值条件无效: %w", err)
 	}
 
+	// 没有 field/operator 时无可比较的阈值（前端规则表单不编辑条件，旧数据只有 regex 等键），
+	// 直接按事件等级/事件类型过滤结果命中，避免拼出 "data.  value" 这类空表达式
+	if cond.Field == "" || cond.Operator == "" {
+		return true, nil
+	}
+
 	// 构建表达式
 	expression := fmt.Sprintf("data.%s %s value", cond.Field, cond.Operator)
 

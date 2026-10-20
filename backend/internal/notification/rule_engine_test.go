@@ -70,6 +70,27 @@ func TestThresholdEvaluator(t *testing.T) {
 			want:    true,
 			wantErr: false,
 		},
+		{
+			// 规则表单不编辑条件，库里存在只有 regex 或空条件的旧规则；此时只按事件等级/类型过滤，不比较阈值
+			name:      "condition without field/operator - pass",
+			condition: commonmodel.JSONMap{"regex": ".*"},
+			event: &Event{
+				Type: "system.startup",
+				Data: map[string]interface{}{},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name:      "empty condition - pass",
+			condition: commonmodel.JSONMap{},
+			event: &Event{
+				Type: "system.startup",
+				Data: map[string]interface{}{},
+			},
+			want:    true,
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
