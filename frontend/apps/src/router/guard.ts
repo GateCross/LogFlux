@@ -136,8 +136,11 @@ function setupAuthGuard(router: Router) {
         await authStore.fetchUserInfo();
       }
 
+      // 路由为前端静态定义，模式固定为 frontend。
+      // 不能读 preferences.app.accessMode：该值可从 localStorage 恢复成历史值
+      // （例如删除 RBAC 前的 'backend'），会导致走后端路由分支拿到空路由表。
       const { accessibleMenus, accessibleRoutes } = await generateAccessible(
-        preferences.app.accessMode,
+        'frontend',
         {
           roles: [],
           router,
