@@ -99,6 +99,11 @@ export function useSimpleWaf(options: UseSimpleWafOptions) {
     return wafStatus.value.mode === 'on' ? 'green' : 'orange';
   });
 
+  /** 策略已开启但 Caddyfile 里还没挂载：属于草稿态，需要「应用到 Caddy」才生效。 */
+  const wafDraftPending = computed(
+    () => Boolean(wafStatus.value?.enabled) && !wafStatus.value?.integrated,
+  );
+
   function syncWafForm(data: CaddySimpleWafApi.SimpleWafConfig) {
     wafStatus.value = data;
     wafForm.enabled = Boolean(data.enabled);
@@ -190,7 +195,7 @@ export function useSimpleWaf(options: UseSimpleWafOptions) {
     wafSaving.value = true;
     try {
       await updateSimpleWafConfigApi(buildWafPayload());
-      message.success('防火墙设置已保存');
+      message.success('防火墙草稿已保存，需「应用到 Caddy」才会生效');
       // 必须先 invalidate，否则 fetchQuery 可能命中 30s staleTime 旧缓存
       await invalidateWafRelatedQueries();
       await fetchWafConfig();
@@ -248,6 +253,7 @@ export function useSimpleWaf(options: UseSimpleWafOptions) {
     wafAvailableSites,
     wafStatusText,
     wafStatusColor,
+    wafDraftPending,
     wafModeOptions,
     wafStrengthOptions,
     wafAuditOptions,

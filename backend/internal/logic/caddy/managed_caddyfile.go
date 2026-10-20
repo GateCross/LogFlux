@@ -50,68 +50,6 @@ type managedCaddyfileOptions struct {
 	Directives         string
 }
 
-func buildPolicyCandidateCaddyConfig(currentConfig, directives string, wafEnabled, forwardAuthEnabled bool) (string, error) {
-	if shouldRenderManagedCaddyfile(currentConfig) {
-		return renderManagedCaddyfile(defaultManagedCaddyfileOptions(currentConfig, directives, wafEnabled, forwardAuthEnabled))
-	}
-	return applyWafPolicyToCaddyConfig(currentConfig, directives)
-}
-
-func shouldRenderManagedCaddyfile(config string) bool {
-	trimmed := strings.TrimSpace(config)
-	if trimmed == "" {
-		return true
-	}
-	if strings.Contains(trimmed, logfluxManagedCaddyfileMarker) {
-		return true
-	}
-	if strings.Contains(trimmed, "(frontend_full)") || strings.Contains(trimmed, "(frontend_simple)") {
-		return true
-	}
-	return strings.Contains(trimmed, "root * /app/frontend") && strings.Contains(trimmed, "reverse_proxy localhost:8888")
-}
-
-func defaultManagedCaddyfileOptions(currentConfig, directives string, wafEnabled, forwardAuthEnabled bool) managedCaddyfileOptions {
-	return managedCaddyfileOptions{
-		SiteAddress:        selectManagedCaddySiteAddress(currentConfig),
-		Backend:            managedCaddyDefaultBackend,
-		FrontendRoot:       managedCaddyDefaultFrontend,
-		AccessLogPath:      managedCaddyDefaultAccessLog,
-		WafAuditLog:        managedCaddyDefaultWafAuditLog,
-		WafEnabled:         wafEnabled,
-		ForwardAuthEnabled: forwardAuthEnabled,
-		Directives:         directives,
-	}
-}
-
-func selectManagedCaddySiteAddress(config string) string {
-	blocks, _, err := parseTopLevelCaddyBlocks(config)
-	if err != nil {
-		return managedCaddyDefaultSiteAddress
-	}
-
-	firstSite := ""
-	for _, block := range blocks {
-		if block.Kind != "site" {
-			continue
-		}
-		address := strings.TrimSpace(block.Address)
-		if address == "" {
-			continue
-		}
-		if address == managedCaddyDefaultSiteAddress {
-			return managedCaddyDefaultSiteAddress
-		}
-		if firstSite == "" {
-			firstSite = address
-		}
-	}
-	if firstSite != "" {
-		return firstSite
-	}
-	return managedCaddyDefaultSiteAddress
-}
-
 func renderManagedCaddyfile(options managedCaddyfileOptions) (string, error) {
 	options = normalizeManagedCaddyfileOptions(options)
 	if options.WafEnabled && strings.TrimSpace(options.Directives) == "" {

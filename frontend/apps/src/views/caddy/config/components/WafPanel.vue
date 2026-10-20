@@ -42,6 +42,8 @@ const props = defineProps<{
   wafPreviewing: boolean;
   wafStatusText: string;
   wafStatusColor: string;
+  /** 策略已开启但尚未挂载到 Caddyfile（草稿态） */
+  wafDraftPending?: boolean;
   wafStatus?: CaddySimpleWafApi.SimpleWafConfig | null;
   /** 读失败页内错误 */
   wafErrorMessage?: string | null;
@@ -95,6 +97,7 @@ const ruleColumns = [
         <template #extra>
           <Space>
             <Tag :color="props.wafStatusColor">{{ props.wafStatusText }}</Tag>
+            <Tag v-if="props.wafDraftPending" color="warning">未生效</Tag>
             <Button size="small" @click="rulesDrawerVisible = true">挂载规则清单</Button>
             <Button size="small" type="primary" @click="goToWafLogs">WAF 防护日志</Button>
           </Space>
@@ -201,11 +204,14 @@ const ruleColumns = [
             </Col>
           </Row>
           <Space>
-            <Button :loading="props.wafSaving" @click="emit('save')">保存设置</Button>
+            <Button :loading="props.wafSaving" @click="emit('save')">保存草稿</Button>
             <Button :loading="props.wafPreviewing" @click="emit('preview')">预览变更</Button>
             <Button type="primary" :loading="props.wafApplying" @click="emit('apply')">应用到 Caddy</Button>
             <Button @click="emit('refresh')">刷新</Button>
           </Space>
+          <div class="hint-text mt-2">
+            保存草稿只写策略，不改 Caddyfile；点「应用到 Caddy」才会挂载到所选站点。
+          </div>
         </Form>
       </Card>
 
@@ -290,5 +296,10 @@ const ruleColumns = [
 
 .mb-3 {
   margin-bottom: 12px;
+}
+
+.hint-text {
+  font-size: 12px;
+  color: #8c8c8c;
 }
 </style>

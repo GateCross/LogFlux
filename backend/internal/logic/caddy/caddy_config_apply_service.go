@@ -26,6 +26,12 @@ func (s *caddyConfigApplyService) loadCurrent(server *caddymodel.CaddyServer) (s
 	return loadCurrentCaddyConfig(server)
 }
 
+// apply 按「校验 → 加载 → 落库」固定顺序应用配置。
+//
+// 顺序统一的原因：/load 本身失败会自动回滚运行态，落库前出错等于什么都没改；
+// 只有落库失败才需要把运行态改回去，而那次恢复依赖上一份配置，所以先加载再落库
+// 是唯一能把"哪一步失败、要回滚什么"说清楚的顺序。首次接管同样适用，此前它
+// 反着来（先落库再加载），失败语义与其他路径不一致。
 func (s *caddyConfigApplyService) apply(server *caddymodel.CaddyServer, config, modules, action string) error {
 	if server == nil {
 		return fmt.Errorf("Caddy 服务器不存在")
@@ -34,31 +40,12 @@ func (s *caddyConfigApplyService) apply(server *caddymodel.CaddyServer, config, 
 	normalizedModules := normalizeCaddyModulesJSON(modules)
 	previousConfig := server.Config
 	previousModules := server.Modules
+
 	if err := adaptCaddyfile(server, config); err != nil {
 		if s != nil && s.logger != nil {
 			s.logger.Errorf("Caddy 配置适配失败: %v", err)
 		}
 		return err
-	}
-
-	if strings.TrimSpace(previousConfig) == "" {
-		historyID, err := s.persist(server, config, normalizedModules, action)
-		if err != nil {
-			server.Config = previousConfig
-			server.Modules = previousModules
-			return err
-		}
-		if err := loadCaddyfile(server, config); err != nil {
-			if s != nil && s.logger != nil {
-				s.logger.Errorf("Caddy 配置加载失败: %v", err)
-			}
-			if rollbackErr := s.restorePersisted(server, previousConfig, previousModules, historyID); rollbackErr != nil {
-				return fmt.Errorf("Caddy 配置加载失败: %v，回滚数据库到未接管状态失败: %v", err, rollbackErr)
-			}
-			return fmt.Errorf("Caddy 配置加载失败，已回滚数据库到未接管状态: %w", err)
-		}
-		s.scheduleLogSourceSync(server)
-		return nil
 	}
 
 	if err := loadCaddyfile(server, config); err != nil {
@@ -71,6 +58,10 @@ func (s *caddyConfigApplyService) apply(server *caddymodel.CaddyServer, config, 
 	if _, err := s.persist(server, config, normalizedModules, action); err != nil {
 		server.Config = previousConfig
 		server.Modules = previousModules
+		// 未接管过的服务器没有可回退的配置，运行态保持新配置，等下次应用覆盖。
+		if strings.TrimSpace(previousConfig) == "" {
+			return fmt.Errorf("保存 Caddy 配置到数据库失败: %w", err)
+		}
 		if rollbackErr := rollbackPolicyConfigToLastGood(server, previousConfig); rollbackErr != nil {
 			return fmt.Errorf("保存 Caddy 配置到数据库失败: %v，回滚 Caddy 到旧配置失败: %v", err, rollbackErr)
 		}
@@ -106,31 +97,6 @@ func (s *caddyConfigApplyService) persist(server *caddymodel.CaddyServer, config
 		return 0, err
 	}
 	return historyID, nil
-}
-
-func (s *caddyConfigApplyService) restorePersisted(server *caddymodel.CaddyServer, config, modules string, historyID uint) error {
-	if err := s.svcCtx.DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&caddymodel.CaddyServer{}).
-			Where("id = ?", server.ID).
-			Updates(map[string]interface{}{
-				"config":  config,
-				"modules": modules,
-			}).Error; err != nil {
-			return fmt.Errorf("恢复 Caddy 服务器配置失败: %w", err)
-		}
-		if historyID == 0 {
-			return nil
-		}
-		if err := tx.Where("id = ? AND server_id = ?", historyID, server.ID).Delete(&caddymodel.CaddyConfigHistory{}).Error; err != nil {
-			return fmt.Errorf("删除未生效配置历史失败: %w", err)
-		}
-		return nil
-	}); err != nil {
-		return err
-	}
-	server.Config = config
-	server.Modules = modules
-	return nil
 }
 
 func (s *caddyConfigApplyService) scheduleLogSourceSync(server *caddymodel.CaddyServer) {

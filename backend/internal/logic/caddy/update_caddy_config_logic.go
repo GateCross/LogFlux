@@ -43,7 +43,7 @@ func (l *UpdateCaddyConfigLogic) UpdateCaddyConfig(req *types.CaddyConfigUpdateR
 		return nil, err
 	}
 	modules := resolveCaddyConfigModules(req.Mode, req.Modules, server.Modules)
-	if err := applyService.apply(&server, candidate.Config, modules, "update"); err != nil {
+	if err := applyService.apply(&server, candidate.Config, modules, caddymodel.CaddyHistoryActionUpdate); err != nil {
 		return nil, err
 	}
 

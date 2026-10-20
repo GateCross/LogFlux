@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	caddymodel "logflux/model/caddy"
+	"strings"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
@@ -38,6 +39,9 @@ func (l *RollbackCaddyConfigLogic) RollbackCaddyConfig(req *types.CaddyConfigRol
 		return nil, fmt.Errorf("历史记录不存在")
 	}
 
+	// 回滚前记录当前运行态，落库失败时用它恢复，避免运行态与库不一致。
+	previousConfig := server.Config
+
 	if err := adaptCaddyfile(&server, history.Config); err != nil {
 		return nil, fmt.Errorf("Caddy 配置适配失败: %v", err)
 	}
@@ -53,14 +57,20 @@ func (l *RollbackCaddyConfigLogic) RollbackCaddyConfig(req *types.CaddyConfigRol
 		}
 		record := &caddymodel.CaddyConfigHistory{
 			ServerID: server.ID,
-			Action:   "rollback",
+			Action:   caddymodel.CaddyHistoryActionRollback,
 			Hash:     hashConfig(history.Config),
 			Config:   history.Config,
 			Modules:  history.Modules,
 		}
 		return tx.Create(record).Error
 	}); err != nil {
-		return nil, fmt.Errorf("保存配置到数据库失败")
+		// 落库失败必须把运行态改回去，否则 Caddy 跑的是新配置、库里还是旧的。
+		if strings.TrimSpace(previousConfig) != "" {
+			if restoreErr := rollbackPolicyConfigToLastGood(&server, previousConfig); restoreErr != nil {
+				return nil, fmt.Errorf("保存配置到数据库失败: %v，恢复原运行态失败: %v", err, restoreErr)
+			}
+		}
+		return nil, fmt.Errorf("保存配置到数据库失败: %v", err)
 	}
 
 	safego.New(context.Background(), "回滚 Caddy 配置后同步日志源").Go(func() {

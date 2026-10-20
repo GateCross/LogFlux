@@ -3,6 +3,7 @@ package caddy
 import (
 	"context"
 	"fmt"
+	caddymodel "logflux/model/caddy"
 	"strings"
 
 	"logflux/internal/svc"
@@ -119,9 +120,9 @@ func (l *ApplyWafIntegrationLogic) ApplyWafIntegration(req *types.WafIntegration
 		return resp, nil
 	}
 
-	historyAction := "waf_integration_disable"
+	historyAction := caddymodel.CaddyHistoryActionWafIntegrationOff
 	if req.Enabled {
-		historyAction = "waf_integration_enable"
+		historyAction = caddymodel.CaddyHistoryActionWafIntegrationOn
 	}
 	if err := applyService.apply(server, nextConfig, modules, historyAction); err != nil {
 		return nil, err

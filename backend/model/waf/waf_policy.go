@@ -29,7 +29,8 @@ type WafPolicy struct {
 	RequestBodyLimit            int64  `gorm:"default:10485760;not null" json:"requestBodyLimit"`                                             // SecRequestBodyLimit
 	RequestBodyNoFilesLimit     int64  `gorm:"default:1048576;not null" json:"requestBodyNoFilesLimit"`                                       // SecRequestBodyNoFilesLimit
 	CrsTemplate                 string `gorm:"size:32;not null;default:'low_fp'" json:"crsTemplate"`                                          // low_fp | balanced | high_blocking | custom
-	CrsParanoiaLevel            int64  `gorm:"not null;default:1" json:"crsParanoiaLevel"`                                                    // tx.paranoia_level
+	CrsParanoiaLevel            int64  `gorm:"not null;default:1" json:"crsParanoiaLevel"`                                                    // tx.blocking_paranoia_level
+	CrsDetectionParanoiaLevel   int64  `gorm:"not null;default:0" json:"crsDetectionParanoiaLevel"`                                           // tx.detection_paranoia_level；0 表示未设置，按预设推导
 	CrsInboundAnomalyThreshold  int64  `gorm:"not null;default:10" json:"crsInboundAnomalyThreshold"`                                         // tx.inbound_anomaly_score_threshold
 	CrsOutboundAnomalyThreshold int64  `gorm:"not null;default:8" json:"crsOutboundAnomalyThreshold"`                                         // tx.outbound_anomaly_score_threshold
 

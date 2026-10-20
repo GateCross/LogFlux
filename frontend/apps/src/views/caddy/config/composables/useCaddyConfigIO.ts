@@ -150,8 +150,6 @@ export function useCaddyConfigIO(options: UseCaddyConfigIOOptions) {
 
   /** 站点创建向导：默认仅产出草稿，不自动 /load */
   const siteWizardOpen = ref(false);
-  /** 向导携带的可选 WAF 意图（草稿阶段不调用 WAF 接口） */
-  const pendingWizardWaf = ref<SiteWizardWafDraft | null>(null);
   /** 向导本地预览用：合并草稿后的 Caddyfile 文本（未 /load） */
   const wizardLocalPreview = ref('');
 
@@ -407,7 +405,6 @@ export function useCaddyConfigIO(options: UseCaddyConfigIOOptions) {
   /** 打开站点创建向导（域名 → 上游 → TLS → 可选 WAF → Preview → Apply） */
   function openSiteWizard() {
     wizardLocalPreview.value = '';
-    pendingWizardWaf.value = null;
     siteWizardOpen.value = true;
   }
 
@@ -444,10 +441,7 @@ export function useCaddyConfigIO(options: UseCaddyConfigIOOptions) {
   /**
    * 将向导草稿合并进 quickSiteDrafts（纯本地，不调用任何 API /load）。
    */
-  function mergeWizardDraftIntoWorkbench(
-    draft: QuickSiteDraft,
-    meta?: { waf?: SiteWizardWafDraft },
-  ) {
+  function mergeWizardDraftIntoWorkbench(draft: QuickSiteDraft) {
     const next: QuickSiteDraft = {
       ...draft,
       id: draft.id || genId(),
@@ -469,9 +463,6 @@ export function useCaddyConfigIO(options: UseCaddyConfigIOOptions) {
     activeQuickSiteId.value = next.id;
     structuredAvailable.value = true;
     lastEditMode.value = 'blocks';
-    if (meta?.waf) {
-      pendingWizardWaf.value = meta.waf.enabled ? { ...meta.waf } : null;
-    }
     wizardLocalPreview.value = formatCaddyfile(generatedConfig.value);
     return next;
   }
@@ -521,10 +512,10 @@ export function useCaddyConfigIO(options: UseCaddyConfigIOOptions) {
     draft: QuickSiteDraft,
     meta: { waf: SiteWizardWafDraft },
   ) {
-    mergeWizardDraftIntoWorkbench(draft, meta);
+    mergeWizardDraftIntoWorkbench(draft);
     mode.value = 'blocks';
     message.success(
-      pendingWizardWaf.value
+      meta.waf.enabled
         ? '站点草稿已写入工作台（含 WAF 意图，未热加载）'
         : '站点草稿已写入工作台（未调用 /load）',
     );
@@ -550,7 +541,7 @@ export function useCaddyConfigIO(options: UseCaddyConfigIOOptions) {
     draft: QuickSiteDraft,
     meta: { waf: SiteWizardWafDraft },
   ) {
-    mergeWizardDraftIntoWorkbench(draft, meta);
+    mergeWizardDraftIntoWorkbench(draft);
     mode.value = 'blocks';
     siteWizardOpen.value = false;
     await previewBeforeSave('blocks');
@@ -798,7 +789,6 @@ export function useCaddyConfigIO(options: UseCaddyConfigIOOptions) {
     activeQuickSiteId,
     savePreview,
     siteWizardOpen,
-    pendingWizardWaf,
     wizardLocalPreview,
     dockerDiscoveryOpen,
     dockerDiscoveryScanning,

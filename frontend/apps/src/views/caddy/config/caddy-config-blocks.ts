@@ -368,6 +368,8 @@ function extractSiteBlocks(config: string): Map<string, string> {
   let depth = 0;
   let currentBlock: string[] = [];
   let currentKey = '';
+  // 紧邻站点块头、中间无空行的注释属于该站点，需随块一并收走。
+  let pendingComments: string[] = [];
 
   for (const line of lines) {
     const trimmed = line.trim();
@@ -381,7 +383,8 @@ function extractSiteBlocks(config: string): Map<string, string> {
       const siteToken = tokens.find(t => isSiteToken(t));
       if (siteToken) {
         currentKey = siteToken;
-        currentBlock = [line];
+        currentBlock = [...pendingComments, line];
+        pendingComments = [];
         depth += openCount - closeCount;
         continue;
       }
@@ -398,6 +401,14 @@ function extractSiteBlocks(config: string): Map<string, string> {
         currentBlock = [];
         currentKey = '';
       }
+      continue;
+    }
+
+    // depth === 0 且未进入站点块：暂存注释，遇到非注释行即切断关联。
+    if (isCommentLine(line)) {
+      pendingComments.push(line);
+    } else {
+      pendingComments = [];
     }
   }
 
@@ -464,6 +475,9 @@ function stripExtractedBlocks(globalRaw: string, _extracted: PreservedCaddyBlock
   let inBlock = false;
   // 暂存注释行：若其后紧跟块则随块移除，否则 flush 回 kept
   let pendingComments: string[] = [];
+  // 已提取块之后、紧邻下一个顶层块头的游离注释不归 global：
+  // 它属于下一个块（站点或 snippet），留在 global.raw 会把它提到文件顶部。
+  let afterExtractedBlock = false;
 
   for (const line of lines) {
     const openCount = (line.match(/{/g) || []).length;
@@ -471,9 +485,11 @@ function stripExtractedBlocks(globalRaw: string, _extracted: PreservedCaddyBlock
 
     if (depth === 0 && !inBlock) {
       if (openCount > 0) {
-        // 进入一个花括号块，连同其前置注释一起跳过（已提取到 preservedBlocks）
+        // 进入一个花括号块，连同其前置注释一起跳过（已提取到 preservedBlocks）。
+        // 这些前置注释同样不入 global，否则会重复输出。
         inBlock = true;
         pendingComments = [];
+        afterExtractedBlock = true;
         depth += openCount - closeCount;
         continue;
       }
@@ -483,9 +499,13 @@ function stripExtractedBlocks(globalRaw: string, _extracted: PreservedCaddyBlock
       }
       // 普通非块行（如 order 指令）或空行：先 flush 暂存注释再保留本行
       if (pendingComments.length) {
-        kept.push(...pendingComments);
+        // 紧跟在已提取块之后的注释属于后面的块，丢弃；否则是 global 自身的注释，保留
+        if (!afterExtractedBlock) {
+          kept.push(...pendingComments);
+        }
         pendingComments = [];
       }
+      afterExtractedBlock = false;
       kept.push(line);
       continue;
     }
@@ -500,7 +520,7 @@ function stripExtractedBlocks(globalRaw: string, _extracted: PreservedCaddyBlock
   }
 
   // 末尾残留的注释（后面没有块）应保留
-  if (pendingComments.length) {
+  if (pendingComments.length && !afterExtractedBlock) {
     kept.push(...pendingComments);
   }
 

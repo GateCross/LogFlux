@@ -167,14 +167,11 @@ func (s *caddyConfigService) prepareQuick(config, modules string) (*caddyConfigP
 	if err != nil {
 		return nil, err
 	}
-	if updated, changed := ensureApiCrsExclusion(caddyfile); changed {
-		caddyfile = updated
-		wafActions = append(wafActions, "自动注入 /api/ CRS 排除规则，防止 WAF 误拦 LogFlux 配置保存")
-	}
-	if updated, changed := ensureCrsFalsePositiveExclusions(caddyfile); changed {
-		caddyfile = updated
-		wafActions = append(wafActions, "自动注入 CRS 误报排除规则（IP 访问 / Cookie 误报）")
-	}
+	// 排除规则不再由保存流程改写用户配置。
+	//
+	// 原先这里无条件注入 /api/ 与 Host-IP 两条 ctl:ruleEngine=Off 规则，既绕过
+	// WAF 又让用户在原文模式删不掉。现在排除规则统一由策略渲染
+	// （composeManagedCorazaDirectives）产出，保存只做格式化和校验，所见即所存。
 	actions := []string{
 		"根据结构化配置生成 Caddyfile",
 		"复杂自定义片段保留在全局配置或站点 import 中",
@@ -234,15 +231,8 @@ func (s *caddyConfigService) prepareRaw(config, modules string) (*caddyConfigPre
 	if strings.TrimSpace(formatted) == "" || !hasCaddyConfigContent(formatted) {
 		return nil, fmt.Errorf("Caddy 配置不能为空，请粘贴有效 Caddyfile")
 	}
+	// 原文模式只做格式化，不注入任何规则：用户写什么就存什么。
 	actions := []string{"使用原始 Caddyfile 内容"}
-	if updated, changed := ensureApiCrsExclusion(formatted); changed {
-		formatted = updated
-		actions = append(actions, "自动注入 /api/ CRS 排除规则，防止 WAF 误拦 LogFlux 配置保存")
-	}
-	if updated, changed := ensureCrsFalsePositiveExclusions(formatted); changed {
-		formatted = updated
-		actions = append(actions, "自动注入 CRS 误报排除规则（IP 访问 / Cookie 误报）")
-	}
 	return &caddyConfigPrepareResult{
 		Config:  formatted,
 		Modules: normalizeCaddyModulesJSON(modules),

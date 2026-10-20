@@ -18,6 +18,12 @@ import (
 
 const simpleWafDefaultPolicyName = "default-global-policy"
 
+// simpleWafSiteAddressesKey 是策略 Config 里保存站点选择的键。
+//
+// 存进 Config 而不是新建绑定表：站点是否真正挂载仍由 Caddyfile 的
+// import waf_protect 决定，这里只保存用户的意图，刷新后不再丢。
+const simpleWafSiteAddressesKey = "siteAddresses"
+
 type simpleWafConfigService struct {
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
@@ -81,7 +87,12 @@ func (s *simpleWafConfigService) Get(req *types.SimpleWafConfigReq) (*types.Simp
 		return nil, err
 	}
 
-	directives, _ := buildWafPolicyDirectives(policy)
+	directives, err := buildWafPolicyDirectives(policy)
+	if err != nil {
+		resp := s.buildResponse(server, policy, snapshot, nil, nil)
+		resp.Message = localizeWafPolicyMessage(err.Error())
+		return resp, nil
+	}
 	return s.buildResponse(server, policy, snapshot, nil, []string{directives}), nil
 }
 
@@ -259,8 +270,9 @@ func (s *simpleWafConfigService) findOrCreateDefaultPolicy() (*wafmodel.WafPolic
 		RequestBodyNoFilesLimit:     1024 * 1024,
 		CrsTemplate:                 wafPolicyCRSTemplateLowFP,
 		CrsParanoiaLevel:            1,
-		CrsInboundAnomalyThreshold:  10,
-		CrsOutboundAnomalyThreshold: 8,
+		CrsDetectionParanoiaLevel:   1,
+		CrsInboundAnomalyThreshold:  5,
+		CrsOutboundAnomalyThreshold: 4,
 		Config: commonmodel.JSONMap{
 			"scope":      "global",
 			"simpleMode": true,
@@ -284,7 +296,7 @@ func (s *simpleWafConfigService) persistAppliedCandidate(candidate *simpleWafCan
 		if err := tx.Save(candidate.Policy).Error; err != nil {
 			return fmt.Errorf("保存简单 WAF 策略失败: %w", err)
 		}
-		if err := createCaddyPolicyHistory(tx, candidate.Server.ID, "simple_waf_last_good", candidate.LastGood, candidate.LastModules); err != nil {
+		if err := createCaddyPolicyHistory(tx, candidate.Server.ID, caddymodel.CaddyHistoryActionSimpleWafLastGood, candidate.LastGood, candidate.LastModules); err != nil {
 			return err
 		}
 		if err := tx.Model(&caddymodel.CaddyServer{}).
@@ -295,7 +307,7 @@ func (s *simpleWafConfigService) persistAppliedCandidate(candidate *simpleWafCan
 			}).Error; err != nil {
 			return fmt.Errorf("保存 Caddy 服务器配置失败: %w", err)
 		}
-		if err := createCaddyPolicyHistory(tx, candidate.Server.ID, "simple_waf_apply", candidate.Config, candidate.Modules); err != nil {
+		if err := createCaddyPolicyHistory(tx, candidate.Server.ID, caddymodel.CaddyHistoryActionSimpleWafApply, candidate.Config, candidate.Modules); err != nil {
 			return err
 		}
 		return nil
@@ -329,7 +341,7 @@ func (s *simpleWafConfigService) buildResponse(server *caddymodel.CaddyServer, p
 	}
 	if policy != nil {
 		resp.Mode = normalizePolicyEngineMode(policy.EngineMode)
-		resp.Strength = normalizeSimpleWafStrength(policy.CrsTemplate, policy.CrsParanoiaLevel, policy.CrsInboundAnomalyThreshold, policy.CrsOutboundAnomalyThreshold)
+		resp.Strength = normalizeSimpleWafStrength(policy.CrsTemplate, policy.CrsParanoiaLevel)
 		resp.Audit = normalizePolicyAuditEngine(policy.AuditEngine)
 		resp.RequestBodyAccess = policy.RequestBodyAccess
 		resp.RequestBodyLimit = normalizePolicyRequestBodyLimit(policy.RequestBodyLimit, 10*1024*1024)
@@ -338,15 +350,42 @@ func (s *simpleWafConfigService) buildResponse(server *caddymodel.CaddyServer, p
 	}
 	if snapshot != nil {
 		resp.Integrated = snapshot.OrderReady && snapshot.SnippetReady && snapshot.DirectiveReady && len(snapshot.ImportedSites) > 0
-		resp.SiteAddresses = append([]string{}, snapshot.ImportedSites...)
 		resp.AvailableSites = append([]string{}, snapshot.AvailableSites...)
-		resp.Enabled = resp.Enabled && resp.Integrated
+		// 站点选择以策略里保存的为准，Caddyfile 现状只作为"是否已生效"的判据。
+		//
+		// 不再用 enabled && integrated 改写 enabled：Caddyfile 一旦漂移，UI 会把
+		// 用户明明开着的 WAF 显示成关闭，而库里仍是开启状态，两边对不上。
+		resp.SiteAddresses = resolveSimpleWafSiteAddresses(policy, snapshot.ImportedSites)
 		resp.Message = buildWafIntegrationStatusMessage(snapshot)
 	}
 	if len(directives) > 0 {
 		resp.Directives = strings.TrimSpace(directives[0])
 	}
 	return resp
+}
+
+// resolveSimpleWafSiteAddresses 取策略里保存的站点选择，缺失时回退到 Caddyfile 现状。
+func resolveSimpleWafSiteAddresses(policy *wafmodel.WafPolicy, importedSites []string) []string {
+	if policy != nil && policy.Config != nil {
+		// 同一请求内写入的是 []string，从库里读回的是 []interface{}，两种都要认。
+		switch raw := policy.Config[simpleWafSiteAddressesKey].(type) {
+		case []string:
+			if len(raw) > 0 {
+				return raw
+			}
+		case []interface{}:
+			result := make([]string, 0, len(raw))
+			for _, item := range raw {
+				if text, ok := item.(string); ok && strings.TrimSpace(text) != "" {
+					result = append(result, strings.TrimSpace(text))
+				}
+			}
+			if len(result) > 0 {
+				return result
+			}
+		}
+	}
+	return append([]string{}, importedSites...)
 }
 
 func normalizeSimpleWafConfigReq(req *types.SimpleWafConfigUpdateReq) (simpleWafNormalizedConfig, error) {
@@ -449,6 +488,7 @@ func applySimpleWafConfigToPolicy(config simpleWafNormalizedConfig, policy *wafm
 	policy.RequestBodyNoFilesLimit = config.RequestBodyNoFilesLimit
 	policy.CrsTemplate = config.Strength
 	policy.CrsParanoiaLevel = preset.ParanoiaLevel
+	policy.CrsDetectionParanoiaLevel = preset.DetectionParanoiaLevel
 	policy.CrsInboundAnomalyThreshold = preset.InboundAnomalyThreshold
 	policy.CrsOutboundAnomalyThreshold = preset.OutboundAnomalyThreshold
 	if policy.Config == nil {
@@ -456,17 +496,19 @@ func applySimpleWafConfigToPolicy(config simpleWafNormalizedConfig, policy *wafm
 	}
 	policy.Config["scope"] = "global"
 	policy.Config["simpleMode"] = true
+	// 直接存 []string：JSONMap 落库时统一走 json.Marshal，读回时由解析器还原。
+	policy.Config[simpleWafSiteAddressesKey] = config.SiteAddresses
 
 	return ensurePolicyCRSTuning(policy)
 }
 
-func normalizeSimpleWafStrength(template string, paranoiaLevel, inboundThreshold, outboundThreshold int64) string {
+func normalizeSimpleWafStrength(template string, paranoiaLevel int64) string {
 	normalized := normalizePolicyCRSTemplate(template)
 	switch normalized {
 	case wafPolicyCRSTemplateLowFP, wafPolicyCRSTemplateBalanced, wafPolicyCRSTemplateHighBlocking:
 		return normalized
 	}
-	derived := derivePolicyCRSTemplateFromValues(paranoiaLevel, inboundThreshold, outboundThreshold)
+	derived := derivePolicyCRSTemplateFromValues(paranoiaLevel)
 	switch derived {
 	case wafPolicyCRSTemplateLowFP, wafPolicyCRSTemplateBalanced, wafPolicyCRSTemplateHighBlocking:
 		return derived

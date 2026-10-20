@@ -101,6 +101,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	ensureCronTaskLogRetentionConstraints(db)
 	backfillCronTaskLogTaskNames(db)
+	backfillWafPolicyCRSDefaults(db)
 	initWafWorkspace(&c)
 	initCronWorkspace(&c)
 
@@ -296,6 +297,40 @@ func quoteIdentifier(name string) string {
 	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
 }
 
+// backfillWafPolicyCRSDefaults 把历史策略行的 CRS 参数对齐到新语义。
+//
+// 升级前写入的阈值是 10/8（旧预设），而旧代码的 PL 变量写错、实际从未生效，
+// 所以这些行是「PL 无效 + 阈值宽松」的组合。新代码修好 PL 后若不迁移，
+// 点一次「应用到 Caddy」就会把线上已经跑着的 5/4 覆盖回 10/8，防护反而变弱。
+//
+// 只处理还没设置检测级别的行，跑一次即收敛；之后用户改过的值不会被覆盖。
+func backfillWafPolicyCRSDefaults(db *gorm2.DB) {
+	if db == nil || db.Dialector == nil || db.Dialector.Name() != "postgres" {
+		return
+	}
+	if !db.Migrator().HasTable(&wafmodel.WafPolicy{}) ||
+		!db.Migrator().HasColumn(&wafmodel.WafPolicy{}, "crs_detection_paranoia_level") {
+		return
+	}
+
+	// 检测级别缺省时按阻断级别补齐，阈值统一回官方推荐值。
+	updateSQL := `
+UPDATE waf_policies
+SET crs_detection_paranoia_level = crs_paranoia_level,
+    crs_inbound_anomaly_threshold = 5,
+    crs_outbound_anomaly_threshold = 4
+WHERE COALESCE(crs_detection_paranoia_level, 0) <= 0
+`
+	result := db.Exec(updateSQL)
+	if result.Error != nil {
+		logx.Errorf("回填 WAF 策略 CRS 默认值失败: %v", result.Error)
+		return
+	}
+	if result.RowsAffected > 0 {
+		logx.Infof("已回填 %d 条 WAF 策略的 CRS 参数", result.RowsAffected)
+	}
+}
+
 func ensureWafWorkspaceDirs(baseDir string) error {
 	trimmed := strings.TrimSpace(baseDir)
 	if trimmed == "" {
@@ -408,8 +443,9 @@ func initWafDefaultPolicies(db *gorm2.DB) {
 		RequestBodyNoFilesLimit:     1024 * 1024,
 		CrsTemplate:                 "low_fp",
 		CrsParanoiaLevel:            1,
-		CrsInboundAnomalyThreshold:  10,
-		CrsOutboundAnomalyThreshold: 8,
+		CrsDetectionParanoiaLevel:   1,
+		CrsInboundAnomalyThreshold:  5,
+		CrsOutboundAnomalyThreshold: 4,
 		Config: commonmodel.JSONMap{
 			"scope": "global",
 		},

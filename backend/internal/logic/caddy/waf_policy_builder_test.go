@@ -23,6 +23,7 @@ func TestBuildWafPolicyDirectivesDeterministic(t *testing.T) {
 		CrsInboundAnomalyThreshold:  5,
 		CrsOutboundAnomalyThreshold: 4,
 	}
+	// 平衡档的检测 PL 比阻断 PL 高一档，未显式赋值时由预设补齐。
 
 	first, err := buildWafPolicyDirectives(policy)
 	if err != nil {
@@ -46,14 +47,19 @@ func TestBuildWafPolicyDirectivesDeterministic(t *testing.T) {
 		"SecRequestBodyAccess On",
 		"SecRequestBodyLimit 10485760",
 		"SecRequestBodyNoFilesLimit 1048576",
-		`SecAction "id:900000,phase:1,pass,nolog,t:none,setvar:tx.paranoia_level=2"`,
-		`SecAction "id:900110,phase:1,pass,nolog,t:none,setvar:tx.inbound_anomaly_score_threshold=5"`,
-		`SecAction "id:900100,phase:1,pass,nolog,t:none,setvar:tx.outbound_anomaly_score_threshold=4"`,
+		`SecAction "id:900000,phase:1,pass,nolog,t:none,setvar:tx.blocking_paranoia_level=2"`,
+		`SecAction "id:900001,phase:1,pass,nolog,t:none,setvar:tx.detection_paranoia_level=3"`,
+		`SecAction "id:900110,phase:1,pass,nolog,t:none,setvar:tx.inbound_anomaly_score_threshold=5,setvar:tx.outbound_anomaly_score_threshold=4"`,
 	}
 	for _, fragment := range expectedFragments {
 		if !strings.Contains(first, fragment) {
 			t.Fatalf("directives missing fragment %q, output=%q", fragment, first)
 		}
+	}
+
+	// CRS 4.x 不再读取裸 tx.paranoia_level，出现即说明回退到了失效写法。
+	if strings.Contains(first, "tx.paranoia_level") {
+		t.Fatalf("directives must not use tx.paranoia_level, output=%q", first)
 	}
 }
 

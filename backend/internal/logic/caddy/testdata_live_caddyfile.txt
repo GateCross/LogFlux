@@ -1,0 +1,274 @@
+{
+  admin localhost:2019
+  debug
+
+  servers {
+    trusted_proxies static 127.0.0.1/8 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
+  }
+
+  order coraza_waf first
+
+  # 关闭自动 HTTP->HTTPS 跳转。
+  #
+  # :80 与 *.example.com 的 443 站点共用同一批 Host，Caddy 会为 :80 自动插入
+  # 一条 Location: https://{host} 的跳转，且位置排在自定义 route 之前。结果是
+  # 内网设备访问 :8100 时先被这条规则踢到公网域名，再经 Cloudflare 回源
+  # （hairpin NAT），内网无法访问。跳转改由 :80 块内显式规则按来源决定。
+  auto_https disable_redirects
+}
+# ==================================
+# 通用配置片段 (Snippets)
+# ==================================
+(compression) {
+  encode zstd gzip
+}
+(cloudflare) {
+  tls {
+    dns cloudflare REDACTED_TOKEN
+  }
+}
+(subdomain-log) {
+  log {
+    output file /var/log/caddy/{args[0]}.log {
+      roll_size 10MB
+      roll_keep 10
+      roll_keep_for 7d
+    }
+    level debug
+    format json
+  }
+}
+# IP 区域访问控制（调用 LogFlux 后端 geo-check）
+(geo_auth) {
+  forward_auth localhost:8888 {
+    uri /api/internal/geo-check
+    header_up X-Forwarded-Host {host}
+    header_up X-Forwarded-Uri {uri}
+    header_up X-Forwarded-Method {method}
+    @blocked status 403
+    handle_response @blocked {
+      redir https://deny.example.com permanent
+    }
+  }
+}
+# WAF 统一锚点
+#
+# 必须包含三条 Include，否则 load_owasp_crs 虽为 true 但 CRS 规则不会加载，
+# 引擎空转：SecRuleEngine On 却任何攻击都放行。顺序不可调换：
+#   1. coraza 基线配置
+#   2. crs-setup（提供 tx.crs_setup_version，缺失时 901001 直接 500）
+#   3. 本项目策略与排除规则
+#   4. OWASP CRS 规则本体
+(waf_protect) {
+  coraza_waf {
+    load_owasp_crs
+    directives `
+    Include @coraza.conf-recommended
+    Include @crs-setup.conf.example
+
+    SecRuleEngine On
+    SecAuditEngine RelevantOnly
+    SecAuditLogFormat JSON
+    SecAuditLogRelevantStatus ^(5[0-9][0-9]|40[0-35-9]|4[1-9][0-9])$
+    SecAuditLog /var/log/caddy/waf_audit.log
+    SecRequestBodyAccess On
+    SecRequestBodyLimit 10485760
+    SecRequestBodyNoFilesLimit 1048576
+
+    SecAction "id:900000,phase:1,pass,nolog,t:none,setvar:tx.blocking_paranoia_level=2,setvar:tx.detection_paranoia_level=2"
+    SecAction "id:900110,phase:1,pass,nolog,t:none,setvar:tx.inbound_anomaly_score_threshold=5,setvar:tx.outbound_anomaly_score_threshold=4"
+
+    SecRule REQUEST_URI "@beginsWith /api/" "id:1000100,phase:1,pass,nolog,noauditlog,ctl:requestBodyAccess=Off"
+
+    # ------------------------------------------------------------------
+    # 误报排除：Proxmox VE 控制台
+    #
+    # PL2 起以下四条会拦掉 PVE 的正常操作（都是单条 CRITICAL 直接到阈值）：
+    #   934190  订阅接口的 localhost 主机名被当作 SSRF
+    #   930130  noVNC 的 package.json 命中受限文件
+    #   942120  VNC ticket 的 base64 含 + / = 被当作 SQL 运算符
+    #   920451  accept-charset 请求头（浏览器与客户端常带）
+    #
+    # 只对 PVE 的接口前缀与 noVNC 路径排除，登录与其余流量仍全程检测。
+    # 排除必须写在 CRS Include 之前。
+    # ------------------------------------------------------------------
+    SecRule REQUEST_URI "@rx ^/(api2|novnc|api/v1/guest)/" \
+        "id:1000300,phase:1,pass,nolog,noauditlog,ctl:ruleRemoveById=934190,ctl:ruleRemoveById=930130,ctl:ruleRemoveById=942120"
+
+    # accept-charset 是弃用但合法的头，浏览器与各类客户端都会带，全局排除。
+    SecRule REQUEST_HEADERS:Accept-Charset "@rx (?i)charset" \
+        "id:1000301,phase:1,pass,nolog,noauditlog,t:none,ctl:ruleRemoveById=920451"
+
+    # ------------------------------------------------------------------
+    # 误报排除：第三方埋点 Cookie（PostHog 等）
+    #
+    # 这类 Cookie 的 JSON 值形如 {"$device_id":"...","$sesid":[...,"01a159cf"]}，
+    # 其中的 $、{、}、逗号与连字符会被 942290/942200/942340/942370 判定为
+    # MongoDB 注入、MySQL 注释与 SQL 认证绕过，累计 20 分直接拦截。
+    # 表现是同一访客时好时坏：带 Cookie 被拦、不带则放行。
+    #
+    # 只移除这些规则对 Cookie 变量的检测，URL、请求体与其余规则仍完整生效。
+    # ------------------------------------------------------------------
+    SecRule REQUEST_COOKIES_NAMES "@rx ^(ph_|_ga|_gid|_hj|amplitude|mp_)" \
+        "id:1000302,phase:1,pass,nolog,noauditlog,ctl:ruleRemoveTargetById=942290;REQUEST_COOKIES,ctl:ruleRemoveTargetById=942200;REQUEST_COOKIES,ctl:ruleRemoveTargetById=942340;REQUEST_COOKIES,ctl:ruleRemoveTargetById=942370;REQUEST_COOKIES"
+
+    Include @owasp_crs/*.conf
+    `
+  }
+}
+(deny_403_redirect) {
+  handle_errors {
+    @blocked expression `{err.status_code} == 403`
+    redir @blocked https://deny.example.com temporary
+  }
+}
+
+(health_check) {
+  handle /api/health {
+    respond "OK" 200
+  }
+}
+(api_proxy) {
+  handle /api/* {
+    reverse_proxy localhost:8888 {
+      header_up Host {host}
+      header_up X-Real-IP {client_ip}
+      header_up X-Forwarded-For {client_ip}
+      header_up X-Forwarded-Proto {scheme}
+      transport http {
+        read_timeout 30s
+        write_timeout 30s
+      }
+    }
+  }
+}
+(frontend_simple) {
+  handle {
+    root * /app/frontend
+    try_files {path} /index.html
+    file_server
+  }
+}
+(security_headers) {
+  header {
+    X-Frame-Options "DENY"
+    X-Content-Type-Options "nosniff"
+    X-XSS-Protection "1; mode=block"
+    Referrer-Policy "strict-origin-when-cross-origin"
+    Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self'
+    'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'"
+    -Server
+  }
+}
+
+# ---------------------------------------------------------------------------
+# :80 —— 内网直连入口
+#
+# 原先无条件 308 跳 https://{host}，导致内网设备访问 8100 时被踢到公网域名，
+# 再经 Cloudflare 回源（hairpin NAT），内网无法访问。
+# 现在按来源区分：内网直接服务，其余才跳 HTTPS。
+# ---------------------------------------------------------------------------
+:80 {
+  import waf_protect
+  import compression
+  import subdomain-log local
+
+  # 内网来源：按 Host 分流到对应源站，不跳 HTTPS，避免 hairpin NAT 回环。
+  #
+  # 两个坑，缺一都会让内网拿到 301：
+  #   1. 不能混用 handle 与 route —— handle 会被 Caddy 重新分组并前移，
+  #      抢在 @lan 之前命中；这里全部用 route 保序。
+  #   2. 全局需 auto_https disable_redirects，否则 Caddy 仍会为 :80
+  #      自动插入 Location: https://{host} 的跳转。
+  #
+  # 内网访问 ikuai/pve 时必须真正反代到源站，而不是落到 LogFlux 前端。
+  @lan remote_ip 127.0.0.1/8 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
+
+  route @lan {
+    # ikuai：HTTPS 源站，保留 Host 改写
+    @ikuai host ikuai.example.com
+    handle @ikuai {
+      reverse_proxy https://192.0.2.254:443 {
+        header_up Host {upstream_hostport}
+        header_up   -Via
+        header_down -Via
+        transport http {
+          tls
+          tls_insecure_skip_verify
+        }
+      }
+    }
+
+    # pve
+    @pve host pve.example.com
+    handle @pve {
+      reverse_proxy https://192.0.2.100:8006 {
+        transport http {
+          tls_insecure_skip_verify
+        }
+      }
+    }
+
+    # 其余（LogFlux 本体）
+    handle {
+      import health_check
+      import geo_auth
+      import api_proxy
+      import frontend_simple
+    }
+  }
+
+  # 其余来源：跳 HTTPS
+  route {
+    redir https://{host}{uri} permanent
+  }
+}
+
+pve.example.com {
+  import deny_403_redirect
+  import waf_protect
+  import cloudflare
+  import geo_auth
+  handle {
+    reverse_proxy https://192.0.2.100:8006 {
+      transport http {
+        tls_insecure_skip_verify
+      }
+    }
+  }
+}
+
+# ikuai 源站是 HTTPS(443)。原写法 reverse_proxy https://192.0.2.254 未指定
+# transport tls 语义，依赖 Caddy 从 https:// 前缀推断；显式写出更稳，且
+# 保留 Host 改写，避免 ikuai 因 Host 不匹配而拒绝。
+ikuai.example.com {
+  import deny_403_redirect
+  import waf_protect
+  import cloudflare
+  import geo_auth
+  handle {
+    reverse_proxy https://192.0.2.254:443 {
+      header_up Host {upstream_hostport}
+      header_up   -Via
+      header_down -Via
+      transport http {
+        tls
+        tls_insecure_skip_verify
+      }
+    }
+  }
+}
+
+myserver.example.com {
+  import deny_403_redirect
+  import waf_protect
+  import cloudflare
+  import geo_auth
+  handle {
+    reverse_proxy https://192.0.2.10:10000 {
+      transport http {
+        tls_insecure_skip_verify
+      }
+    }
+  }
+}

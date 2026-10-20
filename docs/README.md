@@ -45,6 +45,7 @@
 
 - [`plans/waf-crs-frontend-security-config-overall-plan.md`](./plans/waf-crs-frontend-security-config-overall-plan.md)
 - [`plans/waf-crs-frontend-security-config-progress.md`](./plans/waf-crs-frontend-security-config-progress.md)
+- [`plans/waf-caddy-config-optimization-plan.md`](./plans/waf-caddy-config-optimization-plan.md)（WAF 与 Caddy 编辑逻辑梳理与优化方案，含 P0 缺陷清单）
 - [`plans/waf-update-management-design.md`](./plans/waf-update-management-design.md)
 - [`plans/waf-update-task-checklist.md`](./plans/waf-update-task-checklist.md)
 - [`plans/waf-update-operations-guide.md`](./plans/waf-update-operations-guide.md)
