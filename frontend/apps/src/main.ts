@@ -1,7 +1,11 @@
 import { initPreferences } from '@vben/preferences';
 import { unmountGlobalLoading } from '@vben/utils';
 
-import { overridesPreferences, preferencesExtension } from './preferences';
+import {
+  overridesPreferences,
+  preferencesExtension,
+  sanitizeCachedPreferences,
+} from './preferences';
 
 /**
  * 应用初始化完成之后再进行页面加载渲染
@@ -19,6 +23,9 @@ async function initApplication() {
     namespace,
     overrides: overridesPreferences,
   });
+
+  // 清掉缓存里指向外网 CDN 的资源地址
+  sanitizeCachedPreferences();
 
   // 启动应用并挂载
   // vue应用主要逻辑及视图

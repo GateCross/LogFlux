@@ -1,7 +1,12 @@
 import {
   defineOverridesPreferences,
   definePreferencesExtension,
+  preferences,
+  updatePreferences,
 } from '@vben/preferences';
+
+/** 本地 logo 路径，随 public 目录一起发布 */
+const LOCAL_LOGO = '/logo.svg';
 
 interface WebAntdPreferencesExtension {
   defaultTableSize: number;
@@ -19,7 +24,30 @@ export const overridesPreferences = defineOverridesPreferences({
     // 启用 token 刷新
     enableRefreshToken: true,
   },
+  logo: {
+    // 不允许回落到外网图标
+    source: LOCAL_LOGO,
+  },
 });
+
+/**
+ * 修正本地缓存里残留的外网资源地址。
+ * 偏好设置以 localStorage 为优先，老版本用户缓存里存的是 CDN logo，
+ * 不改写会继续请求外网。
+ */
+export function sanitizeCachedPreferences() {
+  const { source, sourceDark } = preferences.logo;
+  const isRemote = (value?: string) => !!value?.startsWith('http');
+  if (!isRemote(source) && !isRemote(sourceDark)) {
+    return;
+  }
+  updatePreferences({
+    logo: {
+      source: isRemote(source) ? LOCAL_LOGO : source,
+      sourceDark: isRemote(sourceDark) ? undefined : sourceDark,
+    },
+  });
+}
 
 export const preferencesExtension =
   definePreferencesExtension<WebAntdPreferencesExtension>({

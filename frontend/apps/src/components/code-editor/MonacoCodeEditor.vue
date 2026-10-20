@@ -7,24 +7,9 @@ import { computed, ref } from 'vue';
 import { usePreferences } from '@vben/preferences';
 
 import { Alert, Input } from 'antdv-next';
-import { loader, VueMonacoEditor } from '@guolao/vue-monaco-editor';
+import { VueMonacoEditor } from '@guolao/vue-monaco-editor';
 
-/** 配置 CDN 一次；失败时组件走 failure 槽回退 Textarea */
-let loaderConfigured = false;
-function ensureMonacoLoader() {
-  if (loaderConfigured) return;
-  loaderConfigured = true;
-  try {
-    loader.config({
-      paths: {
-        vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs',
-      },
-    });
-  } catch {
-    // 配置异常时仍尝试挂载；失败由 failure 槽处理
-  }
-}
-ensureMonacoLoader();
+import '#/components/code-editor/monaco-local';
 
 const props = withDefaults(
   defineProps<{
@@ -80,7 +65,7 @@ function onFallbackInput(value: string | number | undefined) {
 }
 
 function retryEditorLoad() {
-  // failure slot 中递增 key，确保第三方编辑器重新挂载并重新请求 CDN 资源。
+  // failure slot 中递增 key，让编辑器重新挂载并重新初始化
   editorAttempt.value += 1;
 }
 

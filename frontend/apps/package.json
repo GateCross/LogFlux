@@ -45,6 +45,7 @@
     "@surbowl/world-geo-json-zh": "^2.1.5",
     "echarts-china-map": "^1.0.4",
     "@guolao/vue-monaco-editor": "^1.6.0",
+    "monaco-editor": "catalog:",
     "pinia": "catalog:",
     "vue": "catalog:",
     "vue-router": "catalog:"

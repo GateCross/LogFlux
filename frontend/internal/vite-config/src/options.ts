@@ -10,14 +10,9 @@ const getDefaultPwaOptions = (name: string): Partial<PwaPluginOptions> => ({
       'Vben Admin is a modern admin dashboard template based on Vue 3. ',
     icons: [
       {
-        sizes: '192x192',
-        src: 'https://unpkg.com/@vbenjs/static-source@0.1.7/source/pwa-icon-192.png',
-        type: 'image/png',
-      },
-      {
-        sizes: '512x512',
-        src: 'https://unpkg.com/@vbenjs/static-source@0.1.7/source/pwa-icon-512.png',
-        type: 'image/png',
+        sizes: 'any',
+        src: '/logo.svg',
+        type: 'image/svg+xml',
       },
     ],
     name: `${name}${isDevelopment ? ' dev' : ''}`,

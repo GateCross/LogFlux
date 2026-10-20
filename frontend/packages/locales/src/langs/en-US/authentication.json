@@ -40,7 +40,6 @@
   "qqLogin": "QQ Login",
   "githubLogin": "Github Login",
   "googleLogin": "Google Login",
-  "dingdingLogin": "Dingding Login",
   "codeSubtitle": "Enter your phone number to start managing your project",
   "code": "Security code",
   "codeTip": "Security code required {0} characters",
