@@ -4,8 +4,8 @@ const routes: RouteRecordRaw[] = [
   {
     meta: {
       icon: 'mdi:server-network',
-      order: 1,
-      title: 'Caddy 配置',
+      order: 2,
+      title: '服务',
     },
     name: 'Caddy',
     path: '/caddy',
@@ -43,25 +43,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('#/views/caddy/source/index.vue'),
         meta: {
           icon: 'mdi:source-branch',
-          title: '来源管理',
-        },
-      },
-      {
-        name: 'CaddyLog',
-        path: '/caddy/log',
-        component: () => import('#/views/caddy/log/index.vue'),
-        meta: {
-          icon: 'mdi:text-box-outline',
-          title: '访问日志',
-        },
-      },
-      {
-        name: 'CaddySystemLog',
-        path: '/caddy/system-log',
-        component: () => import('#/views/caddy/system-log/index.vue'),
-        meta: {
-          icon: 'mdi:file-document-outline',
-          title: '系统日志',
+          title: 'WAF 来源',
         },
       },
     ],

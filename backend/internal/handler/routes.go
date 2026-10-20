@@ -11,10 +11,7 @@ import (
 	cron "logflux/internal/handler/cron"
 	dashboard "logflux/internal/handler/dashboard"
 	log "logflux/internal/handler/log"
-	menu "logflux/internal/handler/menu"
 	notification "logflux/internal/handler/notification"
-	role "logflux/internal/handler/role"
-	route "logflux/internal/handler/route"
 	user "logflux/internal/handler/user"
 	"logflux/internal/svc"
 
@@ -34,83 +31,23 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Path:    "/refreshToken",
 				Handler: auth.RefreshTokenHandler(serverCtx),
 			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/setup",
+				Handler: auth.SetupHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/setup/status",
+				Handler: auth.GetSetupStatusHandler(serverCtx),
+			},
 		},
 		rest.WithPrefix("/api"),
 	)
 
 	server.AddRoutes(
 		rest.WithMiddlewares(
-			[]rest.Middleware{serverCtx.Permission},
-			[]rest.Route{
-				{
-					Method:  http.MethodGet,
-					Path:    "/caddy/discovery/docker",
-					Handler: caddy.DiscoverDockerServicesHandler(serverCtx),
-				},
-				{
-					Method:  http.MethodGet,
-					Path:    "/caddy/server",
-					Handler: caddy.GetCaddyServersHandler(serverCtx),
-				},
-				{
-					Method:  http.MethodPost,
-					Path:    "/caddy/server",
-					Handler: caddy.AddCaddyServerHandler(serverCtx),
-				},
-				{
-					Method:  http.MethodPut,
-					Path:    "/caddy/server/:id",
-					Handler: caddy.UpdateCaddyServerHandler(serverCtx),
-				},
-				{
-					Method:  http.MethodDelete,
-					Path:    "/caddy/server/:id",
-					Handler: caddy.DeleteCaddyServerHandler(serverCtx),
-				},
-				{
-					Method:  http.MethodGet,
-					Path:    "/caddy/server/:serverId/config",
-					Handler: caddy.GetCaddyConfigHandler(serverCtx),
-				},
-				{
-					Method:  http.MethodPost,
-					Path:    "/caddy/server/:serverId/config",
-					Handler: caddy.UpdateCaddyConfigHandler(serverCtx),
-				},
-				{
-					Method:  http.MethodGet,
-					Path:    "/caddy/server/:serverId/config/history",
-					Handler: caddy.GetCaddyConfigHistoryHandler(serverCtx),
-				},
-				{
-					Method:  http.MethodGet,
-					Path:    "/caddy/server/:serverId/config/history/:historyId",
-					Handler: caddy.GetCaddyConfigHistoryDetailHandler(serverCtx),
-				},
-				{
-					Method:  http.MethodPost,
-					Path:    "/caddy/server/:serverId/config/preview",
-					Handler: caddy.PreviewCaddyConfigHandler(serverCtx),
-				},
-				{
-					Method:  http.MethodPost,
-					Path:    "/caddy/server/:serverId/config/rollback",
-					Handler: caddy.RollbackCaddyConfigHandler(serverCtx),
-				},
-				{
-					Method:  http.MethodGet,
-					Path:    "/caddy/server/status",
-					Handler: caddy.GetCaddyServerStatusHandler(serverCtx),
-				},
-			}...,
-		),
-		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
-		rest.WithPrefix("/api"),
-	)
-
-	server.AddRoutes(
-		rest.WithMiddlewares(
-			[]rest.Middleware{serverCtx.Permission},
+			[]rest.Middleware{serverCtx.ActiveUser},
 			[]rest.Route{
 				{
 					Method:  http.MethodPost,
@@ -195,7 +132,7 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 
 	server.AddRoutes(
 		rest.WithMiddlewares(
-			[]rest.Middleware{serverCtx.Permission},
+			[]rest.Middleware{serverCtx.ActiveUser},
 			[]rest.Route{
 				{
 					Method:  http.MethodGet,
@@ -215,7 +152,77 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 
 	server.AddRoutes(
 		rest.WithMiddlewares(
-			[]rest.Middleware{serverCtx.Permission},
+			[]rest.Middleware{serverCtx.ActiveUser},
+			[]rest.Route{
+				{
+					Method:  http.MethodGet,
+					Path:    "/caddy/discovery/docker",
+					Handler: caddy.DiscoverDockerServicesHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/caddy/server",
+					Handler: caddy.GetCaddyServersHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/caddy/server",
+					Handler: caddy.AddCaddyServerHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPut,
+					Path:    "/caddy/server/:id",
+					Handler: caddy.UpdateCaddyServerHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodDelete,
+					Path:    "/caddy/server/:id",
+					Handler: caddy.DeleteCaddyServerHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/caddy/server/:serverId/config",
+					Handler: caddy.GetCaddyConfigHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/caddy/server/:serverId/config",
+					Handler: caddy.UpdateCaddyConfigHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/caddy/server/:serverId/config/history",
+					Handler: caddy.GetCaddyConfigHistoryHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/caddy/server/:serverId/config/history/:historyId",
+					Handler: caddy.GetCaddyConfigHistoryDetailHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/caddy/server/:serverId/config/preview",
+					Handler: caddy.PreviewCaddyConfigHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/caddy/server/:serverId/config/rollback",
+					Handler: caddy.RollbackCaddyConfigHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/caddy/server/status",
+					Handler: caddy.GetCaddyServerStatusHandler(serverCtx),
+				},
+			}...,
+		),
+		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
+		rest.WithPrefix("/api"),
+	)
+
+	server.AddRoutes(
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.ActiveUser},
 			[]rest.Route{
 				{
 					Method:  http.MethodGet,
@@ -275,7 +282,7 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 
 	server.AddRoutes(
 		rest.WithMiddlewares(
-			[]rest.Middleware{serverCtx.Permission},
+			[]rest.Middleware{serverCtx.ActiveUser},
 			[]rest.Route{
 				{
 					Method:  http.MethodGet,
@@ -290,7 +297,7 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 
 	server.AddRoutes(
 		rest.WithMiddlewares(
-			[]rest.Middleware{serverCtx.Permission},
+			[]rest.Middleware{serverCtx.ActiveUser},
 			[]rest.Route{
 				{
 					Method:  http.MethodGet,
@@ -315,7 +322,7 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 
 	server.AddRoutes(
 		rest.WithMiddlewares(
-			[]rest.Middleware{serverCtx.Permission},
+			[]rest.Middleware{serverCtx.ActiveUser},
 			[]rest.Route{
 				{
 					Method:  http.MethodGet,
@@ -335,37 +342,7 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 
 	server.AddRoutes(
 		rest.WithMiddlewares(
-			[]rest.Middleware{serverCtx.Permission},
-			[]rest.Route{
-				{
-					Method:  http.MethodPost,
-					Path:    "/menu",
-					Handler: menu.CreateMenuHandler(serverCtx),
-				},
-				{
-					Method:  http.MethodPut,
-					Path:    "/menu/:id",
-					Handler: menu.UpdateMenuHandler(serverCtx),
-				},
-				{
-					Method:  http.MethodDelete,
-					Path:    "/menu/:id",
-					Handler: menu.DeleteMenuHandler(serverCtx),
-				},
-				{
-					Method:  http.MethodGet,
-					Path:    "/menu/list",
-					Handler: menu.GetMenuListHandler(serverCtx),
-				},
-			}...,
-		),
-		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
-		rest.WithPrefix("/api"),
-	)
-
-	server.AddRoutes(
-		rest.WithMiddlewares(
-			[]rest.Middleware{serverCtx.Permission},
+			[]rest.Middleware{serverCtx.ActiveUser},
 			[]rest.Route{
 				{
 					Method:  http.MethodGet,
@@ -485,58 +462,7 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 
 	server.AddRoutes(
 		rest.WithMiddlewares(
-			[]rest.Middleware{serverCtx.Permission},
-			[]rest.Route{
-				{
-					Method:  http.MethodPut,
-					Path:    "/role/:id/permissions",
-					Handler: role.UpdateRolePermissionsHandler(serverCtx),
-				},
-				{
-					Method:  http.MethodGet,
-					Path:    "/role/list",
-					Handler: role.GetRoleListHandler(serverCtx),
-				},
-			}...,
-		),
-		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
-		rest.WithPrefix("/api"),
-	)
-
-	server.AddRoutes(
-		rest.WithMiddlewares(
-			[]rest.Middleware{serverCtx.Permission},
-			[]rest.Route{
-				{
-					Method:  http.MethodGet,
-					Path:    "/route/getUserRoutes",
-					Handler: route.GetUserRoutesHandler(serverCtx),
-				},
-			}...,
-		),
-		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
-		rest.WithPrefix("/api"),
-	)
-
-	server.AddRoutes(
-		[]rest.Route{
-			{
-				Method:  http.MethodGet,
-				Path:    "/route/getConstantRoutes",
-				Handler: route.GetConstantRoutesHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodGet,
-				Path:    "/route/isRouteExist",
-				Handler: route.IsRouteExistHandler(serverCtx),
-			},
-		},
-		rest.WithPrefix("/api"),
-	)
-
-	server.AddRoutes(
-		rest.WithMiddlewares(
-			[]rest.Middleware{serverCtx.Permission},
+			[]rest.Middleware{serverCtx.ActiveUser},
 			[]rest.Route{
 				{
 					Method:  http.MethodPost,

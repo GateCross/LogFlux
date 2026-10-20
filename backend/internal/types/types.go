@@ -4,9 +4,8 @@
 package types
 
 type AddUserReq struct {
-	Username string   `json:"username"`
-	Password string   `json:"password"`
-	Roles    []string `json:"roles"`
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
 type BaseResp struct {
@@ -103,7 +102,6 @@ type CaddyLogItem struct {
 	ClientIP  string `json:"clientIp"`
 	UserAgent string `json:"userAgent"`
 	RawLog    string `json:"rawLog"`
-	// ExtraData 为 WAF 审计元数据原始 JSON（含 source/interrupted/matched_rules），由前端按需解析。
 	ExtraData string `json:"extraData,optional"`
 }
 
@@ -115,8 +113,8 @@ type CaddyLogReq struct {
 	Status    int    `form:"status,default=-1"`
 	StartTime string `form:"startTime,optional"`
 	EndTime   string `form:"endTime,optional"`
-	SortBy    string `form:"sortBy,optional"` // logTime
-	Order     string `form:"order,optional"`  // asc|desc
+	SortBy    string `form:"sortBy,optional"`  // logTime
+	Order     string `form:"order,optional"`   // asc|desc
 	OnlyWaf   bool   `form:"onlyWaf,optional"` // 仅查询 WAF 防护/拦截日志
 }
 
@@ -197,16 +195,6 @@ type ChannelUpdateReq struct {
 	Config      string `json:"config,optional"`
 	Events      string `json:"events,optional"`
 	Description string `json:"description,optional"`
-}
-
-type CreateMenuReq struct {
-	Name          string    `json:"name"`
-	Path          string    `json:"path"`
-	Component     string    `json:"component"`
-	Order         int       `json:"order"`
-	Meta          RouteMeta `json:"meta"`          // JSON string
-	RequiredRoles []string  `json:"requiredRoles"` // Array of role names
-	ParentID      uint      `json:"parentId,optional"`
 }
 
 type CronLogDetailReq struct {
@@ -327,6 +315,17 @@ type CronTaskUpdateReq struct {
 	Timeout    int    `json:"timeout,default=-1,optional"`
 }
 
+type CrsRuleItem struct {
+	File     string `json:"file"`
+	Category string `json:"category"`
+}
+
+type CrsRuleSummary struct {
+	Total      int           `json:"total"`
+	Categories []string      `json:"categories"`
+	Rules      []CrsRuleItem `json:"rules"`
+}
+
 type DashboardErrorStats struct {
 	Error4xx   int64 `json:"error4xx"`
 	Blocked4xx int64 `json:"blocked4xx"`
@@ -433,10 +432,6 @@ type IPRegionConfigUpdateReq struct {
 	AllowList []string `json:"allowList"`
 }
 
-type IsRouteExistReq struct {
-	RouteName string `form:"routeName"`
-}
-
 type LogItem struct {
 	ID            uint   `json:"id"`
 	EventID       string `json:"eventId"`
@@ -481,31 +476,6 @@ type LoginResp struct {
 	RefreshToken string `json:"refreshToken"`
 }
 
-type MenuItem struct {
-	ID            uint       `json:"id"`
-	Name          string     `json:"name"`
-	Path          string     `json:"path"`
-	Component     string     `json:"component"`
-	Order         int        `json:"order"`
-	Meta          RouteMeta  `json:"meta"`
-	RequiredRoles []string   `json:"requiredRoles"`
-	ParentID      uint       `json:"parentId"`
-	Children      []MenuItem `json:"children,omitempty"`
-	CreatedAt     string     `json:"createdAt"`
-}
-
-type MenuListResp struct {
-	List []MenuItem `json:"list"`
-}
-
-type MenuRoute struct {
-	Name      string      `json:"name"`
-	Path      string      `json:"path"`
-	Component string      `json:"component"`
-	Meta      RouteMeta   `json:"meta"`
-	Children  []MenuRoute `json:"children,omitempty"`
-}
-
 type PreviewTemplateReq struct {
 	Format  string `json:"format"`
 	Content string `json:"content"`
@@ -518,29 +488,6 @@ type PreviewTemplateResp struct {
 
 type RefreshTokenReq struct {
 	RefreshToken string `json:"refreshToken"`
-}
-
-type RoleItem struct {
-	ID          uint     `json:"id"`
-	Name        string   `json:"name"`
-	DisplayName string   `json:"displayName"`
-	Description string   `json:"description"`
-	Permissions []string `json:"permissions"`
-	CreatedAt   string   `json:"createdAt"`
-}
-
-type RoleListResp struct {
-	List []RoleItem `json:"list"`
-}
-
-type RouteMeta struct {
-	Title      string   `json:"title"`
-	I18nKey    string   `json:"i18nKey,omitempty"`
-	Icon       string   `json:"icon,omitempty"`
-	LocalIcon  string   `json:"localIcon,omitempty"`
-	Order      int      `json:"order,omitempty"`
-	HideInMenu bool     `json:"hideInMenu,omitempty"`
-	Roles      []string `json:"roles,omitempty"`
 }
 
 type RuleItem struct {
@@ -591,19 +538,17 @@ type RuleUpdateReq struct {
 	Description     string   `json:"description,optional"`
 }
 
+type SetupReq struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type SetupStatusResp struct {
+	Initialized bool `json:"initialized"`
+}
+
 type SimpleWafConfigReq struct {
 	ServerId uint `form:"serverId,optional"` // 为空时使用默认 Caddy 服务器
-}
-
-type CrsRuleItem struct {
-	File     string `json:"file"`
-	Category string `json:"category"`
-}
-
-type CrsRuleSummary struct {
-	Total      int           `json:"total"`
-	Categories []string      `json:"categories"`
-	Rules      []CrsRuleItem `json:"rules"`
 }
 
 type SimpleWafConfigResp struct {
@@ -733,44 +678,25 @@ type UpdateCaddyServerReq struct {
 	Password string `json:"password,optional"`
 }
 
-type UpdateMenuReq struct {
-	ID            uint      `path:"id"`
-	Name          string    `json:"name,optional"`
-	Path          string    `json:"path,optional"`
-	Component     string    `json:"component,optional"`
-	Order         int       `json:"order,optional"`
-	Meta          RouteMeta `json:"meta,optional"`          // JSON string
-	RequiredRoles []string  `json:"requiredRoles,optional"` // Array of role names
-	ParentID      uint      `json:"parentId,optional"`
-}
-
-type UpdateRolePermissionsReq struct {
-	ID          uint     `path:"id"`
-	Permissions []string `json:"permissions"`
-}
-
 type UpdateUserReq struct {
-	ID       uint     `path:"id"`
-	Password string   `json:"password,optional"`
-	Roles    []string `json:"roles,optional"`
+	ID       uint   `path:"id"`
+	Password string `json:"password,optional"`
 }
 
 type UserInfoReq struct {
 }
 
 type UserInfoResp struct {
-	UserId      int64    `json:"userId"`
-	Username    string   `json:"username"`
-	Roles       []string `json:"roles"`
-	Preferences string   `json:"preferences"` // JSON string
+	UserId      int64  `json:"userId"`
+	Username    string `json:"username"`
+	Preferences string `json:"preferences"` // JSON string
 }
 
 type UserItem struct {
-	ID        uint     `json:"id"`
-	Username  string   `json:"username"`
-	Roles     []string `json:"roles"`
-	Status    int      `json:"status"`
-	CreatedAt string   `json:"createdAt"`
+	ID        uint   `json:"id"`
+	Username  string `json:"username"`
+	Status    int    `json:"status"`
+	CreatedAt string `json:"createdAt"`
 }
 
 type UserListReq struct {
@@ -786,11 +712,6 @@ type UserListResp struct {
 
 type UserPreferencesReq struct {
 	Preferences string `json:"preferences"` // JSON string
-}
-
-type UserRouteResp struct {
-	Home   string      `json:"home"`
-	Routes []MenuRoute `json:"routes"`
 }
 
 type WafEngineStatusResp struct {

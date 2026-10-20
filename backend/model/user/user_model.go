@@ -10,13 +10,14 @@ import (
 // UserModel 定义用户表的数据访问能力。
 type UserModel interface {
 	FindByID(ctx context.Context, id uint) (*User, error)
+	Count(ctx context.Context) (int64, error)
 	FindByUsername(ctx context.Context, username string, includeDeleted bool) (*User, error)
 	List(ctx context.Context, username string, page, pageSize int) ([]User, int64, error)
 	Create(ctx context.Context, user *User) error
 	UpdateFields(ctx context.Context, user *User, updates map[string]interface{}) error
 	Save(ctx context.Context, user *User) error
 	Delete(ctx context.Context, user *User) error
-	FindActiveUsersExcept(ctx context.Context, exceptID uint) ([]User, error)
+	CountActiveUsersExcept(ctx context.Context, exceptID uint) (int64, error)
 }
 
 type defaultUserModel struct {
@@ -100,10 +101,20 @@ func (m *defaultUserModel) Delete(ctx context.Context, user *User) error {
 	return m.conn(ctx).Delete(user).Error
 }
 
-func (m *defaultUserModel) FindActiveUsersExcept(ctx context.Context, exceptID uint) ([]User, error) {
-	var users []User
-	if err := m.conn(ctx).Select("roles").Where("status = ? AND id <> ?", 1, exceptID).Find(&users).Error; err != nil {
-		return nil, err
+// Count 统计用户总数，用于判断是否已完成初始化。
+func (m *defaultUserModel) Count(ctx context.Context) (int64, error) {
+	var count int64
+	if err := m.conn(ctx).Model(&User{}).Count(&count).Error; err != nil {
+		return 0, err
 	}
-	return users, nil
+	return count, nil
+}
+
+// CountActiveUsersExcept 统计除指定用户外的启用用户数，用于阻止删除 / 禁用最后一个可用账号。
+func (m *defaultUserModel) CountActiveUsersExcept(ctx context.Context, exceptID uint) (int64, error) {
+	var count int64
+	if err := m.conn(ctx).Model(&User{}).Where("status = ? AND id <> ?", 1, exceptID).Count(&count).Error; err != nil {
+		return 0, err
+	}
+	return count, nil
 }

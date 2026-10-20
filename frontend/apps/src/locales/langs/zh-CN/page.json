@@ -32,9 +32,7 @@
     "rollback": "回滚"
   },
   "manage": {
-    "user": "用户管理",
-    "role": "角色管理",
-    "menu": "菜单管理"
+    "user": "用户管理"
   },
   "notification": {
     "channel": "通知渠道",

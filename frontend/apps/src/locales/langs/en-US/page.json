@@ -32,9 +32,7 @@
     "rollback": "Rollback"
   },
   "manage": {
-    "user": "User Management",
-    "role": "Role Management",
-    "menu": "Menu Management"
+    "user": "User Management"
   },
   "notification": {
     "channel": "Channels",

@@ -21,7 +21,6 @@ import {
   Select,
   SelectOption,
   Space,
-  Tag,
   Upload,
   message,
 } from 'antdv-next';
@@ -43,7 +42,6 @@ interface UserProfile {
   language?: string;
   preferences?: string;
   realName?: string;
-  roles?: string[];
   userId?: string;
   username?: string;
 }
@@ -109,7 +107,6 @@ const userInfo = computed<UserProfile>(() => {
     ...store,
     avatar: remote.avatar ?? store.avatar,
     preferences: remote.preferences ?? store.preferences,
-    roles: remote.roles ?? store.roles,
     userId: remote.userId ?? store.userId,
     username: remote.username ?? store.username,
   };
@@ -119,7 +116,6 @@ const currentAvatar = computed(() => prefs.avatar || userInfo.value.avatar);
 const currentDisplayName = computed(
   () => prefs.displayName || userInfo.value.realName || userInfo.value.username || 'LogFlux 用户',
 );
-const roleLabels = computed(() => userInfo.value.roles ?? []);
 
 function parsePreferences(value?: string) {
   if (!value) return {};
@@ -259,11 +255,6 @@ watch(
             </Avatar>
             <h2>{{ currentDisplayName }}</h2>
             <p>{{ userInfo.username || '-' }}</p>
-            <Space class="role-tags" wrap>
-              <Tag v-for="role in roleLabels" :key="role" color="blue">
-                {{ role === 'admin' ? '管理员' : role === 'analyst' ? '分析员' : role }}
-              </Tag>
-            </Space>
           </div>
 
           <Descriptions :column="1" size="small" bordered class="profile-descriptions">
@@ -272,9 +263,6 @@ watch(
             </DescriptionsItem>
             <DescriptionsItem label="邮箱">
               {{ prefs.email || '-' }}
-            </DescriptionsItem>
-            <DescriptionsItem label="角色">
-              {{ roleLabels.join('，') || '-' }}
             </DescriptionsItem>
           </Descriptions>
         </Card>
@@ -382,11 +370,6 @@ watch(
 .profile-summary p {
   margin: 0;
   color: #667085;
-}
-
-.role-tags {
-  justify-content: center;
-  margin-top: 12px;
 }
 
 .profile-descriptions {

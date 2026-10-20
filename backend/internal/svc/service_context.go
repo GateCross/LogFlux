@@ -21,9 +21,7 @@ import (
 	commonmodel "logflux/model/common"
 	cronmodel "logflux/model/cron"
 	ingestmodel "logflux/model/ingest"
-	menumodel "logflux/model/menu"
 	notificationmodel "logflux/model/notification"
-	rolemodel "logflux/model/role"
 	systemmodel "logflux/model/system"
 	usermodel "logflux/model/user"
 	wafmodel "logflux/model/waf"
@@ -47,14 +45,12 @@ type ServiceContext struct {
 	WafScheduler      *tasks.WafScheduler
 	IngestMgr         *ingest.IngestManager
 	NotificationMgr   notification.NotificationManager
-	Permission        rest.Middleware
+	ActiveUser        rest.Middleware
 	RateLimit         rest.Middleware
 	IPRegionCheck     rest.Middleware
 	IPRegionMgr       *middleware.IPRegionMiddleware
 	SystemConfigModel *systemmodel.SystemConfigModel
 	UserModel         usermodel.UserModel
-	RoleModel         rolemodel.RoleModel
-	MenuModel         menumodel.MenuModel
 	CronTaskModel     cronmodel.CronTaskModel
 	CronTaskFileModel cronmodel.CronTaskFileModel
 	CaddyLogModel     caddymodel.CaddyLogModel
@@ -72,8 +68,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		&ingestmodel.SystemLog{},
 		&ingestmodel.LogIngestCursor{},
 		&ingestmodel.LogSource{},
-		&rolemodel.Role{},
-		&menumodel.Menu{},
 		&caddymodel.CaddyServer{},
 		&caddymodel.CaddyConfigHistory{},
 		// 通知相关表
@@ -131,13 +125,8 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		}
 	}
 
-	// 初始化 RBAC 数据
-	initRBACData(db)
 	initWafDefaultSources(db)
 	initWafDefaultPolicies(db)
-
-	// 初始化默认管理员账号（自动生成随机复杂密码并仅在首次初始化时明文输出）
-	ensureAdminUser(db)
 
 	// 初始化通知管理器（仅依赖数据库配置）
 	notificationMgr := initNotificationManager(db, rdb)
@@ -192,14 +181,12 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		WafScheduler:      wafScheduler,
 		IngestMgr:         ingestMgr,
 		NotificationMgr:   notificationMgr,
-		Permission:        middleware.NewPermissionMiddleware(db).Handle,
+		ActiveUser:        middleware.NewActiveUserMiddleware(db).Handle,
 		RateLimit:         middleware.NewRateLimitMiddleware(5, time.Minute, "/api/login", "/api/refreshToken").Handle, // 登录接口 5 次/分钟
 		IPRegionCheck:     ipRegionMgr.Handle,
 		IPRegionMgr:       ipRegionMgr,
 		SystemConfigModel: systemConfigModel,
 		UserModel:         usermodel.NewUserModel(db),
-		RoleModel:         rolemodel.NewRoleModel(db),
-		MenuModel:         menumodel.NewMenuModel(db),
 		CronTaskModel:     cronmodel.NewCronTaskModel(db),
 		CronTaskFileModel: cronmodel.NewCronTaskFileModel(db),
 		CaddyLogModel:     caddymodel.NewCaddyLogModel(db),
@@ -444,269 +431,6 @@ func (svc *ServiceContext) EnsureWafDefaultSources() {
 
 func (svc *ServiceContext) EnsureWafEngineDefaultSource() {
 	return
-}
-
-// initRBACData 初始化 RBAC 角色和菜单数据
-func initRBACData(db *gorm2.DB) {
-	// 初始化默认角色
-	roles := []rolemodel.Role{
-		{
-			Name:        "admin",
-			DisplayName: "管理员",
-			Description: "系统管理员，拥有所有权限",
-			Permissions: []string{
-				"dashboard",
-				"caddy", "caddy_config", "caddy_access", "logs", "logs_caddy",
-				"cron",
-				"manage", "manage_user", "manage_role", "manage_menu",
-				"notification", "notification_channel", "notification_rule", "notification_template", "notification_log",
-			},
-		},
-		{
-			Name:        "analyst",
-			DisplayName: "分析师",
-			Description: "数据分析师，可访问系统日志（logs）与 Caddy 访问日志（logs_caddy）",
-			Permissions: []string{"dashboard", "logs", "logs_caddy"},
-		},
-		{
-			Name:        "viewer",
-			DisplayName: "访客",
-			Description: "只读访问权限",
-			Permissions: []string{"dashboard"},
-		},
-	}
-
-	for _, role := range roles {
-		var existingRole rolemodel.Role
-		if db.Where("name = ?", role.Name).First(&existingRole).Error == gorm2.ErrRecordNotFound {
-			db.Create(&role)
-		} else {
-			db.Model(&existingRole).Select("DisplayName", "Description", "Permissions").Updates(role)
-		}
-	}
-
-	// 初始化菜单数据
-	menus := []menumodel.Menu{
-		{
-			Name:          "dashboard",
-			Path:          "/dashboard",
-			Component:     "layout.base$view.dashboard",
-			Order:         1,
-			Meta:          `{"title":"dashboard","i18nKey":"route.dashboard","icon":"mdi:monitor-dashboard","order":1}`,
-			RequiredRoles: []string{}, // Public
-		},
-		{
-			Name:          "caddy",
-			Path:          "/caddy",
-			Component:     "layout.base",
-			Order:         2,
-			Meta:          `{"title":"caddy","i18nKey":"route.caddy","icon":"carbon:cloud-monitoring","order":2}`,
-			RequiredRoles: []string{"admin", "analyst"},
-		},
-		{
-			Name:          "manage",
-			Path:          "/manage",
-			Component:     "layout.base",
-			Order:         9,
-			Meta:          `{"title":"manage","i18nKey":"route.manage","icon":"carbon:cloud-service-management","order":9,"roles":["admin"]}`,
-			RequiredRoles: []string{"admin"},
-		},
-		{
-			Name:          "notification",
-			Path:          "/notification",
-			Component:     "layout.base",
-			Order:         10,
-			Meta:          `{"title":"notification","i18nKey":"route.notification","icon":"carbon:notification","order":10,"roles":["admin"]}`,
-			RequiredRoles: []string{"admin"},
-		},
-		// --- 子菜单 ---
-		{
-			Name:          "caddy_config",
-			Path:          "/caddy/config",
-			Component:     "view.caddy_config",
-			Meta:          `{"title":"caddy_config","i18nKey":"route.caddy_config","icon":"carbon:settings"}`,
-			RequiredRoles: []string{"admin", "analyst"},
-		},
-		{
-			Name:          "caddy_catalog",
-			Path:          "/caddy/catalog",
-			Component:     "view.caddy_catalog",
-			Meta:          `{"title":"caddy_catalog","i18nKey":"route.caddy_catalog","icon":"carbon:catalog"}`,
-			RequiredRoles: []string{"admin", "analyst"},
-		},
-		{
-			Name:          "caddy_log",
-			Path:          "/caddy/log",
-			Component:     "view.caddy_log",
-			Meta:          `{"title":"caddy_log","i18nKey":"route.caddy_log","icon":"carbon:catalog"}`,
-			RequiredRoles: []string{"admin", "analyst"},
-		},
-		{
-			Name:          "caddy_system_log",
-			Path:          "/caddy/system-log",
-			Component:     "view.caddy_system-log",
-			Meta:          `{"title":"caddy_system-log","i18nKey":"route.caddy_system-log","icon":"carbon:terminal"}`,
-			RequiredRoles: []string{"admin", "analyst"},
-		},
-		{
-			Name:          "caddy_access",
-			Path:          "/caddy/access",
-			Component:     "view.caddy_access",
-			Meta:          `{"title":"caddy_access","i18nKey":"route.caddy_access","icon":"carbon:network-4"}`,
-			RequiredRoles: []string{"admin"},
-		},
-		{
-			Name:          "caddy_source",
-			Path:          "/caddy/source",
-			Component:     "view.caddy_source",
-			Meta:          `{"title":"caddy_source","i18nKey":"route.caddy_source","icon":"carbon:package"}`,
-			RequiredRoles: []string{"admin"},
-		},
-		{
-			Name:          "manage_user",
-			Path:          "/manage/user",
-			Component:     "view.manage_user",
-			Meta:          `{"title":"manage_user","i18nKey":"route.manage_user","icon":"ic:round-manage-accounts","roles":["admin"]}`,
-			RequiredRoles: []string{"admin"},
-		},
-		{
-			Name:          "manage_role",
-			Path:          "/manage/role",
-			Component:     "view.manage_role",
-			Meta:          `{"title":"manage_role","i18nKey":"route.manage_role","icon":"carbon:user-role","roles":["admin"]}`,
-			RequiredRoles: []string{"admin"},
-		},
-		{
-			Name:          "manage_menu",
-			Path:          "/manage/menu",
-			Component:     "view.manage_menu",
-			Meta:          `{"title":"manage_menu","i18nKey":"route.manage_menu","icon":"material-symbols:menu-book","roles":["admin"]}`,
-			RequiredRoles: []string{"admin"},
-		},
-		{
-			Name:          "notification_channel",
-			Path:          "/notification/channel",
-			Component:     "view.notification_channel",
-			Meta:          `{"title":"notification_channel","i18nKey":"route.notification_channel","icon":"mdi:broadcast","roles":["admin"]}`,
-			RequiredRoles: []string{"admin"},
-		},
-		{
-			Name:          "notification_rule",
-			Path:          "/notification/rule",
-			Component:     "view.notification_rule",
-			Meta:          `{"title":"notification_rule","i18nKey":"route.notification_rule","icon":"carbon:rule","roles":["admin"]}`,
-			RequiredRoles: []string{"admin"},
-		},
-		{
-			Name:          "notification_template",
-			Path:          "/notification/template",
-			Component:     "view.notification_template",
-			Meta:          `{"title":"notification_template","i18nKey":"route.notification_template","icon":"carbon:template","roles":["admin"]}`,
-			RequiredRoles: []string{"admin"},
-		},
-		{
-			Name:          "notification_log",
-			Path:          "/notification/log",
-			Component:     "view.notification_log",
-			Meta:          `{"title":"notification_log","i18nKey":"route.notification_log","icon":"carbon:script","roles":["admin"]}`,
-			RequiredRoles: []string{"admin"},
-		},
-		{
-			Name:          "cron",
-			Path:          "/cron",
-			Component:     "layout.base$view.cron",
-			Order:         5,
-			Meta:          `{"title":"cron","i18nKey":"route.cron","icon":"mdi:clock-time-four-outline","order":5,"roles":["admin"]}`,
-			RequiredRoles: []string{"admin"},
-		},
-		// --- 个人中心 ---
-		{
-			Name:          "user",
-			Path:          "/user/center",
-			Component:     "layout.base$view.user_center",
-			Order:         11,
-			Meta:          `{"title":"user","i18nKey":"route.user","icon":"carbon:user-avatar","order":11}`,
-			RequiredRoles: []string{}, // Public
-		},
-	}
-
-	// 第一步：确保所有菜单存在
-	createdMenus := make(map[string]bool)
-	for i := range menus {
-		menu := menus[i]
-		var existingMenu menumodel.Menu
-		if db.Where("name = ?", menu.Name).First(&existingMenu).Error == gorm2.ErrRecordNotFound {
-			db.Create(&menu)
-			createdMenus[menu.Name] = true
-		} else {
-			// 只更新代码路径相关的技术字段，保留用户的配置（排序、图标、权限等）
-			db.Model(&existingMenu).Select("Path", "Component").Updates(menu)
-		}
-	}
-
-	// 兼容历史菜单数据：统一系统日志菜单的组件与 i18nKey
-	db.Model(&menumodel.Menu{}).Where("name = ?", "caddy_system_log").Updates(map[string]interface{}{
-		"component": "view.caddy_system-log",
-		"meta":      `{"title":"caddy_system-log","i18nKey":"route.caddy_system-log","icon":"carbon:terminal"}`,
-	})
-
-	// 第二步：建立父子关系
-	setParent := func(childName, parentName string) {
-		// 仅对新创建的菜单设置默认父级，避免覆盖用户的层级调整
-		if !createdMenus[childName] {
-			return
-		}
-
-		var child, parent menumodel.Menu
-		if db.Where("name = ?", childName).First(&child).Error == nil &&
-			db.Where("name = ?", parentName).First(&parent).Error == nil {
-			db.Model(&child).Update("parent_id", parent.ID)
-		}
-	}
-
-	setParentForce := func(childName, parentName string) {
-		var child, parent menumodel.Menu
-		if db.Where("name = ?", childName).First(&child).Error == nil &&
-			db.Where("name = ?", parentName).First(&parent).Error == nil {
-			db.Model(&child).Update("parent_id", parent.ID)
-		}
-	}
-
-	setParent("caddy_config", "caddy")
-	setParent("caddy_catalog", "caddy")
-	setParent("caddy_log", "caddy")
-	setParent("manage_user", "manage")
-	setParent("manage_role", "manage")
-	setParent("manage_menu", "manage")
-	setParent("notification_channel", "notification")
-	setParent("notification_rule", "notification")
-	setParent("notification_template", "notification")
-	setParent("notification_log", "notification")
-	setParentForce("caddy_system_log", "manage")
-	setParentForce("caddy_access", "caddy")
-	setParentForce("caddy_source", "caddy")
-	// setParent("cron", "manage") // moved to top level
-
-	// 兼容：强制校正服务目录菜单的父子关系与组件路径
-	setParentForce("caddy_catalog", "caddy")
-	db.Model(&menumodel.Menu{}).Where("name = ?", "caddy_catalog").Updates(map[string]interface{}{
-		"path":      "/caddy/catalog",
-		"component": "view.caddy_catalog",
-		"meta":      `{"title":"caddy_catalog","i18nKey":"route.caddy_catalog","icon":"carbon:catalog"}`,
-	})
-
-	// 清理遗留数据
-	db.Where("name = ?", "home").Delete(&menumodel.Menu{})
-	db.Where("path = ?", "/home").Delete(&menumodel.Menu{})
-	db.Where("component = ?", "home").Delete(&menumodel.Menu{})
-	db.Where("name = ?", "caddy_waf").Delete(&menumodel.Menu{})
-	db.Where("name in ?", []string{"security", "waf", "waf_security", "crs", "security_access"}).Delete(&menumodel.Menu{})
-	db.Where("path = ? OR path LIKE ?", "/security", "/security/%").Delete(&menumodel.Menu{})
-	// 修复被误改 name 的 caddy_access 菜单（name 必须是路由 key，不是中文标题）
-	db.Model(&menumodel.Menu{}).Where("path = ? AND name != ?", "/caddy/access", "caddy_access").Delete(&menumodel.Menu{})
-	// 个人中心现在是一级菜单，清理旧的二级重复菜单并确保父级为空。
-	db.Where("name = ?", "user_center").Delete(&menumodel.Menu{})
-	db.Model(&menumodel.Menu{}).Where("name = ?", "user").Update("parent_id", nil)
 }
 
 // createArchiveFunction 创建归档存储过程

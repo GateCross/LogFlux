@@ -130,7 +130,7 @@ type (
 	prefix: /api
 	group:  caddy
 	jwt:    Auth
-	middleware: Permission
+	middleware: ActiveUser
 )
 service logflux-api {
 	@handler GetCaddyServers

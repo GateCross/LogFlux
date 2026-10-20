@@ -66,7 +66,7 @@ const router = useRouter();
 const rulesDrawerVisible = ref(false);
 
 function goToWafLogs() {
-  router.push('/caddy/log?onlyWaf=true');
+  router.push('/logs/access?onlyWaf=true');
 }
 
 function goToSourceManage() {

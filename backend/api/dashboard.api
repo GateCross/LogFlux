@@ -61,7 +61,7 @@ type (
 	prefix: /api
 	group:  dashboard
 	jwt:    Auth
-	middleware: Permission
+	middleware: ActiveUser
 )
 service logflux-api {
 	@handler GetDashboardSummary

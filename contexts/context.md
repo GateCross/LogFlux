@@ -9,7 +9,7 @@ LogFlux 是一个日志流量分析、Caddy 图形化配置与 Coraza WAF 管理
 - Caddy 反向代理配置管理、预览、热加载、历史记录与回滚。
 - Caddy 访问日志与运行日志采集、查询、统计与归档。
 - Coraza + OWASP CRS 的简单防火墙配置、策略发布、版本管理、任务审计与误报反馈。
-- RBAC 权限控制、动态菜单、用户/角色/菜单管理。
+- 用户管理与登录认证（无角色、无动态菜单，路由为前端静态定义）。
 - 通知渠道、通知规则、模板、站内通知与通知日志。
 - 定时任务管理与日志。
 
@@ -115,13 +115,13 @@ api/*.api
 - `WafScheduler`
 - `NotificationMgr`
 - `Permission`
-- `UserModel`、`RoleModel`、`MenuModel`
+- `UserModel`
 - `CronTaskModel`
 - `LogSourceModel`
 - `CaddyLogModel`
 - `SystemLogModel`
 
-启动时会执行 GORM `AutoMigrate`，初始化 RBAC、默认管理员、默认 WAF 源、默认 WAF 策略，并启动日志摄入、归档任务、Cron 调度和通知管理器。
+启动时会执行 GORM `AutoMigrate`，初始化默认管理员、默认 WAF 源、默认 WAF 策略，并启动日志摄入、归档任务、Cron 调度和通知管理器。
 
 ## 5. API 与 goctl 规范
 
@@ -133,21 +133,24 @@ api/*.api
 
 - `base.api`
 - `auth.api`
-- `route.api`
-- `manage.api`
-- `notification.api`
+- `user.api`
+- `dashboard.api`
+- `caddy_server.api`
+- `caddy_ip_region.api`
 - `caddy_log.api`
+- `waf.api`
+- `notification.api`
 - `system_log.api`
 - `cron.api`
 
-路由统一使用 `/api` 前缀。除登录、刷新 Token、常量路由等公开接口外，大部分接口使用：
+路由统一使用 `/api` 前缀。除登录与刷新 Token 外，所有接口使用：
 
 ```api
 @server (
     prefix: /api
     group:  xxx
     jwt:    Auth
-    middleware: Permission
+    middleware: ActiveUser
 )
 ```
 
@@ -276,27 +279,19 @@ result.HttpResult(r, w, resp, err)
 - 日志文案使用中文，并带上关键业务上下文。
 - 不要在业务代码中使用 `fmt.Print` 或标准库 `log` 输出运行日志。
 
-## 9. RBAC 与路由
+## 9. 认证与路由
 
-当前权限模型：
+当前权限模型：**已删除 RBAC**。只有「是否登录」与「账号是否启用」两个判断，没有角色、权限码与动态菜单。
 
-```text
-User -> Roles ([]string) -> Permissions ([]string) -> Routes / Menus
-```
+- 认证：JWT（`userId` + `tokenType`），登录与刷新令牌由 `backend/internal/service/auth_service.go` 签发。
+- 登录态校验：`backend/internal/middleware/active_user_middleware.go`，只检查用户存在且 `status=1`。
+- 前端路由：`frontend/apps/src/router/routes/modules/` 下的静态路由，`accessMode` 为 `frontend`。
+- 用户管理仅支持用户名、密码、冻结/解冻、删除；系统会阻止删除或禁用最后一个启用账号。
+- 首个账号：库里没有任何账号时，Web 会引导到 `/auth/setup` 创建管理员（`GET /api/setup/status` + `POST /api/setup`）。初始化入口在创建成功后自动关闭，不存在抢注风险。
+- 密码能力统一在 `backend/common/password`（8–72 位且含字母与数字），HTTP 与 CLI 共用。
+- 忘记密码：`logflux-api reset-password -f <config> -u <username>`，生成随机密码打印一次并解除禁用。这是唯一不依赖数据库 SQL 的恢复路径。
 
-默认角色：
-
-- `admin`：管理员，拥有系统管理、Caddy、日志、安全、通知、个人中心等权限。
-- `analyst`：分析师，可访问仪表盘、日志、Caddy 相关能力。
-- `viewer`：访客，只读访问仪表盘。
-
-后端关键位置：
-
-- 权限中间件：`backend/internal/middleware/permission_middleware.go`
-- 用户路由：`backend/internal/logic/route/get_user_routes_logic.go`
-- RBAC 初始化：`backend/internal/svc/service_context.go`
-
-菜单数据可能被用户在后台调整。初始化代码应尽量只补齐缺失数据或更新技术字段，避免覆盖用户自定义排序、图标、权限等配置。
+历史 RBAC 代码（`permission_middleware.go`、`role` / `menu` / `route` 的 handler、logic、service、model 与 `role.api`、`menu.api`、`route.api`）已移除，不要重新引入。
 
 ## 10. 前端开发规则
 

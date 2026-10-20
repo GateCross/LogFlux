@@ -51,6 +51,15 @@ const coreRoutes: RouteRecordRaw[] = [
           title: $t('page.auth.login'),
         },
       },
+      {
+        // 首次部署、库里还没有账号时进入此页创建管理员
+        name: 'Setup',
+        path: 'setup',
+        component: () => import('#/views/_core/authentication/setup.vue'),
+        meta: {
+          title: '初始化',
+        },
+      },
     ],
   },
 ];

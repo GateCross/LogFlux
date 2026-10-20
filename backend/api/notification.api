@@ -170,7 +170,7 @@ type (
 	prefix: /api
 	group:  notification
 	jwt:    Auth
-	middleware: Permission
+	middleware: ActiveUser
 )
 service logflux-api {
 	// Channel

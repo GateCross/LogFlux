@@ -6,7 +6,6 @@ export namespace UserManageApi {
   export interface UserItem {
     id: number;
     username: string;
-    roles: string[];
     status: number;
     createdAt: string;
   }
@@ -19,12 +18,10 @@ export namespace UserManageApi {
   export interface CreateUserParams {
     username: string;
     password: string;
-    roles: string[];
   }
 
   export interface UpdateUserParams {
     password?: string;
-    roles?: string[];
   }
 }
 

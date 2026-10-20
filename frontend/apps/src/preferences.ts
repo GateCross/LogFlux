@@ -14,8 +14,8 @@ interface WebAntdPreferencesExtension {
 export const overridesPreferences = defineOverridesPreferences({
   app: {
     name: import.meta.env.VITE_APP_TITLE || 'LogFlux',
-    // LogFlux 使用后端动态路由
-    accessMode: 'backend',
+    // 路由为前端静态定义，不使用后端动态菜单
+    accessMode: 'frontend',
     // 默认首页
     defaultHomePath: '/dashboard',
     // 启用 token 刷新

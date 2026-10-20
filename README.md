@@ -23,7 +23,7 @@ LogFlux 是一个日志流量分析、Caddy 图形化配置与 Coraza WAF 管理
 - **IP 区域访问控制**：基于 ip2region 的国家/省份粒度访问限制
 - Coraza + OWASP CRS 简单 WAF 管理（检测/阻断/关闭模式、强度调节、审计日志）
 - WAF 更新源、发布、绑定、误报反馈与任务审计
-- RBAC 权限、用户、角色、菜单管理
+- 用户管理（登录账号、冻结/解冻），无角色与权限体系
 - 通知渠道（Telegram 等）、规则、模板、站内通知与日志
 - Cron 定时任务管理
 - 日志归档与后台调度
@@ -141,18 +141,17 @@ frontend/
   apps/
     src/
       api/           # API 服务层（core/, caddy/, system/ 等）
-      router/        # 路由配置 + 动态路由守卫
+      router/        # 静态路由配置 + 登录守卫
       store/         # Pinia 状态管理
       views/         # 业务页面
         dashboard/   # 仪表盘
-        caddy/       # Caddy 管理（config, access, log, system-log）
-        security/    # WAF 管理（source, policy, observe, ops, runtime, crs, exclusion, binding, release, job）
-          manage/      # 系统管理（user, role, menu）
-          notification/# 通知管理（channel, rule, template, log）
-          cron/        # 定时任务
-          user/        # 个人中心
-        locales/       # 国际化（zh-CN, en-US）
-    backend-mock/      # 开发用 Mock API 服务
+        caddy/       # 服务（config, catalog, access, source）
+        logs/        # 日志（access, system）
+        cron/        # 定时任务
+        notification/# 通知（channel, rule, template, log）
+        system/      # 系统（user）
+        user/        # 个人中心
+      locales/       # 国际化（zh-CN, en-US）
   packages/            # 共享包（stores, hooks, utils, styles, types 等）
   internal/            # 内部工具（lint-configs, vite-config, tsconfig 等）
 ```

@@ -51,12 +51,3 @@ func userIDFromContext(ctx context.Context) (uint, error) {
 		return 0, fmt.Errorf("未认证")
 	}
 }
-
-func hasRole(roles []string, target string) bool {
-	for _, role := range roles {
-		if strings.TrimSpace(role) == target {
-			return true
-		}
-	}
-	return false
-}

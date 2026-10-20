@@ -240,7 +240,7 @@ export function useServiceCatalogPage() {
       return;
     }
     router.push({
-      name: 'CaddyLog',
+      name: 'LogsAccess',
       query,
     });
   }

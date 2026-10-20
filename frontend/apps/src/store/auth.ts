@@ -10,7 +10,7 @@ import { resetAllStores, useAccessStore, useUserStore } from '@vben/stores';
 import { notification } from 'antdv-next';
 import { defineStore } from 'pinia';
 
-import { getAccessCodesApi, getUserInfoApi, loginApi } from '#/api';
+import { getSetupStatusApi, getUserInfoApi, loginApi, setupApi } from '#/api';
 import { $t } from '#/locales';
 import { clearRefreshToken, setRefreshToken } from '#/store/refresh-token';
 import { getDefaultAvatarDataUrl } from '#/utils/avatar';
@@ -46,7 +46,6 @@ export const useAuthStore = defineStore('auth', () => {
       username: userInfo?.username,
       realName: displayName,
       avatar,
-      roles: userInfo?.roles || [],
       homePath: preferences.app.defaultHomePath,
       preferences: userInfo?.preferences || '{}',
     };
@@ -80,15 +79,7 @@ export const useAuthStore = defineStore('auth', () => {
           setRefreshToken(refreshToken);
         }
 
-        // 获取用户信息和权限码
-        const [fetchUserInfoResult, accessCodes] = await Promise.all([
-          fetchUserInfo(),
-          getAccessCodesApi(),
-        ]);
-
-        userInfo = fetchUserInfoResult;
-
-        accessStore.setAccessCodes(accessCodes);
+        userInfo = await fetchUserInfo();
 
         if (accessStore.loginExpired) {
           accessStore.setLoginExpired(false);
@@ -112,10 +103,49 @@ export const useAuthStore = defineStore('auth', () => {
     return { userInfo };
   }
 
+  /** 系统是否还没有任何账号，用于把用户引导到初始化页 */
+  async function checkSetupStatus(): Promise<boolean> {
+    try {
+      const { initialized } = await getSetupStatusApi();
+      return !initialized;
+    } catch {
+      // 查询失败时按「已初始化」处理，避免把正常用户挡在登录页外
+      return false;
+    }
+  }
+
+  /** 创建首个管理员账号，成功后直接进入系统 */
+  async function setupAdmin(params: {
+    password: string;
+    username: string;
+  }) {
+    try {
+      loginLoading.value = true;
+      const { token, refreshToken } = await setupApi({
+        password: params.password,
+        username: params.username,
+      });
+
+      accessStore.setAccessToken(token);
+      if (refreshToken) {
+        setRefreshToken(refreshToken);
+      }
+
+      const userInfo = await fetchUserInfo();
+      notification.success({
+        description: `管理员账号已创建: ${userInfo.username}`,
+        duration: 3,
+        title: '初始化完成',
+      });
+      await router.push(preferences.app.defaultHomePath);
+    } finally {
+      loginLoading.value = false;
+    }
+  }
+
   async function logout(redirect: boolean = true) {
-    // LogFlux 无独立登出接口，直接清理本地状态
+    // LogFlux 无独立登出接口，直接清理本地状态（resetAllStores 会清空 token、菜单与路由标记）
     clearRefreshToken();
-    accessStore.setAccessToken(null);
     resetAllStores();
     accessStore.setLoginExpired(false);
 
@@ -145,8 +175,10 @@ export const useAuthStore = defineStore('auth', () => {
   return {
     $reset,
     authLogin,
+    checkSetupStatus,
     fetchUserInfo,
     loginLoading,
     logout,
+    setupAdmin,
   };
 });

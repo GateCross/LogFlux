@@ -56,6 +56,21 @@ curl -f http://localhost/api/health
 
 - `80` -> HTTP
 
+### 3.4 首次访问与账号初始化
+
+首次部署时数据库里没有任何账号，浏览器打开 `http://localhost` 会自动进入 **初始化页面**，在那里设置管理员用户名和密码即可（密码至少 8 位，需同时包含字母和数字）。创建成功后直接进入系统，无需重启服务。
+
+账号初始化只在「一个账号都没有」时开放，创建完成后该入口会自动关闭。
+
+**忘记密码时**，用 CLI 重置（会生成随机密码并打印一次，同时解除账号禁用）：
+
+```bash
+docker compose -f docker/docker-compose.yml exec logflux \
+  /app/logflux-api reset-password -f /app/etc/config.yaml -u admin
+```
+
+也可以在用户管理页里给其他账号改密码，但修改自己的密码需要先输入旧密码。
+
 ## 4. 镜像来源与本地构建
 
 `docker-compose.yml` 默认使用：

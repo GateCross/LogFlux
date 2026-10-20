@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"os"
 
 	"logflux/common/logging"
 	"logflux/internal/config"
@@ -27,6 +28,11 @@ import (
 var configFile = flag.String("f", "etc/config.yaml", "the config file")
 
 func main() {
+	// 子命令：reset-password 用于忘记密码时恢复账号，不启动 HTTP 服务
+	if len(os.Args) > 1 && os.Args[1] == "reset-password" {
+		os.Exit(runResetPassword(os.Args[2:]))
+	}
+
 	flag.Parse()
 
 	var c config.Config
@@ -47,7 +53,7 @@ func main() {
 
 	ctx := svc.NewServiceContext(c)
 
-	// Geo-check endpoint for Caddy forward_auth (no JWT, no Permission)
+	// Geo-check endpoint for Caddy forward_auth（不经过 JWT 与登录中间件）
 	server.AddRoutes([]rest.Route{
 		{
 			Method:  http.MethodGet,
@@ -70,7 +76,7 @@ func main() {
 
 	// Global Middlewares
 	server.Use(middleware.ResponseMiddleware)
-	server.Use(ctx.RateLimit)      // 登录接口速率限制
+	server.Use(ctx.RateLimit)     // 登录接口速率限制
 	server.Use(ctx.IPRegionCheck) // IP 区域访问控制
 
 	// Global Error Handler (still needed for business errors)

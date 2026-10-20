@@ -191,7 +191,7 @@ export function useSiteMetrics(options: UseSiteMetricsOptions) {
       return;
     }
     router.push({
-      name: 'CaddyLog',
+      name: 'LogsAccess',
       query: { host },
     });
   }

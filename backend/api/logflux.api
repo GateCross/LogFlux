@@ -10,10 +10,7 @@ info (
 
 import "base.api"
 import "auth.api"
-import "route.api"
 import "user.api"
-import "role.api"
-import "menu.api"
 import "dashboard.api"
 import "caddy_server.api"
 import "waf.api"

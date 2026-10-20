@@ -34,7 +34,7 @@ type (
 	prefix: /api
 	group:  log
 	jwt:    Auth
-	middleware: Permission
+	middleware: ActiveUser
 )
 service logflux-api {
 	@handler GetSystemLogs

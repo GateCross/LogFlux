@@ -37,8 +37,6 @@ export const qk = {
   },
   system: {
     users: (params: object) => ['system', 'users', params] as const,
-    roles: (params?: object) => ['system', 'roles', params] as const,
-    menus: () => ['system', 'menus'] as const,
     systemLogs: (params: object) => ['system', 'logs', params] as const,
   },
   user: {

@@ -13,6 +13,14 @@ type (
 		Token        string `json:"token"`
 		RefreshToken string `json:"refreshToken"`
 	}
+	SetupStatusResp {
+		// Initialized 为 false 时表示还没有任何账号，前端应引导创建首个管理员
+		Initialized bool `json:"initialized"`
+	}
+	SetupReq {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
 )
 
 @server (
@@ -25,4 +33,10 @@ service logflux-api {
 
 	@handler RefreshToken
 	post /refreshToken (RefreshTokenReq) returns (LoginResp)
+
+	@handler GetSetupStatus
+	get /setup/status returns (SetupStatusResp)
+
+	@handler Setup
+	post /setup (SetupReq) returns (LoginResp)
 }

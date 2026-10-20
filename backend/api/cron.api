@@ -120,7 +120,7 @@ type (
 	prefix: /api
 	group:  cron
 	jwt:    Auth
-	middleware: Permission
+	middleware: ActiveUser
 )
 service logflux-api {
 	@handler GetCronTaskList

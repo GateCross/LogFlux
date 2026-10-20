@@ -4,8 +4,8 @@ const routes: RouteRecordRaw[] = [
   {
     meta: {
       icon: 'mdi:bell-outline',
-      order: 4,
-      title: '通知管理',
+      order: 5,
+      title: '通知',
     },
     name: 'Notification',
     path: '/notification',

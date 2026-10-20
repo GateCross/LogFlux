@@ -47,7 +47,6 @@ func (s *UserService) AddUser(req *types.AddUserReq) (*types.BaseResp, error) {
 	newUser := &usermodel.User{
 		Username: strings.TrimSpace(req.Username),
 		Password: string(hash),
-		Roles:    req.Roles,
 	}
 	if err := s.svcCtx.UserModel.Create(s.ctx, newUser); err != nil {
 		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "idx_users_username") {
@@ -88,7 +87,7 @@ func (s *UserService) DeleteUser(req *types.IDReq) (*types.BaseResp, error) {
 		return nil, err
 	}
 
-	if err := s.ensureOtherActiveAdmin(user, req.ID); err != nil {
+	if err := s.ensureOtherActiveUser(user, req.ID); err != nil {
 		return nil, err
 	}
 	if err := s.svcCtx.UserModel.Delete(s.ctx, user); err != nil {
@@ -121,7 +120,6 @@ func (s *UserService) GetUserInfo() (*types.UserInfoResp, error) {
 	return &types.UserInfoResp{
 		UserId:      int64(user.ID),
 		Username:    user.Username,
-		Roles:       user.Roles,
 		Preferences: preferences,
 	}, nil
 }
@@ -137,7 +135,6 @@ func (s *UserService) GetUserList(req *types.UserListReq) (*types.UserListResp, 
 		list = append(list, types.UserItem{
 			ID:        user.ID,
 			Username:  user.Username,
-			Roles:     user.Roles,
 			Status:    user.Status,
 			CreatedAt: user.CreatedAt.Format("2006-01-02 15:04:05"),
 		})
@@ -150,7 +147,7 @@ func (s *UserService) ToggleUserStatus(req *types.IDReq) (*types.BaseResp, error
 	if err != nil {
 		return nil, err
 	}
-	if err := s.ensureOtherActiveAdmin(user, req.ID); err != nil {
+	if err := s.ensureOtherActiveUser(user, req.ID); err != nil {
 		return nil, err
 	}
 
@@ -183,12 +180,6 @@ func (s *UserService) UpdateUser(req *types.UpdateUserReq) (*types.BaseResp, err
 	if err := s.svcCtx.UserModel.UpdateFields(s.ctx, user, updates); err != nil {
 		return nil, xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "更新用户失败", err)
 	}
-	if req.Roles != nil {
-		user.Roles = req.Roles
-		if err := s.svcCtx.UserModel.Save(s.ctx, user); err != nil {
-			return nil, xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "更新用户角色失败", err)
-		}
-	}
 	return baseResp("更新成功"), nil
 }
 
@@ -217,20 +208,19 @@ func (s *UserService) UpdateUserPreferences(req *types.UserPreferencesReq) (*typ
 	return baseResp("更新成功"), nil
 }
 
-func (s *UserService) ensureOtherActiveAdmin(user *usermodel.User, currentID uint) error {
-	if user == nil || user.Status != 1 || !hasRole(user.Roles, "admin") {
+// ensureOtherActiveUser 阻止删除 / 禁用最后一个启用账号，避免无人可登录。
+func (s *UserService) ensureOtherActiveUser(user *usermodel.User, currentID uint) error {
+	if user == nil || user.Status != 1 {
 		return nil
 	}
-	activeUsers, err := s.svcCtx.UserModel.FindActiveUsersExcept(s.ctx, currentID)
+	count, err := s.svcCtx.UserModel.CountActiveUsersExcept(s.ctx, currentID)
 	if err != nil {
-		return xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "检查管理员用户失败", err)
+		return xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "检查可用用户失败", err)
 	}
-	for _, activeUser := range activeUsers {
-		if hasRole(activeUser.Roles, "admin") {
-			return nil
-		}
+	if count == 0 {
+		return xerr.NewBusinessErrorWith("至少保留一个启用的用户")
 	}
-	return xerr.NewBusinessErrorWith("至少保留一个启用的管理员用户")
+	return nil
 }
 
 func baseResp(message string) *types.BaseResp {

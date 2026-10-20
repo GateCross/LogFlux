@@ -18,6 +18,11 @@ export namespace AuthApi {
     refreshToken: string;
     token: string;
   }
+
+  /** 初始化状态：initialized 为 false 表示还没有任何账号 */
+  export interface SetupStatusResult {
+    initialized: boolean;
+  }
 }
 
 /**
@@ -25,6 +30,21 @@ export namespace AuthApi {
  */
 export async function loginApi(data: AuthApi.LoginParams) {
   return requestClient.post<AuthApi.LoginResult>('/login', data);
+}
+
+/**
+ * 查询系统是否已完成初始化 — GET /setup/status
+ */
+export async function getSetupStatusApi() {
+  return requestClient.get<AuthApi.SetupStatusResult>('/setup/status');
+}
+
+/**
+ * 创建首个管理员账号 — POST /setup
+ * 仅在系统还没有任何账号时可用，成功后直接返回登录令牌。
+ */
+export async function setupApi(data: AuthApi.LoginParams) {
+  return requestClient.post<AuthApi.LoginResult>('/setup', data);
 }
 
 /**
@@ -36,14 +56,4 @@ export async function refreshTokenApi() {
   return baseRequestClient.post<AuthApi.RefreshTokenResult>('/refreshToken', {
     refreshToken,
   });
-}
-
-/**
- * 获取用户权限码（LogFlux 无独立接口，从 user/info 中获取 roles）
- */
-export async function getAccessCodesApi() {
-  // LogFlux 没有独立的 /auth/codes 接口
-  // 权限码从用户信息中的 roles 派生，此处返回空数组
-  // 实际权限控制通过路由守卫中的 roles 判断
-  return [] as string[];
 }
