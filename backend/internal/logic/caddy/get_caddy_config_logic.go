@@ -36,6 +36,7 @@ func (l *GetCaddyConfigLogic) GetCaddyConfig(req *types.CaddyConfigReq) (resp *t
 		return &types.CaddyConfigResp{
 			Config:  config,
 			Modules: modules,
+			Hash:    hashConfig(config),
 		}, nil
 	}
 

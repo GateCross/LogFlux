@@ -31,6 +31,8 @@ export namespace CaddySimpleWafApi {
     requestBodyNoFilesLimit: number;
     siteAddresses: string[];
     availableSites: string[];
+    /** Caddyfile 里实际 import waf_protect 的站点 */
+    importedSites: string[];
     corazaVersion?: string;
     crsVersion?: string;
     actions?: string[];
@@ -50,6 +52,8 @@ export namespace CaddySimpleWafApi {
     serverId?: number;
     siteAddresses?: string[];
     strength: SimpleWafStrength;
+    /** 编辑起点的 Caddyfile 哈希；与库内不一致时后端拒绝写入 */
+    baseHash?: string;
   }
 }
 

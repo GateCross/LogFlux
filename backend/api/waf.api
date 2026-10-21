@@ -127,6 +127,7 @@ type (
 		RequestBodyLimit            int64    `json:"requestBodyLimit,optional"`
 		RequestBodyNoFilesLimit     int64    `json:"requestBodyNoFilesLimit,optional"`
 		SiteAddresses               []string `json:"siteAddresses,optional"` // 为空时默认使用全部可识别站点
+		BaseHash                    string   `json:"baseHash,optional"`      // 编辑起点配置哈希；不一致说明他人已改
 	}
 	CrsRuleItem {
 		File     string `json:"file"`
@@ -149,6 +150,7 @@ type (
 		RequestBodyNoFilesLimit     int64           `json:"requestBodyNoFilesLimit"`
 		SiteAddresses               []string        `json:"siteAddresses"`
 		AvailableSites              []string        `json:"availableSites"`
+		ImportedSites               []string        `json:"importedSites"`
 		CorazaVersion               string          `json:"corazaVersion,optional"`
 		CrsVersion                  string          `json:"crsVersion,optional"`
 		Actions                     []string        `json:"actions,optional"`

@@ -32,6 +32,9 @@ func (l *UpdateCaddyConfigLogic) UpdateCaddyConfig(req *types.CaddyConfigUpdateR
 	if err := l.svcCtx.DB.WithContext(l.ctx).First(&server, req.ServerId).Error; err != nil {
 		return nil, fmt.Errorf("服务器不存在")
 	}
+	if err := checkBaseHash(&server, req.BaseHash); err != nil {
+		return nil, err
+	}
 	applyService := newCaddyConfigApplyService(l.svcCtx, l.Logger)
 	configService := newCaddyConfigService()
 	candidate, err := configService.Prepare(caddyConfigPrepareInput{

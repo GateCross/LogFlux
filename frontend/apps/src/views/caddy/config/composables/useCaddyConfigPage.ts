@@ -1,5 +1,6 @@
-import { computed, onMounted, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { computed, onBeforeUnmount, onMounted, watch } from 'vue';
+import { Modal } from 'antdv-next';
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 
 import type { CaddyPageMode } from '../types';
 import { useCaddyServers } from './useCaddyServers';
@@ -15,6 +16,7 @@ function readQueryText(raw: unknown): string {
 
 export function useCaddyConfigPage() {
   const route = useRoute();
+  const router = useRouter();
 
   function queryServerId(): number | undefined {
     const id = Number(readQueryText(route.query.serverId));
@@ -73,6 +75,7 @@ export function useCaddyConfigPage() {
     saving,
     previewing,
     configContent,
+    configHash,
     mode,
     formModel,
     quickSiteDrafts,
@@ -152,6 +155,8 @@ export function useCaddyConfigPage() {
 
   const wafApi = useSimpleWaf({
     selectedServerId,
+    currentConfig: configContent,
+    baseHash: configHash,
     onApplied: () => fetchConfig(),
   });
 
@@ -163,15 +168,24 @@ export function useCaddyConfigPage() {
     wafStatus,
     wafPreviewVisible,
     wafPreviewResult,
+    wafLastApply,
     wafErrorMessage,
     wafForm,
     wafAvailableSites,
+    wafSiteStates,
+    wafDirty,
     wafStatusText,
     wafStatusColor,
     wafDraftPending,
+    wafPreviewDiff,
+    wafValidationError,
     wafModeOptions,
     wafStrengthOptions,
     wafAuditOptions,
+    wafLoadState,
+    wafActionsDisabled,
+    isWafStale,
+    resetWafState,
     fetchWafConfig,
     saveWafConfig,
     previewWafConfig,
@@ -202,7 +216,37 @@ export function useCaddyConfigPage() {
     rollbackHistory,
   } = historyApi;
 
-  watch(selectedServerId, async () => {
+  /** 丢弃 WAF 草稿前确认；返回是否继续。 */
+  function confirmDiscardWafDraft(title: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      Modal.confirm({
+        title,
+        content: '防火墙设置还有未保存的修改，继续将丢失这些改动。',
+        okText: '放弃修改',
+        cancelText: '返回编辑',
+        onOk: () => resolve(true),
+        onCancel: () => resolve(false),
+      });
+    });
+  }
+
+  /** 回退服务器选择会再次触发 watcher，用标记跳过这一轮。 */
+  let revertingServerSwitch = false;
+
+  watch(selectedServerId, async (next, prev) => {
+    if (revertingServerSwitch) {
+      revertingServerSwitch = false;
+      return;
+    }
+    // 草稿属于全局策略，切服务器同样会丢，必须先问。
+    const shouldConfirm = prev !== undefined && next !== undefined && wafDirty.value;
+    if (shouldConfirm && !(await confirmDiscardWafDraft('切换服务器？'))) {
+      revertingServerSwitch = true;
+      selectedServerId.value = prev;
+      return;
+    }
+    // WAF 状态属于具体服务器：切换时先作废，避免旧数据冒充新服务器状态。
+    resetWafState();
     await fetchConfig();
     if (mode.value === 'waf') {
       await fetchWafConfig();
@@ -210,8 +254,16 @@ export function useCaddyConfigPage() {
   });
 
   watch(mode, (value) => {
-    if (value === 'waf' && !wafStatus.value) {
-      fetchWafConfig();
+    // fetchConfig 会把 mode 重置成 blocks，所以这里按归属判断而不是「有没有数据」。
+    if (value === 'waf' && isWafStale()) {
+      void fetchWafConfig();
+    }
+    // 视角写回 URL：刷新后停在同一个 tab，也让深链可分享。
+    const current = readQueryText(route.query.mode);
+    if (current !== value) {
+      void router.replace({
+        query: { ...route.query, mode: value },
+      });
     }
   });
 
@@ -230,6 +282,23 @@ export function useCaddyConfigPage() {
     if (mode.value === 'waf') {
       await fetchWafConfig();
     }
+  });
+
+  /** 离开页面或关标签页会丢掉 WAF 草稿，给出提示。 */
+  onBeforeRouteLeave(async () => {
+    if (!wafDirty.value) return true;
+    return confirmDiscardWafDraft('离开配置页？');
+  });
+
+  function handleBeforeUnload(event: BeforeUnloadEvent) {
+    if (!wafDirty.value) return;
+    event.preventDefault();
+    event.returnValue = '';
+  }
+
+  window.addEventListener('beforeunload', handleBeforeUnload);
+  onBeforeUnmount(() => {
+    window.removeEventListener('beforeunload', handleBeforeUnload);
   });
 
   // 打包 props
@@ -288,14 +357,21 @@ export function useCaddyConfigPage() {
     wafStatusText: wafStatusText.value,
     wafStatusColor: wafStatusColor.value,
     wafDraftPending: wafDraftPending.value,
+    wafPreviewDiff: wafPreviewDiff.value,
+    wafValidationError: wafValidationError.value,
     wafErrorMessage: wafErrorMessage.value,
+    wafLoadState: wafLoadState.value,
+    wafActionsDisabled: wafActionsDisabled.value,
+    wafDirty: wafDirty.value,
     wafForm,
     wafAvailableSites: wafAvailableSites.value,
+    wafSiteStates: wafSiteStates.value,
     wafModeOptions,
     wafStrengthOptions,
     wafAuditOptions,
     wafPreviewVisible: wafPreviewVisible.value,
     wafPreviewResult: wafPreviewResult.value,
+    wafLastApply: wafLastApply.value,
   }));
 
   const savePreviewProps = computed(() => ({

@@ -119,6 +119,8 @@ export function useCaddyConfigIO(options: UseCaddyConfigIOOptions) {
   const previewing = ref(false);
 
   const configContent = ref('');
+  /** 最近一次读到的配置哈希，写入时回传做乐观并发 */
+  const configHash = ref('');
   const mode = ref<CaddyPageMode>('blocks');
   const lastEditMode = ref<'blocks' | 'raw'>('blocks');
   const structuredAvailable = ref(false);
@@ -338,6 +340,7 @@ export function useCaddyConfigIO(options: UseCaddyConfigIOOptions) {
       // 远程权威快照 → seed 本地草稿（configContent / formModel / quickSiteDrafts）
       // 草稿本身不写回 query cache（9.2 硬边界）
       configContent.value = data?.config ?? '';
+      configHash.value = data?.hash ?? '';
       formModel.value = createEmptyFormModel();
       preservedBlocks.value = [];
       quickSiteDrafts.value = [];
@@ -712,6 +715,7 @@ export function useCaddyConfigIO(options: UseCaddyConfigIOOptions) {
     previewing.value = true;
     try {
       const preview = await previewCaddyConfigApi(selectedServerId.value, {
+        baseHash: configHash.value || undefined,
         config,
         mode: kind === 'blocks' ? 'quick' : 'raw',
         modules: modules || undefined,
@@ -736,6 +740,19 @@ export function useCaddyConfigIO(options: UseCaddyConfigIOOptions) {
     }
   }
 
+  /** 写完配置后同步哈希；失败不阻断主流程，下次读取会自动刷新。 */
+  async function refreshConfigHash(serverId: number) {
+    try {
+      const data = await queryClient.fetchQuery({
+        queryKey: qk.caddy.config(serverId),
+        queryFn: () => getCaddyConfigApi(serverId, withListDetailErrorMode()),
+      });
+      configHash.value = data?.hash ?? '';
+    } catch {
+      configHash.value = '';
+    }
+  }
+
   async function confirmSave() {
     if (!selectedServerId.value) return;
     saving.value = true;
@@ -746,6 +763,7 @@ export function useCaddyConfigIO(options: UseCaddyConfigIOOptions) {
         serverId,
         content,
         savePreview.kind === 'blocks' ? savePreview.modules : undefined,
+        configHash.value || undefined,
       );
       message.success('配置已保存并自动热重载 Caddy');
       // 前缀匹配：config（含 simple-waf）、history、catalog、metrics
@@ -756,6 +774,8 @@ export function useCaddyConfigIO(options: UseCaddyConfigIOOptions) {
         ['caddy', 'metrics', serverId],
       ]);
       configContent.value = content;
+      // 写入成功后必须重新取哈希，否则下一次保存会拿旧哈希一直报冲突。
+      await refreshConfigHash(serverId);
       if (savePreview.kind === 'blocks' && savePreview.modules) {
         loadModules(savePreview.modules);
         lastEditMode.value = 'blocks';
@@ -779,6 +799,7 @@ export function useCaddyConfigIO(options: UseCaddyConfigIOOptions) {
     saving,
     previewing,
     configContent,
+    configHash,
     mode,
     lastEditMode,
     structuredAvailable,

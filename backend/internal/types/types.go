@@ -53,9 +53,10 @@ type CaddyConfigHistoryListResp struct {
 
 type CaddyConfigPreviewReq struct {
 	ServerId uint   `path:"serverId"`
-	Mode     string `json:"mode,optional"`    // quick | raw；为空时根据 modules 自动判断
-	Config   string `json:"config,optional"`  // 原始 Caddyfile 或前端兜底生成结果
-	Modules  string `json:"modules,optional"` // 结构化配置(JSON)
+	Mode     string `json:"mode,optional"`     // quick | raw；为空时根据 modules 自动判断
+	Config   string `json:"config,optional"`   // 原始 Caddyfile 或前端兜底生成结果
+	Modules  string `json:"modules,optional"`  // 结构化配置(JSON)
+	BaseHash string `json:"baseHash,optional"` // 预览时同样做漂移检测
 }
 
 type CaddyConfigPreviewResp struct {
@@ -72,6 +73,7 @@ type CaddyConfigReq struct {
 type CaddyConfigResp struct {
 	Config  string `json:"config"`
 	Modules string `json:"modules,optional"`
+	Hash    string `json:"hash,optional"` // 当前库内配置哈希；写请求回传做乐观并发
 }
 
 type CaddyConfigRollbackReq struct {
@@ -81,9 +83,10 @@ type CaddyConfigRollbackReq struct {
 
 type CaddyConfigUpdateReq struct {
 	ServerId uint   `path:"serverId"`
-	Mode     string `json:"mode,optional"`    // quick | raw；为空时兼容旧版请求
-	Config   string `json:"config,optional"`  // 原始 Caddyfile 或前端兜底生成结果
-	Modules  string `json:"modules,optional"` // 结构化配置(JSON)
+	Mode     string `json:"mode,optional"`     // quick | raw；为空时兼容旧版请求
+	Config   string `json:"config,optional"`   // 原始 Caddyfile 或前端兜底生成结果
+	Modules  string `json:"modules,optional"`  // 结构化配置(JSON)
+	BaseHash string `json:"baseHash,optional"` // 编辑起点配置哈希；不一致说明他人已改
 }
 
 type CaddyLogItem struct {
@@ -563,6 +566,7 @@ type SimpleWafConfigResp struct {
 	RequestBodyNoFilesLimit int64           `json:"requestBodyNoFilesLimit"`
 	SiteAddresses           []string        `json:"siteAddresses"`
 	AvailableSites          []string        `json:"availableSites"`
+	ImportedSites           []string        `json:"importedSites"`
 	CorazaVersion           string          `json:"corazaVersion,optional"`
 	CrsVersion              string          `json:"crsVersion,optional"`
 	Actions                 []string        `json:"actions,optional"`
@@ -582,6 +586,7 @@ type SimpleWafConfigUpdateReq struct {
 	RequestBodyLimit        int64    `json:"requestBodyLimit,optional"`
 	RequestBodyNoFilesLimit int64    `json:"requestBodyNoFilesLimit,optional"`
 	SiteAddresses           []string `json:"siteAddresses,optional"` // 为空时默认使用全部可识别站点
+	BaseHash                string   `json:"baseHash,optional"`      // 编辑起点配置哈希；不一致说明他人已改
 }
 
 type SiteMetricsItem struct {

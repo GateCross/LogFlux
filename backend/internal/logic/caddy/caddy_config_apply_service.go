@@ -26,6 +26,35 @@ func (s *caddyConfigApplyService) loadCurrent(server *caddymodel.CaddyServer) (s
 	return loadCurrentCaddyConfig(server)
 }
 
+// checkBaseHash 做乐观并发检查。
+//
+// baseHash 为空表示旧版客户端，保持向后兼容直接放行；非空时与库内当前哈希比对，
+// 不一致说明期间有人改过配置，继续写会静默覆盖对方的改动。
+func checkBaseHash(server *caddymodel.CaddyServer, baseHash string) error {
+	baseHash = strings.TrimSpace(baseHash)
+	if baseHash == "" || server == nil {
+		return nil
+	}
+	current := hashConfig(server.Config)
+	if current != baseHash {
+		return fmt.Errorf("配置已被他人修改，请刷新后重试")
+	}
+	return nil
+}
+
+// verifyBaseHash 从库里重新取一份最新配置再校验，避免用请求上下文里的旧快照判断。
+func verifyBaseHash(db *gorm.DB, serverID uint, baseHash string) error {
+	if strings.TrimSpace(baseHash) == "" {
+		return nil
+	}
+	// serverID 为 0 表示"默认服务器"，必须先解析成实际记录再比对。
+	server, err := findPreferredCaddyServer(db, serverID)
+	if err != nil {
+		return err
+	}
+	return checkBaseHash(server, baseHash)
+}
+
 // apply 按「校验 → 加载 → 落库」固定顺序应用配置。
 //
 // 顺序统一的原因：/load 本身失败会自动回滚运行态，落库前出错等于什么都没改；

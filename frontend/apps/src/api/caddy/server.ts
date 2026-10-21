@@ -49,6 +49,8 @@ export namespace CaddyServerApi {
   export interface CaddyConfig {
     config: string;
     modules?: string;
+    /** 当前库内配置哈希；写请求回传做乐观并发 */
+    hash?: string;
   }
 
   /**
@@ -62,6 +64,8 @@ export namespace CaddyServerApi {
     config?: string;
     /** 结构化配置(JSON) */
     modules?: string;
+    /** 编辑起点的配置哈希；与库内不一致时后端拒绝写入 */
+    baseHash?: string;
   }
 
   /** 配置预览响应 — 对齐 backend CaddyConfigPreviewResp */
@@ -224,10 +228,16 @@ export async function pushCaddyConfigApi(
   serverId: number,
   config: string,
   modules?: string,
+  baseHash?: string,
 ) {
   return requestClient.post<void>(
     `/caddy/server/${serverId}/config`,
-    { config, mode: modules ? 'quick' : 'raw', modules } satisfies CaddyServerApi.CaddyConfigWrite,
+    {
+      baseHash,
+      config,
+      mode: modules ? 'quick' : 'raw',
+      modules,
+    } satisfies CaddyServerApi.CaddyConfigWrite,
   );
 }
 

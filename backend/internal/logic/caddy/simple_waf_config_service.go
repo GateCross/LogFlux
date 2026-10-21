@@ -174,6 +174,11 @@ func (s *simpleWafConfigService) buildCandidate(req *types.SimpleWafConfigUpdate
 		return nil, err
 	}
 
+	// 站点选择来自用户意图，配置文本来自库内现状；两者都可能被并发改过。
+	if err := verifyBaseHash(s.svcCtx.DB.WithContext(s.ctx), normalized.ServerID, req.BaseHash); err != nil {
+		return nil, err
+	}
+
 	policy, err := s.findOrCreateDefaultPolicy()
 	if err != nil {
 		return nil, err
@@ -330,6 +335,7 @@ func (s *simpleWafConfigService) buildResponse(server *caddymodel.CaddyServer, p
 		RequestBodyNoFilesLimit: 1024 * 1024,
 		SiteAddresses:           []string{},
 		AvailableSites:          []string{},
+		ImportedSites:           []string{},
 		Actions:                 actions,
 	}
 	helper := newWafLogicHelper(s.ctx, s.svcCtx, s.logger)
@@ -351,6 +357,8 @@ func (s *simpleWafConfigService) buildResponse(server *caddymodel.CaddyServer, p
 	if snapshot != nil {
 		resp.Integrated = snapshot.OrderReady && snapshot.SnippetReady && snapshot.DirectiveReady && len(snapshot.ImportedSites) > 0
 		resp.AvailableSites = append([]string{}, snapshot.AvailableSites...)
+		// Caddyfile 里实际挂了 waf_protect 的站点：前端据此区分"已生效/待应用"。
+		resp.ImportedSites = append([]string{}, snapshot.ImportedSites...)
 		// 站点选择以策略里保存的为准，Caddyfile 现状只作为"是否已生效"的判据。
 		//
 		// 不再用 enabled && integrated 改写 enabled：Caddyfile 一旦漂移，UI 会把

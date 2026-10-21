@@ -5,7 +5,6 @@ import { listOf, totalOf, type ListResult } from '../_utils';
 
 import type { CaddyServerApi } from './server';
 import type { CaddyIpRegionApi } from './ip-region';
-import type { CaddyWafIntegrationApi } from './integration';
 import type { CaddySimpleWafApi } from './simple-waf';
 import type { CaddyWafSourceApi } from './source';
 
@@ -61,6 +60,7 @@ const sampleSimpleWafConfig: CaddySimpleWafApi.SimpleWafConfig = {
   requestBodyNoFilesLimit: 131_072,
   siteAddresses: ['example.com'],
   availableSites: ['example.com', 'api.example.com'],
+  importedSites: ['example.com'],
   corazaVersion: '3.2.1',
   crsVersion: '4.0.0',
   actions: ['preview'],
@@ -129,27 +129,6 @@ const sampleCaddyLogQuery: CaddyServerApi.CaddyLogQuery = {
 const sampleIpRegionConfig: CaddyIpRegionApi.IpRegionConfig = {
   enabled: true,
   allowList: ['中国', '日本'],
-};
-
-const sampleIntegrationStatus: CaddyWafIntegrationApi.IntegrationStatus = {
-  serverId: 1,
-  integrated: true,
-  orderReady: true,
-  snippetReady: true,
-  directiveReady: true,
-  importedSites: ['example.com'],
-  availableSites: ['example.com', 'api.example.com'],
-  message: '集成状态正常',
-};
-
-const sampleIntegrationApplyResult: CaddyWafIntegrationApi.IntegrationApplyResult = {
-  serverId: 1,
-  enabled: true,
-  changed: true,
-  importedSites: ['example.com'],
-  actions: ['reload'],
-  config: 'example.com {\n  waf\n}',
-  message: '应用成功',
 };
 
 const sampleServerListResult: CaddyServerApi.CaddyServerListResult = {
@@ -226,6 +205,7 @@ const simpleWafConfigArb: fc.Arbitrary<CaddySimpleWafApi.SimpleWafConfig> =
     requestBodyNoFilesLimit: fc.integer({ min: 0, max: 1_000_000 }),
     siteAddresses: fc.array(fc.domain(), { maxLength: 5 }),
     availableSites: fc.array(fc.domain(), { maxLength: 8 }),
+    importedSites: fc.array(fc.domain(), { maxLength: 8 }),
     corazaVersion: fc.option(fc.string({ maxLength: 16 }), { nil: undefined }),
     crsVersion: fc.option(fc.string({ maxLength: 16 }), { nil: undefined }),
     actions: fc.option(fc.array(fc.string({ maxLength: 12 }), { maxLength: 4 }), {
@@ -429,10 +409,6 @@ describe('API_Contract type tightening — runtime payload equivalence', () => {
     expect(totalOf(logPage)).toBe(1);
     expect(identityMap(sampleCaddyLogQuery)).toEqual(sampleCaddyLogQuery);
     expect(clonePayload(sampleIpRegionConfig)).toEqual(sampleIpRegionConfig);
-    expect(identityMap(sampleIntegrationStatus)).toEqual(sampleIntegrationStatus);
-    expect(clonePayload(sampleIntegrationApplyResult)).toEqual(
-      sampleIntegrationApplyResult,
-    );
   });
 
   it('边界：listOf/totalOf 对 null/undefined/非法 list 不抛且可预期', () => {
