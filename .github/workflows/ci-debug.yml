@@ -1,0 +1,43 @@
+name: ci-debug
+
+on:
+  workflow_dispatch:
+
+jobs:
+  debug-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.5.0
+          run_install: false
+
+      - name: Install deps
+        env:
+          SKIP_SIMPLE_GIT_HOOKS: 1
+        run: pnpm -C frontend install --frozen-lockfile
+
+      - name: Build frontend with full diagnostics
+        env:
+          NODE_OPTIONS: '--trace-warnings --unhandled-rejections=strict --stack-trace-limit=100'
+        run: |
+          set +e
+          pnpm -C frontend -F logflux-web run build 2>&1 | tee build-full.log
+          code=${PIPESTATUS[0]}
+          echo "BUILD_EXIT_CODE=$code"
+          echo "----- last 60 lines of raw log -----"
+          tail -60 build-full.log || true
+          echo "----- memory -----"
+          free -h || true
+          echo "----- kernel messages (OOM/segfault) -----"
+          sudo dmesg | tail -20 || true
+          exit $code
