@@ -341,6 +341,7 @@ func (s *simpleWafConfigService) buildResponse(server *caddymodel.CaddyServer, p
 	helper := newWafLogicHelper(s.ctx, s.svcCtx, s.logger)
 	resp.CorazaVersion = helper.corazaCurrentVersion()
 	resp.CrsVersion = helper.crsCurrentVersion()
+	resp.CaddyVersion = helper.caddyCurrentVersion()
 	resp.RulesInfo = helper.mountedCRSRulesSummary()
 	if server != nil {
 		resp.ServerId = server.ID

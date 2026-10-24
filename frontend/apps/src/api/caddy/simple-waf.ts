@@ -35,6 +35,7 @@ export namespace CaddySimpleWafApi {
     importedSites: string[];
     corazaVersion?: string;
     crsVersion?: string;
+    caddyVersion?: string;
     actions?: string[];
     directives?: string;
     config?: string;

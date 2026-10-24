@@ -569,6 +569,7 @@ type SimpleWafConfigResp struct {
 	ImportedSites           []string        `json:"importedSites"`
 	CorazaVersion           string          `json:"corazaVersion,optional"`
 	CrsVersion              string          `json:"crsVersion,optional"`
+	CaddyVersion            string          `json:"caddyVersion,optional"`
 	Actions                 []string        `json:"actions,optional"`
 	Directives              string          `json:"directives,optional"`
 	Config                  string          `json:"config,optional"`

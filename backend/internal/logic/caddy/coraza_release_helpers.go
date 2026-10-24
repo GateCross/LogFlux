@@ -333,3 +333,45 @@ func latestEngineCheckVersion(job *wafmodel.WafUpdateJob) string {
 	}
 	return ""
 }
+
+// caddyCurrentVersion 返回本机 caddy 二进制的核心版本号；
+// 命令不可用或解析失败时返回空串，由前端展示为 '-'。
+func (helper *wafLogicHelper) caddyCurrentVersion() string {
+	commandCandidates := [][]string{
+		{"caddy", "version"},
+		{"/usr/bin/caddy", "version"},
+	}
+	for _, command := range commandCandidates {
+		version, err := detectCaddyCoreVersionByCommand(helper.ctx, command[0], command[1:]...)
+		if err != nil {
+			continue
+		}
+		if version != "" {
+			return version
+		}
+	}
+	return ""
+}
+
+func detectCaddyCoreVersionByCommand(parentCtx context.Context, name string, args ...string) (string, error) {
+	baseCtx := parentCtx
+	if baseCtx == nil {
+		baseCtx = context.Background()
+	}
+	timeoutCtx, cancel := context.WithTimeout(baseCtx, 3*time.Second)
+	defer cancel()
+
+	command := exec.CommandContext(timeoutCtx, name, args...)
+	outputBytes, err := command.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("执行命令失败: %s %s err=%w", name, strings.Join(args, " "), err)
+	}
+
+	// 输出形如 "v2.10.2 h1:xxx"，取首个空格前的版本令牌
+	fields := strings.Fields(strings.TrimSpace(string(outputBytes)))
+	if len(fields) == 0 {
+		return "", nil
+	}
+	version := strings.TrimPrefix(fields[0], "v")
+	return version, nil
+}

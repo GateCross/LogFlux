@@ -182,6 +182,10 @@ const ruleColumns = [
             <Tag color="cyan">{{ props.wafStatus?.corazaVersion || '-' }}</Tag>
           </div>
           <div>
+            <span class="text-gray-500">Caddy：</span>
+            <Tag color="geekblue">{{ props.wafStatus?.caddyVersion || '-' }}</Tag>
+          </div>
+          <div>
             <span class="text-gray-500">已挂载规则文件：</span>
             <Tag color="purple">{{ props.wafStatus?.rulesInfo?.total || 0 }} 个</Tag>
           </div>
