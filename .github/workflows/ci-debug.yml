@@ -35,13 +35,24 @@ jobs:
           NODE_OPTIONS: '--trace-warnings --unhandled-rejections=strict --stack-trace-limit=100'
         run: |
           set +e
-          pnpm -C frontend -F logflux-web run build 2>&1 | tee build-full.log
-          code=${PIPESTATUS[0]}
+          pnpm -C frontend -F logflux-web run build > build-full.log 2>&1
+          code=$?
           echo "BUILD_EXIT_CODE=$code"
-          echo "----- last 60 lines of raw log -----"
-          tail -60 build-full.log || true
+          echo "----- last 80 lines -----"
+          tail -80 build-full.log || true
           echo "----- memory -----"
           free -h || true
-          echo "----- kernel messages (OOM/segfault) -----"
-          sudo dmesg | tail -20 || true
+          echo "----- kernel messages -----"
+          sudo dmesg 2>/dev/null | tail -10 || true
+          # 关键错误行写入注解，便于无登录 API 读取
+          grep -iE "error|panic|abort|oom|killed|segmentation|illegal|out of memory|✗" build-full.log | tail -25 > err-lines.txt || true
+          nl -ba build-full.log | tail -40 > tail-lines.txt || true
+          while IFS= read -r line; do
+            msg=$(echo "$line" | tr -d '\r' | cut -c1-480)
+            echo "::error::${msg}"
+          done < err-lines.txt
+          while IFS= read -r line; do
+            msg=$(echo "$line" | tr -d '\r' | cut -c1-480)
+            echo "::error::TAIL|${msg}"
+          done < tail-lines.txt
           exit $code
