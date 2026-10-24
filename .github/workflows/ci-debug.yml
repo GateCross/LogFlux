@@ -1,6 +1,10 @@
 name: ci-debug
 
 on:
+  push:
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/ci-debug.yml'
   workflow_dispatch:
 
 jobs:
