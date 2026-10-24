@@ -7,7 +7,6 @@ import {
 
 /** 本地 logo 路径，随 public 目录一起发布 */
 const LOCAL_LOGO = '/logo.svg';
-const LOCAL_LOGO_DARK = '/logo-dark.svg';
 
 interface WebAntdPreferencesExtension {
   defaultTableSize: number;
@@ -26,9 +25,8 @@ export const overridesPreferences = defineOverridesPreferences({
     enableRefreshToken: true,
   },
   logo: {
-    // 不允许回落到外网图标；浅色用浅底，深色用深底
+    // 不允许回落到外网图标；渐变底在深浅色主题下通用
     source: LOCAL_LOGO,
-    sourceDark: LOCAL_LOGO_DARK,
   },
 });
 
@@ -46,7 +44,7 @@ export function sanitizeCachedPreferences() {
   updatePreferences({
     logo: {
       source: isRemote(source) ? LOCAL_LOGO : source,
-      sourceDark: isRemote(sourceDark) ? LOCAL_LOGO_DARK : sourceDark,
+      sourceDark: isRemote(sourceDark) ? '' : sourceDark,
     },
   });
 }

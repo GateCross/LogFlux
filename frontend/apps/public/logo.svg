@@ -1,15 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="LogFlux">
   <defs>
-    <linearGradient id="lf-shield" x1="32" y1="18" x2="32" y2="50" gradientUnits="userSpaceOnUse">
+    <linearGradient id="lf-bg" x1="8" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse">
       <stop stop-color="#38bdf8" />
       <stop offset="1" stop-color="#14b8a6" />
     </linearGradient>
   </defs>
-  <g transform="translate(0 -7)">
-    <path
-      d="M32 24c6.5 3.6 11.8 4 16.4 2v11.2c0 9.9-6.8 17-16.4 21.1-9.6-4.1-16.4-11.2-16.4-21.1V26c4.6 2 9.9 1.6 16.4-2Z"
-      fill="url(#lf-shield)"
-    />
-    <path d="M25.4 38.2 30.5 43l8.3-10" stroke="#ffffff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" />
-  </g>
+  <rect width="64" height="64" rx="15" fill="url(#lf-bg)" />
+  <polyline
+    points="13,35 23,35 28,22 36,48 41,35 51,35"
+    fill="none"
+    stroke="#ffffff"
+    stroke-width="4.5"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
 </svg>
