@@ -38,13 +38,15 @@ export const overridesPreferences = defineOverridesPreferences({
 export function sanitizeCachedPreferences() {
   const { source, sourceDark } = preferences.logo;
   const isRemote = (value?: string) => !!value?.startsWith('http');
-  if (!isRemote(source) && !isRemote(sourceDark)) {
+  // logo-dark.svg 已随单 Logo 方案删除，残留缓存必须清掉
+  const staleLocalDark = sourceDark === '/logo-dark.svg';
+  if (!isRemote(source) && !isRemote(sourceDark) && !staleLocalDark) {
     return;
   }
   updatePreferences({
     logo: {
       source: isRemote(source) ? LOCAL_LOGO : source,
-      sourceDark: isRemote(sourceDark) ? '' : sourceDark,
+      sourceDark: isRemote(sourceDark) || staleLocalDark ? '' : sourceDark,
     },
   });
 }
