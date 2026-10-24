@@ -18,6 +18,9 @@ export const qk = {
     ipRegion: (params?: object) => ['caddy', 'ip-region', params] as const,
     source: (params?: object) => ['caddy', 'source', params] as const,
     wafEngine: () => ['caddy', 'waf-engine'] as const,
+    wafEvents: (params: object) => ['caddy', 'waf-events', params] as const,
+    wafEventStats: (params?: object) =>
+      ['caddy', 'waf-event-stats', params] as const,
     metrics: (serverId: number, siteKey?: string) =>
       ['caddy', 'metrics', serverId, siteKey] as const,
     systemLog: (params: object) => ['caddy', 'system-log', params] as const,

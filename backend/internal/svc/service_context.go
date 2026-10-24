@@ -8,6 +8,7 @@ import (
 	cronutil "logflux/common/cron"
 	"logflux/common/gorm"
 	ingest "logflux/common/ingest"
+	ingestcaddy "logflux/common/ingest/caddy"
 	"logflux/common/logging"
 	redisClient "logflux/common/redis"
 	"logflux/internal/config"
@@ -55,6 +56,7 @@ type ServiceContext struct {
 	CronTaskFileModel cronmodel.CronTaskFileModel
 	CaddyLogModel     caddymodel.CaddyLogModel
 	SystemLogModel    ingestmodel.SystemLogModel
+	WafEventModel     wafmodel.WafEventModel
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -85,6 +87,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		&wafmodel.WafRelease{},
 		&wafmodel.WafUpdateJob{},
 		&wafmodel.WafPolicy{},
+		&wafmodel.WafEvent{},
 		// 系统配置
 		&systemmodel.SystemConfig{},
 	)
@@ -173,6 +176,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		ingestMgr.StartSource(src)
 	}
 
+	// 存量审计访问日志异步回填为归一化 WAF 事件
+	backfillWafEvents(db)
+
 	return &ServiceContext{
 		Config:            c,
 		DB:                db,
@@ -192,7 +198,48 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		CronTaskFileModel: cronmodel.NewCronTaskFileModel(db),
 		CaddyLogModel:     caddymodel.NewCaddyLogModel(db),
 		SystemLogModel:    ingestmodel.NewSystemLogModel(db),
+		WafEventModel:     wafmodel.NewWafEventModel(db),
 	}
+}
+
+// backfillWafEvents 把存量审计来源访问日志归一化写入 WAF 事件表；
+// 幂等可重跑，按 id 分批推进，失败中止留待下次启动重试。
+func backfillWafEvents(db *gorm2.DB) {
+	safego.New(context.Background(), "WAF 历史事件回填").Go(func() {
+		const batchSize = 500
+		var (
+			lastID uint
+			total  int
+		)
+		eventModel := wafmodel.NewWafEventModel(db)
+		for {
+			var logs []caddymodel.CaddyLog
+			if err := db.Where("id > ? AND extra_data::text LIKE ?", lastID, `%"source":"waf"%`).
+				Order("id asc").Limit(batchSize).Find(&logs).Error; err != nil {
+				logx.Errorf("回填 WAF 历史事件查询失败: %v", err)
+				return
+			}
+			if len(logs) == 0 {
+				break
+			}
+
+			events := make([]*wafmodel.WafEvent, 0, len(logs))
+			for i := range logs {
+				events = append(events, ingestcaddy.WafEventsFromCaddyLog(&logs[i])...)
+			}
+			if len(events) > 0 {
+				if err := eventModel.SaveIgnoreConflict(context.Background(), events); err != nil {
+					logx.Errorf("回填 WAF 历史事件写入失败: %v", err)
+					return
+				}
+				total += len(events)
+			}
+			lastID = logs[len(logs)-1].ID
+		}
+		if total > 0 {
+			logx.Infof("WAF 历史事件回填完成，共 %d 条", total)
+		}
+	})
 }
 
 func initWafWorkspace(c *config.Config) {

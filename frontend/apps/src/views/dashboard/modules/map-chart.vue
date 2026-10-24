@@ -184,8 +184,9 @@ function buildMapSeries(): MapSeriesOption {
     type: 'map',
     map: mode.value,
     roam: true,
+    label: { color: 'rgba(128, 128, 128, 0.9)' },
     emphasis: {
-      label: { show: true },
+      label: { show: true, color: 'rgba(128, 128, 128, 0.95)' },
       itemStyle: { areaColor: '#38bdf8' },
     },
     data: activeData.value,
@@ -197,13 +198,21 @@ let chartInstance: echarts.ECharts | null = null;
 
 function getFullOptions(): echarts.EChartsCoreOption {
   return {
-    tooltip: { show: true, formatter: formatTooltip },
+    tooltip: {
+      show: true,
+      formatter: formatTooltip,
+      // 固定白底深字，两种主题下都可读
+      backgroundColor: 'rgba(255, 255, 255, 0.96)',
+      borderColor: 'rgba(0, 0, 0, 0.08)',
+      textStyle: { color: '#333' },
+    },
     visualMap: {
       min: 0,
       max: visualMax.value,
       left: 'left',
       top: 'bottom',
       text: ['高', '低'],
+      textStyle: { color: 'rgba(128, 128, 128, 0.9)' },
       calculable: true,
       inRange: { color: ['#e0f2fe', '#0ea5e9'] },
     },

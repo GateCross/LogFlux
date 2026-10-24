@@ -20,6 +20,7 @@ import (
 	"logflux/internal/utils/safego"
 	caddymodel "logflux/model/caddy"
 	ingestmodel "logflux/model/ingest"
+	wafmodel "logflux/model/waf"
 
 	"github.com/nxadm/tail"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -170,7 +171,20 @@ func (i *CaddyIngestor) IngestWithPath(filePath string, line string) error {
 		logx.Errorf("写入数据库失败: %v", err)
 		return err
 	}
+	i.saveWafEvents(logEntry)
 	return nil
+}
+
+// saveWafEvents 对审计来源的访问日志做归一化事件双写；
+// (transaction_id, rule_id) 冲突时跳过，失败只记日志不影响访问日志入库。
+func (i *CaddyIngestor) saveWafEvents(entry *caddymodel.CaddyLog) {
+	events := WafEventsFromCaddyLog(entry)
+	if len(events) == 0 {
+		return
+	}
+	if err := wafmodel.NewWafEventModel(i.db).SaveIgnoreConflict(context.Background(), events); err != nil {
+		logx.Errorf("WAF 事件入库失败: %v", err)
+	}
 }
 
 func (i *CaddyIngestor) Start(filePath string) {

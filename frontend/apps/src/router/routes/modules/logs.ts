@@ -11,6 +11,15 @@ const routes: RouteRecordRaw[] = [
     path: '/logs',
     children: [
       {
+        name: 'LogsSecurity',
+        path: '/logs/security',
+        component: () => import('#/views/logs/security/index.vue'),
+        meta: {
+          icon: 'mdi:shield-alert-outline',
+          title: '安全事件',
+        },
+      },
+      {
         name: 'LogsAccess',
         path: '/logs/access',
         component: () => import('#/views/logs/access/index.vue'),
