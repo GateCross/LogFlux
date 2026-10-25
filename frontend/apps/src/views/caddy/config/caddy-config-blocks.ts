@@ -362,7 +362,7 @@ function firstSiteTokenOfRaw(raw: string): string {
 }
 
 /** 从原始 Caddyfile 文本中提取站点块，以首个域名做 key */
-function extractSiteBlocks(config: string): Map<string, string> {
+export function extractSiteBlocks(config: string): Map<string, string> {
   const result = new Map<string, string>();
   const lines = config.split('\n');
   let depth = 0;

@@ -2,7 +2,6 @@
 import { Page } from '@vben/common-ui';
 import { Alert, Button, Card, Empty, Spin } from 'antdv-next';
 
-import SiteWizardModal from './SiteWizardModal.vue';
 import DockerDiscoveryModal from './DockerDiscoveryModal.vue';
 import ServerToolbar from './components/ServerToolbar.vue';
 import ModeStrip from './components/ModeStrip.vue';
@@ -17,7 +16,6 @@ defineOptions({ name: 'CaddyConfig' });
 
 const {
   servers,
-  selectedServerId,
   serversErrorMessage,
   configErrorMessage,
   loadingConfig,
@@ -26,13 +24,9 @@ const {
   quickValidationErrors,
   configContent,
   previewConfig,
-  siteWizardOpen,
   dockerDiscoveryOpen,
   dockerDiscoveryScanning,
   dockerDiscoveryResult,
-  mergedQuickFormModel,
-  previewing,
-  upstreamPoolOptions,
   serverToolbarProps,
   blocksWorkbenchProps,
   wafPanelProps,
@@ -47,7 +41,6 @@ const {
   handleRefreshServerStatus,
   openHistory,
   applyPreset,
-  openSiteWizard,
   openDockerDiscovery,
   parseRawToBlocks,
   previewBeforeSave,
@@ -79,9 +72,6 @@ const {
   handleDiscoveryCommitDrafts,
   handleDiscoveryPreview,
   handleDiscoveryApply,
-  handleWizardCommitDraft,
-  handleWizardPreview,
-  handleWizardApply,
 } = useCaddyConfigPage();
 </script>
 
@@ -147,7 +137,6 @@ const {
               @remove-upstream="removeUpstream"
               @refresh-metrics="handleRefreshSiteMetrics"
               @open-docker="openDockerDiscovery"
-              @open-wizard="openSiteWizard"
               @add-site="addQuickSite"
               @open-access-logs="(domains, e) => openAccessLogs(domains, e)"
               @duplicate-site="duplicateQuickSite"
@@ -178,18 +167,6 @@ const {
         </Spin>
       </Card>
     </div>
-
-    <SiteWizardModal
-      v-model:open="siteWizardOpen"
-      :base-form-model="mergedQuickFormModel"
-      :previewing="previewing"
-      :applying="previewing"
-      :has-server="Boolean(selectedServerId)"
-      :upstream-pool-options="upstreamPoolOptions"
-      @commit-draft="handleWizardCommitDraft"
-      @preview="handleWizardPreview"
-      @apply="handleWizardApply"
-    />
 
     <DockerDiscoveryModal
       v-model:open="dockerDiscoveryOpen"

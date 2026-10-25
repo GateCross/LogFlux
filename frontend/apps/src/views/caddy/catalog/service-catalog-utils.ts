@@ -2,7 +2,8 @@
 
 import type { SiteMetricsItem } from '#/api/caddy/server';
 
-import { parseCaddyfileToBlocks } from '../config/caddy-config-blocks';
+import { extractSiteBlocks, parseCaddyfileToBlocks } from '../config/caddy-config-blocks';
+import { extractSiteCapabilities, type SiteCapabilitiesSnapshot } from '../config/site-capabilities';
 import { normalizeModules } from '../config/caddy-config-utils';
 import {
   buildQuickConfigState,
@@ -29,6 +30,10 @@ export interface CatalogSiteCard {
   lbPolicy?: string;
   healthPath?: string;
   reasons?: string[];
+  /** 站点块原文（能力识别与抽屉编辑的事实来源） */
+  raw?: string;
+  /** 从块原文识别出的能力状态 */
+  capabilities?: SiteCapabilitiesSnapshot;
 }
 
 export type SiteMetricsMap = Map<string, { count4xx: number; count5xx: number }>;
@@ -290,7 +295,22 @@ export function buildCatalogSitesFromConfigPayload(data: {
     }
   }
 
-  return buildCatalogSitesFromModel(formModel, preservedBlocks);
+  const cards = buildCatalogSitesFromModel(formModel, preservedBlocks);
+  attachSiteBlockRaw(cards, configContent);
+  return cards;
+}
+
+/** 按首域名把站点块原文与能力状态挂到卡片上，供徽章与抽屉使用 */
+function attachSiteBlockRaw(cards: CatalogSiteCard[], configContent: string): void {
+  if (!configContent.trim()) return;
+  const rawByDomain = extractSiteBlocks(configContent);
+  for (const card of cards) {
+    const key = card.domains.find((domain) => rawByDomain.has(domain));
+    const raw = key ? rawByDomain.get(key) : undefined;
+    if (!raw) continue;
+    card.raw = raw;
+    card.capabilities = extractSiteCapabilities(raw);
+  }
 }
 
 /** 配置工作台深链 query（不触发 /load） */

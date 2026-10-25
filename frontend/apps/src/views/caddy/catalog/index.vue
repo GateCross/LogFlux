@@ -1,13 +1,26 @@
 <script lang="ts" setup>
+import { ref } from 'vue';
 import { Page } from '@vben/common-ui';
-import { Alert, Card } from 'antdv-next';
+import { Alert, Button, Card, Tooltip } from 'antdv-next';
 
+import SiteCreateModal from '../sites/SiteCreateModal.vue';
+import SiteDrawer from '../sites/SiteDrawer.vue';
 import EditPanel from './components/EditPanel.vue';
 import ServiceList from './components/ServiceList.vue';
 import StatusActions from './components/StatusActions.vue';
 import { useServiceCatalogPage } from './composables/useServiceCatalogPage';
+import type { CatalogSiteCard } from './service-catalog-utils';
 
 defineOptions({ name: 'CaddyCatalog' });
+
+const createModalOpen = ref(false);
+const drawerOpen = ref(false);
+const drawerSite = ref<CatalogSiteCard | null>(null);
+
+function openSiteDrawer(site: CatalogSiteCard) {
+  drawerSite.value = site;
+  drawerOpen.value = true;
+}
 
 const {
   servers,
@@ -17,6 +30,8 @@ const {
   serversErrorMessage,
   configErrorMessage,
   siteCards,
+  configRaw,
+  configHash,
   keyword,
   kindFilter,
   siteMetricsMap,
@@ -39,7 +54,6 @@ const {
   openConfigWorkbench,
   openWaf,
   openAccessLogs,
-  openSiteInWorkbench,
   metricDisplay,
   setKeyword,
   setKindFilter,
@@ -88,6 +102,37 @@ const {
     </Card>
 
     <Card variant="borderless" class="mb-4">
+      <div class="create-site-row">
+        <Tooltip title="一个表单 + 一次确认，防护跟随全局默认，自动校验后上线">
+          <Button
+            type="primary"
+            :disabled="!selectedServerId"
+            @click="createModalOpen = true"
+          >
+            添加站点
+          </Button>
+        </Tooltip>
+      </div>
+      <SiteCreateModal
+        v-model:open="createModalOpen"
+        :server-id="selectedServerId"
+        :config="configRaw"
+        :base-hash="configHash || undefined"
+        @created="fetchConfigSites"
+      />
+
+      <SiteDrawer
+        v-model:open="drawerOpen"
+        :server-id="selectedServerId"
+        :config="configRaw"
+        :base-hash="configHash || undefined"
+        :site="drawerSite"
+        @saved="fetchConfigSites"
+        @open-workbench="openConfigWorkbench('raw')"
+      />
+    </Card>
+
+    <Card variant="borderless" class="mb-4">
       <StatusActions
         :servers-count="servers.length"
         :last-probed-at="lastProbedAt"
@@ -115,7 +160,7 @@ const {
         :metric-display="metricDisplay"
         @update:keyword="setKeyword"
         @update:kind-filter="setKindFilter"
-        @open-site="openSiteInWorkbench"
+        @open-site="openSiteDrawer"
         @open-access-logs="openAccessLogs"
         @open-waf="openWaf"
         @open-workbench="() => openConfigWorkbench()"
@@ -127,5 +172,10 @@ const {
 <style scoped>
 .mb-4 {
   margin-bottom: 16px;
+}
+
+.create-site-row {
+  display: flex;
+  align-items: center;
 }
 </style>

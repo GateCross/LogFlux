@@ -12,6 +12,7 @@ import {
   Space,
   Spin,
   Tag,
+  Tooltip,
 } from 'antdv-next';
 
 import {
@@ -23,6 +24,7 @@ import {
   type CatalogSiteCard,
   type SiteMetricsMap,
 } from '../service-catalog-utils';
+import { describeSiteCapabilities } from '../../config/site-capabilities';
 
 const props = defineProps<{
   selectedServerId?: number;
@@ -61,6 +63,12 @@ function onKindFilterChange(value: unknown) {
   if (value === 'all' || value === 'simple' || value === 'complex') {
     emit('update:kindFilter', value);
   }
+}
+
+/** 开启/未知的能力徽章；off 不展示 */
+function capabilityBadges(site: CatalogSiteCard) {
+  if (!site.capabilities) return [];
+  return describeSiteCapabilities(site.capabilities).filter((item) => item.status !== 'off');
 }
 </script>
 
@@ -165,6 +173,21 @@ function onKindFilterChange(value: unknown) {
               <span v-if="site.upstream" class="text-muted site-upstream">
                 {{ site.upstream }}
               </span>
+            </div>
+
+            <div v-if="capabilityBadges(site).length" class="site-caps">
+              <Tooltip
+                v-for="badge in capabilityBadges(site)"
+                :key="badge.key"
+                :title="badge.status === 'unknown' ? '检测到无法识别的配置，开关已禁用' : badge.label"
+              >
+                <Tag
+                  class="cap-tag"
+                  :color="badge.status === 'unknown' ? 'default' : 'geekblue'"
+                >
+                  {{ badge.label }}{{ badge.status === 'unknown' ? '?' : '' }}
+                </Tag>
+              </Tooltip>
             </div>
 
             <div v-if="site.lbPolicy || site.healthPath" class="site-extra text-muted">
@@ -322,6 +345,18 @@ function onKindFilterChange(value: unknown) {
   gap: 10px;
   margin-top: 6px;
   font-size: 12px;
+}
+
+.site-caps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.cap-tag {
+  margin-inline-end: 0;
+  font-size: 11px;
 }
 
 .site-metrics {

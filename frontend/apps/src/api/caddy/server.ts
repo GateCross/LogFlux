@@ -101,6 +101,8 @@ export namespace CaddyServerApi {
 
   export interface RollbackParams {
     historyId: number;
+    /** 回滚起点配置哈希；与库内不一致时后端拒绝回滚 */
+    baseHash?: string;
   }
 
   /**

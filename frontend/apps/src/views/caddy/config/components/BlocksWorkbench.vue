@@ -55,7 +55,6 @@ const emit = defineEmits<{
   removeUpstream: [index: number];
   refreshMetrics: [];
   openDocker: [];
-  openWizard: [];
   addSite: [];
   openAccessLogs: [domains: string[], event: Event];
   duplicateSite: [site: QuickSiteDraft];
@@ -194,7 +193,6 @@ const emit = defineEmits<{
                   刷新指标
                 </Button>
                 <Button size="small" @click="emit('openDocker')">Docker 发现</Button>
-                <Button size="small" @click="emit('openWizard')">向导</Button>
                 <Button size="small" type="primary" @click="emit('addSite')">新建站点</Button>
               </Space>
             </div>
@@ -213,7 +211,6 @@ const emit = defineEmits<{
             <Empty description="暂无简单站点">
               <Space>
                 <Button size="small" @click="emit('openDocker')">Docker 发现</Button>
-                <Button size="small" @click="emit('openWizard')">站点向导</Button>
                 <Button size="small" type="primary" @click="emit('addSite')">新建站点</Button>
               </Space>
             </Empty>

@@ -82,7 +82,6 @@ export function useCaddyConfigPage() {
     complexSiteSummaries,
     activeQuickSiteId,
     savePreview,
-    siteWizardOpen,
     dockerDiscoveryOpen,
     dockerDiscoveryScanning,
     dockerDiscoveryResult,
@@ -101,15 +100,11 @@ export function useCaddyConfigPage() {
     parseRawToBlocks,
     fetchConfig,
     addQuickSite,
-    openSiteWizard,
     openDockerDiscovery,
     handleDockerDiscoveryScan,
     handleDiscoveryCommitDrafts,
     handleDiscoveryPreview,
     handleDiscoveryApply,
-    handleWizardCommitDraft,
-    handleWizardPreview,
-    handleWizardApply,
     duplicateQuickSite,
     removeQuickSite,
     addUpstream,
@@ -195,6 +190,7 @@ export function useCaddyConfigPage() {
   const historyApi = useConfigHistory({
     selectedServerId,
     previewConfig,
+    configHash,
     onRolledBack: () => fetchConfig(),
   });
 
@@ -408,7 +404,6 @@ export function useCaddyConfigPage() {
     quickValidationErrors,
     configContent,
     previewConfig,
-    siteWizardOpen,
     dockerDiscoveryOpen,
     dockerDiscoveryScanning,
     dockerDiscoveryResult,
@@ -431,7 +426,6 @@ export function useCaddyConfigPage() {
     handleRefreshServerStatus,
     openHistory,
     applyPreset,
-    openSiteWizard,
     openDockerDiscovery,
     parseRawToBlocks,
     previewBeforeSave,
@@ -480,8 +474,5 @@ export function useCaddyConfigPage() {
     handleDiscoveryCommitDrafts,
     handleDiscoveryPreview,
     handleDiscoveryApply,
-    handleWizardCommitDraft,
-    handleWizardPreview,
-    handleWizardApply,
   };
 }

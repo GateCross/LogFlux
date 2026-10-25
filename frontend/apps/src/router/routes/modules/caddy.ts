@@ -29,6 +29,15 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        name: 'CaddyCertificates',
+        path: '/caddy/certificates',
+        component: () => import('#/views/caddy/certificates/index.vue'),
+        meta: {
+          icon: 'mdi:certificate-outline',
+          title: '证书中心',
+        },
+      },
+      {
         name: 'CaddyAccess',
         path: '/caddy/access',
         component: () => import('#/views/caddy/access/index.vue'),

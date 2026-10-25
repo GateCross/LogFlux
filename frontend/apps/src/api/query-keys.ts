@@ -13,6 +13,8 @@ export const qk = {
     history: (serverId: number, page: number, pageSize: number) =>
       ['caddy', 'history', serverId, page, pageSize] as const,
     catalog: (serverId: number) => ['caddy', 'catalog', serverId] as const,
+    certificates: (serverId?: number) =>
+      ['caddy', 'certificates', serverId ?? 'all'] as const,
     logs: (params: object) => ['caddy', 'logs', params] as const,
     access: (params?: object) => ['caddy', 'access', params] as const,
     ipRegion: (params?: object) => ['caddy', 'ip-region', params] as const,

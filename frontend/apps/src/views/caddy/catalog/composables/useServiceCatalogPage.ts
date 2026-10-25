@@ -112,6 +112,10 @@ export function useServiceCatalogPage() {
     return buildCatalogSitesFromConfigPayload(configData.value);
   });
 
+  /** 当前配置原文与哈希，供一步建站弹窗做追加保存与乐观并发 */
+  const configRaw = computed(() => configData.value?.config ?? '');
+  const configHash = computed(() => configData.value?.hash ?? '');
+
   watch(siteCards, () => {
     siteMetricsMap.value = new Map();
     siteMetricsError.value = '';
@@ -245,11 +249,6 @@ export function useServiceCatalogPage() {
     });
   }
 
-  function openSiteInWorkbench(site: CatalogSiteCard) {
-    openConfigWorkbench('blocks');
-    void site;
-  }
-
   function metricDisplay(site: CatalogSiteCard, kind: '4xx' | '5xx') {
     if (loadingSiteMetrics.value && !siteMetricsLoaded.value) return '…';
     if (siteMetricsError.value) return '—';
@@ -274,6 +273,8 @@ export function useServiceCatalogPage() {
     serversErrorMessage,
     configErrorMessage,
     siteCards,
+    configRaw,
+    configHash,
     keyword,
     kindFilter,
     siteMetricsMap,
@@ -298,7 +299,6 @@ export function useServiceCatalogPage() {
     openConfigWorkbench,
     openWaf,
     openAccessLogs,
-    openSiteInWorkbench,
     metricDisplay,
     setKeyword,
     setKindFilter,

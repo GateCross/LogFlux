@@ -42,12 +42,14 @@ export interface UseConfigHistoryOptions {
   selectedServerId: Ref<number | undefined>;
   /** 当前将要发布的配置文本（对比右侧） */
   previewConfig: Ref<string> | { value: string };
+  /** 已加载配置的哈希；回滚前做乐观并发校验，他人改动过则拒绝 */
+  configHash?: Ref<string> | { value: string };
   /** 回滚成功后刷新配置 */
   onRolledBack?: () => Promise<void> | void;
 }
 
 export function useConfigHistory(options: UseConfigHistoryOptions) {
-  const { selectedServerId, previewConfig, onRolledBack } = options;
+  const { selectedServerId, previewConfig, configHash, onRolledBack } = options;
   const queryClient = useQueryClient();
 
   const historyDrawerVisible = ref(false);
@@ -158,7 +160,10 @@ export function useConfigHistory(options: UseConfigHistoryOptions) {
       content: '确定要回滚到该版本吗？',
       async onOk() {
         try {
-          await rollbackCaddyConfigApi(serverId, { historyId: id });
+          await rollbackCaddyConfigApi(serverId, {
+            historyId: id,
+            baseHash: configHash?.value || undefined,
+          });
           message.success('回滚成功');
           // 先失效相关缓存，再 fetchConfig() / openHistory，避免 staleTime 命中旧数据
           await invalidateAfterConfigMutation(serverId);

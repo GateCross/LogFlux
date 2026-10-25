@@ -29,7 +29,6 @@ import {
   mergeQuickConfigDrafts,
   type QuickSiteDraft,
 } from '../quick-config-utils';
-import type { SiteWizardWafDraft } from '../site-wizard-utils';
 import type { DockerDiscoveryCandidate as SessionDockerCandidate } from '../docker-discovery-utils';
 import type {
   CaddyBlockDraft,
@@ -149,11 +148,6 @@ export function useCaddyConfigIO(options: UseCaddyConfigIOOptions) {
     open: false,
     original: '',
   });
-
-  /** 站点创建向导：默认仅产出草稿，不自动 /load */
-  const siteWizardOpen = ref(false);
-  /** 向导本地预览用：合并草稿后的 Caddyfile 文本（未 /load） */
-  const wizardLocalPreview = ref('');
 
   /** Docker 发现：会话候选（内存，不建 discovery DB） */
   const dockerDiscoveryOpen = ref(false);
@@ -405,12 +399,6 @@ export function useCaddyConfigIO(options: UseCaddyConfigIOOptions) {
     activeQuickSiteId.value = site.id;
   }
 
-  /** 打开站点创建向导（域名 → 上游 → TLS → 可选 WAF → Preview → Apply） */
-  function openSiteWizard() {
-    wizardLocalPreview.value = '';
-    siteWizardOpen.value = true;
-  }
-
   /** 打开 Docker 发现（label 扫描 → 会话候选；不落库、不 /load） */
   function openDockerDiscovery() {
     dockerDiscoveryOpen.value = true;
@@ -442,9 +430,9 @@ export function useCaddyConfigIO(options: UseCaddyConfigIOOptions) {
   }
 
   /**
-   * 将向导草稿合并进 quickSiteDrafts（纯本地，不调用任何 API /load）。
+   * 将站点草稿合并进 quickSiteDrafts（纯本地，不调用任何 API /load）。
    */
-  function mergeWizardDraftIntoWorkbench(draft: QuickSiteDraft) {
+  function mergeDraftIntoWorkbench(draft: QuickSiteDraft) {
     const next: QuickSiteDraft = {
       ...draft,
       id: draft.id || genId(),
@@ -466,7 +454,6 @@ export function useCaddyConfigIO(options: UseCaddyConfigIOOptions) {
     activeQuickSiteId.value = next.id;
     structuredAvailable.value = true;
     lastEditMode.value = 'blocks';
-    wizardLocalPreview.value = formatCaddyfile(generatedConfig.value);
     return next;
   }
 
@@ -475,12 +462,11 @@ export function useCaddyConfigIO(options: UseCaddyConfigIOOptions) {
    */
   function mergeDiscoveryDraftsIntoWorkbench(drafts: QuickSiteDraft[]) {
     for (const draft of drafts) {
-      mergeWizardDraftIntoWorkbench(draft);
+      mergeDraftIntoWorkbench(draft);
     }
     structuredAvailable.value = true;
     lastEditMode.value = 'blocks';
     mode.value = 'blocks';
-    wizardLocalPreview.value = formatCaddyfile(generatedConfig.value);
   }
 
   /** 发现：仅写入会话草稿 */
@@ -506,53 +492,6 @@ export function useCaddyConfigIO(options: UseCaddyConfigIOOptions) {
     mergeDiscoveryDraftsIntoWorkbench(drafts);
     dockerDiscoveryOpen.value = false;
     await previewBeforeSave('blocks');
-  }
-
-  /**
-   * 向导仅写入草稿：合并进工作台后关闭向导，不调用 preview/push（无 /load）。
-   */
-  function handleWizardCommitDraft(
-    draft: QuickSiteDraft,
-    meta: { waf: SiteWizardWafDraft },
-  ) {
-    mergeWizardDraftIntoWorkbench(draft);
-    mode.value = 'blocks';
-    message.success(
-      meta.waf.enabled
-        ? '站点草稿已写入工作台（含 WAF 意图，未热加载）'
-        : '站点草稿已写入工作台（未调用 /load）',
-    );
-    siteWizardOpen.value = false;
-    onConfigReady?.();
-  }
-
-  /**
-   * 向导 Preview：合并草稿后走既有 previewBeforeSave（仅 /adapt，不 /load）。
-   */
-  async function handleWizardPreview(draft: QuickSiteDraft) {
-    mergeWizardDraftIntoWorkbench(draft);
-    mode.value = 'blocks';
-    siteWizardOpen.value = false;
-    await previewBeforeSave('blocks');
-  }
-
-  /**
-   * 向导 Apply：合并草稿 → Preview 确认弹窗 → 用户确认后 confirmSave 才 /load。
-   * 绝不在向导内直接 push。
-   */
-  async function handleWizardApply(
-    draft: QuickSiteDraft,
-    meta: { waf: SiteWizardWafDraft },
-  ) {
-    mergeWizardDraftIntoWorkbench(draft);
-    mode.value = 'blocks';
-    siteWizardOpen.value = false;
-    await previewBeforeSave('blocks');
-    if (meta.waf?.enabled) {
-      message.info(
-        '站点已进入保存预览；WAF 意图请在「防火墙」页确认后单独应用，不会静默热加载。',
-      );
-    }
   }
 
   function duplicateQuickSite(site: QuickSiteDraft) {
@@ -809,8 +748,6 @@ export function useCaddyConfigIO(options: UseCaddyConfigIOOptions) {
     complexSiteSummaries,
     activeQuickSiteId,
     savePreview,
-    siteWizardOpen,
-    wizardLocalPreview,
     dockerDiscoveryOpen,
     dockerDiscoveryScanning,
     dockerDiscoveryResult,
@@ -834,15 +771,11 @@ export function useCaddyConfigIO(options: UseCaddyConfigIOOptions) {
     loadModules,
     fetchConfig,
     addQuickSite,
-    openSiteWizard,
     openDockerDiscovery,
     handleDockerDiscoveryScan,
     handleDiscoveryCommitDrafts,
     handleDiscoveryPreview,
     handleDiscoveryApply,
-    handleWizardCommitDraft,
-    handleWizardPreview,
-    handleWizardApply,
     duplicateQuickSite,
     removeQuickSite,
     addUpstream,
