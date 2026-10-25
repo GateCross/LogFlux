@@ -8,6 +8,7 @@ import { MapChart } from 'echarts/charts';
 import { TooltipComponent, VisualMapComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import { registerChinaMap, registerWorldMap } from '#/utils/map-register';
+import { usePreferences } from '@vben/preferences';
 
 echarts.use([MapChart, TooltipComponent, VisualMapComponent, CanvasRenderer]);
 
@@ -29,6 +30,8 @@ type TooltipFormatterParams = Parameters<
 >[0];
 
 const props = defineProps<Props>();
+
+const { isDark } = usePreferences();
 
 const mode = ref<'china' | 'world'>('china');
 
@@ -201,10 +204,10 @@ function getFullOptions(): echarts.EChartsCoreOption {
     tooltip: {
       show: true,
       formatter: formatTooltip,
-      // 固定白底深字，两种主题下都可读
-      backgroundColor: 'rgba(255, 255, 255, 0.96)',
-      borderColor: 'rgba(0, 0, 0, 0.08)',
-      textStyle: { color: '#333' },
+      // 跟随主题取底色，深浅两种模式下都可读
+      backgroundColor: isDark.value ? 'rgba(30, 30, 34, 0.96)' : 'rgba(255, 255, 255, 0.96)',
+      borderColor: isDark.value ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)',
+      textStyle: { color: isDark.value ? 'rgba(255, 255, 255, 0.85)' : '#333' },
     },
     visualMap: {
       min: 0,
@@ -244,6 +247,11 @@ watch(mode, () => {
   });
 });
 
+// 切主题只换 tooltip 配色，无需重建图表
+watch(isDark, () => {
+  chartInstance?.setOption(getFullOptions());
+});
+
 onMounted(() => {
   if (chartRef.value) {
     chartInstance = echarts.init(chartRef.value);
@@ -271,7 +279,7 @@ onUnmounted(() => {
       </div>
     </template>
     <div ref="chartRef" class="h-[400px] w-full" />
-    <div class="absolute bottom-4 right-4 rounded-xl border border-gray-100 bg-white/80 p-4 backdrop-blur-sm">
+    <div class="top-overlay absolute bottom-4 right-4 rounded-xl border p-4 backdrop-blur-sm">
       <div class="mb-2 text-sm font-bold">Top 区域</div>
       <div class="flex flex-col gap-2">
         <div v-for="item in activeData" :key="item.name" class="flex items-center justify-between gap-8">
@@ -286,3 +294,11 @@ onUnmounted(() => {
     </div>
   </Card>
 </template>
+
+<style scoped>
+/* 跟随主题的卡片底色，深浅色模式各自取 --card/--border */
+.top-overlay {
+  background: hsl(var(--card) / 80%);
+  border-color: hsl(var(--border));
+}
+</style>
