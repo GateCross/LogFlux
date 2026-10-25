@@ -46,6 +46,8 @@
 - [`plans/waf-crs-frontend-security-config-overall-plan.md`](./plans/waf-crs-frontend-security-config-overall-plan.md)
 - [`plans/waf-crs-frontend-security-config-progress.md`](./plans/waf-crs-frontend-security-config-progress.md)
 - [`plans/waf-caddy-config-optimization-plan.md`](./plans/waf-caddy-config-optimization-plan.md)（WAF 与 Caddy 编辑逻辑梳理与优化方案，含 P0 缺陷清单）
+- [`plans/caddy-config-framework-refactor-plan.md`](./plans/caddy-config-framework-refactor-plan.md)（配置框架重构：单一真相源 + 单一写入器，站点优先方案的阶段 0 前置）
+- [`plans/caddy-site-first-cert-center-plan.md`](./plans/caddy-site-first-cert-center-plan.md)（站点优先重构：一步建站 + 证书中心，取代 caddy-site-capability-model-plan.md）
 - [`plans/waf-update-management-design.md`](./plans/waf-update-management-design.md)
 - [`plans/waf-update-task-checklist.md`](./plans/waf-update-task-checklist.md)
 - [`plans/waf-update-operations-guide.md`](./plans/waf-update-operations-guide.md)
