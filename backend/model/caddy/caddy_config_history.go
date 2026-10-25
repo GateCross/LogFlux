@@ -10,8 +10,6 @@ const (
 	CaddyHistoryActionRollback            = "rollback"
 	CaddyHistoryActionSimpleWafApply      = "simple_waf_apply"
 	CaddyHistoryActionSimpleWafLastGood   = "simple_waf_last_good"
-	CaddyHistoryActionWafIntegrationOn    = "waf_integration_enable"
-	CaddyHistoryActionWafIntegrationOff   = "waf_integration_disable"
 )
 
 type CaddyConfigHistory struct {

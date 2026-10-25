@@ -77,8 +77,9 @@ type CaddyConfigResp struct {
 }
 
 type CaddyConfigRollbackReq struct {
-	ServerId  uint `path:"serverId"`
-	HistoryId uint `json:"historyId"`
+	ServerId  uint   `path:"serverId"`
+	HistoryId uint   `json:"historyId"`
+	BaseHash  string `json:"baseHash,optional"` // 回滚起点配置哈希；不一致说明他人已改
 }
 
 type CaddyConfigUpdateReq struct {
@@ -158,6 +159,38 @@ type CaddyServerStatusItem struct {
 
 type CaddyServerStatusListResp struct {
 	List []CaddyServerStatusItem `json:"list"`
+}
+
+type CertificateItem struct {
+	ID            uint   `json:"id"`
+	ServerId      uint   `json:"serverId"`      // 所属 Caddy 服务器
+	Domains       string `json:"domains"`       // SAN 列表，逗号分隔
+	PrimaryDomain string `json:"primaryDomain"` // 主域名（库存合并键）
+	Issuer        string `json:"issuer"`        // 签发者展示名
+	Source        string `json:"source"`        // acme_http | acme_dns | internal | upload | manual_declared
+	NotBefore     string `json:"notBefore"`     // 生效时间，ISO 字符串；声明行无真值为空
+	NotAfter      string `json:"notAfter"`      // 到期时间，ISO 字符串；声明行无真值为空
+	LastSyncedAt  string `json:"lastSyncedAt"`  // 最近一次同步时间，ISO 字符串
+	StoragePath   string `json:"storagePath"`   // 证书文件路径
+	Status        string `json:"status"`        // valid | expiring | expired | missing | pending
+	DaysLeft      int    `json:"daysLeft"`      // 距到期天数；pending/missing/已过期为 0
+}
+
+type CertificateListReq struct {
+	ServerId uint `form:"serverId,optional"`
+}
+
+type CertificateListResp struct {
+	List []CertificateItem `json:"list"`
+}
+
+type CertificateRefreshReq struct {
+	ServerId uint `json:"serverId,optional"` // 只刷新指定服务器，缺省刷新全部
+}
+
+type CertificateUploadReq struct {
+	ServerId uint   `form:"serverId,optional"` // 目标服务器，缺省使用默认本机服务器
+	Domains  string `form:"domains,optional"`  // 补充域名，逗号分隔，与证书 SAN 合并展示
 }
 
 type ChangePasswordReq struct {
@@ -799,35 +832,6 @@ type WafEventTrendItem struct {
 	Time    string `json:"time"`
 	Total   int64  `json:"total"`
 	Blocked int64  `json:"blocked"`
-}
-
-type WafIntegrationApplyReq struct {
-	ServerId      uint     `json:"serverId,optional"`
-	Enabled       bool     `json:"enabled"`
-	ApplyAll      bool     `json:"applyAll,optional"`
-	SiteAddresses []string `json:"siteAddresses,optional"`
-	DryRun        bool     `json:"dryRun,optional"`
-}
-
-type WafIntegrationApplyResp struct {
-	ServerId      uint     `json:"serverId"`
-	Enabled       bool     `json:"enabled"`
-	Changed       bool     `json:"changed"`
-	ImportedSites []string `json:"importedSites"`
-	Actions       []string `json:"actions"`
-	Config        string   `json:"config,optional"`
-	Message       string   `json:"message,optional"`
-}
-
-type WafIntegrationStatusResp struct {
-	ServerId       uint     `json:"serverId"`
-	Integrated     bool     `json:"integrated"`
-	OrderReady     bool     `json:"orderReady"`
-	SnippetReady   bool     `json:"snippetReady"`
-	DirectiveReady bool     `json:"directiveReady"`
-	ImportedSites  []string `json:"importedSites"`
-	AvailableSites []string `json:"availableSites"`
-	Message        string   `json:"message,optional"`
 }
 
 type WafSourceActionReq struct {

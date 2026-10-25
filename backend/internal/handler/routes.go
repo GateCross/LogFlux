@@ -51,26 +51,6 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 			[]rest.Route{
 				{
 					Method:  http.MethodGet,
-					Path:    "/caddy/ip-region",
-					Handler: caddy.GetIpRegionConfigHandler(serverCtx),
-				},
-				{
-					Method:  http.MethodPut,
-					Path:    "/caddy/ip-region",
-					Handler: caddy.UpdateIpRegionConfigHandler(serverCtx),
-				},
-			}...,
-		),
-		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
-		rest.WithPrefix("/api"),
-	)
-
-	server.AddRoutes(
-		rest.WithMiddlewares(
-			[]rest.Middleware{serverCtx.ActiveUser},
-			[]rest.Route{
-				{
-					Method:  http.MethodGet,
 					Path:    "/caddy/discovery/docker",
 					Handler: caddy.DiscoverDockerServicesHandler(serverCtx),
 				},
@@ -140,6 +120,36 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 			[]rest.Middleware{serverCtx.ActiveUser},
 			[]rest.Route{
 				{
+					Method:  http.MethodGet,
+					Path:    "/caddy/certificates",
+					Handler: caddy.ListCertificatesHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodDelete,
+					Path:    "/caddy/certificates/:id",
+					Handler: caddy.DeleteCertificateHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/caddy/certificates/refresh",
+					Handler: caddy.RefreshCertificatesHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/caddy/certificates/upload",
+					Handler: caddy.UploadCertificateHandler(serverCtx),
+				},
+			}...,
+		),
+		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
+		rest.WithPrefix("/api"),
+	)
+
+	server.AddRoutes(
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.ActiveUser},
+			[]rest.Route{
+				{
 					Method:  http.MethodPost,
 					Path:    "/caddy/waf/engine/check",
 					Handler: caddy.CheckWafEngineHandler(serverCtx),
@@ -158,16 +168,6 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					Method:  http.MethodGet,
 					Path:    "/caddy/waf/events/stats",
 					Handler: caddy.GetWafEventStatsHandler(serverCtx),
-				},
-				{
-					Method:  http.MethodPost,
-					Path:    "/caddy/waf/integration/apply",
-					Handler: caddy.ApplyWafIntegrationHandler(serverCtx),
-				},
-				{
-					Method:  http.MethodGet,
-					Path:    "/caddy/waf/integration/status",
-					Handler: caddy.GetWafIntegrationStatusHandler(serverCtx),
 				},
 				{
 					Method:  http.MethodGet,
@@ -223,6 +223,26 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					Method:  http.MethodPost,
 					Path:    "/caddy/waf/upload",
 					Handler: caddy.UploadWafPackageHandler(serverCtx),
+				},
+			}...,
+		),
+		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
+		rest.WithPrefix("/api"),
+	)
+
+	server.AddRoutes(
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.ActiveUser},
+			[]rest.Route{
+				{
+					Method:  http.MethodGet,
+					Path:    "/caddy/ip-region",
+					Handler: caddy.GetIpRegionConfigHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPut,
+					Path:    "/caddy/ip-region",
+					Handler: caddy.UpdateIpRegionConfigHandler(serverCtx),
 				},
 			}...,
 		),
@@ -311,13 +331,18 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 			[]rest.Route{
 				{
 					Method:  http.MethodGet,
-					Path:    "/system/logs",
-					Handler: log.GetSystemLogsHandler(serverCtx),
+					Path:    "/caddy/logs",
+					Handler: log.GetCaddyLogsHandler(serverCtx),
 				},
 				{
 					Method:  http.MethodPost,
-					Path:    "/system/logs/clear",
-					Handler: log.ClearSystemLogsHandler(serverCtx),
+					Path:    "/caddy/logs/clear",
+					Handler: log.ClearCaddyLogsHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/caddy/logs/site-metrics",
+					Handler: log.GetSiteMetricsHandler(serverCtx),
 				},
 			}...,
 		),
@@ -331,18 +356,13 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 			[]rest.Route{
 				{
 					Method:  http.MethodGet,
-					Path:    "/caddy/logs",
-					Handler: log.GetCaddyLogsHandler(serverCtx),
+					Path:    "/system/logs",
+					Handler: log.GetSystemLogsHandler(serverCtx),
 				},
 				{
 					Method:  http.MethodPost,
-					Path:    "/caddy/logs/clear",
-					Handler: log.ClearCaddyLogsHandler(serverCtx),
-				},
-				{
-					Method:  http.MethodPost,
-					Path:    "/caddy/logs/site-metrics",
-					Handler: log.GetSiteMetricsHandler(serverCtx),
+					Path:    "/system/logs/clear",
+					Handler: log.ClearSystemLogsHandler(serverCtx),
 				},
 			}...,
 		),

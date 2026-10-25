@@ -124,8 +124,9 @@ type (
 		CreatedAt string `json:"createdAt"`
 	}
 	CaddyConfigRollbackReq {
-		ServerId  uint `path:"serverId"`
-		HistoryId uint `json:"historyId"`
+		ServerId  uint   `path:"serverId"`
+		HistoryId uint   `json:"historyId"`
+		BaseHash  string `json:"baseHash,optional"` // 回滚起点配置哈希；不一致说明他人已改
 	}
 )
 

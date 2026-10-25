@@ -44,6 +44,7 @@ type ServiceContext struct {
 	ArchiveTask       *tasks.ArchiveTask
 	CronScheduler     *tasks.CronScheduler
 	WafScheduler      *tasks.WafScheduler
+	CertSyncScheduler *tasks.CertSyncScheduler
 	IngestMgr         *ingest.IngestManager
 	NotificationMgr   notification.NotificationManager
 	ActiveUser        rest.Middleware
@@ -55,6 +56,7 @@ type ServiceContext struct {
 	CronTaskModel     cronmodel.CronTaskModel
 	CronTaskFileModel cronmodel.CronTaskFileModel
 	CaddyLogModel     caddymodel.CaddyLogModel
+	CertificateModel  caddymodel.CertificateModel
 	SystemLogModel    ingestmodel.SystemLogModel
 	WafEventModel     wafmodel.WafEventModel
 }
@@ -72,6 +74,8 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		&ingestmodel.LogSource{},
 		&caddymodel.CaddyServer{},
 		&caddymodel.CaddyConfigHistory{},
+		// 证书中心库存
+		&caddymodel.Certificate{},
 		// 通知相关表
 		&notificationmodel.NotificationChannel{},
 		&notificationmodel.NotificationRule{},
@@ -151,6 +155,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	// 初始化 WAF 更新调度器（执行器在 main 中注入）
 	wafScheduler := tasks.NewWafScheduler(db)
 
+	// 初始化证书每日同步调度器（执行器在 main 中注入，避免 tasks 依赖 logic 层）
+	certSyncScheduler := tasks.NewCertSyncScheduler()
+
 	// 初始化系统配置模型
 	systemConfigModel := systemmodel.NewSystemConfigModel(db)
 
@@ -186,6 +193,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		ArchiveTask:       archiveTask,
 		CronScheduler:     cronScheduler,
 		WafScheduler:      wafScheduler,
+		CertSyncScheduler: certSyncScheduler,
 		IngestMgr:         ingestMgr,
 		NotificationMgr:   notificationMgr,
 		ActiveUser:        middleware.NewActiveUserMiddleware(db).Handle,
@@ -197,6 +205,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		CronTaskModel:     cronmodel.NewCronTaskModel(db),
 		CronTaskFileModel: cronmodel.NewCronTaskFileModel(db),
 		CaddyLogModel:     caddymodel.NewCaddyLogModel(db),
+		CertificateModel:  caddymodel.NewCertificateModel(db),
 		SystemLogModel:    ingestmodel.NewSystemLogModel(db),
 		WafEventModel:     wafmodel.NewWafEventModel(db),
 	}

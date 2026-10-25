@@ -80,5 +80,11 @@ func (l *GetEventListLogic) GetEventList() (resp *types.EventListResp, err error
 
 	)
 
+	// 7. 证书事件
+	resp.List = append(resp.List,
+		types.EventItem{Value: notification.EventCertExpiring, Label: "证书即将到期", Group: "证书事件"},
+		types.EventItem{Value: notification.EventCertExpired, Label: "证书已过期", Group: "证书事件"},
+	)
+
 	return resp, nil
 }

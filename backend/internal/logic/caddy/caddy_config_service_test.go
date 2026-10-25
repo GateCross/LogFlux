@@ -15,10 +15,33 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
 )
+
+// newCaddySQLmockDB 构造基于 sqlmock 的 GORM 连接，供需要模拟数据库的用例共用。
+func newCaddySqlmockDB(t *testing.T) (*gorm.DB, sqlmock.Sqlmock, func()) {
+	t.Helper()
+
+	sqldb, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+	if err != nil {
+		t.Fatalf("failed to open sqlmock: %v", err)
+	}
+
+	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqldb}), &gorm.Config{SkipDefaultTransaction: true})
+	if err != nil {
+		_ = sqldb.Close()
+		t.Fatalf("failed to open gorm: %v", err)
+	}
+
+	cleanup := func() {
+		_ = sqldb.Close()
+	}
+	return gdb, mock, cleanup
+}
 
 func TestCaddyConfigServicePrepareQuick(t *testing.T) {
 	modules := mustCaddyModules(t, caddyFormModel{
@@ -252,7 +275,7 @@ func TestCaddyConfigServiceValidateQuick(t *testing.T) {
 	}
 }
 
-func TestResolveCaddyConfigModulesKeepsRawSnapshot(t *testing.T) {
+func TestResolveCaddyConfigModulesDropsStaleRawSnapshot(t *testing.T) {
 	request := mustCaddyModules(t, caddyFormModel{
 		SchemaVersion: 1,
 		Global:        caddyGlobal{Raw: "{"},
@@ -273,14 +296,14 @@ func TestResolveCaddyConfigModulesKeepsRawSnapshot(t *testing.T) {
 			},
 		},
 	})
-	existing := mustCaddyModules(t, caddyFormModel{SchemaVersion: 1, Global: caddyGlobal{Raw: "{existing}"}})
-	if got := resolveCaddyConfigModules(caddyConfigModeRaw, "", existing); got != existing {
-		t.Fatalf("expected raw update to keep existing modules, got %q", got)
+	// raw 模式手改文本后旧 modules 必然过期，必须丢弃让前端回退到文本解析。
+	if got := resolveCaddyConfigModules(caddyConfigModeRaw, ""); got != emptyModulesJSON {
+		t.Fatalf("expected raw update without request modules to drop stale modules, got %q", got)
 	}
-	if got := resolveCaddyConfigModules(caddyConfigModeRaw, request, existing); got != request {
+	if got := resolveCaddyConfigModules(caddyConfigModeRaw, request); got != request {
 		t.Fatalf("expected raw update with request modules to use request modules, got %q", got)
 	}
-	if got := resolveCaddyConfigModules(caddyConfigModeQuick, request, existing); got != request {
+	if got := resolveCaddyConfigModules(caddyConfigModeQuick, request); got != request {
 		t.Fatalf("expected structured update to use request modules, got %q", got)
 	}
 }
@@ -319,7 +342,7 @@ func TestLoadCurrentCaddyConfigRequiresManagedConfig(t *testing.T) {
 }
 
 func TestGetCaddyConfigReturnsUnmanagedPrompt(t *testing.T) {
-	gdb, mock, cleanup := newWafIntegrationMockDB(t)
+	gdb, mock, cleanup := newCaddySqlmockDB(t)
 	defer cleanup()
 
 	now := time.Now()
@@ -371,7 +394,7 @@ func TestPreviewCaddyConfigOnlyAdapts(t *testing.T) {
 	}))
 	defer caddyMock.Close()
 
-	gdb, mock, cleanup := newWafIntegrationMockDB(t)
+	gdb, mock, cleanup := newCaddySqlmockDB(t)
 	defer cleanup()
 
 	now := time.Now()
@@ -452,11 +475,15 @@ func TestUpdateCaddyConfigUsesAdaptThenLoadAndHistory(t *testing.T) {
 	}))
 	defer caddyMock.Close()
 
-	gdb, mock, cleanup := newWafIntegrationMockDB(t)
+	gdb, mock, cleanup := newCaddySqlmockDB(t)
 	defer cleanup()
 
 	now := time.Now()
 	// 已有配置 → apply 走 load 后再 persist 分支
+	mock.ExpectQuery(`SELECT .* FROM "caddy_servers"`).WillReturnRows(
+		caddyServerRows(now, caddyMock.URL, integrationBaseConfig),
+	)
+	// Apply 锁内重读库内最新行
 	mock.ExpectQuery(`SELECT .* FROM "caddy_servers"`).WillReturnRows(
 		caddyServerRows(now, caddyMock.URL, integrationBaseConfig),
 	)

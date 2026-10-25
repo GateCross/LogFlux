@@ -72,6 +72,11 @@ func main() {
 		ctx.WafScheduler.Start()
 		defer ctx.WafScheduler.Stop()
 	}
+	if ctx.CertSyncScheduler != nil {
+		ctx.CertSyncScheduler.SetExecutor(&certSyncExecutor{svcCtx: ctx})
+		ctx.CertSyncScheduler.Start()
+		defer ctx.CertSyncScheduler.Stop()
+	}
 	handler.RegisterHandlers(server, ctx)
 
 	// Global Middlewares
@@ -114,4 +119,16 @@ func (executor *wafScheduleExecutor) SyncSource(ctx context.Context, sourceID ui
 		ActivateNow: activateNow,
 	})
 	return err
+}
+
+// certSyncExecutor 把证书每日同步调度桥接到 logic 层的双源同步服务。
+type certSyncExecutor struct {
+	svcCtx *svc.ServiceContext
+}
+
+func (executor *certSyncExecutor) SyncCertificates(ctx context.Context) error {
+	if executor == nil || executor.svcCtx == nil {
+		return fmt.Errorf("证书同步执行器服务上下文为空")
+	}
+	return caddylogic.NewCertSyncService(ctx, executor.svcCtx).Sync(0)
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	caddymodel "logflux/model/caddy"
 	"strings"
+	"sync"
 
 	"logflux/internal/svc"
 	"logflux/internal/utils/safego"
@@ -12,6 +13,13 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 	"gorm.io/gorm"
 )
+
+// caddyConfigWriteMu 串行化所有 Caddy 配置写路径。
+//
+// adapt → load → persist 必须作为整体执行：若无互斥，两个并发写请求交错
+// （A.load → B.load → B.persist → A.persist）会出现运行态与库内配置分叉，
+// 且双方都返回成功；配置写频率极低，全局单锁即可，无需按服务器细分。
+var caddyConfigWriteMu sync.Mutex
 
 type caddyConfigApplyService struct {
 	svcCtx *svc.ServiceContext
@@ -55,16 +63,50 @@ func verifyBaseHash(db *gorm.DB, serverID uint, baseHash string) error {
 	return checkBaseHash(server, baseHash)
 }
 
-// apply 按「校验 → 加载 → 落库」固定顺序应用配置。
+// configWriteOptions 表达一次配置写入的全部差异，供三条写路径共用同一套语义。
+type configWriteOptions struct {
+	// history 表 action 名，必填。
+	HistoryAction string
+	// 额外写一条快照历史，记录写入前的旧配置（简单 WAF 的 last_good 依赖）。
+	SnapshotBefore bool
+	// 非空时做乐观并发校验，与库内哈希不一致则拒绝写入。
+	BaseHash string
+	// 与配置同事务执行的落库动作（如简单 WAF 的策略保存），任一步失败整体回滚。
+	InTx func(tx *gorm.DB) error
+}
+
+// Apply 按「校验 → 加载 → 落库」固定顺序应用配置，是所有 Caddy 配置写路径的唯一入口，
+// 全程持有 caddyConfigWriteMu 串行执行。
 //
 // 顺序统一的原因：/load 本身失败会自动回滚运行态，落库前出错等于什么都没改；
 // 只有落库失败才需要把运行态改回去，而那次恢复依赖上一份配置，所以先加载再落库
-// 是唯一能把"哪一步失败、要回滚什么"说清楚的顺序。首次接管同样适用，此前它
-// 反着来（先落库再加载），失败语义与其他路径不一致。
-func (s *caddyConfigApplyService) apply(server *caddymodel.CaddyServer, config, modules, action string) error {
+// 是唯一能把"哪一步失败、要回滚什么"说清楚的顺序。
+func (s *caddyConfigApplyService) Apply(server *caddymodel.CaddyServer, config, modules string, opts configWriteOptions) error {
 	if server == nil {
 		return fmt.Errorf("Caddy 服务器不存在")
 	}
+	if strings.TrimSpace(opts.HistoryAction) == "" {
+		return fmt.Errorf("配置写入缺少 history 动作名")
+	}
+
+	caddyConfigWriteMu.Lock()
+	defer caddyConfigWriteMu.Unlock()
+
+	// 锁内重读库内最新行再校验 baseHash：请求开始时的内存快照不可信，
+	// 从加载 server 到落库之间隔着 adapt/load 两次带重试的 HTTP 调用（窗口可达数十秒），
+	// 期间他人落库的修改若不在此重新比对，会被携带"当时合法"哈希的后写者覆盖。
+	var fresh caddymodel.CaddyServer
+	if err := s.svcCtx.DB.First(&fresh, server.ID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return fmt.Errorf("Caddy 服务器不存在")
+		}
+		return fmt.Errorf("查询 Caddy 服务器失败: %w", err)
+	}
+	if err := checkBaseHash(&fresh, opts.BaseHash); err != nil {
+		return err
+	}
+	// 以库内最新值为回滚基准，并同步回调用方持有的对象，落库与响应展示都以它为准。
+	*server = fresh
 
 	normalizedModules := normalizeCaddyModulesJSON(modules)
 	previousConfig := server.Config
@@ -84,7 +126,7 @@ func (s *caddyConfigApplyService) apply(server *caddymodel.CaddyServer, config, 
 		return err
 	}
 
-	if _, err := s.persist(server, config, normalizedModules, action); err != nil {
+	if _, err := s.persist(server, config, normalizedModules, opts, previousConfig, previousModules); err != nil {
 		server.Config = previousConfig
 		server.Modules = previousModules
 		// 未接管过的服务器没有可回退的配置，运行态保持新配置，等下次应用覆盖。
@@ -101,9 +143,20 @@ func (s *caddyConfigApplyService) apply(server *caddymodel.CaddyServer, config, 
 	return nil
 }
 
-func (s *caddyConfigApplyService) persist(server *caddymodel.CaddyServer, config, modules, action string) (uint, error) {
+func (s *caddyConfigApplyService) persist(server *caddymodel.CaddyServer, config, modules string, opts configWriteOptions, previousConfig, previousModules string) (uint, error) {
 	var historyID uint
 	if err := s.svcCtx.DB.Transaction(func(tx *gorm.DB) error {
+		if opts.InTx != nil {
+			if err := opts.InTx(tx); err != nil {
+				return err
+			}
+		}
+		if opts.SnapshotBefore {
+			if err := createCaddyPolicyHistory(tx, server.ID, caddymodel.CaddyHistoryActionSimpleWafLastGood, previousConfig, previousModules); err != nil {
+				return err
+			}
+		}
+
 		server.Config = config
 		server.Modules = modules
 		if err := tx.Save(server).Error; err != nil {
@@ -112,7 +165,7 @@ func (s *caddyConfigApplyService) persist(server *caddymodel.CaddyServer, config
 
 		history := &caddymodel.CaddyConfigHistory{
 			ServerID: server.ID,
-			Action:   strings.TrimSpace(action),
+			Action:   opts.HistoryAction,
 			Hash:     hashConfig(config),
 			Config:   config,
 			Modules:  modules,

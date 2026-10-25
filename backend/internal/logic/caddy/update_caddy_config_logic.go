@@ -32,6 +32,7 @@ func (l *UpdateCaddyConfigLogic) UpdateCaddyConfig(req *types.CaddyConfigUpdateR
 	if err := l.svcCtx.DB.WithContext(l.ctx).First(&server, req.ServerId).Error; err != nil {
 		return nil, fmt.Errorf("服务器不存在")
 	}
+	// 提前校验一次避免无谓的文本处理，写入器内还会再校验兜底。
 	if err := checkBaseHash(&server, req.BaseHash); err != nil {
 		return nil, err
 	}
@@ -45,8 +46,11 @@ func (l *UpdateCaddyConfigLogic) UpdateCaddyConfig(req *types.CaddyConfigUpdateR
 	if err != nil {
 		return nil, err
 	}
-	modules := resolveCaddyConfigModules(req.Mode, req.Modules, server.Modules)
-	if err := applyService.apply(&server, candidate.Config, modules, caddymodel.CaddyHistoryActionUpdate); err != nil {
+	modules := resolveCaddyConfigModules(req.Mode, req.Modules)
+	if err := applyService.Apply(&server, candidate.Config, modules, configWriteOptions{
+		HistoryAction: caddymodel.CaddyHistoryActionUpdate,
+		BaseHash:      req.BaseHash,
+	}); err != nil {
 		return nil, err
 	}
 

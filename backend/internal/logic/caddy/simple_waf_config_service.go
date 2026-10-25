@@ -10,7 +10,6 @@ import (
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
-	"logflux/internal/utils/safego"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"gorm.io/gorm"
@@ -139,23 +138,25 @@ func (s *simpleWafConfigService) Apply(req *types.SimpleWafConfigUpdateReq) (*ty
 		return nil, err
 	}
 
-	if err := adaptCaddyfile(candidate.Server, candidate.Config); err != nil {
-		return nil, fmt.Errorf("简单 WAF 配置校验失败: %w", err)
-	}
-	if err := loadCaddyfile(candidate.Server, candidate.Config); err != nil {
-		return nil, fmt.Errorf("简单 WAF 配置加载失败: %w", err)
-	}
-
-	if err := s.persistAppliedCandidate(candidate); err != nil {
-		if rollbackErr := rollbackPolicyConfigToLastGood(candidate.Server, candidate.LastGood); rollbackErr != nil {
-			return nil, fmt.Errorf("简单 WAF 配置落库失败: %v，回滚到 last_good 失败: %v", err, rollbackErr)
-		}
+	// 策略保存与配置落库必须在同一事务：任一步失败整体回滚，避免出现
+	// 策略已开而 Caddyfile 未挂载的中间态。
+	writer := newCaddyConfigApplyService(s.svcCtx, s.logger)
+	if err := writer.Apply(candidate.Server, candidate.Config, candidate.Modules, configWriteOptions{
+		HistoryAction:  caddymodel.CaddyHistoryActionSimpleWafApply,
+		SnapshotBefore: true,
+		BaseHash:       req.BaseHash,
+		InTx: func(tx *gorm.DB) error {
+			if err := ensureSingleDefaultPolicy(tx, candidate.Policy); err != nil {
+				return err
+			}
+			if err := tx.Save(candidate.Policy).Error; err != nil {
+				return fmt.Errorf("保存简单 WAF 策略失败: %w", err)
+			}
+			return nil
+		},
+	}); err != nil {
 		return nil, err
 	}
-
-	safego.New(context.Background(), "应用简单 WAF 配置后同步日志源").Go(func() {
-		syncCaddyLogSources(s.svcCtx, candidate.Server, s.logger)
-	})
 
 	// 确保 WAF 审计日志路径已注册为日志源
 	if candidate.Normalized.Enabled {
@@ -278,51 +279,12 @@ func (s *simpleWafConfigService) findOrCreateDefaultPolicy() (*wafmodel.WafPolic
 		CrsDetectionParanoiaLevel:   1,
 		CrsInboundAnomalyThreshold:  5,
 		CrsOutboundAnomalyThreshold: 4,
-		Config: commonmodel.JSONMap{
-			"scope":      "global",
-			"simpleMode": true,
-		},
+		Config:                      commonmodel.JSONMap{},
 	}
 	if err := db.Create(&policy).Error; err != nil {
 		return nil, fmt.Errorf("创建默认 WAF 策略失败: %w", err)
 	}
 	return &policy, nil
-}
-
-func (s *simpleWafConfigService) persistAppliedCandidate(candidate *simpleWafCandidate) error {
-	if candidate == nil || candidate.Server == nil || candidate.Policy == nil {
-		return fmt.Errorf("简单 WAF 候选配置无效")
-	}
-
-	if err := s.svcCtx.DB.WithContext(s.ctx).Transaction(func(tx *gorm.DB) error {
-		if err := ensureSingleDefaultPolicy(tx, candidate.Policy); err != nil {
-			return err
-		}
-		if err := tx.Save(candidate.Policy).Error; err != nil {
-			return fmt.Errorf("保存简单 WAF 策略失败: %w", err)
-		}
-		if err := createCaddyPolicyHistory(tx, candidate.Server.ID, caddymodel.CaddyHistoryActionSimpleWafLastGood, candidate.LastGood, candidate.LastModules); err != nil {
-			return err
-		}
-		if err := tx.Model(&caddymodel.CaddyServer{}).
-			Where("id = ?", candidate.Server.ID).
-			Updates(map[string]interface{}{
-				"config":  candidate.Config,
-				"modules": candidate.Modules,
-			}).Error; err != nil {
-			return fmt.Errorf("保存 Caddy 服务器配置失败: %w", err)
-		}
-		if err := createCaddyPolicyHistory(tx, candidate.Server.ID, caddymodel.CaddyHistoryActionSimpleWafApply, candidate.Config, candidate.Modules); err != nil {
-			return err
-		}
-		return nil
-	}); err != nil {
-		return fmt.Errorf("简单 WAF 配置落库失败: %w", err)
-	}
-
-	candidate.Server.Config = candidate.Config
-	candidate.Server.Modules = candidate.Modules
-	return nil
 }
 
 func (s *simpleWafConfigService) buildResponse(server *caddymodel.CaddyServer, policy *wafmodel.WafPolicy, snapshot *wafIntegrationSnapshot, actions []string, directives []string) *types.SimpleWafConfigResp {
@@ -503,8 +465,6 @@ func applySimpleWafConfigToPolicy(config simpleWafNormalizedConfig, policy *wafm
 	if policy.Config == nil {
 		policy.Config = commonmodel.JSONMap{}
 	}
-	policy.Config["scope"] = "global"
-	policy.Config["simpleMode"] = true
 	// 直接存 []string：JSONMap 落库时统一走 json.Marshal，读回时由解析器还原。
 	policy.Config[simpleWafSiteAddressesKey] = config.SiteAddresses
 

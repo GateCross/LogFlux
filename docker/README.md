@@ -271,8 +271,47 @@ Waf:
 
 - 启动优先 `caddy run --resume`（读取 `/config/caddy/autosave.json`）
 - 无 autosave 时回退 `/etc/caddy/Caddyfile`，默认是 LogFlux 受管简化模板
-- 后台保存配置会调用 Caddy Admin API `/adapt` + `/load`，属于热重载，无需重启容器
+- 后台保存配置会调用 Caddy Admin API `/adapt` + `/load`，属于热加载，无需重启容器
 - WAF 策略发布时会优先生成完整受管 Caddyfile；未识别为 LogFlux 默认模板的自定义配置继续只替换 Coraza directives 块
+
+### 8.1 证书中心与 DNS-01 签发（CF_API_TOKEN）
+
+LogFlux 证书中心（`Caddy管理 -> 证书中心`）只做**声明与展示**，不做签发编排：
+签发与自动续期一律由 Caddy 完成。库存来自两个来源合并：
+
+- 本机服务器：扫描 Caddy 证书存储目录（默认 `/data/caddy/certificates`，可用
+  `backend/etc/config.yaml` 的 `Caddy.CertStorageDir` 覆盖），解析 PEM 得到有效期/签发者/SAN；
+- 全部服务器（含远端）：解析 Caddyfile 的站点域名与 `tls` 指令得到"应有证书"清单；
+  远端服务器只有声明行，状态显示 `pending`（远端仅声明）。
+
+上传的证书写入 `/config/certs/<serverID>/<主域名>/`（`fullchain.pem` + `privkey.pem`，0600）。
+该目录已通过 `cert_certs` 命名卷挂载持久化（见 `docker-compose.yml`），重建容器不丢失。
+
+**DNS-01（Cloudflare）签发的 token 注入**：在建站/站点配置里选择 DNS 签发后，
+生成的 Caddyfile 会引用环境变量占位 `{$CF_API_TOKEN}`，token 只经环境变量进入容器，
+**不写数据库、不进前端**。注入方法（任选其一）：
+
+```yaml
+# 方法一：docker-compose.yml 的 logflux 服务下追加
+services:
+  logflux:
+    environment:
+      - CF_API_TOKEN=你的 Cloudflare API Token
+```
+
+```bash
+# 方法二：docker/.env 里写入后 compose 自动注入（需在 compose 中引用变量）
+#   environment:
+#     - CF_API_TOKEN=${CF_API_TOKEN:-}
+CF_API_TOKEN=你的 Cloudflare API Token
+```
+
+说明：
+
+- Token 需要 Cloudflare 的 `Zone - DNS - Edit` 权限，建议使用仅限目标域的受限 Token；
+- token 未注入时，DNS 签发的站点会签发失败（Caddy 日志可见），HTTP-01/TLS-ALPN 自动签发不受影响；
+- 需要泛域名证书（`*.example.com`）或源站无公网 80 端口时才需要 DNS-01；
+- 证书到期前 14/7 天发 warning、1 天与已过期发 critical 通知（通知规则里选"证书事件"组即可订阅）。
 
 ## 9. 常用运维命令
 

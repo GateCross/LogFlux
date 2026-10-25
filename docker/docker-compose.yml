@@ -14,6 +14,8 @@ services:
       - caddy_data:/data/caddy
       - caddy_config:/config/caddy
       - security_data:/config/security
+      # 上传证书持久化（Caddyfile 引用其路径，容器重建不得丢失）
+      - cert_certs:/config/certs
       - cron_files:/config/cron-files
       - caddy_logs:/var/log/caddy
       
@@ -51,6 +53,8 @@ volumes:
   caddy_config:
     driver: local
   security_data:
+    driver: local
+  cert_certs:
     driver: local
   cron_files:
     driver: local

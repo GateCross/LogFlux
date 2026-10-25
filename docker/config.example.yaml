@@ -17,6 +17,11 @@ Redis:
   Password: ""
   DB: 0
 CaddyLogPath: "/var/log/caddy/access.log"
+
+# 证书中心：Caddy 证书存储目录（卷扫描源），留空回退 /data/caddy/certificates
+Caddy:
+  CertStorageDir: "/data/caddy/certificates"
+
 Archive:
   Enabled: true
   RetentionDay: 90

@@ -12,13 +12,23 @@ type Config struct {
 		AccessSecret string
 		AccessExpire int64
 	}
-	Database     DatabaseConf
-	Redis        RedisConf
-	CronFilesDir string `json:",optional"` // 定时任务脚本文件目录
+	Caddy               CaddyConf        `json:",optional"`
+	Database            DatabaseConf
+	Redis               RedisConf
+	CronFilesDir        string `json:",optional"` // 定时任务脚本文件目录
 	Archive             ArchiveConf
 	Waf                 WafConf
 	Notification        NotificationConf `json:",optional"`
 	IPRegion            IPRegionConf     `json:",optional"`
+}
+
+// Caddy 证书存储目录缺省值，与容器内 Caddy 存储卷一致。
+const DefaultCaddyCertStorageDir = "/data/caddy/certificates"
+
+// CaddyConf Caddy 运行时目录配置，供证书中心扫描使用。
+type CaddyConf struct {
+	// 证书存储目录（卷扫描源），留空回退 DefaultCaddyCertStorageDir
+	CertStorageDir string `json:",optional"`
 }
 
 type DatabaseConf struct {

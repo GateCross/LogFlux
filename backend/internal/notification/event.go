@@ -92,6 +92,10 @@ const (
 	EventCaddyConfigUpdateSuccess = "caddy.config_update_success"
 	EventCaddyLogSourceDiscovered = "caddy.log_source_discovered"
 
+	// 证书事件
+	EventCertExpiring = "cert.expiring" // 证书距到期不足阈值（14/7 天 warning、1 天 critical）
+	EventCertExpired  = "cert.expired"  // 证书已过期
+
 	// 安全事件
 	EventSecurityLoginFailed               = "security.login_failed"
 	EventSecurityBruteForce                = "security.brute_force"
