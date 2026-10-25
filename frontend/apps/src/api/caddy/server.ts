@@ -309,11 +309,19 @@ export async function getCaddyLogsApi(
   });
 }
 
-/** 站点近窗 4xx/5xx 指标项 — POST /caddy/logs/site-metrics */
+/**
+ * 站点近窗指标项 — POST /caddy/logs/site-metrics
+ * window=24h 契约：total / blocked 为新增可选字段（后端 getSiteMetrics 扩展），
+ * 未上线前为 undefined，前端按 — 降级展示，不做本地推测。
+ */
 export interface SiteMetricsItem {
   host: string;
   count4xx: number;
   count5xx: number;
+  /** 窗口内总请求数（无 status 过滤，聚合自 caddy_logs） */
+  total?: number;
+  /** 窗口内 WAF 拦截数（按站点聚合自 waf_events，仅统计被拦截请求） */
+  blocked?: number;
 }
 
 export interface SiteMetricsListResult {
@@ -323,7 +331,7 @@ export interface SiteMetricsListResult {
 export interface SiteMetricsParams {
   /** 主机列表，单次最多 50 */
   hosts: string[];
-  /** 时间窗分钟数，默认 15 */
+  /** 时间窗分钟数，默认 15；"window=24h" 即传 1440 */
   windowMinutes?: number;
 }
 

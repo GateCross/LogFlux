@@ -17,14 +17,21 @@ export const qk = {
       ['caddy', 'certificates', serverId ?? 'all'] as const,
     logs: (params: object) => ['caddy', 'logs', params] as const,
     access: (params?: object) => ['caddy', 'access', params] as const,
+    globalOptions: (params?: object) =>
+      ['caddy', 'global-options', params] as const,
+    entryBlock: (params?: object) =>
+      ['caddy', 'entry-block', params] as const,
     ipRegion: (params?: object) => ['caddy', 'ip-region', params] as const,
     source: (params?: object) => ['caddy', 'source', params] as const,
     wafEngine: () => ['caddy', 'waf-engine'] as const,
     wafEvents: (params: object) => ['caddy', 'waf-events', params] as const,
     wafEventStats: (params?: object) =>
       ['caddy', 'waf-event-stats', params] as const,
-    metrics: (serverId: number, siteKey?: string) =>
-      ['caddy', 'metrics', serverId, siteKey] as const,
+    /** 站点指标；windowMinutes 传入时进 key（不同窗口缓存隔离，如 24h=1440） */
+    metrics: (serverId: number, siteKey?: string, windowMinutes?: number) =>
+      windowMinutes == null
+        ? (['caddy', 'metrics', serverId, siteKey] as const)
+        : (['caddy', 'metrics', serverId, siteKey, windowMinutes] as const),
     systemLog: (params: object) => ['caddy', 'system-log', params] as const,
   },
   cron: {

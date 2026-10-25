@@ -5,6 +5,7 @@ import (
 	"fmt"
 	caddymodel "logflux/model/caddy"
 	ingestmodel "logflux/model/ingest"
+	wafmodel "logflux/model/waf"
 	"strings"
 	"time"
 
@@ -92,8 +93,9 @@ func (s *LogService) GetCaddyLogs(req *types.CaddyLogReq) (*types.CaddyLogResp, 
 	return &types.CaddyLogResp{List: list, Total: total}, nil
 }
 
-// 按 host 批量返回近窗 4xx/5xx 计数。
+// 按 host 批量返回近窗请求总数、4xx/5xx 计数与 WAF 拦截数。
 // 无日志 host 补 0，不因单 host 无数据失败整批。
+// 窗口由 windowMinutes 控制（省略或 <=0 默认 15 分钟，24h 传 1440）。
 func (s *LogService) GetSiteMetrics(req *types.SiteMetricsReq) (*types.SiteMetricsResp, error) {
 	if req == nil {
 		return nil, xerr.NewBusinessErrorWith("请求参数无效")
@@ -116,6 +118,10 @@ func (s *LogService) GetSiteMetrics(req *types.SiteMetricsReq) (*types.SiteMetri
 	start := end.Add(-time.Duration(windowMinutes) * time.Minute)
 
 	logModel := s.caddyLogModel()
+	rowsTotal, err := logModel.CountAllByHosts(s.ctx, start, end, hosts)
+	if err != nil {
+		return nil, xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "统计站点请求数失败", err)
+	}
 	rows4xx, err := logModel.CountStatusByHosts(s.ctx, start, end, hosts, 400, 500)
 	if err != nil {
 		return nil, xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "统计站点 4xx 失败", err)
@@ -125,23 +131,39 @@ func (s *LogService) GetSiteMetrics(req *types.SiteMetricsReq) (*types.SiteMetri
 		return nil, xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "统计站点 5xx 失败", err)
 	}
 
+	rowsBlocked, err := s.wafEventModel().CountInterruptedByHosts(s.ctx, start, end, hosts)
+	if err != nil {
+		return nil, xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "统计站点拦截数失败", err)
+	}
+
 	return &types.SiteMetricsResp{
-		List: mergeHostStatusCounts(hosts, rows4xx, rows5xx),
+		List: mergeHostMetrics(hosts, rowsTotal, rows4xx, rows5xx, rowsBlocked),
 	}, nil
 }
 
 // 将 model 返回的稀疏计数合并为请求 hosts 的完整列表，缺失补 0。
 // 导出给测试用于验证 Property 6 的聚合语义。
-func mergeHostStatusCounts(hosts []string, rows4xx, rows5xx []caddymodel.HostStatusCount) []types.SiteMetricsItem {
+func mergeHostMetrics(
+	hosts []string,
+	rowsTotal, rows4xx, rows5xx []caddymodel.HostStatusCount,
+	rowsBlocked []wafmodel.HostInterruptedCount,
+) []types.SiteMetricsItem {
+	total := hostCountMap(rowsTotal)
 	count4xx := hostCountMap(rows4xx)
 	count5xx := hostCountMap(rows5xx)
+	blocked := make(map[string]int64, len(rowsBlocked))
+	for _, row := range rowsBlocked {
+		blocked[row.Host] = row.Count
+	}
 
 	list := make([]types.SiteMetricsItem, 0, len(hosts))
 	for _, host := range hosts {
 		list = append(list, types.SiteMetricsItem{
 			Host:     host,
+			Total:    total[host],
 			Count4xx: count4xx[host],
 			Count5xx: count5xx[host],
+			Blocked:  blocked[host],
 		})
 	}
 	return list
@@ -257,6 +279,13 @@ func (s *LogService) caddyLogModel() caddymodel.CaddyLogModel {
 		return s.svcCtx.CaddyLogModel
 	}
 	return caddymodel.NewCaddyLogModel(s.svcCtx.DB)
+}
+
+func (s *LogService) wafEventModel() wafmodel.WafEventModel {
+	if s.svcCtx.WafEventModel != nil {
+		return s.svcCtx.WafEventModel
+	}
+	return wafmodel.NewWafEventModel(s.svcCtx.DB)
 }
 
 func (s *LogService) systemLogModel() ingestmodel.SystemLogModel {

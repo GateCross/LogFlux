@@ -11,7 +11,9 @@ import {
   formatMetricCount,
   metricCountColor,
   normalizeSiteHost,
+  siteCertDaysLeft,
   sitePrimaryHost,
+  siteProtectBadge,
   statusLabel,
   statusTagColor,
 } from './service-catalog-utils';
@@ -127,6 +129,33 @@ describe('service-catalog-utils', () => {
     expect(complex?.reasons?.some((r) => r.includes('import'))).toBe(true);
   });
 
+  it('回归：线上 snippet 风格站点（import 能力挂载 + https 上游跳过验证）判 simple', () => {
+    // 取自生产 Caddyfile 的 pve 站点块原文（10-20 fix_lan_waf 版本）
+    const config = `{
+  admin localhost:2019
+}
+
+pve.myddpp.top {
+  import deny_403_redirect
+  import waf_protect
+  import cloudflare
+  import geo_auth
+  handle {
+    reverse_proxy https://192.168.50.100:8006 {
+      transport http {
+        tls_insecure_skip_verify
+      }
+    }
+  }
+}
+`;
+    const cards = buildCatalogSitesFromConfigPayload({ config });
+    const pve = cards.find((c) => c.primaryHost === 'pve.myddpp.top');
+    expect(pve?.kind).toBe('simple');
+    expect(pve?.mode).toBe('reverse_proxy');
+    expect(pve?.upstream).toBe('https://192.168.50.100:8006');
+  });
+
   it('buildCatalogSitesFromConfigPayload 从 Caddyfile 解析站点', () => {
     const cards = buildCatalogSitesFromConfigPayload({
       config: `
@@ -168,13 +197,72 @@ www.demo.com {
     expect(hosts.sort()).toEqual(['a.example.com', 'b.example.com']);
   });
 
-  it('buildSiteMetricsMap 补齐无日志 host 为 0', () => {
+  it('buildSiteMetricsMap 补齐无日志 host 为 0（含今日 total/blocked）', () => {
     const map = buildSiteMetricsMap(
       [{ host: 'a.example.com', count4xx: 2, count5xx: 1 }],
       ['a.example.com', 'b.example.com'],
     );
     expect(map.get('a.example.com')).toEqual({ count4xx: 2, count5xx: 1 });
-    expect(map.get('b.example.com')).toEqual({ count4xx: 0, count5xx: 0 });
+    expect(map.get('b.example.com')).toEqual({
+      count4xx: 0,
+      count5xx: 0,
+      total: 0,
+      blocked: 0,
+    });
+  });
+
+  it('buildSiteMetricsMap 透传 window=24h 契约字段 total/blocked', () => {
+    const map = buildSiteMetricsMap([
+      { host: 'a.example.com', count4xx: 2, count5xx: 1, total: 120, blocked: 3 },
+      // 后端未上线 total/blocked 时保持 undefined，展示按 — 降级
+      { host: 'b.example.com', count4xx: 0, count5xx: 0 },
+    ]);
+    expect(map.get('a.example.com')).toEqual({
+      count4xx: 2,
+      count5xx: 1,
+      total: 120,
+      blocked: 3,
+    });
+    expect(map.get('b.example.com')?.total).toBeUndefined();
+    expect(map.get('b.example.com')?.blocked).toBeUndefined();
+  });
+
+  it('siteCertDaysLeft 按域名/泛域名匹配并取最小剩余天数', () => {
+    const certs = [
+      { id: 1, serverId: 1, domains: 'www.example.com,api.example.com', primaryDomain: 'www.example.com', issuer: '', source: 'upload' as const, notBefore: '', notAfter: '', lastSyncedAt: '', storagePath: '', status: 'valid' as const, daysLeft: 30 },
+      { id: 2, serverId: 1, domains: '*.example.com', primaryDomain: '*.example.com', issuer: '', source: 'acme_dns' as const, notBefore: '', notAfter: '', lastSyncedAt: '', storagePath: '', status: 'expiring' as const, daysLeft: 7 },
+      { id: 3, serverId: 1, domains: 'other.org', primaryDomain: 'other.org', issuer: '', source: 'upload' as const, notBefore: '', notAfter: '', lastSyncedAt: '', storagePath: '', status: 'valid' as const, daysLeft: 90 },
+    ];
+    // 同时命中精确与泛域名时取最小剩余天数
+    expect(siteCertDaysLeft(certs, ['www.example.com', ':443'])).toBe(7);
+    // 仅泛域名覆盖
+    expect(siteCertDaysLeft(certs, ['sub.example.com'])).toBe(7);
+    // 未命中证书
+    expect(siteCertDaysLeft(certs, ['unmatched.net'])).toBeNull();
+    expect(siteCertDaysLeft([], ['www.example.com'])).toBeNull();
+    expect(siteCertDaysLeft(certs, [])).toBeNull();
+  });
+
+  it('siteProtectBadge 组合站点挂载与全局引擎状态', () => {
+    const mountOn = { capabilities: { waf: { status: 'on' as const } } };
+    const mountOff = { capabilities: { waf: { status: 'off' as const } } };
+    const mountUnknown = { capabilities: { waf: { status: 'unknown' as const } } };
+
+    expect(siteProtectBadge(mountOff, null)).toMatchObject({ label: '未防护' });
+    expect(siteProtectBadge(mountUnknown, null)).toMatchObject({ label: 'WAF?' });
+    // 无全局快照：挂载未知引擎状态
+    expect(siteProtectBadge(mountOn, null)).toMatchObject({ label: '防护中' });
+    // 全局引擎关闭
+    expect(siteProtectBadge(mountOn, { enabled: false, mode: 'off' })).toMatchObject({
+      label: '未生效',
+    });
+    // 阻断 / 检测
+    expect(siteProtectBadge(mountOn, { enabled: true, mode: 'on' })).toMatchObject({
+      label: '阻断',
+    });
+    expect(
+      siteProtectBadge(mountOn, { enabled: true, mode: 'detectiononly' }),
+    ).toMatchObject({ label: '检测' });
   });
 
   it('指标展示格式与颜色', () => {

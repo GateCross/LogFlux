@@ -71,6 +71,13 @@ type WafEventCountRow struct {
 	Count int64  `gorm:"column:count"`
 }
 
+// HostInterruptedCount 按 host 聚合的拦截计数行。
+// 仅返回时间窗内存在拦截事件的 host；无拦截 host 由调用方对请求清单补 0。
+type HostInterruptedCount struct {
+	Host  string `gorm:"column:host"`
+	Count int64  `gorm:"column:count"`
+}
+
 // WafEventGeoRow 攻击源地理分布行
 type WafEventGeoRow struct {
 	Name  string `gorm:"column:name"`
@@ -81,6 +88,9 @@ type WafEventModel interface {
 	SaveIgnoreConflict(ctx context.Context, events []*WafEvent) error
 	List(ctx context.Context, query WafEventQuery) ([]WafEvent, int64, error)
 	Count(ctx context.Context, start, end time.Time) (total int64, blocked int64, err error)
+	// 在时间窗内按 host 批量统计拦截计数（interrupted=true，与 Count 的 blocked 判定一致）。
+	// hosts 为空时返回空切片；结果仅含有匹配行的 host。
+	CountInterruptedByHosts(ctx context.Context, start, end time.Time, hosts []string) ([]HostInterruptedCount, error)
 	CountUniqueIP(ctx context.Context, start, end time.Time) (int64, error)
 	TrendRows(ctx context.Context, start, end time.Time, intervalSec int) ([]WafEventTrendRow, error)
 	TopRules(ctx context.Context, start, end time.Time, limit int) ([]WafEventCountRow, error)
@@ -187,6 +197,25 @@ func (m *defaultWafEventModel) Count(ctx context.Context, start, end time.Time) 
 		}
 	}
 	return total, blocked, nil
+}
+
+// 按 host 批量统计时间窗内被 WAF 拦截的事件数。
+// waf_events 一次规则命中一行，与 Count 的 blocked 口径一致取 COUNT(*)。
+// 空 hosts 直接返回空结果；无匹配事件的 host 不会出现在返回值中。
+func (m *defaultWafEventModel) CountInterruptedByHosts(ctx context.Context, start, end time.Time, hosts []string) ([]HostInterruptedCount, error) {
+	rows := make([]HostInterruptedCount, 0)
+	if len(hosts) == 0 {
+		return rows, nil
+	}
+	// 利用 host / interrupted / event_time 相关索引：时间窗 + host IN + interrupted + GROUP BY host
+	err := m.conn(ctx).Model(&WafEvent{}).
+		Select("host, COUNT(*) AS count").
+		Where("event_time >= ? AND event_time <= ?", start, end).
+		Where("host IN ?", hosts).
+		Where("interrupted = ?", true).
+		Group("host").
+		Scan(&rows).Error
+	return rows, err
 }
 
 func (m *defaultWafEventModel) CountUniqueIP(ctx context.Context, start, end time.Time) (int64, error) {

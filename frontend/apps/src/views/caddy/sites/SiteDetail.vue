@@ -1,0 +1,781 @@
+<script lang="ts" setup>
+/**
+ * 站点详情整页（对齐雷池防护应用，替代原 SiteDrawer 抽屉）：
+ * 大头部（站点名 + 域名 + 防护模式开关组 + 今日请求/拦截）
+ * + 横向 Tab（基本信息 / 防护 / 高级），每 Tab 独立保存，走既有 diff 确认制。
+ * 防护模式开关组写全局 simple-waf 配置（waf_policies），改动前提示对全部站点生效。
+ */
+import { computed, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { useQueryClient } from '@tanstack/vue-query';
+import { message, Modal } from 'antdv-next';
+import { Page } from '@vben/common-ui';
+
+import {
+  Alert,
+  Button,
+  Card,
+  Collapse,
+  CollapsePanel,
+  Empty,
+  Input,
+  RadioButton,
+  RadioGroup,
+  Select,
+  Space,
+  Spin,
+  Switch,
+  TabPane,
+  Tabs,
+  Tag,
+  Tooltip,
+} from 'antdv-next';
+
+import {
+  applySimpleWafConfigApi,
+  getSimpleWafConfigApi,
+  type CaddySimpleWafApi,
+} from '#/api/caddy/simple-waf';
+import {
+  getCaddyConfigApi,
+  getSiteMetricsApi,
+  type SiteMetricsItem,
+} from '#/api/caddy/server';
+import { withListDetailErrorMode } from '#/api/list-detail';
+import { invalidateListDetailQueryKeys } from '#/api/list-detail-mutation';
+import { qk } from '#/api/query-keys';
+import { useListDetailQuery } from '#/composables/use-list-detail-query';
+import { apiErrorMessage } from '#/utils/api-error-message';
+
+import {
+  SITE_METRICS_WINDOW_MINUTES,
+  buildCatalogSitesFromConfigPayload,
+  buildConfigWorkbenchQuery,
+  catalogModeLabel,
+  formatMetricCount,
+} from '../catalog/service-catalog-utils';
+import {
+  ADVANCED_CAPABILITY_ITEMS,
+  PROTECT_CAPABILITY_ITEMS,
+  useSiteDetailEdit,
+  type SiteDetailTab,
+} from './use-site-detail-edit';
+
+defineOptions({ name: 'CaddySiteDetail' });
+
+const route = useRoute();
+const router = useRouter();
+const queryClient = useQueryClient();
+
+// ---------- 路由参数：query 携带 serverId + host（主域名作为站点查找键） ----------
+const serverId = computed(() => {
+  const raw = Number(route.query.serverId);
+  return Number.isInteger(raw) && raw > 0 ? raw : undefined;
+});
+const host = computed(() => String(route.query.host ?? '').trim().toLowerCase());
+
+// ---------- 站点定位：与目录页共享 catalog 查询缓存，不建平行数据源 ----------
+const {
+  data: configData,
+  loading: loadingConfig,
+  errorMessage: configErrorMessage,
+  refetch: refetchConfig,
+} = useListDetailQuery({
+  queryKey: computed(() => qk.caddy.catalog(serverId.value ?? 0)),
+  queryFn: () => getCaddyConfigApi(serverId.value!, withListDetailErrorMode()),
+  errorFallback: '获取站点配置失败',
+  enabled: computed(() => Boolean(serverId.value)),
+});
+
+const configRaw = computed(() => configData.value?.config ?? '');
+const configHash = computed(() => configData.value?.hash ?? '');
+
+const site = computed(() => {
+  if (!host.value) return null;
+  const cards = buildCatalogSitesFromConfigPayload(configData.value);
+  return (
+    cards.find((card) => {
+      if ((card.primaryHost || '') === host.value) return true;
+      return card.domains.some((d) => d.trim().toLowerCase() === host.value);
+    }) ?? null
+  );
+});
+
+// ---------- 今日统计：window=24h 契约（windowMinutes=1440），total/blocked 由后端返回 ----------
+const {
+  data: metricsData,
+  loading: loadingMetrics,
+} = useListDetailQuery({
+  queryKey: computed(() =>
+    qk.caddy.metrics(serverId.value ?? 0, host.value, SITE_METRICS_WINDOW_MINUTES),
+  ),
+  queryFn: () =>
+    getSiteMetricsApi(
+      { hosts: [host.value], windowMinutes: SITE_METRICS_WINDOW_MINUTES },
+      withListDetailErrorMode(),
+    ),
+  errorFallback: '获取站点今日指标失败',
+  enabled: computed(() => Boolean(serverId.value && host.value)),
+});
+
+const siteMetrics = computed(() => {
+  const list = (metricsData.value as SiteMetricsItem[] | undefined) ?? [];
+  return (
+    list.find((item) => String(item.host ?? '').trim().toLowerCase() === host.value) ??
+    null
+  );
+});
+
+const todayTotal = computed(() =>
+  loadingMetrics.value ? '…' : formatMetricCount(siteMetrics.value?.total),
+);
+const todayBlocked = computed(() =>
+  loadingMetrics.value ? '…' : formatMetricCount(siteMetrics.value?.blocked),
+);
+const blockedDanger = computed(() => Number(siteMetrics.value?.blocked ?? 0) > 0);
+
+// ---------- 防护模式开关组：读全局 simple-waf，改动经确认后 apply（对全部站点生效） ----------
+const {
+  data: wafData,
+  errorMessage: wafErrorMessage,
+  refetch: refetchWaf,
+} = useListDetailQuery({
+  queryKey: computed(() => [...qk.caddy.config(serverId.value ?? 0), 'simple-waf']),
+  queryFn: () => getSimpleWafConfigApi(serverId.value!, withListDetailErrorMode()),
+  errorFallback: '获取 WAF 状态失败',
+  enabled: computed(() => Boolean(serverId.value)),
+});
+const wafStatus = computed(() => wafData.value ?? null);
+
+const applyingMode = ref(false);
+
+const wafModeValue = computed<'detectiononly' | 'off' | 'on'>(() => {
+  const status = wafStatus.value;
+  if (!status || !status.enabled) return 'off';
+  return status.mode === 'on' ? 'on' : 'detectiononly';
+});
+
+function handleWafModeChangeEvent(event: unknown) {
+  const value = (event as { target?: { value?: unknown } } | null)?.target?.value;
+  handleWafModeChange(value);
+}
+
+function handleWafModeChange(value: unknown) {
+  if (value !== 'on' && value !== 'detectiononly' && value !== 'off') return;
+  if (value === wafModeValue.value) return;
+  const status = wafStatus.value;
+  if (!status) {
+    message.warning('WAF 全局状态未加载，无法修改防护模式');
+    return;
+  }
+  Modal.confirm({
+    title: '防护模式将写入全局 WAF 配置',
+    content:
+      '此设置对全部站点生效：修改的是当前节点的全局 WAF 引擎模式，应用后影响所有已挂载 WAF 的站点。确认继续？',
+    okText: '确认并应用',
+    cancelText: '取消',
+    async onOk() {
+      applyingMode.value = true;
+      try {
+        // 其余字段（强度/审计/请求体限制/挂载清单）保持读到的全局现状，只改模式
+        const data = await applySimpleWafConfigApi({
+          audit: (status.audit || 'relevantonly') as CaddySimpleWafApi.SimpleWafAudit,
+          enabled: value !== 'off',
+          mode: value === 'off' ? 'off' : value,
+          requestBodyAccess: status.requestBodyAccess ?? true,
+          requestBodyLimit: status.requestBodyLimit || 10 * 1024 * 1024,
+          requestBodyNoFilesLimit: status.requestBodyNoFilesLimit || 1024 * 1024,
+          serverId: serverId.value,
+          siteAddresses: Array.isArray(status.siteAddresses)
+            ? [...status.siteAddresses]
+            : [],
+          strength: (status.strength || 'balanced') as CaddySimpleWafApi.SimpleWafStrength,
+          baseHash: configHash.value || undefined,
+        });
+        message.success(data?.message || '防护模式已应用，对全部站点生效');
+        // 应用会改写运行中配置：连带失效配置/目录/指标缓存并重取 WAF 状态
+        await invalidateListDetailQueryKeys(queryClient, [
+          qk.caddy.config(serverId.value ?? 0),
+          qk.caddy.catalog(serverId.value ?? 0),
+          ['caddy', 'metrics', serverId.value ?? 0],
+        ]);
+        await refetchWaf();
+        await refetchConfig();
+      } catch (error) {
+        message.error(apiErrorMessage(error, '应用防护模式失败'));
+      } finally {
+        applyingMode.value = false;
+      }
+    },
+  });
+}
+
+// ---------- 三 Tab 编辑：解析/定点替换/diff 确认全部复用既有链路 ----------
+const activeTab = ref<SiteDetailTab>('basic');
+
+const {
+  basic,
+  toggles,
+  basicEditable,
+  capabilities,
+  hasUpstreamDirective,
+  certOptions,
+  certLoading,
+  certErrorMessage,
+  refetchCerts,
+  selectedCertId,
+  handleCertSelect,
+  pendingDiff,
+  saving,
+  confirmError,
+  unchangedLineCount,
+  requestSave,
+  confirmSave,
+  cancelSave,
+} = useSiteDetailEdit({
+  serverId,
+  config: configRaw,
+  baseHash: configHash,
+  site,
+  onSaved: async ({ nextHost }) => {
+    // 域名变更后同步路由 host，避免详情页按旧域名查找落空
+    if (nextHost) {
+      await router.replace({ query: { ...route.query, host: nextHost } });
+    }
+    await refetchConfig();
+  },
+});
+
+function goCatalog() {
+  router.push({ name: 'CaddyCatalog' });
+}
+
+function openWorkbenchRaw() {
+  router.push({
+    name: 'CaddyConfig',
+    query: buildConfigWorkbenchQuery({ serverId: serverId.value, mode: 'raw' }),
+  });
+}
+
+/** 空态引导跳证书中心上传 */
+function goCertificates() {
+  router.push('/caddy/certificates');
+}
+</script>
+
+<template>
+  <Page title="站点详情" description="站点防护与上游配置的整页视图">
+    <template v-if="!serverId">
+      <Card variant="borderless">
+        <Empty description="缺少 serverId 参数，请从站点列表进入">
+          <Button @click="goCatalog">返回站点列表</Button>
+        </Empty>
+      </Card>
+    </template>
+    <template v-else>
+      <Alert
+        v-if="configErrorMessage"
+        class="mb-4"
+        type="error"
+        show-icon
+        :message="configErrorMessage"
+      />
+
+      <!-- 大头部：站点名 + 域名 + 防护模式开关组 + 今日统计 -->
+      <Card variant="borderless" class="mb-4">
+        <Spin :spinning="loadingConfig && !site">
+          <div v-if="site" class="detail-header">
+            <div class="header-main">
+              <div class="header-titles">
+                <span class="site-name">{{ site.name || '未命名站点' }}</span>
+                <Tag v-if="!site.enabled" color="error">已停用</Tag>
+                <Tag>{{ catalogModeLabel(site.mode) }}</Tag>
+              </div>
+              <div class="header-domains" :title="site.domains.join('、')">
+                {{ site.domains.join('、') || '未配置域名' }}
+              </div>
+            </div>
+
+            <div class="header-stats">
+              <div class="stat">
+                <span class="stat-value">{{ todayTotal }}</span>
+                <span class="stat-label">今日请求</span>
+              </div>
+              <div class="stat">
+                <span class="stat-value" :class="{ danger: blockedDanger }">
+                  {{ todayBlocked }}
+                </span>
+                <span class="stat-label">今日拦截</span>
+              </div>
+            </div>
+
+            <div class="header-mode">
+              <span class="mode-label">防护模式</span>
+              <Tooltip
+                :title="
+                  wafErrorMessage
+                    ? `WAF 状态加载失败：${wafErrorMessage}`
+                    : '此设置对全部站点生效（写入全局 WAF 配置）'
+                "
+              >
+                <RadioGroup
+                  :value="wafModeValue"
+                  size="small"
+                  :disabled="!wafStatus || applyingMode"
+                  @change="handleWafModeChangeEvent"
+                >
+                  <RadioButton value="on">阻断</RadioButton>
+                  <RadioButton value="detectiononly">仅检测</RadioButton>
+                  <RadioButton value="off">关闭</RadioButton>
+                </RadioGroup>
+              </Tooltip>
+            </div>
+          </div>
+          <Empty
+            v-else-if="!loadingConfig"
+            description="未找到该站点，可能已被删除或域名已变更"
+          >
+            <Button @click="goCatalog">返回站点列表</Button>
+          </Empty>
+        </Spin>
+      </Card>
+
+      <!-- 横向 Tab：基本信息 / 防护 / 高级 -->
+      <Card variant="borderless">
+        <template v-if="site">
+          <Alert
+            v-if="!site.raw"
+            class="mb-3"
+            type="warning"
+            show-icon
+            message="未取到该站点的配置块原文，请刷新后重试"
+          />
+
+          <Tabs v-model:active-key="activeTab">
+            <!-- 基本信息：域名增删 + 上游（地址/HTTPS/跳过验证）+ TLS 模式，必填仅域名与上游 -->
+            <TabPane key="basic" tab="基本信息">
+              <template v-if="basicEditable">
+                <div class="field">
+                  <div class="field-label">域名 / 监听地址</div>
+                  <Select
+                    v-model:value="basic.domains"
+                    mode="tags"
+                    placeholder="回车添加"
+                    :token-separators="[',', ' ']"
+                    :open="false"
+                    class="w-full"
+                  />
+                </div>
+                <div class="field">
+                  <div class="field-label">上游地址</div>
+                  <Input
+                    v-model:value="basic.upstreamAddress"
+                    :disabled="!hasUpstreamDirective"
+                    placeholder="localhost:8080"
+                  />
+                  <div v-if="!hasUpstreamDirective" class="cap-note">
+                    未识别到 reverse_proxy 指令，上游设置不可用
+                  </div>
+                </div>
+                <div class="field">
+                  <div class="field-label">上游 HTTPS / 跳过验证</div>
+                  <Space wrap>
+                    <Switch
+                      v-model:checked="basic.upstreamHttps"
+                      :disabled="!hasUpstreamDirective"
+                      checked-children="HTTPS"
+                      un-checked-children="HTTP"
+                    />
+                    <Tooltip
+                      title="上游证书无法通过校验时跳过验证（写入 transport http { tls_insecure_skip_verify }）"
+                    >
+                      <Switch
+                        v-model:checked="basic.upstreamSkipVerify"
+                        :disabled="!hasUpstreamDirective"
+                        checked-children="跳过验证"
+                        un-checked-children="验证上游证书"
+                      />
+                    </Tooltip>
+                  </Space>
+                </div>
+                <div class="field">
+                  <div class="field-label">HTTPS（TLS 模式）</div>
+                  <Tooltip
+                    :title="
+                      capabilities?.tls.status === 'unknown'
+                        ? '无法识别当前 TLS 配置，请用原文模式调整'
+                        : undefined
+                    "
+                  >
+                    <RadioGroup
+                      v-model:value="basic.tlsMode"
+                      class="tls-group"
+                      :disabled="capabilities?.tls.status === 'unknown'"
+                    >
+                      <RadioButton value="auto">自动</RadioButton>
+                      <RadioButton value="dns">DNS</RadioButton>
+                      <RadioButton value="internal">内部 CA</RadioButton>
+                      <RadioButton value="manual">手动</RadioButton>
+                      <RadioButton value="off">关闭</RadioButton>
+                    </RadioGroup>
+                  </Tooltip>
+                  <div v-if="capabilities?.tls.status === 'unknown'" class="cap-note">
+                    {{ capabilities?.tls.note }}
+                  </div>
+                  <template v-if="basic.tlsMode === 'manual'">
+                    <Select
+                      class="tls-cert-select"
+                      :value="selectedCertId"
+                      :options="certOptions"
+                      :loading="certLoading"
+                      allow-clear
+                      placeholder="从证书库选择，自动填充下方路径（也可手动填写）"
+                      @change="handleCertSelect"
+                    >
+                      <template #notFoundContent>
+                        <div class="cert-empty">
+                          暂无已上传证书，
+                          <a @click="goCertificates">前往证书中心上传</a>
+                        </div>
+                      </template>
+                    </Select>
+                    <div v-if="certErrorMessage" class="cap-note cert-error">
+                      {{ certErrorMessage }}，
+                      <a @click="() => refetchCerts()">重试</a> 或直接手动填写路径
+                    </div>
+                    <Input
+                      v-model:value="basic.manualCertPath"
+                      class="tls-path-input"
+                      placeholder="证书路径（容器内），如 /config/certs/1/example.com/fullchain.pem"
+                    />
+                    <Input
+                      v-model:value="basic.manualKeyPath"
+                      class="tls-path-input"
+                      placeholder="私钥路径（容器内），如 /config/certs/1/example.com/privkey.pem"
+                    />
+                    <div class="cap-note">
+                      路径须为 Caddy 容器内可读位置，可从证书中心复制存储路径
+                    </div>
+                  </template>
+                </div>
+                <div class="tab-actions">
+                  <Button type="primary" @click="requestSave('basic')">
+                    保存基本信息
+                  </Button>
+                </div>
+              </template>
+            </TabPane>
+
+            <!-- 防护：per-site 挂载开关（默认继承全局）；防护模式在页头（全局生效） -->
+            <TabPane key="protect" tab="防护">
+              <Alert
+                class="mb-3"
+                type="info"
+                show-icon
+                message="防护模式（阻断/仅检测/关闭）在页头调整，写入全局 WAF 配置并对全部站点生效；以下开关仅控制当前站点的挂载项。"
+              />
+              <div
+                v-for="item in PROTECT_CAPABILITY_ITEMS"
+                :key="item.key"
+                class="field-row"
+              >
+                <div>
+                  <div>{{ item.label }}</div>
+                  <div v-if="capabilities?.[item.key]?.status === 'unknown'" class="cap-note">
+                    {{ capabilities?.[item.key]?.note }}
+                  </div>
+                  <div v-else class="cap-note">{{ item.hint }}</div>
+                </div>
+                <Tooltip
+                  :title="
+                    capabilities?.[item.key]?.status === 'unknown'
+                      ? '无法识别当前配置，请用原文模式调整'
+                      : item.hint
+                  "
+                >
+                  <Switch
+                    v-model:checked="(toggles[item.key] as boolean)"
+                    :disabled="capabilities?.[item.key]?.status === 'unknown'"
+                  />
+                </Tooltip>
+              </div>
+              <div v-if="capabilities?.otherImports?.length" class="cap-note">
+                其他业务片段：{{ capabilities.otherImports.join('、') }}（在原文模式维护）
+              </div>
+              <div class="tab-actions">
+                <Button type="primary" @click="requestSave('protect')">
+                  保存防护设置
+                </Button>
+              </div>
+            </TabPane>
+
+            <!-- 高级：日志/压缩能力 + 逃生舱 raw，默认收起 -->
+            <TabPane key="advanced" tab="高级">
+              <Collapse>
+                <CollapsePanel key="caps" header="日志与压缩">
+                  <div
+                    v-for="item in ADVANCED_CAPABILITY_ITEMS"
+                    :key="item.key"
+                    class="field-row"
+                  >
+                    <div>
+                      <div>{{ item.label }}</div>
+                      <div
+                        v-if="capabilities?.[item.key]?.status === 'unknown'"
+                        class="cap-note"
+                      >
+                        {{ capabilities?.[item.key]?.note }}
+                      </div>
+                      <div v-else class="cap-note">{{ item.hint }}</div>
+                    </div>
+                    <Tooltip
+                      :title="
+                        capabilities?.[item.key]?.status === 'unknown'
+                          ? '无法识别当前配置，请用原文模式调整'
+                          : item.hint
+                      "
+                    >
+                      <Switch
+                        v-model:checked="(toggles[item.key] as boolean)"
+                        :disabled="capabilities?.[item.key]?.status === 'unknown'"
+                      />
+                    </Tooltip>
+                  </div>
+                </CollapsePanel>
+                <CollapsePanel key="raw" header="站点块原文（逃生舱）">
+                  <pre class="raw-block">{{ site.raw }}</pre>
+                  <div class="tab-actions">
+                    <Button @click="openWorkbenchRaw">在原文模式打开</Button>
+                  </div>
+                </CollapsePanel>
+              </Collapse>
+              <div class="tab-actions">
+                <Button type="primary" @click="requestSave('advanced')">
+                  保存高级设置
+                </Button>
+              </div>
+            </TabPane>
+          </Tabs>
+        </template>
+        <Empty
+          v-else-if="!loadingConfig"
+          description="未找到该站点，可能已被删除或域名已变更"
+        >
+          <Button @click="goCatalog">返回站点列表</Button>
+        </Empty>
+      </Card>
+    </template>
+
+    <!-- diff 确认弹窗：沿用抽屉语义（确认制，返回修改不丢表单状态） -->
+    <Modal
+      :open="!!pendingDiff"
+      title="确认应用变更"
+      :width="720"
+      :confirm-loading="saving"
+      ok-text="确认并应用"
+      cancel-text="返回修改"
+      @ok="confirmSave"
+      @cancel="cancelSave"
+    >
+      <Alert
+        v-if="confirmError"
+        class="mb-3"
+        type="error"
+        show-icon
+        :message="confirmError"
+      />
+      <div class="diff-hint">
+        仅替换该站点块（其余 {{ unchangedLineCount }} 行不变），确认后执行「校验 → 应用 → 落库」：
+      </div>
+      <div class="diff-box">
+        <div
+          v-for="(line, index) in (pendingDiff?.block ?? '').split('\n')"
+          :key="index"
+          class="diff-line diff-added"
+        >
+          <span class="diff-sign">+</span>
+          <span class="diff-text">{{ line }}</span>
+        </div>
+      </div>
+    </Modal>
+  </Page>
+</template>
+
+<style scoped>
+.mb-4 {
+  margin-bottom: 16px;
+}
+
+.mb-3 {
+  margin-bottom: 12px;
+}
+
+.detail-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 32px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.header-main {
+  flex: 1;
+  min-width: 220px;
+}
+
+.header-titles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.site-name {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.header-domains {
+  overflow: hidden;
+  margin-top: 6px;
+  font-size: 13px;
+  /* muted-foreground 浅色主题下过淡，用主前景色 72% 透明度保证可读 */
+  color: hsl(var(--foreground) / 72%);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.header-stats {
+  display: flex;
+  gap: 28px;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  min-width: 64px;
+}
+
+.stat-value {
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.stat-value.danger {
+  color: hsl(var(--destructive));
+}
+
+.stat-label {
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+}
+
+.header-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mode-label {
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+}
+
+.field {
+  margin-bottom: 16px;
+}
+
+.field-label {
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
+.field-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid hsl(var(--border) / 60%);
+}
+
+.tab-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.tls-group {
+  flex-wrap: wrap;
+}
+
+.tls-cert-select {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.cert-empty {
+  padding: 8px 12px;
+  color: rgba(0, 0, 0, 45%);
+}
+
+.tls-path-input {
+  margin-top: 8px;
+}
+
+.cap-note {
+  margin-top: 2px;
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+}
+
+.cap-note.cert-error {
+  margin-top: 4px;
+  color: #cf1322;
+}
+
+.raw-block {
+  max-height: 320px;
+  padding: 8px 12px;
+  overflow: auto;
+  font-size: 12.5px;
+  line-height: 1.6;
+  white-space: pre;
+  background: rgba(0, 0, 0, 3%);
+  border-radius: 6px;
+}
+
+.diff-hint {
+  margin-bottom: 8px;
+  color: rgba(0, 0, 0, 65%);
+}
+
+.diff-box {
+  max-height: 420px;
+  padding: 8px 0;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.6;
+  background: rgba(0, 0, 0, 3%);
+  border-radius: 6px;
+}
+
+.diff-line {
+  display: flex;
+  padding: 0 12px;
+  white-space: pre;
+}
+
+.diff-sign {
+  width: 18px;
+  flex-shrink: 0;
+  color: rgba(0, 0, 0, 45%);
+}
+
+.diff-added {
+  background: rgba(82, 196, 26, 18%);
+}
+</style>

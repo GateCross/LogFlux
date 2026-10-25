@@ -1,0 +1,42 @@
+# :80 —— LogFlux 系统默认入口（模板，可在设置中修改，支持恢复默认）
+#
+# 内网来源按 Host 分流到对应源站，不跳 HTTPS，避免 hairpin NAT 回环；
+# 其余来源跳 HTTPS。
+#
+# 两个坑，缺一都会让内网拿到 301：
+#   1. 不能混用 handle 与 route —— handle 会被 Caddy 重新分组并前移，
+#      抢在 @lan 之前命中；这里全部用 route 保序。
+#   2. 全局需 auto_https disable_redirects，否则 Caddy 仍会为 :80
+#      自动插入 Location: https://{host} 的跳转（在“全局选项”里配置）。
+:80 {
+  import waf_protect
+  import compression
+  import subdomain-log local
+
+  @lan remote_ip 127.0.0.1/8 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
+
+  route @lan {
+    # 按域名分流到内网源站；示例保留 pve，其余源站自行添加。
+    # @pve host pve.example.com
+    # handle @pve {
+    #   reverse_proxy https://192.168.50.100:8006 {
+    #     transport http {
+    #       tls_insecure_skip_verify
+    #     }
+    #   }
+    # }
+
+    # 其余（LogFlux 本体）
+    handle {
+      import health_check
+      import geo_auth
+      import api_proxy
+      import frontend_simple
+    }
+  }
+
+  # 其余来源：跳 HTTPS
+  route {
+    redir https://{host}{uri} permanent
+  }
+}

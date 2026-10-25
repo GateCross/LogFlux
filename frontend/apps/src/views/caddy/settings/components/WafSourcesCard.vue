@@ -3,9 +3,8 @@ import type { CaddyWafSourceApi } from '#/api/caddy/source';
 
 import { computed, reactive, ref } from 'vue';
 
-import { Page } from '@vben/common-ui';
-
 import { useQueryClient } from '@tanstack/vue-query';
+
 import {
   Alert,
   Button,
@@ -33,7 +32,11 @@ import { qk } from '#/api/query-keys';
 import { useListDetailQuery } from '#/composables/use-list-detail-query';
 import { apiErrorMessage } from '#/utils/api-error-message';
 
-defineOptions({ name: 'CaddySource' });
+/**
+ * WAF 来源卡：由原「WAF 来源」页面（/caddy/source）并入全局设置，
+ * 保留源列表增删改与「同步并激活」核心能力。
+ */
+defineOptions({ name: 'WafSourcesCard' });
 
 const queryClient = useQueryClient();
 
@@ -144,7 +147,11 @@ async function handleSync(record: CaddyWafSourceApi.WafSource) {
 </script>
 
 <template>
-  <Page title="WAF 源">
+  <Card title="WAF 来源" variant="borderless">
+    <template #extra>
+      <Button type="primary" @click="handleAdd">新增源</Button>
+    </template>
+
     <Alert
       v-if="errorMessage"
       class="mb-4"
@@ -152,56 +159,57 @@ async function handleSync(record: CaddyWafSourceApi.WafSource) {
       show-icon
       :message="errorMessage"
     />
-    <Card>
-      <div style="display: flex; justify-content: space-between; margin-bottom: 16px">
-        <span style="font-size: 16px; font-weight: 500">源列表</span>
-        <Button type="primary" @click="handleAdd">新增源</Button>
-      </div>
+    <Alert
+      v-else
+      class="mb-4"
+      type="info"
+      :show-icon="true"
+      message="规则源维护 CRS 规则包来源；「同步并激活」会下载规则包、重构规则布局并热加载 Caddy。"
+    />
 
-      <Table
-        :columns="columns"
-        :data-source="dataSource"
-        :loading="loading"
-        row-key="id"
-        size="middle"
-      >
-        <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'status'">
-            <Tag :color="record.enabled ? 'green' : 'default'">
-              {{ record.enabled ? '启用' : '停用' }}
-            </Tag>
-          </template>
-          <template v-if="column.key === 'actions'">
-            <Space :size="6">
-              <Button
-                size="small"
-                type="primary"
-                :loading="syncingId === record.id"
-                class="table-action-btn"
-                @click="handleSync(record as CaddyWafSourceApi.WafSource)"
-              >
-                同步并激活
-              </Button>
-              <Button
-                size="small"
-                class="table-action-btn"
-                @click="handleEdit(record as CaddyWafSourceApi.WafSource)"
-              >
-                编辑
-              </Button>
-              <Button
-                size="small"
-                danger
-                class="table-action-btn table-action-btn--danger"
-                @click="handleDelete(record as CaddyWafSourceApi.WafSource)"
-              >
-                删除
-              </Button>
-            </Space>
-          </template>
+    <Table
+      :columns="columns"
+      :data-source="dataSource"
+      :loading="loading"
+      row-key="id"
+      size="middle"
+    >
+      <template #bodyCell="{ column, record }">
+        <template v-if="column.key === 'status'">
+          <Tag :color="record.enabled ? 'green' : 'default'">
+            {{ record.enabled ? '启用' : '停用' }}
+          </Tag>
         </template>
-      </Table>
-    </Card>
+        <template v-if="column.key === 'actions'">
+          <Space :size="6">
+            <Button
+              size="small"
+              type="primary"
+              :loading="syncingId === record.id"
+              class="table-action-btn"
+              @click="handleSync(record as CaddyWafSourceApi.WafSource)"
+            >
+              同步并激活
+            </Button>
+            <Button
+              size="small"
+              class="table-action-btn"
+              @click="handleEdit(record as CaddyWafSourceApi.WafSource)"
+            >
+              编辑
+            </Button>
+            <Button
+              size="small"
+              danger
+              class="table-action-btn table-action-btn--danger"
+              @click="handleDelete(record as CaddyWafSourceApi.WafSource)"
+            >
+              删除
+            </Button>
+          </Space>
+        </template>
+      </template>
+    </Table>
 
     <Modal
       :open="modalVisible"
@@ -209,7 +217,11 @@ async function handleSync(record: CaddyWafSourceApi.WafSource) {
       @cancel="modalVisible = false"
       @ok="handleModalOk"
     >
-      <Form :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }" style="margin-top: 16px">
+      <Form
+        :label-col="{ span: 6 }"
+        :wrapper-col="{ span: 16 }"
+        style="margin-top: 16px"
+      >
         <FormItem label="名称">
           <Input v-model:value="formState.name" placeholder="源名称" />
         </FormItem>
@@ -217,11 +229,14 @@ async function handleSync(record: CaddyWafSourceApi.WafSource) {
           <Input v-model:value="formState.url" placeholder="源 URL" />
         </FormItem>
         <FormItem label="类型">
-          <Input v-model:value="formState.type" placeholder="如 crs / coraza_engine" />
+          <Input
+            v-model:value="formState.type"
+            placeholder="如 crs / coraza_engine"
+          />
         </FormItem>
       </Form>
     </Modal>
-  </Page>
+  </Card>
 </template>
 
 <style scoped>

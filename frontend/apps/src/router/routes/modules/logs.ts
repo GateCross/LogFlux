@@ -1,24 +1,29 @@
 import type { RouteRecordRaw } from 'vue-router';
 
+/**
+ * 日志域路由：安全事件提升为一级入口（路径 /logs/security 保持不变，
+ * 兼容旧深链与页面内跳转）；日志分组仅保留访问日志与系统日志。
+ */
 const routes: RouteRecordRaw[] = [
+  {
+    name: 'LogsSecurity',
+    path: '/logs/security',
+    component: () => import('#/views/logs/security/index.vue'),
+    meta: {
+      icon: 'mdi:shield-alert-outline',
+      order: 3,
+      title: '安全事件',
+    },
+  },
   {
     meta: {
       icon: 'mdi:text-box-search-outline',
-      order: 3,
+      order: 7,
       title: '日志',
     },
     name: 'Logs',
     path: '/logs',
     children: [
-      {
-        name: 'LogsSecurity',
-        path: '/logs/security',
-        component: () => import('#/views/logs/security/index.vue'),
-        meta: {
-          icon: 'mdi:shield-alert-outline',
-          title: '安全事件',
-        },
-      },
       {
         name: 'LogsAccess',
         path: '/logs/access',

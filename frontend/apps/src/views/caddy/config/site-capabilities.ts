@@ -63,8 +63,8 @@ const CAPABILITY_ANCHORS: Record<SiteCapabilityKey, CapabilityAnchor> = {
   errorPage: { importName: 'deny_403_redirect', inlineUnknown: [/^[ \t]*handle_errors/m] },
 };
 
-/** 已归类的 snippet 名；import 行按此分派到能力 */
-const CLASSIFIED_IMPORTS = new Set([
+/** 已归类的 snippet 名；import 行按此分派到能力（quick-config 分类器也用它排除误判） */
+export const CLASSIFIED_IMPORTS = new Set([
   ...Object.values(CAPABILITY_ANCHORS).map(item => item.importName),
   'cloudflare',
 ]);

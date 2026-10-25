@@ -90,6 +90,31 @@ type CaddyConfigUpdateReq struct {
 	BaseHash string `json:"baseHash,optional"` // 编辑起点配置哈希；不一致说明他人已改
 }
 
+type CaddyEntryBlockResp struct {
+	Raw string `json:"raw"`
+}
+
+type CaddyEntryBlockUpdateReq struct {
+	Raw            string `json:"raw,optional"`
+	SyncFromConfig bool   `json:"syncFromConfig,optional"`
+}
+
+type CaddyGlobalOptionsResp struct {
+	AutoHttps       string   `json:"autoHttps,optional"`
+	TrustedProxies  []string `json:"trustedProxies,optional"`
+	Debug           bool     `json:"debug,optional"`
+	Email           string   `json:"email,optional"`
+	ExtraRawOptions string   `json:"extraRawOptions,optional"`
+}
+
+type CaddyGlobalOptionsUpdateReq struct {
+	AutoHttps       string   `json:"autoHttps,optional"`
+	TrustedProxies  []string `json:"trustedProxies,optional"`
+	Debug           bool     `json:"debug,optional"`
+	Email           string   `json:"email,optional"`
+	ExtraRawOptions string   `json:"extraRawOptions,optional"`
+}
+
 type CaddyLogItem struct {
 	ID        uint   `json:"id"`
 	LogTime   string `json:"logTime"`
@@ -625,13 +650,15 @@ type SimpleWafConfigUpdateReq struct {
 
 type SiteMetricsItem struct {
 	Host     string `json:"host"`
+	Total    int64  `json:"total"` // 窗内总请求数（不过滤状态）
 	Count4xx int64  `json:"count4xx"`
 	Count5xx int64  `json:"count5xx"`
+	Blocked  int64  `json:"blocked"` // 窗内 WAF 拦截数（waf_events 中 interrupted=true）
 }
 
 type SiteMetricsReq struct {
 	Hosts         []string `json:"hosts"`                  // 必填；最多 50
-	WindowMinutes int      `json:"windowMinutes,optional"` // 省略或 <=0 时默认 15
+	WindowMinutes int      `json:"windowMinutes,optional"` // 查询窗口分钟数；省略或 <=0 默认 15，24h 传 1440
 }
 
 type SiteMetricsResp struct {

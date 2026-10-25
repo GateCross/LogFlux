@@ -1,0 +1,51 @@
+syntax = "v1"
+
+import "base.api"
+
+type (
+	// Caddy Global Options & Entry Block
+	CaddyGlobalOptionsResp {
+		AutoHttps       string   `json:"autoHttps,optional"`
+		TrustedProxies  []string `json:"trustedProxies,optional"`
+		Debug           bool     `json:"debug,optional"`
+		Email           string   `json:"email,optional"`
+		ExtraRawOptions string   `json:"extraRawOptions,optional"`
+	}
+	CaddyGlobalOptionsUpdateReq {
+		AutoHttps       string   `json:"autoHttps,optional"`
+		TrustedProxies  []string `json:"trustedProxies,optional"`
+		Debug           bool     `json:"debug,optional"`
+		Email           string   `json:"email,optional"`
+		ExtraRawOptions string   `json:"extraRawOptions,optional"`
+	}
+	CaddyEntryBlockResp {
+		Raw string `json:"raw"`
+	}
+	CaddyEntryBlockUpdateReq {
+		Raw            string `json:"raw,optional"`
+		SyncFromConfig bool   `json:"syncFromConfig,optional"`
+	}
+)
+
+@server (
+	prefix: /api
+	group:  caddy
+	jwt:    Auth
+	middleware: ActiveUser
+)
+service logflux-api {
+	@handler GetCaddyGlobalOptions
+	get /caddy/global-options returns (CaddyGlobalOptionsResp)
+
+	@handler UpdateCaddyGlobalOptions
+	put /caddy/global-options (CaddyGlobalOptionsUpdateReq) returns (CaddyGlobalOptionsResp)
+
+	@handler GetCaddyEntryBlock
+	get /caddy/entry-block returns (CaddyEntryBlockResp)
+
+	@handler UpdateCaddyEntryBlock
+	put /caddy/entry-block (CaddyEntryBlockUpdateReq) returns (CaddyEntryBlockResp)
+
+	@handler ResetCaddyEntryBlock
+	post /caddy/entry-block/reset-default returns (CaddyEntryBlockResp)
+}

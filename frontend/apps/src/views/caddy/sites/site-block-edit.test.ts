@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   applyBasicEditsToSiteBlock,
   parseManualTlsPaths,
+  parseReverseProxyTarget,
+  parseUpstreamSkipVerify,
   replaceSiteBlockInConfig,
 } from './site-block-edit';
 
@@ -21,6 +23,20 @@ const DNS_SITE = `pve.example.com {
   import waf_protect
   handle {
     reverse_proxy https://192.0.2.100:8006
+  }
+}`;
+
+/** 无子块的 reverse_proxy（块形式收起的常见形态） */
+const PLAIN = `plain.example.com {
+  reverse_proxy localhost:4000
+}`;
+
+/** transport 是 reverse_proxy 唯一子内容的形态 */
+const ONLY_TRANSPORT = `only.example.com {
+  reverse_proxy localhost:5000 {
+    transport http {
+      tls_insecure_skip_verify
+    }
   }
 }`;
 
@@ -149,6 +165,92 @@ describe('applyBasicEditsToSiteBlock', () => {
     expect(next.split('\n')[0]).toBe('new.example.com {\r');
     expect(next).toContain('\r\n');
   });
+
+  it('跳过验证开启：reverse_proxy 无子块时转为块形式并插入 transport', () => {
+    const next = applyBasicEditsToSiteBlock(PLAIN, { upstreamSkipVerify: true });
+    expect(next).toContain('  reverse_proxy localhost:4000 {');
+    expect(next).toContain('    transport http {');
+    expect(next).toContain('      tls_insecure_skip_verify');
+    expect(next).toContain('    }');
+    expect(next.trimEnd().endsWith('}')).toBe(true);
+    expect(parseUpstreamSkipVerify(next)).toBe(true);
+  });
+
+  it('跳过验证开启：已有子块时插到块头之后，原子行整体后移', () => {
+    const next = applyBasicEditsToSiteBlock(SIMPLE, { upstreamSkipVerify: true });
+    expect(next).toContain('      transport http {');
+    expect(next).toContain('        tls_insecure_skip_verify');
+    expect(next).toContain('      lb_policy least_conn');
+    expect(next).toContain('      health_uri /health');
+    expect(parseUpstreamSkipVerify(next)).toBe(true);
+  });
+
+  it('跳过验证：重复开启字节级不变（幂等）', () => {
+    const once = applyBasicEditsToSiteBlock(SIMPLE, { upstreamSkipVerify: true });
+    const twice = applyBasicEditsToSiteBlock(once, { upstreamSkipVerify: true });
+    expect(twice).toBe(once);
+    expect(applyBasicEditsToSiteBlock(ONLY_TRANSPORT, { upstreamSkipVerify: true })).toBe(
+      ONLY_TRANSPORT,
+    );
+  });
+
+  it('跳过验证关闭：transport 是唯一子内容时整块收回并还原行形式', () => {
+    const next = applyBasicEditsToSiteBlock(ONLY_TRANSPORT, { upstreamSkipVerify: false });
+    expect(next).toBe(`only.example.com {
+  reverse_proxy localhost:5000
+}`);
+    expect(parseUpstreamSkipVerify(next)).toBe(false);
+  });
+
+  it('跳过验证关闭：关闭后与原块一致（先开后关的往返）', () => {
+    const opened = applyBasicEditsToSiteBlock(SIMPLE, { upstreamSkipVerify: true });
+    const closed = applyBasicEditsToSiteBlock(opened, { upstreamSkipVerify: false });
+    expect(closed).toBe(SIMPLE);
+  });
+
+  it('跳过验证关闭：transport 还有其他子行时只删 skip 行', () => {
+    const withOther = `mix.example.com {
+  reverse_proxy localhost:6000 {
+    header_up X-Real-IP {remote_host}
+    transport http {
+      dial_timeout 5s
+      tls_insecure_skip_verify
+    }
+  }
+}`;
+    const next = applyBasicEditsToSiteBlock(withOther, { upstreamSkipVerify: false });
+    expect(next).not.toContain('tls_insecure_skip_verify');
+    expect(next).toContain('transport http {');
+    expect(next).toContain('dial_timeout 5s');
+    expect(next).toContain('header_up X-Real-IP {remote_host}');
+  });
+
+  it('跳过验证：无 reverse_proxy 指令时原样返回', () => {
+    const staticSite = `static.example.com {
+  root * /srv
+  file_server
+}`;
+    expect(applyBasicEditsToSiteBlock(staticSite, { upstreamSkipVerify: true })).toBe(
+      staticSite,
+    );
+  });
+
+  it('跳过验证：改上游与开启跳过验证一次生效', () => {
+    const next = applyBasicEditsToSiteBlock(SIMPLE, {
+      upstream: 'https://10.0.0.9:8443',
+      upstreamSkipVerify: true,
+    });
+    expect(next).toContain('    reverse_proxy https://10.0.0.9:8443 {');
+    expect(next).toContain('        tls_insecure_skip_verify');
+    expect(next).toContain('      lb_policy least_conn');
+  });
+
+  it('跳过验证：CRLF 块内插入行保持 \\r\\n', () => {
+    const crlf = PLAIN.split('\n').join('\r\n');
+    const next = applyBasicEditsToSiteBlock(crlf, { upstreamSkipVerify: true });
+    expect(next).toContain('tls_insecure_skip_verify\r\n');
+    expect(next).toContain('transport http {\r\n');
+  });
 });
 
 describe('replaceSiteBlockInConfig', () => {
@@ -202,5 +304,33 @@ describe('parseManualTlsPaths', () => {
     expect(parseManualTlsPaths(DNS_SITE)).toBeNull();
     expect(parseManualTlsPaths('a.example.com {\n}')).toBeNull();
     expect(parseManualTlsPaths('')).toBeNull();
+  });
+});
+
+describe('parseReverseProxyTarget', () => {
+  it('解析块内首条 reverse_proxy 目标（含 https 前缀）', () => {
+    expect(parseReverseProxyTarget(SIMPLE)).toBe('localhost:3000');
+    expect(parseReverseProxyTarget(DNS_SITE)).toBe('https://192.0.2.100:8006');
+    expect(parseReverseProxyTarget(ONLY_TRANSPORT)).toBe('localhost:5000');
+  });
+
+  it('无 reverse_proxy 或块形式占位返回 null', () => {
+    expect(parseReverseProxyTarget('a.example.com {\n  file_server\n}')).toBeNull();
+    expect(parseReverseProxyTarget('a.example.com {\n  reverse_proxy {\n  }\n}')).toBeNull();
+    expect(parseReverseProxyTarget('')).toBeNull();
+  });
+});
+
+describe('parseUpstreamSkipVerify', () => {
+  it('transport http 内有 tls_insecure_skip_verify 判开启', () => {
+    expect(parseUpstreamSkipVerify(ONLY_TRANSPORT)).toBe(true);
+    const opened = applyBasicEditsToSiteBlock(SIMPLE, { upstreamSkipVerify: true });
+    expect(parseUpstreamSkipVerify(opened)).toBe(true);
+  });
+
+  it('无 transport 或无 skip 行判关闭', () => {
+    expect(parseUpstreamSkipVerify(SIMPLE)).toBe(false);
+    expect(parseUpstreamSkipVerify(PLAIN)).toBe(false);
+    expect(parseUpstreamSkipVerify('a.example.com {\n  file_server\n}')).toBe(false);
   });
 });

@@ -9,6 +9,7 @@ import (
 	"logflux/internal/types"
 
 	"github.com/zeromicro/go-zero/core/logx"
+	"gorm.io/gorm"
 )
 
 const emptyModulesJSON = "{}"
@@ -46,6 +47,14 @@ func (l *UpdateCaddyConfigLogic) UpdateCaddyConfig(req *types.CaddyConfigUpdateR
 	if err != nil {
 		return nil, err
 	}
+	// 方案 A 提示：用户在配置里改了 :80 块但模板未同步时，Apply 会用存储模板
+	// 覆盖该改动；这里在 Apply 前检测差异，返回中文提示引导去设置里同步模板。
+	msg := "成功"
+	if hint, differs := checkEntryBlockDiffers(l.svcCtx.DB, candidate.Config); differs {
+		l.Logger.Infof("检测到 :80 入口块与模板不一致，将在应用时被模板覆盖: %q", hint)
+		msg = "已保存。:80 为系统入口块，此修改将在下次全局合并时被模板覆盖，可在设置中同步为模板"
+	}
+
 	modules := resolveCaddyConfigModules(req.Mode, req.Modules)
 	if err := applyService.Apply(&server, candidate.Config, modules, configWriteOptions{
 		HistoryAction: caddymodel.CaddyHistoryActionUpdate,
@@ -57,6 +66,20 @@ func (l *UpdateCaddyConfigLogic) UpdateCaddyConfig(req *types.CaddyConfigUpdateR
 	l.Logger.Info("Caddy 配置更新成功")
 	return &types.BaseResp{
 		Code: 200,
-		Msg:  "成功",
+		Msg:  msg,
 	}, nil
+}
+
+// checkEntryBlockDiffers 判断传入配置里的 :80 块与存储模板是否不一致。
+//
+// 配置中没有 :80 块（Apply 会追加模板）或内容与模板相同时不提示。
+func checkEntryBlockDiffers(db *gorm.DB, config string) (string, bool) {
+	extracted, err := extractCaddyEntryBlock(config)
+	if err != nil {
+		return "", false
+	}
+	if extracted == loadCaddyEntryBlock(db) {
+		return "", false
+	}
+	return extracted, true
 }

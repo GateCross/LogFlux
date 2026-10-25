@@ -28,10 +28,10 @@ import type { CaddySimpleWafApi } from '#/api/caddy/simple-waf';
 import type {
   WafFormState,
   WafLoadState,
-} from '../composables/useSimpleWaf';
-import { WAF_REQUEST_BODY_MAX_MB } from '../composables/useSimpleWaf';
-import type { DiffRow } from '../caddy-config-diff';
-import { diffSideClass } from '../composables/useConfigHistory';
+} from '../../config/composables/useSimpleWaf';
+import { WAF_REQUEST_BODY_MAX_MB } from '../../config/composables/useSimpleWaf';
+import type { DiffRow } from '../../config/caddy-config-diff';
+import { diffSideClass } from '../../config/composables/useConfigHistory';
 
 /** 站点在"已生效 / 待应用 / 将移除"三态中的归属 */
 type SiteState = 'active' | 'pending' | 'remove';
@@ -108,8 +108,9 @@ function goToWafLogs() {
   router.push('/logs/access?onlyWaf=true');
 }
 
+/** WAF 来源管理已并入全局设置页，跳转过去同步规则 */
 function goToSourceManage() {
-  router.push('/caddy/source');
+  router.push('/caddy/settings');
 }
 
 const ruleColumns = [

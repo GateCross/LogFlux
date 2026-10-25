@@ -71,6 +71,12 @@ const emit = defineEmits<{
       >
         <CollapsePanel key="global" header="全局配置">
           <div class="panel-subtitle mb-3">Caddyfile 顶层选项，保存时会和右侧站点配置一起合并。</div>
+          <Alert
+            class="mb-3"
+            type="info"
+            show-icon
+            message="自动 HTTPS、受信任代理、调试模式、ACME 邮箱、附加全局选项已由「全局设置」统一接管；在此编辑这些行，保存时会被设置值覆盖。其余指令（admin、order、servers 超时等）仍在此维护。"
+          />
           <Input.TextArea
             v-model:value="props.formModel.global.raw"
             :auto-size="{ minRows: 14, maxRows: 22 }"

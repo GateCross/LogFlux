@@ -52,6 +52,9 @@ type CaddyLogModel interface {
 	// 在时间窗内按 host 批量聚合指定状态范围（min 含，max 不含）的计数。
 	// hosts 为空时返回空切片；结果仅含有匹配行的 host。
 	CountStatusByHosts(ctx context.Context, start, end time.Time, hosts []string, min, max int) ([]HostStatusCount, error)
+	// 在时间窗内按 host 批量统计全部请求计数（不过滤状态）。
+	// hosts 为空时返回空切片；结果仅含有匹配行的 host。
+	CountAllByHosts(ctx context.Context, start, end time.Time, hosts []string) ([]HostStatusCount, error)
 	CountUniqueVisitor(ctx context.Context, start, end time.Time) (int64, error)
 	CountUniqueRemoteIP(ctx context.Context, start, end time.Time) (int64, error)
 	CountAttackIP(ctx context.Context, start, end time.Time, statuses []int) (int64, error)
@@ -154,6 +157,22 @@ func (m *defaultCaddyLogModel) CountStatusByHosts(ctx context.Context, start, en
 		Select("host, COUNT(*) AS count").
 		Where("host IN ?", hosts).
 		Where("status >= ? AND status < ?", min, max).
+		Group("host").
+		Scan(&rows).Error
+	return rows, err
+}
+
+// 按 host 批量统计时间窗内全部请求计数，不做状态过滤。
+// 空 hosts 直接返回空结果；无匹配日志的 host 不会出现在返回值中。
+func (m *defaultCaddyLogModel) CountAllByHosts(ctx context.Context, start, end time.Time, hosts []string) ([]HostStatusCount, error) {
+	rows := make([]HostStatusCount, 0)
+	if len(hosts) == 0 {
+		return rows, nil
+	}
+	// 利用 host / log_time 相关索引：时间窗 + host IN + GROUP BY host
+	err := m.baseRange(ctx, start, end).
+		Select("host, COUNT(*) AS count").
+		Where("host IN ?", hosts).
 		Group("host").
 		Scan(&rows).Error
 	return rows, err

@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-/** 目录页工具栏 / 辅助导航（跳转配置工作台，无页内表单） */
+/** 目录页节点工具栏（节点选择/探测/工作台深链）；站点刷新与添加在卡片网格工具条 */
 import { Button, Select, Space, Tag, Tooltip } from 'antdv-next';
 
 import type { ServerStatusItem } from '../../shared/caddy-server-status';
@@ -12,14 +12,13 @@ import {
 
 withDefaults(
   defineProps<{
-    section?: 'toolbar' | 'secondary';
+    section?: 'toolbar';
     selectedServerId?: number;
     serverOptions?: Array<{ label: string; value: number }>;
     loadingServers?: boolean;
     selectedServerStatus?: ServerStatusItem | null;
     loadingServerStatus?: boolean;
     loadingConfig?: boolean;
-    loadingSiteMetrics?: boolean;
   }>(),
   {
     section: 'toolbar',
@@ -27,15 +26,12 @@ withDefaults(
     loadingServers: false,
     loadingServerStatus: false,
     loadingConfig: false,
-    loadingSiteMetrics: false,
   },
 );
 
 const emit = defineEmits<{
   'update:selectedServerId': [value: number];
   refreshStatus: [];
-  refreshSites: [];
-  refreshMetrics: [];
   openWorkbench: [mode?: 'blocks' | 'waf' | 'raw' | 'preview'];
   openWaf: [];
 }>();
@@ -71,42 +67,15 @@ function handleServerChange(value: unknown) {
     <Button :loading="loadingServerStatus" @click="emit('refreshStatus')">
       探测状态
     </Button>
-    <Button :loading="loadingConfig" @click="emit('refreshSites')">刷新站点</Button>
-    <Button :loading="loadingSiteMetrics" @click="emit('refreshMetrics')">
-      刷新指标
-    </Button>
     <Button type="primary" :disabled="!selectedServerId" @click="emit('openWorkbench')">
       配置工作台
     </Button>
     <Button :disabled="!selectedServerId" @click="emit('openWaf')">WAF</Button>
   </Space>
-
-  <div v-else class="catalog-secondary">
-    <Space wrap>
-      <span class="text-muted">辅助入口（仍走既有 Apply_Path）：</span>
-      <Button size="small" @click="emit('openWorkbench', 'blocks')">
-        站点向导 / 编辑
-      </Button>
-      <Button size="small" @click="emit('openWorkbench')">
-        Docker 发现（工作台内）
-      </Button>
-      <Button size="small" @click="emit('openWaf')">防火墙 WAF</Button>
-    </Space>
-  </div>
 </template>
 
 <style scoped>
 .server-select {
   min-width: 220px;
-}
-
-.catalog-secondary {
-  margin-top: 16px;
-  padding-top: 12px;
-  border-top: 1px solid hsl(var(--border));
-}
-
-.text-muted {
-  color: hsl(var(--muted-foreground));
 }
 </style>

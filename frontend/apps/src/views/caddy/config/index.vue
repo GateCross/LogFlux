@@ -6,7 +6,8 @@ import DockerDiscoveryModal from './DockerDiscoveryModal.vue';
 import ServerToolbar from './components/ServerToolbar.vue';
 import ModeStrip from './components/ModeStrip.vue';
 import BlocksWorkbench from './components/BlocksWorkbench.vue';
-import WafPanel from './components/WafPanel.vue';
+// WafPanel 由配置管理 waf 视角与全局设置共用，放在 shared 下
+import WafPanel from '../shared/components/WafPanel.vue';
 import RawEditorPanel from './components/RawEditorPanel.vue';
 import HistoryDrawer from './components/HistoryDrawer.vue';
 import SavePreviewModal from './components/SavePreviewModal.vue';

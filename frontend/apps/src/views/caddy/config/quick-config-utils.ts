@@ -1,4 +1,5 @@
 import type { CaddyFormModel, Handle, HealthCheck, Route, Site } from './types';
+import { CLASSIFIED_IMPORTS } from './site-capabilities';
 
 export type QuickSiteMode = 'reverse_proxy' | 'file_server' | 'redirect';
 
@@ -149,8 +150,11 @@ function hasRouteMatchers(route: Route) {
 function analyzeHandleMode(handle: Handle, _upstreamNames: Set<string>, reasons: Set<string>): QuickSiteMode | null {
   if (handle.type === 'reverse_proxy') {
     // healthCheck、已定义上游池引用、常见 lbPolicy 不再单独判 complex（Req 2.1）
-    if (handle.transportProtocol) reasons.add('反向代理包含自定义传输协议');
-    if (handle.tlsInsecureSkipVerify) reasons.add('反向代理包含 TLS 跳过校验');
+    // transport http 与 tls_insecure_skip_verify 是详情页基本信息 Tab 的结构化开关
+    // （upstreamHttps / upstreamSkipVerify），不算复杂；仅自定义非 http 传输才降级。
+    if (handle.transportProtocol && handle.transportProtocol !== 'http') {
+      reasons.add(`反向代理包含自定义传输协议 ${handle.transportProtocol}`);
+    }
     if (handle.lbPolicy && !SIMPLE_LB_POLICIES.has(handle.lbPolicy)) {
       reasons.add('反向代理包含负载策略');
     }
@@ -203,13 +207,21 @@ function buildQuickDraftFromSite(site: Site, handle: Handle, mode: QuickSiteMode
 export function analyzeSiteForQuickConfig(site: Site, upstreamNames: Set<string>) {
   const reasons = createReasons();
 
-  if (!isEmptyArray(site.imports)) reasons.add('站点包含 import');
+  // 已归类 snippet 的 import（waf_protect/cloudflare/geo_auth 等能力挂载行）是
+  // 系统自己生成的写法，且基本信息保存走外科编辑不会破坏它们，不算复杂；
+  // 只有无法归类的 import 才降级为复杂站点。
+  const unclassifiedImports = (site.imports ?? []).filter(
+    (name) => !CLASSIFIED_IMPORTS.has(name),
+  );
+  if (!isEmptyArray(unclassifiedImports)) reasons.add('站点包含无法归类的 import');
+
+  // dns（cloudflare DNS 签发）由 import cloudflare 表达，同样不算高级模式。
   if (!isEmptyArray(site.geoip2Vars)) reasons.add('站点包含 GeoIP2 变量');
   if (!isEmptyArray(site.encode)) reasons.add('站点包含 encode 配置');
   if (!isEmptyArray(site.headers)) reasons.add('站点包含 header 配置');
 
   const tlsMode = site.tls?.mode ?? 'auto';
-  if (!['auto', 'off', 'internal'].includes(tlsMode)) {
+  if (!['auto', 'off', 'internal', 'dns'].includes(tlsMode)) {
     reasons.add('TLS 使用了高级模式');
   }
 
@@ -222,7 +234,15 @@ export function analyzeSiteForQuickConfig(site: Site, upstreamNames: Set<string>
     reasons.add('站点未配置主路由');
   } else {
     if (!route.enabled) reasons.add('主路由已禁用');
-    if (route.name && route.name.trim() && route.name.trim() !== '默认路由') reasons.add('主路由包含自定义命名');
+    // 解析器为无 matcher 的 handle 块生成的名字是"未命名路由"，历史配置可能是
+    // "默认路由"，两者都是生成名而非用户命名，不算自定义。
+    if (
+      route.name?.trim() &&
+      route.name.trim() !== '默认路由' &&
+      route.name.trim() !== '未命名路由'
+    ) {
+      reasons.add('主路由包含自定义命名');
+    }
     if (hasRouteMatchers(route)) reasons.add('主路由包含 matcher');
     if (!isEmptyArray(route.logAppend)) reasons.add('主路由包含日志追加配置');
     if (route.handles.length !== 1) reasons.add('主路由包含多个处理器');

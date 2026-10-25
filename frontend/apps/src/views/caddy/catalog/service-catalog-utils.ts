@@ -1,5 +1,6 @@
 /** 服务目录纯函数：复用工作台站点/指标语义，不建平行 discovery 数据源 */
 
+import type { CaddyCertificateApi } from '#/api/caddy/certificate';
 import type { SiteMetricsItem } from '#/api/caddy/server';
 
 import { extractSiteBlocks, parseCaddyfileToBlocks } from '../config/caddy-config-blocks';
@@ -12,7 +13,8 @@ import {
 } from '../config/quick-config-utils';
 import type { CaddyFormModel, PreservedCaddyBlock } from '../config/types';
 
-export const SITE_METRICS_WINDOW_MINUTES = 15;
+/** 站点卡片/详情页统计窗口：今日（24h），对应 window=24h 契约（windowMinutes=1440） */
+export const SITE_METRICS_WINDOW_MINUTES = 1440;
 export const SITE_METRICS_HOST_CHUNK = 50;
 
 export type CatalogSiteKind = 'simple' | 'complex';
@@ -36,7 +38,17 @@ export interface CatalogSiteCard {
   capabilities?: SiteCapabilitiesSnapshot;
 }
 
-export type SiteMetricsMap = Map<string, { count4xx: number; count5xx: number }>;
+/** 站点窗口指标计数；total/blocked 为 window=24h 契约字段，后端未返回时为 undefined */
+export interface SiteMetricsCounters {
+  count4xx: number;
+  count5xx: number;
+  /** 窗口内总请求数（今日请求） */
+  total?: number;
+  /** 窗口内 WAF 拦截数（今日拦截） */
+  blocked?: number;
+}
+
+export type SiteMetricsMap = Map<string, SiteMetricsCounters>;
 
 // 节点探测展示语义统一从 shared 复用（配置管理 / 服务目录）
 export type { ServerStatusItem } from '../shared/caddy-server-status';
@@ -105,7 +117,7 @@ export function metricCountColor(
   return kind === '5xx' ? 'error' : 'warning';
 }
 
-/** 将 API metrics 列表转为 host → 计数 map（无日志 host 补 0） */
+/** 将 API metrics 列表转为 host → 计数 map（无日志 host 补 0；total/blocked 原样透传） */
 export function buildSiteMetricsMap(
   items: SiteMetricsItem[] | undefined | null,
   expectedHosts: string[] = [],
@@ -118,13 +130,16 @@ export function buildSiteMetricsMap(
     next.set(host, {
       count4xx: Number(item.count4xx) || 0,
       count5xx: Number(item.count5xx) || 0,
+      total: item.total == null ? undefined : Math.max(0, Number(item.total)),
+      blocked: item.blocked == null ? undefined : Math.max(0, Number(item.blocked)),
     });
   }
   for (const host of expectedHosts) {
     const key = normalizeSiteHost(host) || host.trim().toLowerCase();
     if (!key) continue;
     if (!next.has(key)) {
-      next.set(key, { count4xx: 0, count5xx: 0 });
+      // 窗口内无任何日志行：后端 GROUP BY 不会返回该 host，按 0 补齐
+      next.set(key, { count4xx: 0, count5xx: 0, total: 0, blocked: 0 });
     }
   }
   return next;
@@ -133,17 +148,98 @@ export function buildSiteMetricsMap(
 export function siteMetricsForHost(
   map: SiteMetricsMap,
   domains: string[] | undefined,
-): { count4xx: number; count5xx: number } | null {
+): SiteMetricsCounters | null {
   const host = sitePrimaryHost(domains);
   if (!host) return null;
   return map.get(host) ?? null;
+}
+
+/**
+ * 站点命中的证书剩余天数：按域名匹配证书 SAN（支持 *.example.com 泛域名后缀），
+ * 多张命中取最小剩余天数（最紧迫者决定展示）；未命中或无数据返回 null。
+ */
+export function siteCertDaysLeft(
+  certs: CaddyCertificateApi.CertificateItem[] | undefined | null,
+  domains: string[] | undefined,
+): number | null {
+  if (!certs?.length || !domains?.length) return null;
+  const hosts = new Set<string>();
+  for (const domain of domains) {
+    const host = normalizeSiteHost(domain);
+    if (host) hosts.add(host);
+  }
+  if (hosts.size === 0) return null;
+  let best: number | null = null;
+  for (const cert of certs) {
+    const sans = String(cert.domains ?? '')
+      .split(',')
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean);
+    const covered = [...hosts].some((host) =>
+      sans.some(
+        (san) =>
+          san === host ||
+          (san.startsWith('*.') &&
+            (host === san.slice(2) || host.endsWith(`.${san.slice(2)}`))),
+      ),
+    );
+    if (!covered) continue;
+    const days = Number(cert.daysLeft);
+    if (!Number.isFinite(days)) continue;
+    if (best === null || days < best) best = days;
+  }
+  return best;
+}
+
+/** 卡片/详情头防护模式徽章：站点挂载状态 × 全局 WAF 引擎状态 */
+export interface SiteProtectBadge {
+  label: string;
+  color: string;
+  /** 补充说明（Tooltip） */
+  title?: string;
+}
+
+/**
+ * 从站点能力快照与全局 simple-waf 状态推导防护徽章：
+ * 未取到原文 → 未知；未挂载 → 未防护；挂载后按全局引擎模式标注 阻断/检测/未生效。
+ * 能力入参只依赖 waf 快照（完整 CatalogSiteCard 与测试桩均可传入）。
+ */
+export function siteProtectBadge(
+  site: { capabilities?: Pick<SiteCapabilitiesSnapshot, 'waf'> | null },
+  wafStatus?: { enabled?: boolean; mode?: string } | null,
+): SiteProtectBadge {
+  const caps = site.capabilities;
+  if (!caps) {
+    return { label: '未知', color: 'default', title: '未取到站点块原文，能力未知，进入详情查看' };
+  }
+  if (caps.waf.status === 'unknown') {
+    return { label: 'WAF?', color: 'default', title: '检测到无法识别的 WAF 配置，请在详情查看' };
+  }
+  if (caps.waf.status !== 'on') {
+    return { label: '未防护', color: 'default' };
+  }
+  if (!wafStatus) {
+    return { label: '防护中', color: 'geekblue', title: '已挂载 WAF，全局引擎状态未知' };
+  }
+  if (!wafStatus.enabled) {
+    return { label: '未生效', color: 'orange', title: '已挂载 WAF，但全局引擎关闭' };
+  }
+  if (wafStatus.mode === 'on') {
+    return { label: '阻断', color: 'green' };
+  }
+  if (wafStatus.mode === 'detectiononly') {
+    return { label: '检测', color: 'orange' };
+  }
+  return { label: '防护中', color: 'geekblue' };
 }
 
 function modeLabel(mode: CatalogSiteMode): string {
   if (mode === 'reverse_proxy') return '反向代理';
   if (mode === 'file_server') return '静态文件';
   if (mode === 'redirect') return '重定向';
-  if (mode === 'complex') return '复杂站点';
+  // 不再使用"复杂站点"说法：无法结构化归纳的站点统称自定义配置，
+  // 基本信息仍表单可编辑，无法识别的项在对应字段上就地提示。
+  if (mode === 'complex') return '自定义';
   return '未知';
 }
 
@@ -246,52 +342,30 @@ export function buildCatalogSitesFromConfigPayload(data: {
   let preservedBlocks: PreservedCaddyBlock[] = [];
 
   const modulesRaw = typeof data?.modules === 'string' ? data.modules : undefined;
-  let loadedModules = false;
-  if (modulesRaw) {
+
+  if (configContent.trim()) {
+    // 有配置原文时一律新鲜解析：modules 是落库时的分类快照，分类规则升级后
+    // （如 snippet 风格站点改判 simple）旧快照会把站点继续标成复杂，必须以
+    // 当前规则重解析为准；preserved 块也能从原文原地提取，不依赖快照。
+    const parsed = parseCaddyfileToBlocks(configContent);
+    formModel = {
+      schemaVersion: parsed.schemaVersion,
+      global: parsed.global,
+      upstreams: parsed.upstreams,
+      sites: parsed.sites,
+    };
+    preservedBlocks = parsed.preservedBlocks ?? [];
+  } else if (modulesRaw) {
     try {
       const parsed = JSON.parse(modulesRaw);
       const normalized = normalizeModules(parsed);
       const modulePreserved = Array.isArray(parsed?.preservedBlocks)
         ? (parsed.preservedBlocks as PreservedCaddyBlock[])
         : [];
-      const hasContent =
-        Boolean(normalized.sites?.length) ||
-        Boolean(normalized.upstreams?.length) ||
-        Boolean(normalized.global?.raw?.trim()) ||
-        modulePreserved.some((b) => b.raw?.trim());
-      if (hasContent) {
-        formModel = normalized;
-        preservedBlocks = modulePreserved;
-        loadedModules = true;
-      }
+      formModel = normalized;
+      preservedBlocks = modulePreserved;
     } catch {
-      loadedModules = false;
-    }
-  }
-
-  if (configContent.trim()) {
-    const parsed = parseCaddyfileToBlocks(configContent);
-    if (!loadedModules) {
-      formModel = {
-        schemaVersion: parsed.schemaVersion,
-        global: parsed.global,
-        upstreams: parsed.upstreams,
-        sites: parsed.sites,
-      };
-      preservedBlocks = parsed.preservedBlocks ?? [];
-    } else {
-      // modules 已加载时合并 raw 中的 preserved site，避免遗漏
-      const existingRaw = new Set(
-        preservedBlocks.map((b) => b.raw?.trim()).filter(Boolean),
-      );
-      for (const block of parsed.preservedBlocks ?? []) {
-        const raw = block.raw?.trim();
-        if (!raw || existingRaw.has(raw)) continue;
-        if (block.kind === 'site') {
-          preservedBlocks.push(block);
-          existingRaw.add(raw);
-        }
-      }
+      // modules 损坏时保持空模型，卡片展示为空
     }
   }
 

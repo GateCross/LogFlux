@@ -7,7 +7,7 @@ const routes: RouteRecordRaw[] = [
     component: () => import('#/views/cron/index.vue'),
     meta: {
       icon: 'mdi:clock-outline',
-      order: 4,
+      order: 8,
       title: '定时任务',
     },
   },

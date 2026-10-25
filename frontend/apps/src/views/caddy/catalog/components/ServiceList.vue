@@ -1,25 +1,29 @@
 <script lang="ts" setup>
-/** 目录站点列表（只读；配置/WAF/日志仅导航） */
+/**
+ * 站点卡片网格（对齐雷池防护应用解剖）：
+ * 站点名 + 更多菜单 → 防护模式徽章 → 域名 → 今日请求/拦截 → 能力 chips（IP 限制/证书天数）。
+ * 卡片主体点击进详情整页；低频动作（日志/原文/WAF）收进「更多」下拉。
+ */
 import {
   Alert,
   Button,
   Card,
   Col,
+  Dropdown,
   Empty,
   Input,
   Row,
-  Select,
   Space,
   Spin,
   Tag,
   Tooltip,
 } from 'antdv-next';
 
+import type { CaddyCertificateApi } from '#/api/caddy/certificate';
+
 import {
-  SITE_METRICS_WINDOW_MINUTES,
-  catalogModeLabel,
-  metricCountColor,
-  siteMetricsForHost,
+  siteCertDaysLeft,
+  siteProtectBadge,
   sitePrimaryHost,
   type CatalogSiteCard,
   type SiteMetricsMap,
@@ -30,25 +34,19 @@ const props = defineProps<{
   selectedServerId?: number;
   loading: boolean;
   keyword: string;
-  kindFilter: 'all' | 'simple' | 'complex';
-  summary: {
-    total: number;
-    simple: number;
-    complex: number;
-    online: number;
-    offline: number;
-  };
-  serverStatusLoaded: boolean;
-  siteMetricsError: string;
   siteCardsCount: number;
   filteredSites: CatalogSiteCard[];
+  siteMetricsError: string;
   siteMetricsMap: SiteMetricsMap;
-  metricDisplay: (site: CatalogSiteCard, kind: '4xx' | '5xx') => string;
+  certList: CaddyCertificateApi.CertificateItem[];
+  wafStatus: { enabled?: boolean; mode?: string } | null;
+  todayDisplay: (site: CatalogSiteCard, kind: 'total' | 'blocked') => string;
 }>();
 
 const emit = defineEmits<{
   'update:keyword': [value: string];
-  'update:kindFilter': [value: 'all' | 'simple' | 'complex'];
+  refresh: [];
+  addSite: [];
   openSite: [site: CatalogSiteCard];
   openAccessLogs: [domains: string[] | undefined, event?: Event];
   openWaf: [];
@@ -59,55 +57,82 @@ function onKeywordChange(value: string) {
   emit('update:keyword', value);
 }
 
-function onKindFilterChange(value: unknown) {
-  if (value === 'all' || value === 'simple' || value === 'complex') {
-    emit('update:kindFilter', value);
+/** 卡片「更多」菜单项：查看日志需有可过滤域名，其余常开 */
+function moreItems(site: CatalogSiteCard) {
+  return [
+    { key: 'logs', label: '查看日志', disabled: !sitePrimaryHost(site.domains) },
+    { key: 'raw', label: '原文编辑（工作台）' },
+    { key: 'waf', label: 'WAF 策略' },
+  ];
+}
+
+function handleMoreClick(info: { key: number | string }, site: CatalogSiteCard) {
+  if (info.key === 'logs') {
+    emit('openAccessLogs', site.domains);
+  } else if (info.key === 'raw') {
+    emit('openWorkbench');
+  } else if (info.key === 'waf') {
+    emit('openWaf');
   }
 }
 
-/** 开启/未知的能力徽章；off 不展示 */
+/** 防护模式徽章：站点挂载状态 × 全局 WAF 引擎状态 */
+function protectBadge(site: CatalogSiteCard) {
+  return siteProtectBadge(site, props.wafStatus);
+}
+
+/** 证书天数 chip：按域名匹配证书库存取最小剩余天数；未命中不展示 */
+function certDaysLeft(site: CatalogSiteCard) {
+  return siteCertDaysLeft(props.certList, site.domains);
+}
+
+function certChip(days: number) {
+  if (days < 0) return { label: '证书已过期', color: 'error' };
+  if (days <= 14) return { label: `证书 ${days} 天`, color: 'warning' };
+  return { label: `证书 ${days} 天`, color: 'success' };
+}
+
+/**
+ * 能力 chips：只留 IP 限制；WAF 挂载已由防护徽章表达，仅 unknown 时提示注意；
+ * 安全头/错误页/压缩/日志在详情页防护与高级 Tab 维护。
+ */
 function capabilityBadges(site: CatalogSiteCard) {
   if (!site.capabilities) return [];
-  return describeSiteCapabilities(site.capabilities).filter((item) => item.status !== 'off');
+  return describeSiteCapabilities(site.capabilities).filter(
+    (item) => item.key === 'geo' || (item.key === 'waf' && item.status === 'unknown'),
+  );
+}
+
+/** 今日拦截原始值：> 0 时数值标红 */
+function blockedCount(site: CatalogSiteCard): number {
+  const host = sitePrimaryHost(site.domains);
+  if (!host) return 0;
+  return props.siteMetricsMap.get(host)?.blocked ?? 0;
 }
 </script>
 
 <template>
   <div class="service-list">
     <div class="catalog-toolbar">
-      <div class="catalog-summary">
-        <Tag>站点 {{ props.summary.total }}</Tag>
-        <Tag color="blue">简单 {{ props.summary.simple }}</Tag>
-        <Tag color="orange">复杂 {{ props.summary.complex }}</Tag>
-        <Tag v-if="props.serverStatusLoaded" color="success">
-          在线 {{ props.summary.online }}
-        </Tag>
-        <Tag v-if="props.serverStatusLoaded && props.summary.offline" color="error">
-          离线 {{ props.summary.offline }}
-        </Tag>
-        <span class="text-muted">近窗 {{ SITE_METRICS_WINDOW_MINUTES }} 分钟 5xx/4xx</span>
-      </div>
-
-      <div class="catalog-filters">
-        <Space wrap>
-          <Input
-            :value="props.keyword"
-            allow-clear
-            placeholder="搜索站点名称 / 域名 / 上游"
-            style="width: 260px"
-            @update:value="onKeywordChange"
-          />
-          <Select
-            :value="props.kindFilter"
-            style="width: 140px"
-            :options="[
-              { label: '全部类型', value: 'all' },
-              { label: '简单站点', value: 'simple' },
-              { label: '复杂站点', value: 'complex' },
-            ]"
-            @change="onKindFilterChange"
-          />
-        </Space>
+      <Input
+        :value="props.keyword"
+        allow-clear
+        placeholder="搜索站点名称 / 域名 / 上游"
+        class="toolbar-search"
+        @update:value="onKeywordChange"
+      />
+      <span class="text-muted toolbar-summary">
+        共 {{ props.siteCardsCount }} 个站点 · 今日（24 小时）统计
+      </span>
+      <div class="toolbar-actions">
+        <Button :loading="props.loading" @click="emit('refresh')">刷新</Button>
+        <Button
+          type="primary"
+          :disabled="!props.selectedServerId"
+          @click="emit('addSite')"
+        >
+          添加站点
+        </Button>
       </div>
     </div>
 
@@ -121,15 +146,21 @@ function capabilityBadges(site: CatalogSiteCard) {
 
     <Spin :spinning="props.loading">
       <div v-if="!props.selectedServerId" class="sidebar-empty">
-        <Empty description="请选择 Caddy 节点以查看服务目录" />
+        <Empty description="请选择 Caddy 节点以查看站点" />
       </div>
       <div v-else-if="props.filteredSites.length === 0" class="sidebar-empty">
         <Empty
           :description="props.siteCardsCount === 0 ? '当前节点暂无站点' : '无匹配站点'"
         >
           <Space>
+            <Button
+              type="primary"
+              :disabled="!props.selectedServerId"
+              @click="emit('addSite')"
+            >
+              添加站点
+            </Button>
             <Button @click="emit('openWorkbench')">打开配置工作台</Button>
-            <Button @click="emit('openWaf')">WAF 入口</Button>
           </Space>
         </Empty>
       </div>
@@ -150,36 +181,72 @@ function capabilityBadges(site: CatalogSiteCard) {
             @click="emit('openSite', site)"
           >
             <div class="site-card-header">
-              <div class="site-card-title">
-                <span class="site-name">{{ site.name || '未命名站点' }}</span>
-                <Tag :color="site.kind === 'simple' ? 'blue' : 'orange'">
-                  {{ site.kind === 'simple' ? '简单' : '复杂' }}
-                </Tag>
+              <span class="site-name" :title="site.name">
+                {{ site.name || '未命名站点' }}
+              </span>
+              <Tag v-if="!site.enabled" color="error">已停用</Tag>
+              <div class="site-more" @click.stop>
+                <Dropdown
+                  :trigger="['click']"
+                  placement="bottomRight"
+                  :menu="{
+                    items: moreItems(site),
+                    onClick: (info: { key: number | string }) =>
+                      handleMoreClick(info, site),
+                  }"
+                >
+                  <Button size="small" type="text">更多</Button>
+                </Dropdown>
               </div>
-              <Tag :color="site.enabled ? 'green' : 'default'">
-                {{ site.enabled ? '启用' : '停用' }}
-              </Tag>
             </div>
 
-            <div class="site-domain text-muted">
+            <div class="site-badges">
+              <Tooltip :title="protectBadge(site).title">
+                <Tag :color="protectBadge(site).color">
+                  {{ protectBadge(site).label }}
+                </Tag>
+              </Tooltip>
+            </div>
+
+            <div
+              v-if="sitePrimaryHost(site.domains) !== site.name"
+              class="site-domain"
+              :title="site.domains.join('、')"
+            >
               {{ site.domains[0] || site.primaryHost || '未配置域名' }}
-            </div>
-            <div v-if="site.domains.length > 1" class="site-domain-extra text-muted">
-              +{{ site.domains.length - 1 }} 个域名
-            </div>
-
-            <div class="site-meta-row">
-              <Tag>{{ catalogModeLabel(site.mode) }}</Tag>
-              <span v-if="site.upstream" class="text-muted site-upstream">
-                {{ site.upstream }}
+              <span v-if="site.domains.length > 1">
+                +{{ site.domains.length - 1 }}
               </span>
             </div>
 
-            <div v-if="capabilityBadges(site).length" class="site-caps">
+            <div class="site-stats">
+              <div class="stat">
+                <span class="stat-value">{{ props.todayDisplay(site, 'total') }}</span>
+                <span class="stat-label">今日请求</span>
+              </div>
+              <div class="stat">
+                <span
+                  class="stat-value"
+                  :class="{ danger: blockedCount(site) > 0 }"
+                >
+                  {{ props.todayDisplay(site, 'blocked') }}
+                </span>
+                <span class="stat-label">今日拦截</span>
+              </div>
+            </div>
+
+            <div
+              v-if="capabilityBadges(site).length || certDaysLeft(site) !== null"
+              class="site-caps"
+            >
               <Tooltip
                 v-for="badge in capabilityBadges(site)"
                 :key="badge.key"
-                :title="badge.status === 'unknown' ? '检测到无法识别的配置，开关已禁用' : badge.label"
+                :title="
+                  badge.status === 'unknown'
+                    ? '检测到无法识别的配置，开关已禁用'
+                    : badge.label
+                "
               >
                 <Tag
                   class="cap-tag"
@@ -188,62 +255,23 @@ function capabilityBadges(site: CatalogSiteCard) {
                   {{ badge.label }}{{ badge.status === 'unknown' ? '?' : '' }}
                 </Tag>
               </Tooltip>
+              <Tooltip
+                v-if="certDaysLeft(site) !== null"
+                title="按域名匹配的证书剩余天数（多证书取最小值）"
+              >
+                <Tag class="cap-tag" :color="certChip(certDaysLeft(site)!).color">
+                  {{ certChip(certDaysLeft(site)!).label }}
+                </Tag>
+              </Tooltip>
             </div>
 
-            <div v-if="site.lbPolicy || site.healthPath" class="site-extra text-muted">
-              <span v-if="site.lbPolicy">lb: {{ site.lbPolicy }}</span>
-              <span v-if="site.healthPath">health: {{ site.healthPath }}</span>
-            </div>
-
-            <div class="site-metrics">
-              <span class="site-metric">
-                <span class="meta-label">近窗 5xx</span>
-                <Tag
-                  class="site-metric-tag"
-                  :color="
-                    metricCountColor(
-                      siteMetricsForHost(props.siteMetricsMap, site.domains)?.count5xx,
-                      '5xx',
-                    )
-                  "
-                >
-                  {{ props.metricDisplay(site, '5xx') }}
-                </Tag>
-              </span>
-              <span class="site-metric">
-                <span class="meta-label">近窗 4xx</span>
-                <Tag
-                  class="site-metric-tag"
-                  :color="
-                    metricCountColor(
-                      siteMetricsForHost(props.siteMetricsMap, site.domains)?.count4xx,
-                      '4xx',
-                    )
-                  "
-                >
-                  {{ props.metricDisplay(site, '4xx') }}
-                </Tag>
-              </span>
+            <div v-if="site.upstream" class="site-upstream text-muted" :title="site.upstream">
+              {{ site.upstream }}
             </div>
 
             <div v-if="site.reasons?.length" class="site-reasons text-muted">
               {{ site.reasons[0] }}
               <span v-if="site.reasons.length > 1"> 等 {{ site.reasons.length }} 条原因</span>
-            </div>
-
-            <div class="site-actions" @click.stop>
-              <Button
-                v-if="sitePrimaryHost(site.domains)"
-                size="small"
-                type="link"
-                @click="(e: Event) => emit('openAccessLogs', site.domains, e)"
-              >
-                查看日志
-              </Button>
-              <Button size="small" type="link" @click="emit('openSite', site)">
-                配置
-              </Button>
-              <Button size="small" type="link" @click="emit('openWaf')">WAF</Button>
             </div>
           </Card>
         </Col>
@@ -258,7 +286,6 @@ function capabilityBadges(site: CatalogSiteCard) {
   flex-wrap: wrap;
   gap: 12px 16px;
   align-items: center;
-  justify-content: space-between;
   margin-bottom: 20px;
   padding: 12px 14px;
   background: hsl(var(--muted) / 40%);
@@ -266,16 +293,20 @@ function capabilityBadges(site: CatalogSiteCard) {
   border-radius: 8px;
 }
 
-.catalog-summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  min-width: 0;
+.toolbar-search {
+  width: 260px;
 }
 
-.catalog-filters {
+.toolbar-summary {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.toolbar-actions {
+  display: flex;
   flex-shrink: 0;
+  gap: 8px;
 }
 
 .site-card {
@@ -291,67 +322,69 @@ function capabilityBadges(site: CatalogSiteCard) {
 .site-card-header {
   display: flex;
   gap: 8px;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 6px;
-}
-
-.site-card-title {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
   align-items: center;
-  min-width: 0;
+  justify-content: space-between;
 }
 
 .site-name {
   overflow: hidden;
+  flex: 1;
+  min-width: 0;
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.site-more {
+  flex-shrink: 0;
+}
+
+.site-badges {
+  margin-top: 6px;
+}
+
 .site-domain {
   overflow: hidden;
-  font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.site-domain-extra {
   margin-top: 2px;
-  font-size: 12px;
-}
-
-.site-meta-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  margin-top: 8px;
-}
-
-.site-upstream {
-  overflow: hidden;
-  max-width: 100%;
-  font-size: 12px;
+  font-size: 13px;
+  /* muted-foreground 在浅色主题下过淡（截图反馈），改用主前景色 72% 透明度保证可读 */
+  color: hsl(var(--foreground) / 72%);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.site-extra {
+.site-stats {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 6px;
+  gap: 24px;
+  margin-top: 10px;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  min-width: 56px;
+}
+
+.stat-value {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.stat-value.danger {
+  color: hsl(var(--destructive));
+}
+
+.stat-label {
   font-size: 12px;
+  color: hsl(var(--muted-foreground));
 }
 
 .site-caps {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  margin-top: 6px;
+  margin-top: 8px;
 }
 
 .cap-tag {
@@ -359,41 +392,18 @@ function capabilityBadges(site: CatalogSiteCard) {
   font-size: 11px;
 }
 
-.site-metrics {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: center;
-  margin-top: 12px;
-}
-
-.site-metric {
-  display: inline-flex;
-  gap: 6px;
-  align-items: center;
-}
-
-.meta-label {
+.site-upstream {
+  overflow: hidden;
+  margin-top: 6px;
   font-size: 12px;
-  color: hsl(var(--muted-foreground));
-}
-
-.site-metric-tag {
-  margin-inline-end: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .site-reasons {
-  margin-top: 8px;
+  margin-top: 6px;
   font-size: 12px;
   line-height: 1.4;
-}
-
-.site-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0;
-  margin-top: 8px;
-  margin-left: -8px;
 }
 
 .sidebar-empty {

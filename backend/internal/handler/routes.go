@@ -256,6 +256,41 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 			[]rest.Route{
 				{
 					Method:  http.MethodGet,
+					Path:    "/caddy/entry-block",
+					Handler: caddy.GetCaddyEntryBlockHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPut,
+					Path:    "/caddy/entry-block",
+					Handler: caddy.UpdateCaddyEntryBlockHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/caddy/entry-block/reset-default",
+					Handler: caddy.ResetCaddyEntryBlockHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/caddy/global-options",
+					Handler: caddy.GetCaddyGlobalOptionsHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPut,
+					Path:    "/caddy/global-options",
+					Handler: caddy.UpdateCaddyGlobalOptionsHandler(serverCtx),
+				},
+			}...,
+		),
+		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),
+		rest.WithPrefix("/api"),
+	)
+
+	server.AddRoutes(
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.ActiveUser},
+			[]rest.Route{
+				{
+					Method:  http.MethodGet,
 					Path:    "/cron/log",
 					Handler: cron.GetCronLogListHandler(serverCtx),
 				},
@@ -331,18 +366,13 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 			[]rest.Route{
 				{
 					Method:  http.MethodGet,
-					Path:    "/caddy/logs",
-					Handler: log.GetCaddyLogsHandler(serverCtx),
+					Path:    "/system/logs",
+					Handler: log.GetSystemLogsHandler(serverCtx),
 				},
 				{
 					Method:  http.MethodPost,
-					Path:    "/caddy/logs/clear",
-					Handler: log.ClearCaddyLogsHandler(serverCtx),
-				},
-				{
-					Method:  http.MethodPost,
-					Path:    "/caddy/logs/site-metrics",
-					Handler: log.GetSiteMetricsHandler(serverCtx),
+					Path:    "/system/logs/clear",
+					Handler: log.ClearSystemLogsHandler(serverCtx),
 				},
 			}...,
 		),
@@ -356,13 +386,18 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 			[]rest.Route{
 				{
 					Method:  http.MethodGet,
-					Path:    "/system/logs",
-					Handler: log.GetSystemLogsHandler(serverCtx),
+					Path:    "/caddy/logs",
+					Handler: log.GetCaddyLogsHandler(serverCtx),
 				},
 				{
 					Method:  http.MethodPost,
-					Path:    "/system/logs/clear",
-					Handler: log.ClearSystemLogsHandler(serverCtx),
+					Path:    "/caddy/logs/clear",
+					Handler: log.ClearCaddyLogsHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/caddy/logs/site-metrics",
+					Handler: log.GetSiteMetricsHandler(serverCtx),
 				},
 			}...,
 		),

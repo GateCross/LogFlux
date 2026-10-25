@@ -4,7 +4,7 @@ const routes: RouteRecordRaw[] = [
   {
     meta: {
       icon: 'mdi:cog-sync-outline',
-      order: 6,
+      order: 10,
       title: '系统',
     },
     name: 'System',

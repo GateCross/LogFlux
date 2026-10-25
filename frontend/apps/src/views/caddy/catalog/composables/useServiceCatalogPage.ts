@@ -10,6 +10,8 @@ import {
   getSiteMetricsApi,
   type SiteMetricsItem,
 } from '#/api/caddy/server';
+import { getSimpleWafConfigApi } from '#/api/caddy/simple-waf';
+import { getCertificateListApi } from '#/api/caddy/certificate';
 import { withListDetailErrorMode } from '#/api/list-detail';
 import { qk } from '#/api/query-keys';
 import { useListDetailQuery } from '#/composables/use-list-detail-query';
@@ -24,7 +26,10 @@ import {
   buildSiteMetricsMap,
   collectCatalogHosts,
   formatMetricCount,
+  siteCertDaysLeft,
   siteMetricsForHost,
+  sitePrimaryHost,
+  siteProtectBadge,
   type CatalogSiteCard,
   type SiteMetricsMap,
 } from '../service-catalog-utils';
@@ -40,7 +45,6 @@ export function useServiceCatalogPage() {
 
   const selectedServerId = ref<number>();
   const keyword = ref('');
-  const kindFilter = ref<'all' | 'simple' | 'complex'>('all');
 
   /** 近窗指标：失败降级，不阻塞目录浏览 */
   const siteMetricsMap = ref<SiteMetricsMap>(new Map());
@@ -68,8 +72,6 @@ export function useServiceCatalogPage() {
     lastProbedAt,
     selectedServerStatus,
     serverStatusRows,
-    onlineCount,
-    offlineCount,
     pruneByServers,
     handleRefreshServerStatus,
   } = useCaddyServerStatus({
@@ -116,6 +118,29 @@ export function useServiceCatalogPage() {
   const configRaw = computed(() => configData.value?.config ?? '');
   const configHash = computed(() => configData.value?.hash ?? '');
 
+  /** 证书库存（与证书中心同 queryKey 共享缓存）：卡片「证书天数」chip 数据源 */
+  const {
+    data: certData,
+    loading: loadingCerts,
+  } = useListDetailQuery({
+    queryKey: computed(() => qk.caddy.certificates(selectedServerId.value)),
+    queryFn: () =>
+      getCertificateListApi(selectedServerId.value, withListDetailErrorMode()),
+    errorFallback: '获取证书列表失败',
+    enabled: computed(() => Boolean(selectedServerId.value)),
+  });
+  const certList = computed(() => certData.value ?? []);
+
+  /** 全局 WAF 状态（key 与 useSimpleWaf 一致，共享缓存）：卡片防护模式徽章数据源 */
+  const { data: wafStatusData } = useListDetailQuery({
+    queryKey: computed(() => [...qk.caddy.config(selectedServerId.value ?? 0), 'simple-waf']),
+    queryFn: () =>
+      getSimpleWafConfigApi(selectedServerId.value, withListDetailErrorMode()),
+    errorFallback: '获取 WAF 状态失败',
+    enabled: computed(() => Boolean(selectedServerId.value)),
+  });
+  const wafStatus = computed(() => wafStatusData.value ?? null);
+
   watch(siteCards, () => {
     siteMetricsMap.value = new Map();
     siteMetricsError.value = '';
@@ -133,26 +158,12 @@ export function useServiceCatalogPage() {
   const filteredSites = computed(() => {
     const q = keyword.value.trim().toLowerCase();
     return siteCards.value.filter((site) => {
-      if (kindFilter.value !== 'all' && site.kind !== kindFilter.value) return false;
       if (!q) return true;
       const hay = [site.name, site.primaryHost, ...(site.domains ?? []), site.upstream ?? '']
         .join(' ')
         .toLowerCase();
       return hay.includes(q);
     });
-  });
-
-  const summary = computed(() => {
-    const total = siteCards.value.length;
-    const simple = siteCards.value.filter((s) => s.kind === 'simple').length;
-    const complex = total - simple;
-    return {
-      total,
-      simple,
-      complex,
-      online: onlineCount.value,
-      offline: offlineCount.value,
-    };
   });
 
   async function fetchServers() {
@@ -180,8 +191,13 @@ export function useServiceCatalogPage() {
       const items: SiteMetricsItem[] = [];
       for (let i = 0; i < hosts.length; i += SITE_METRICS_HOST_CHUNK) {
         const chunk = hosts.slice(i, i + SITE_METRICS_HOST_CHUNK);
+        // window=24h 契约：windowMinutes=1440 进 query key，与旧 15 分钟窗缓存隔离
         const list = await queryClient.fetchQuery({
-          queryKey: qk.caddy.metrics(selectedServerId.value ?? 0, chunk.join(',')),
+          queryKey: qk.caddy.metrics(
+            selectedServerId.value ?? 0,
+            chunk.join(','),
+            SITE_METRICS_WINDOW_MINUTES,
+          ),
           queryFn: () =>
             getSiteMetricsApi(
               {
@@ -249,23 +265,50 @@ export function useServiceCatalogPage() {
     });
   }
 
-  function metricDisplay(site: CatalogSiteCard, kind: '4xx' | '5xx') {
+  /** 卡片今日统计展示：window=24h 契约字段 total/blocked，后端未上线时按 — 降级 */
+  function todayDisplay(site: CatalogSiteCard, kind: 'total' | 'blocked') {
     if (loadingSiteMetrics.value && !siteMetricsLoaded.value) return '…';
     if (siteMetricsError.value) return '—';
     const metrics = siteMetricsForHost(siteMetricsMap.value, site.domains);
-    return formatMetricCount(kind === '5xx' ? metrics?.count5xx : metrics?.count4xx);
+    if (!metrics) return '—';
+    return formatMetricCount(kind === 'total' ? metrics.total : metrics.blocked);
+  }
+
+  /** 卡片证书天数 chip：按域名匹配证书库存取最小剩余天数 */
+  function certDaysLeft(site: CatalogSiteCard) {
+    return siteCertDaysLeft(certList.value, site.domains);
+  }
+
+  /** 卡片防护模式徽章：站点挂载 × 全局 WAF 引擎状态 */
+  function protectBadge(site: CatalogSiteCard) {
+    return siteProtectBadge(site, wafStatus.value);
+  }
+
+  /** 打开站点详情整页（对齐雷池，替代原抽屉） */
+  function openSiteDetail(site: CatalogSiteCard) {
+    if (!selectedServerId.value) return;
+    const host = site.primaryHost || sitePrimaryHost(site.domains);
+    if (!host) {
+      message.warning('该站点无可识别域名，请用配置工作台编辑');
+      return;
+    }
+    router.push({
+      name: 'CaddySiteDetail',
+      query: { serverId: String(selectedServerId.value), host },
+    });
+  }
+
+  /** 工具条「刷新」：站点配置 + 今日指标一起重取 */
+  async function handleRefreshSites() {
+    await fetchConfigSites();
+    handleRefreshSiteMetrics();
   }
 
   function setKeyword(value: string) {
     keyword.value = value;
   }
 
-  function setKindFilter(value: 'all' | 'simple' | 'complex') {
-    kindFilter.value = value;
-  }
-
   return {
-    SITE_METRICS_WINDOW_MINUTES,
     servers,
     selectedServerId,
     loadingServers,
@@ -276,11 +319,13 @@ export function useServiceCatalogPage() {
     configRaw,
     configHash,
     keyword,
-    kindFilter,
     siteMetricsMap,
     loadingSiteMetrics,
     siteMetricsError,
     siteMetricsLoaded,
+    certList,
+    loadingCerts,
+    wafStatus,
     serverOptions,
     loadingServerStatus,
     serverStatusError,
@@ -289,18 +334,20 @@ export function useServiceCatalogPage() {
     selectedServerStatus,
     serverStatusRows,
     filteredSites,
-    summary,
     fetchConfigSites,
     fetchServers,
     handleRefreshServerStatus,
     handleRefreshSiteMetrics,
+    handleRefreshSites,
     handleServerChange,
     selectServerFromStatus,
     openConfigWorkbench,
     openWaf,
     openAccessLogs,
-    metricDisplay,
+    openSiteDetail,
+    todayDisplay,
+    certDaysLeft,
+    protectBadge,
     setKeyword,
-    setKindFilter,
   };
 }

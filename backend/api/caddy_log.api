@@ -37,15 +37,17 @@ type (
 		List  []CaddyLogItem `json:"list"`
 		Total int64          `json:"total"`
 	}
-	// 站点近窗指标（按 host 聚合访问日志 4xx/5xx）
+	// 站点近窗指标（按 host 聚合访问日志总数/4xx/5xx 与 WAF 拦截数）
 	SiteMetricsReq {
-		Hosts         []string `json:"hosts"`                    // 必填；最多 50
-		WindowMinutes int      `json:"windowMinutes,optional"` // 省略或 <=0 时默认 15
+		Hosts         []string `json:"hosts"`                  // 必填；最多 50
+		WindowMinutes int      `json:"windowMinutes,optional"` // 查询窗口分钟数；省略或 <=0 默认 15，24h 传 1440
 	}
 	SiteMetricsItem {
 		Host     string `json:"host"`
+		Total    int64  `json:"total"`    // 窗内总请求数（不过滤状态）
 		Count4xx int64  `json:"count4xx"`
 		Count5xx int64  `json:"count5xx"`
+		Blocked  int64  `json:"blocked"`  // 窗内 WAF 拦截数（waf_events 中 interrupted=true）
 	}
 	SiteMetricsResp {
 		List []SiteMetricsItem `json:"list"`

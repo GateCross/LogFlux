@@ -112,6 +112,14 @@ func (s *caddyConfigApplyService) Apply(server *caddymodel.CaddyServer, config, 
 	previousConfig := server.Config
 	previousModules := server.Modules
 
+	// adapt 前合并全局选项与 :80 入口块模板：库里单独保存的设置在每次应用时
+	// 统一收口到最终配置，后续 adapt/load/persist 都以合并结果为准。
+	merged, err := s.mergeManagedBlocks(config)
+	if err != nil {
+		return err
+	}
+	config = merged
+
 	if err := adaptCaddyfile(server, config); err != nil {
 		if s != nil && s.logger != nil {
 			s.logger.Errorf("Caddy 配置适配失败: %v", err)
@@ -179,6 +187,20 @@ func (s *caddyConfigApplyService) persist(server *caddymodel.CaddyServer, config
 		return 0, err
 	}
 	return historyID, nil
+}
+
+// mergeManagedBlocks 把库里保存的全局选项与 :80 入口块模板合并进配置。
+//
+// 读库失败按"未配置"处理不阻断应用；模板本身不合法（缺 :80 地址）属于
+// 数据错误，直接报错避免把坏配置推给 Caddy。
+func (s *caddyConfigApplyService) mergeManagedBlocks(config string) (string, error) {
+	return mergeCaddyManagedBlocks(config, loadCaddyGlobalOptions(s.svcCtx.DB), loadCaddyEntryBlock(s.svcCtx.DB))
+}
+
+// mergeCaddyManagedBlocks 是合并的纯函数形态：先合并全局选项，再替换入口块。
+func mergeCaddyManagedBlocks(config string, opts CaddyGlobalOptionsValue, entryBlock string) (string, error) {
+	merged := mergeGlobalOptions(config, opts)
+	return mergeEntryBlock(merged, entryBlock)
 }
 
 func (s *caddyConfigApplyService) scheduleLogSourceSync(server *caddymodel.CaddyServer) {

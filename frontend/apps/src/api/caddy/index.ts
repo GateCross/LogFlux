@@ -1,3 +1,4 @@
+export * from './global-options';
 export * from './ip-region';
 export * from './server';
 export * from './simple-waf';

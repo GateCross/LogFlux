@@ -231,7 +231,7 @@ describe('quick-config-utils simple classification & draft round-trip', () => {
       healthCheck: { path: '/ok' }
     });
     site.imports = ['snippet'];
-    site.routes[0]!.handles[0]!.transportProtocol = 'http';
+    site.routes[0]!.handles[0]!.transportProtocol = 'fastcgi';
 
     const analyzed = analyzeSiteForQuickConfig(site, new Set());
     expect(analyzed.kind).toBe('complex');
@@ -239,5 +239,20 @@ describe('quick-config-utils simple classification & draft round-trip', () => {
       expect(analyzed.summary.reasons.some(r => r.includes('import'))).toBe(true);
       expect(analyzed.summary.reasons.some(r => r.includes('传输协议'))).toBe(true);
     }
+  });
+
+  it('unit: 已归类 snippet import 与 transport http 不再判 complex（雷池式低门槛）', () => {
+    const site = baseSimpleReverseProxySite({
+      id: 'c2',
+      name: 'snippet-site',
+      domains: ['b.example.com'],
+      upstream: 'https://192.168.50.100:8006'
+    });
+    site.imports = ['waf_protect', 'cloudflare', 'geo_auth', 'deny_403_redirect'];
+    site.routes[0]!.handles[0]!.transportProtocol = 'http';
+    site.routes[0]!.handles[0]!.tlsInsecureSkipVerify = true;
+
+    const analyzed = analyzeSiteForQuickConfig(site, new Set());
+    expect(analyzed.kind).toBe('simple');
   });
 });
