@@ -11,6 +11,9 @@
 - WAF/CRS 历史计划与进度：
   - [`plans/waf-crs-frontend-security-config-overall-plan.md`](./plans/waf-crs-frontend-security-config-overall-plan.md)
   - [`plans/waf-crs-frontend-security-config-progress.md`](./plans/waf-crs-frontend-security-config-progress.md)
+- 站点中心重构与站点日志进度：
+  - [`plans/caddy-site-first-cert-center-plan.md`](./plans/caddy-site-first-cert-center-plan.md)
+  - [`plans/caddy-site-log-pipeline-progress.md`](./plans/caddy-site-log-pipeline-progress.md)（含未完成项）
 
 ## 计划文档目录说明
 
