@@ -273,6 +273,8 @@ function countBraces(line: string): number {
  *
  * 名字优先沿用块内既有 import 的参数，其次用调用方给的名字，最后回落到
  * 块头域名前缀，避免仅改开关时把日志文件名改掉、把历史日志切成两份。
+ * 写回统一为位置参数单行；块参数写法与旧单行写法先清干净再插入，
+ * 避免留下两份互相覆盖的日志配置。
  * 两开关全关时不写任何行（level OFF 不是合法指令），只做删除。
  * 其余字节（注释、缩进、顺序）一概不动，连续应用幂等。
  */
@@ -295,13 +297,11 @@ export function applySiteLogToSiteBlock(
     'site';
 
   const indent = detectChildIndent(elements, headerIdx);
-  // 块内续行比指令行再深一级，沿用站点既有缩进（Tab 站点不混入空格缩进）
-  const argIndent = indent.includes('\t') ? `${indent}\t` : `${indent}  `;
   const crlfSuffix = siteBlock.includes('\r\n') ? '\r' : '';
-  const desired = renderSiteImportBlock(settings, resolvedName).map((line) => {
-    if (!line.startsWith('  ')) return `${indent}${line}${crlfSuffix}`;
-    return `${argIndent}${line.slice(2)}${crlfSuffix}`;
-  });
+  // 单行写法没有续行，整行落在站点块一级缩进上
+  const desired = renderSiteImportBlock(settings, resolvedName).map(
+    (line) => `${indent}${line}${crlfSuffix}`,
+  );
 
   // 已按期望形态存在（且没有残留的旧写法）时原样返回，避免移动既有行的位置
   const stripped = stripSiteLogImports(elements);

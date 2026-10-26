@@ -56,10 +56,12 @@ func (c RedisConf) Addr() string {
 	return fmt.Sprintf("%s:%d", c.Host, c.Port)
 }
 
+// ArchiveConf 旧归档配置；归档机制已移除，日志保留策略改存 system_configs（缺省 7 天）。
+// 字段保留只为旧配置文件解析不报错，运行时不再读取。
 type ArchiveConf struct {
-	Enabled      bool
-	RetentionDay int // 日志保留天数
-	ArchiveTable string
+	Enabled      bool // 已废弃：保留开关在 system_configs 的 caddy_log_retention 键里
+	RetentionDay int  // 已废弃：保留天数在 system_configs 的 caddy_log_retention 键里
+	ArchiveTable string // 已废弃：归档表已删除
 }
 
 type WafConf struct {

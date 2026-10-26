@@ -34,6 +34,7 @@ import { invalidateListDetailQueries } from '#/api/list-detail-mutation';
 import { qk } from '#/api/query-keys';
 import { useListDetailQuery } from '#/composables/use-list-detail-query';
 import { parseWafLog } from '#/views/logs/shared/waf-log';
+import { statusTagColor } from '#/views/logs/shared/log-status-color';
 
 defineOptions({ name: 'LogsAccess' });
 
@@ -206,14 +207,6 @@ function methodTagColor(method?: string) {
   if (method === 'GET') return 'blue';
   if (method === 'POST') return 'green';
   return 'orange';
-}
-
-function statusTagColor(status?: number) {
-  if (status == null) return 'default';
-  if (status >= 200 && status < 300) return 'green';
-  if (status >= 300 && status < 400) return 'orange';
-  if (status >= 400) return 'red';
-  return 'default';
 }
 
 const columns = computed(() => {

@@ -19,22 +19,18 @@ const logSnippetTestConfig = `{
 
 # 主站
 app.example.com {
-  import subdomain-log {
-    name app
-    size 10
-    level INFO
-  }
+  import subdomain-log app 10 INFO
   reverse_proxy localhost:8080
 }
 `
 
 const logSnippetTestOld = `(subdomain-log) {
   log {
-    output file /var/log/caddy/{args.name}.log {
-      roll_size {args.size}mb
+    output file /var/log/caddy/{args[0]}.log {
+      roll_size {args[1]}mb
       roll_keep 1
     }
-    level {args.level}
+    level {args[2]}
     format json
   }
 }`
@@ -73,7 +69,7 @@ func TestMergeLogSnippetReplacesExisting(t *testing.T) {
 	if strings.Count(got, "(subdomain-log) {") != 1 {
 		t.Fatalf("定义应恰好一份:\n%s", got)
 	}
-	if !strings.Contains(got, "roll_size {args.size}mb") || !strings.Contains(got, "roll_keep 1") {
+	if !strings.Contains(got, "roll_size {args[1]}mb") || !strings.Contains(got, "roll_keep 1") {
 		t.Fatalf("新定义内容应写入:\n%s", got)
 	}
 	if !strings.Contains(got, "app.example.com") || !strings.Contains(got, "admin localhost:2019") {
@@ -179,10 +175,10 @@ func TestDefaultLogSnippetShape(t *testing.T) {
 	snippet := defaultCaddyLogSnippetNormalized()
 	for _, want := range []string{
 		"(subdomain-log) {",
-		"output file /var/log/caddy/{args.name}.log",
-		"roll_size {args.size}mb",
+		"output file /var/log/caddy/{args[0]}.log",
+		"roll_size {args[1]}mb",
 		"roll_keep 1",
-		"level {args.level}",
+		"level {args[2]}",
 		"format json",
 	} {
 		if !strings.Contains(snippet, want) {

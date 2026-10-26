@@ -11,7 +11,7 @@
 :80 {
   import waf_protect
   import compression
-  import subdomain-log local
+  import subdomain-log local 10 INFO
 
   @lan remote_ip 127.0.0.1/8 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
 

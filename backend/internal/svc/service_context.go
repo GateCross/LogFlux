@@ -41,7 +41,7 @@ type ServiceContext struct {
 	Config            config.Config
 	DB                *gorm2.DB
 	Redis             *redis.Client
-	ArchiveTask       *tasks.ArchiveTask
+	LogCleanupTask    *tasks.LogCleanupTask
 	CronScheduler     *tasks.CronScheduler
 	WafScheduler      *tasks.WafScheduler
 	CertSyncScheduler *tasks.CertSyncScheduler
@@ -64,11 +64,10 @@ type ServiceContext struct {
 func NewServiceContext(c config.Config) *ServiceContext {
 	db := gorm.InitGorm(c.Database.DSN())
 
-	// Auto Migrate - 包含归档表和通知表
+	// Auto Migrate - 包含日志表和通知表
 	db.AutoMigrate(
 		&usermodel.User{},
 		&caddymodel.CaddyLog{},
-		&caddymodel.CaddyLogArchive{}, // 归档表
 		&ingestmodel.SystemLog{},
 		&ingestmodel.LogIngestCursor{},
 		&ingestmodel.LogSource{},
@@ -112,9 +111,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	initWafWorkspace(&c)
 	initCronWorkspace(&c)
 
-	// 创建归档存储过程（如果不存在）
-	createArchiveFunction(db)
-
 	// 后端日志直接写入数据库（异步）
 	if writer := logging.NewDBWriter(db, "backend"); writer != nil {
 		logx.AddWriter(writer)
@@ -139,13 +135,12 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	// 初始化通知管理器（仅依赖数据库配置）
 	notificationMgr := initNotificationManager(db, rdb)
 
-	// 初始化归档任务
-	archiveTask := tasks.NewArchiveTask(db, c.Archive.RetentionDay, c.Archive.Enabled, notificationMgr)
-	if c.Archive.Enabled {
-		safego.New(context.Background(), "日志归档任务").Go(func() {
-			archiveTask.Start(context.Background())
-		})
-	}
+	// 初始化日志清理任务：保留策略存于 system_configs，任务无条件启动，
+	// 每轮执行时按策略决定是否删除。
+	logCleanupTask := tasks.NewLogCleanupTask(db, notificationMgr)
+	safego.New(context.Background(), "日志清理任务").Go(func() {
+		logCleanupTask.Start(context.Background())
+	})
 
 	// 初始化定时任务调度器
 	cronScheduler := tasks.NewCronScheduler(db)
@@ -195,12 +190,14 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	// 存量审计访问日志异步回填为归一化 WAF 事件
 	backfillWafEvents(db)
+	// 存量日志补齐 level / logger，供访问日志与错误日志分开查看
+	ingestcaddy.BackfillLogFields(db)
 
 	return &ServiceContext{
 		Config:            c,
 		DB:                db,
 		Redis:             rdb,
-		ArchiveTask:       archiveTask,
+		LogCleanupTask:    logCleanupTask,
 		CronScheduler:     cronScheduler,
 		WafScheduler:      wafScheduler,
 		CertSyncScheduler: certSyncScheduler,
@@ -533,39 +530,6 @@ func (svc *ServiceContext) EnsureWafDefaultSources() {
 
 func (svc *ServiceContext) EnsureWafEngineDefaultSource() {
 	return
-}
-
-// createArchiveFunction 创建归档存储过程
-func createArchiveFunction(db *gorm2.DB) {
-	sql := `
-CREATE OR REPLACE FUNCTION archive_old_logs(retention_days INTEGER DEFAULT 90)
-RETURNS INTEGER AS $$
-DECLARE
-    archived_count INTEGER;
-    archive_date TIMESTAMP;
-BEGIN
-    archive_date := NOW() - (retention_days || ' days')::INTERVAL;
-
-    -- 将旧数据移动到归档表
-    WITH moved_rows AS (
-        DELETE FROM caddy_logs
-        WHERE log_time < archive_date
-        RETURNING *
-    )
-    INSERT INTO caddy_logs_archive (id, created_at, updated_at, log_time, country, province, city, host, method, uri, proto, status, size, user_agent, remote_ip, client_ip, raw_log, extra_data)
-    SELECT id, created_at, updated_at, log_time, country, province, city, host, method, uri, proto, status, size, user_agent, remote_ip, client_ip, raw_log, extra_data FROM moved_rows;
-
-    GET DIAGNOSTICS archived_count = ROW_COUNT;
-
-    RETURN archived_count;
-END;
-$$ LANGUAGE plpgsql;
-`
-	if err := db.Exec(sql).Error; err != nil {
-		logx.Errorf("警告: 创建归档函数失败: %s", err.Error())
-	} else {
-		logx.Info("归档函数创建成功")
-	}
 }
 
 // initNotificationManager 初始化通知管理器（仅从数据库加载配置）

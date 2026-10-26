@@ -1,16 +1,14 @@
 # (subdomain-log) —— LogFlux 托管的站点日志 snippet（可在设置中修改，支持恢复默认）
 #
-# 参数化定义，一份被所有站点共享，三个键由站点侧 import 传值：
-#   name   文件名（不含 .log 后缀），日志落在 /var/log/caddy/{name}.log
-#   size   单文件大小上限（MB 整数）
-#   level  最低日志级别，见下方三档说明
+# 三个位置参数，由站点侧 import 按顺序传值：
+#   args[0]  文件名（不含 .log 后缀），日志落在 /var/log/caddy/{args[0]}.log
+#   args[1]  单文件大小上限（MB 整数）
+#   args[2]  最低日志级别，见下方三档说明
+#
+# 注意：Caddy snippet 参数只有 {args[n]} 位置形式，没有 {args.name} 键名形式。
 #
 # 站点引用示例：
-#   import subdomain-log {
-#     name myapp
-#     size 10
-#     level INFO
-#   }
+#   import subdomain-log myapp 10 INFO
 #
 # level 是最低级别而非白名单，因此只有三档可用：
 #   INFO   访问日志 + 错误日志（默认，两开关都开时选它）
@@ -24,11 +22,11 @@
 # 注意 0 会被 Caddy 当成未设置并回落默认 10，所以下限就是 1。
 (subdomain-log) {
   log {
-    output file /var/log/caddy/{args.name}.log {
-      roll_size {args.size}mb
+    output file /var/log/caddy/{args[0]}.log {
+      roll_size {args[1]}mb
       roll_keep 1
     }
-    level {args.level}
+    level {args[2]}
     format json
   }
 }

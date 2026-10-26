@@ -54,6 +54,24 @@ func TestMergeManagedBlocksEmptyKeepsConfig(t *testing.T) {
 	}
 }
 
+// 合并入口在 snippet 就位后顺带把站点侧旧 import 写法迁移为三参数单行。
+func TestMergeManagedBlocksMigratesOldLogImports(t *testing.T) {
+	config := ":80 {\n  import subdomain-log local\n}\n\napp.example.com {\n  import subdomain-log {\n    name app\n    size 10\n    level INFO\n  }\n}\n"
+	got, err := mergeCaddyManagedBlocks(config, CaddyGlobalOptionsValue{}, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, "import subdomain-log local 10 DEBUG") {
+		t.Fatalf("单行 1 参数 import 应被迁移:\n%s", got)
+	}
+	if !strings.Contains(got, "import subdomain-log app 10 INFO") {
+		t.Fatalf("块形式 import 应被迁移:\n%s", got)
+	}
+	if strings.Contains(got, "name app") {
+		t.Fatalf("块形式不应残留:\n%s", got)
+	}
+}
+
 func TestMergeManagedBlocksRejectsBadEntryTemplate(t *testing.T) {
 	if _, err := mergeCaddyManagedBlocks(mergeTestBaseConfig, CaddyGlobalOptionsValue{}, "example.com {\n}\n", ""); err == nil {
 		t.Fatal("缺 :80 地址的模板应报错")

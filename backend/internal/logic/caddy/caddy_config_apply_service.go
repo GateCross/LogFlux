@@ -214,7 +214,12 @@ func mergeCaddyManagedBlocks(config string, opts CaddyGlobalOptionsValue, entryB
 	if err != nil {
 		return "", err
 	}
-	return mergeCaddyLogSnippet(merged, logSnippet)
+	merged, err = mergeCaddyLogSnippet(merged, logSnippet)
+	if err != nil {
+		return "", err
+	}
+	// snippet 定义就位后，把存量站点侧旧 import 写法迁移为三参数单行
+	return migrateSiteLogImports(merged), nil
 }
 
 func (s *caddyConfigApplyService) scheduleLogSourceSync(server *caddymodel.CaddyServer) {

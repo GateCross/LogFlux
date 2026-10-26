@@ -107,6 +107,16 @@ type CaddyLogSnippetUpdateReq struct {
 	Raw string `json:"raw,optional"`
 }
 
+type CaddyLogRetentionResp struct {
+	Enabled       bool `json:"enabled"`
+	RetentionDays int  `json:"retentionDays"`
+}
+
+type CaddyLogRetentionUpdateReq struct {
+	Enabled       bool `json:"enabled,default=true"`
+	RetentionDays int  `json:"retentionDays,optional"`
+}
+
 type CaddyGlobalOptionsResp struct {
 	AutoHttps       string   `json:"autoHttps,optional"`
 	TrustedProxies  []string `json:"trustedProxies,optional"`

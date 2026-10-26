@@ -34,6 +34,7 @@ import { qk } from '#/api/query-keys';
 import MonacoCodeEditor from '#/components/code-editor/MonacoCodeEditor.vue';
 import { useListDetailQuery } from '#/composables/use-list-detail-query';
 import { apiErrorMessage } from '#/utils/api-error-message';
+import SettingsSiteLogCard from './components/SettingsSiteLogCard.vue';
 import SettingsWafCard from './components/SettingsWafCard.vue';
 import WafSourcesCard from './components/WafSourcesCard.vue';
 
@@ -289,6 +290,9 @@ function handleResetEntry() {
           </Form>
         </Spin>
       </Card>
+
+      <!-- 站点日志：保留天数与 (subdomain-log) 模板 -->
+      <SettingsSiteLogCard />
 
       <!-- WAF 防护：复用 simple-waf 接口与 WafPanel，节点级状态 -->
       <SettingsWafCard v-model:server-id="advancedServerId" />

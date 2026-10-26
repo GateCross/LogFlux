@@ -266,14 +266,10 @@ describe('accessLog 能力识别兼容块参数写法', () => {
 });
 
 describe('applySiteLogToSiteBlock', () => {
-  it('裸站点开日志：块头后插入四行参数块，其余字节不动', () => {
+  it('裸站点开日志：块头后插入位置参数单行，其余字节不动', () => {
     expect(applySiteLogToSiteBlock(BARE_SITE, makeLog(), 'plain')).toBe(
       `plain.example.com {
-  import subdomain-log {
-    name plain
-    size 10
-    level INFO
-  }
+  import subdomain-log plain 10 INFO
   handle {
     reverse_proxy localhost:3000
   }
@@ -283,12 +279,12 @@ describe('applySiteLogToSiteBlock', () => {
 
   it('名字缺省时回落到块头域名前缀', () => {
     const next = applySiteLogToSiteBlock(BARE_SITE, makeLog());
-    expect(next).toContain('    name plain\n');
+    expect(next).toContain('import subdomain-log plain 10 INFO');
   });
 
   it('仅记错误：level 写 ERROR', () => {
     const next = applySiteLogToSiteBlock(BARE_SITE, makeLog({ access: false }), 'plain');
-    expect(next).toContain('    level ERROR\n');
+    expect(next).toContain('import subdomain-log plain 10 ERROR');
   });
 
   it('两开关全关：清干净且不写任何行', () => {
@@ -302,19 +298,17 @@ describe('applySiteLogToSiteBlock', () => {
     expect(next).toContain('    reverse_proxy localhost:3000');
   });
 
-  it('旧的单行写法整行被新块替换，不留下两份配置', () => {
+  it('旧的单行写法整行被新写法替换，不留下两份配置', () => {
     const next = applySiteLogToSiteBlock(LAN_SITE, makeLog(), 'local');
     expect(next.match(/import subdomain-log/g)).toHaveLength(1);
     expect(next).not.toContain('import subdomain-log local\n');
-    expect(next).toContain('    level INFO\n');
+    expect(next).toContain('import subdomain-log local 10 INFO');
   });
 
   it('既有块写法只改设置：文件名沿用原参数', () => {
     const next = applySiteLogToSiteBlock(BLOCK_LOG_SITE, makeLog({ sizeMb: 32 }));
-    expect(next).toContain('    name myapp\n');
-    expect(next).toContain('    size 32\n');
-    expect(next).toContain('    level INFO\n');
-    expect(next.match(/name myapp/g)).toHaveLength(1);
+    expect(next).toContain('import subdomain-log myapp 32 INFO');
+    expect(next.match(/subdomain-log/g)).toHaveLength(1);
   });
 
   it('幂等：连续应用两次结果一致', () => {
@@ -328,18 +322,16 @@ describe('applySiteLogToSiteBlock', () => {
     expect(twice).toBe(once);
   });
 
-  it('块写法插入后仍是 CRLF', () => {
+  it('单行写法插入后仍是 CRLF', () => {
     const crlf = BARE_SITE.split('\n').join('\r\n');
     const next = applySiteLogToSiteBlock(crlf, makeLog(), 'plain');
-    expect(next).toContain('  import subdomain-log {\r\n');
-    expect(next.split('\r\n')[2]).toBe('    name plain');
+    expect(next.split('\r\n')[1]).toBe('  import subdomain-log plain 10 INFO');
     expect(next.includes('\r\n')).toBe(true);
   });
 
   it('tab 缩进站点沿用 Tab，不混入空格缩进', () => {
     const next = applySiteLogToSiteBlock(TAB_SITE, makeLog(), 'tab');
-    expect(next).toContain('\timport subdomain-log {\n');
-    expect(next).toContain('\t\tname tab\n');
+    expect(next).toContain('\timport subdomain-log tab 10 INFO\n');
     expect(next).not.toContain('  import subdomain-log');
   });
 

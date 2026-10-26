@@ -19,6 +19,7 @@ import {
   CollapsePanel,
   Empty,
   Input,
+  InputNumber,
   RadioButton,
   RadioGroup,
   Select,
@@ -62,6 +63,7 @@ import {
   useSiteDetailEdit,
   type SiteDetailTab,
 } from './use-site-detail-edit';
+import SiteLogPanel from './components/SiteLogPanel.vue';
 
 defineOptions({ name: 'CaddySiteDetail' });
 
@@ -228,6 +230,12 @@ const {
   basicEditable,
   capabilities,
   hasUpstreamDirective,
+  logSettings,
+  logLevelLabel,
+  logErrorForced,
+  logInlineConflict,
+  logSizeMinMb,
+  logSizeMaxMb,
   certOptions,
   certLoading,
   certErrorMessage,
@@ -272,6 +280,9 @@ function openWorkbenchRaw() {
 function goCertificates() {
   router.push('/caddy/certificates');
 }
+
+/** 站点主域名：日志 Tab 按它过滤；缺失时退回路由上的查找键 */
+const sitePrimaryHost = computed(() => site.value?.primaryHost || host.value);
 </script>
 
 <template>
@@ -533,10 +544,66 @@ function goCertificates() {
               </div>
             </TabPane>
 
-            <!-- 高级：日志/压缩能力 + 逃生舱 raw，默认收起 -->
+            <!-- 高级：日志三开关/压缩能力 + 逃生舱 raw，默认收起 -->
             <TabPane key="advanced" tab="高级">
               <Collapse>
-                <CollapsePanel key="caps" header="日志与压缩">
+                <CollapsePanel key="site-log" header="站点日志">
+                  <Alert
+                    v-if="logInlineConflict"
+                    class="mb-3"
+                    type="warning"
+                    show-icon
+                    message="检测到内联 log 指令，请在原文模式维护"
+                  />
+                  <div class="field-row">
+                    <div>
+                      <div>访问日志</div>
+                      <div class="cap-note">
+                        关闭后站点块不再写 import subdomain-log
+                      </div>
+                    </div>
+                    <Switch
+                      v-model:checked="logSettings.access"
+                      :disabled="logInlineConflict"
+                    />
+                  </div>
+                  <div class="field-row">
+                    <div>
+                      <div>错误日志</div>
+                      <div class="cap-note">
+                        由 log 的 level 控制；访问日志开启时会连带记录错误日志
+                      </div>
+                    </div>
+                    <Switch
+                      v-model:checked="logSettings.error"
+                      :disabled="logInlineConflict || logErrorForced"
+                    />
+                  </div>
+                  <div class="field-row">
+                    <div>
+                      <div>单文件上限（MB）</div>
+                      <div class="cap-note">
+                        写满后按 roll_size 滚动归档，保留 1 个归档文件
+                      </div>
+                    </div>
+                    <InputNumber
+                      v-model:value="logSettings.sizeMb"
+                      :min="logSizeMinMb"
+                      :max="logSizeMaxMb"
+                      :precision="0"
+                      :disabled="logInlineConflict"
+                      class="log-size-input"
+                    />
+                  </div>
+                  <div class="field-row">
+                    <div>
+                      <div>生效级别</div>
+                      <div class="cap-note">按上方开关推导，不单独编辑</div>
+                    </div>
+                    <span class="cap-note">{{ logLevelLabel }}</span>
+                  </div>
+                </CollapsePanel>
+                <CollapsePanel key="caps" header="压缩">
                   <div
                     v-for="item in ADVANCED_CAPABILITY_ITEMS"
                     :key="item.key"
@@ -578,6 +645,11 @@ function goCertificates() {
                   保存高级设置
                 </Button>
               </div>
+            </TabPane>
+
+            <!-- 日志：只读查询，不参与保存；多域名站点可在面板内切换 host -->
+            <TabPane key="logs" tab="日志">
+              <SiteLogPanel :host="sitePrimaryHost" :domains="site.domains" />
             </TabPane>
           </Tabs>
         </template>
@@ -757,6 +829,10 @@ function goCertificates() {
   margin-top: 2px;
   font-size: 12px;
   color: hsl(var(--muted-foreground));
+}
+
+.log-size-input {
+  width: 160px;
 }
 
 .cap-note.cert-error {

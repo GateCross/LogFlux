@@ -2,7 +2,7 @@
  * 站点日志的参数模型与 snippet 渲染（纯函数，无 API 依赖）。
  *
  * LogFlux 只托管一份参数化 snippet：可变项（文件名 / 大小上限 / 级别）走
- * import 的键名块参数传值，站点块文本仍是唯一事实来源，这里只负责把三开关
+ * import 的位置参数传值，站点块文本仍是唯一事实来源，这里只负责把三开关
  * 翻译成 Caddyfile 文本、以及从文本里读回来，不做任何 IO。
  *
  * Caddy 事实：站点块内 log 只管访问日志，全局 log 才管运行时日志；log 的
@@ -78,32 +78,30 @@ export function normalizeSiteLogSizeMb(value: number): number {
 /**
  * 渲染 LogFlux 托管的 snippet 定义（2 空格缩进、LF 换行）。
  *
- * 骨架与具体站点无关：name / size / level 全是命名参数，由站点侧 import 传值，
- * 因此一份定义被所有站点共享。入参只保持与其余 render/validate 一致的调用形态，
- * 不影响输出文本；大小上限的 clamp 落在 renderSiteImportBlock 里。
+ * 骨架与具体站点无关：文件名 / 大小 / 级别是三个位置参数，按站点侧 import
+ * 的出现顺序取 {args[0..2]}，一份定义被所有站点共享。入参不影响输出文本；
+ * 大小上限的 clamp 在站点侧 import 行渲染时完成。
  * roll_keep 固定 1：1 个活动文件 + 1 个归档文件最省磁盘（0 会被 Caddy 当未设置）。
  */
 export function renderLogSnippet(_settings: SiteLogSettings): string {
   return [
     `(${SITE_LOG_SNIPPET_NAME}) {`,
     '  log {',
-    '    output file /var/log/caddy/{args.name}.log {',
-    '      roll_size {args.size}mb',
+    '    output file /var/log/caddy/{args[0]}.log {',
+    '      roll_size {args[1]}mb',
     '      roll_keep 1',
     '    }',
-    '    level {args.level}',
+    '    level {args[2]}',
     '    format json',
     '  }',
     '}',
   ].join('\n');
 }
 
-/** snippet 块内各键的缩进：在站点块里插入时由调用侧再叠加站点缩进 */
-const IMPORT_ARG_INDENT = '  ';
-
 /**
- * 渲染站点侧的 import 块，返回不带缩进的行数组（缩进由写回时按站点块补齐）。
+ * 渲染站点侧的 import 行，返回不带缩进的行数组（缩进由写回时按站点块补齐）。
  *
+ * 位置参数单行：文件名、大小上限、级别按 snippet 定义的取参顺序依次传值。
  * 两开关全关时返回空数组：level OFF 不是合法 Caddy 指令，正确做法是整条
  * import 都不写，让站点块里彻底没有 log 相关字节。
  */
@@ -115,11 +113,7 @@ export function renderSiteImportBlock(
   if (level === 'OFF') return [];
   const logName = (name ?? '').trim().split(/\s+/)[0] || 'site';
   return [
-    `import ${SITE_LOG_SNIPPET_NAME} {`,
-    `${IMPORT_ARG_INDENT}name ${logName}`,
-    `${IMPORT_ARG_INDENT}size ${normalizeSiteLogSizeMb(settings.sizeMb)}`,
-    `${IMPORT_ARG_INDENT}level ${level}`,
-    '}',
+    `import ${SITE_LOG_SNIPPET_NAME} ${logName} ${normalizeSiteLogSizeMb(settings.sizeMb)} ${level}`,
   ];
 }
 
@@ -159,8 +153,9 @@ export interface ParsedSiteLogImport {
 /**
  * 解析站点块里已有的 import subdomain-log。
  *
- * 兼容两种写法：块写法读 name / size / level 三键；旧的单行写法
- * （import subdomain-log myapp）只有文件名，其余按默认值。找不到返回 null。
+ * 兼容三种写法：位置参数单行（import subdomain-log myapp 20 ERROR）依次读
+ * 文件名 / 大小 / 级别；旧的单行写法（import subdomain-log myapp）只有文件名，
+ * 其余按默认值；块写法读 name / size / level 三键。找不到返回 null。
  */
 export function parseSiteLogImport(
   siteBlock: string,
@@ -175,21 +170,34 @@ export function parseSiteLogImport(
     if (!head) continue;
 
     const rest = line.slice(head[0].length).trim();
-    // 旧的单行写法：位置参数即文件名（对应 snippet 的 {args[0]}）
-    if (!rest.includes('{')) {
-      return { name: rest, settings: { ...DEFAULT_SITE_LOG_SETTINGS } };
+    // 块写法：参数以 name/size/level 键值对写在花括号里
+    if (rest.includes('{')) {
+      const args = readSiteLogImportArgs(lines, idx, rest);
+      const rawSize = (args.size ?? '').trim();
+      const size = rawSize === '' ? DEFAULT_SITE_LOG_SETTINGS.sizeMb : Number(rawSize);
+      return {
+        name: (args.name ?? '').trim(),
+        settings: levelToSettings(
+          args.level ?? '',
+          Number.isFinite(size) ? size : DEFAULT_SITE_LOG_SETTINGS.sizeMb,
+        ),
+      };
     }
 
-    const args = readSiteLogImportArgs(lines, idx, rest);
-    const rawSize = (args.size ?? '').trim();
-    const size = rawSize === '' ? DEFAULT_SITE_LOG_SETTINGS.sizeMb : Number(rawSize);
-    return {
-      name: (args.name ?? '').trim(),
-      settings: levelToSettings(
-        args.level ?? '',
-        Number.isFinite(size) ? size : DEFAULT_SITE_LOG_SETTINGS.sizeMb,
-      ),
-    };
+    const tokens = rest.split(/\s+/).filter(Boolean);
+    // 位置参数单行：文件名、大小、级别依次传值
+    if (tokens.length >= 3) {
+      const size = Number(tokens[1]);
+      return {
+        name: tokens[0] ?? '',
+        settings: levelToSettings(
+          tokens[2] ?? '',
+          Number.isFinite(size) ? size : DEFAULT_SITE_LOG_SETTINGS.sizeMb,
+        ),
+      };
+    }
+    // 旧的单行写法：只剩文件名一个参数，设置按全开兜底
+    return { name: rest, settings: { ...DEFAULT_SITE_LOG_SETTINGS } };
   }
   return null;
 }

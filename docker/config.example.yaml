@@ -22,6 +22,8 @@ CaddyLogPath: "/var/log/caddy/access.log"
 Caddy:
   CertStorageDir: "/data/caddy/certificates"
 
+# 已废弃：归档机制已移除，日志保留策略改在系统设置里配置（存储键 caddy_log_retention，缺省 7 天）。
+# 以下字段保留只为旧配置文件解析不报错，运行时不再读取。
 Archive:
   Enabled: true
   RetentionDay: 90

@@ -29,6 +29,7 @@ import {
   describeSiteLogLevel,
   isSameSiteLogSettings,
   normalizeSiteLogSizeMb,
+  parseSiteLogImport,
   readSiteLogSettings,
   settingsToLevel,
   SITE_LOG_SIZE_MAX_MB,
@@ -131,11 +132,11 @@ export function useSiteDetailEdit(options: SiteDetailEditOptions) {
     return site.value.capabilities ?? extractSiteCapabilities(site.value.raw);
   });
 
-  /** 独立访问日志的文件名：既有 subdomain-log 参数优先，否则取主域名前缀 */
+  /** 独立访问日志的文件名：既有 import 的文件名参数优先，否则取主域名前缀 */
   const logName = computed(() => {
     const raw = site.value?.raw ?? '';
-    const match = raw.match(/^[ \t]*import\s+subdomain-log\s+(\S+)/m);
-    if (match?.[1]) return match[1];
+    const parsed = parseSiteLogImport(raw);
+    if (parsed?.name) return parsed.name;
     const host = site.value?.primaryHost ?? '';
     return host.split('.')[0] || 'site';
   });

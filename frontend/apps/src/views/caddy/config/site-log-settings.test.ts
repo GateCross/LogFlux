@@ -101,27 +101,29 @@ describe('sizeMb clamp', () => {
   });
 
   it('渲染时大小上限同样被 clamp', () => {
-    expect(renderSiteImportBlock(make({ sizeMb: 0 }), 'a')).toContain('  size 1');
-    expect(renderSiteImportBlock(make({ sizeMb: 99999 }), 'a')).toContain(
-      '  size 1024',
-    );
-    expect(renderSiteImportBlock(make({ sizeMb: 25.4 }), 'a')).toContain(
-      '  size 26',
-    );
+    expect(renderSiteImportBlock(make({ sizeMb: 0 }), 'a')).toEqual([
+      'import subdomain-log a 1 INFO',
+    ]);
+    expect(renderSiteImportBlock(make({ sizeMb: 99999 }), 'a')).toEqual([
+      'import subdomain-log a 1024 INFO',
+    ]);
+    expect(renderSiteImportBlock(make({ sizeMb: 25.4 }), 'a')).toEqual([
+      'import subdomain-log a 26 INFO',
+    ]);
   });
 });
 
 describe('renderLogSnippet 逐字比对', () => {
-  it('渲染参数化 snippet 定义，2 空格缩进、LF 换行', () => {
+  it('渲染位置参数 snippet 定义，2 空格缩进、LF 换行', () => {
     expect(renderLogSnippet(DEFAULT_SITE_LOG_SETTINGS)).toBe(
       [
         '(subdomain-log) {',
         '  log {',
-        '    output file /var/log/caddy/{args.name}.log {',
-        '      roll_size {args.size}mb',
+        '    output file /var/log/caddy/{args[0]}.log {',
+        '      roll_size {args[1]}mb',
         '      roll_keep 1',
         '    }',
-        '    level {args.level}',
+        '    level {args[2]}',
         '    format json',
         '  }',
         '}',
@@ -145,23 +147,15 @@ describe('renderLogSnippet 逐字比对', () => {
 });
 
 describe('renderSiteImportBlock', () => {
-  it('全开时渲染两行参数块（不带缩进）', () => {
+  it('全开时渲染位置参数单行（不带缩进）', () => {
     expect(renderSiteImportBlock(make(), 'myapp')).toEqual([
-      'import subdomain-log {',
-      '  name myapp',
-      '  size 10',
-      '  level INFO',
-      '}',
+      'import subdomain-log myapp 10 INFO',
     ]);
   });
 
   it('只记错误时 level 为 ERROR', () => {
     expect(renderSiteImportBlock(make({ access: false }), 'myapp')).toEqual([
-      'import subdomain-log {',
-      '  name myapp',
-      '  size 10',
-      '  level ERROR',
-      '}',
+      'import subdomain-log myapp 10 ERROR',
     ]);
   });
 
@@ -171,9 +165,15 @@ describe('renderSiteImportBlock', () => {
   });
 
   it('文件名取首个 token，空名回落 site', () => {
-    expect(renderSiteImportBlock(make(), '  my app  ')[1]).toBe('  name my');
-    expect(renderSiteImportBlock(make(), '')[1]).toBe('  name site');
-    expect(renderSiteImportBlock(make(), '   ')[1]).toBe('  name site');
+    expect(renderSiteImportBlock(make(), '  my app  ')[0]).toBe(
+      'import subdomain-log my 10 INFO',
+    );
+    expect(renderSiteImportBlock(make(), '')[0]).toBe(
+      'import subdomain-log site 10 INFO',
+    );
+    expect(renderSiteImportBlock(make(), '   ')[0]).toBe(
+      'import subdomain-log site 10 INFO',
+    );
   });
 });
 
@@ -196,9 +196,23 @@ describe('parseSiteLogImport', () => {
   }
 }`;
 
+  const POSITIONAL_SITE = `pos.example.com {
+  import subdomain-log pos 20 ERROR
+  handle {
+    reverse_proxy localhost:3000
+  }
+}`;
+
   it('解析块写法：名字与设置全部读回', () => {
     expect(parseSiteLogImport(BLOCK_SITE)).toEqual({
       name: 'myapp',
+      settings: { access: false, error: true, sizeMb: 20 },
+    });
+  });
+
+  it('解析位置参数单行：文件名、大小、级别依次读回', () => {
+    expect(parseSiteLogImport(POSITIONAL_SITE)).toEqual({
+      name: 'pos',
       settings: { access: false, error: true, sizeMb: 20 },
     });
   });
@@ -249,7 +263,7 @@ describe('parseSiteLogImport', () => {
     expect(parseSiteLogImport('')).toBeNull();
   });
 
-  it('渲染出的 import 块能被解析回原设置', () => {
+  it('渲染出的 import 行能被解析回原设置', () => {
     for (const settings of [
       make(),
       make({ access: false }),

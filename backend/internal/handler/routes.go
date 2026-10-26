@@ -286,6 +286,16 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				},
 				{
 					Method:  http.MethodGet,
+					Path:    "/caddy/log-retention",
+					Handler: caddy.GetCaddyLogRetentionHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPut,
+					Path:    "/caddy/log-retention",
+					Handler: caddy.UpdateCaddyLogRetentionHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
 					Path:    "/caddy/global-options",
 					Handler: caddy.GetCaddyGlobalOptionsHandler(serverCtx),
 				},

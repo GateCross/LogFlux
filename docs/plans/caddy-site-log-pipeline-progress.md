@@ -81,7 +81,7 @@ Level  string `gorm:"size:16;index:idx_level_log_time,priority:1"`
 Logger string `gorm:"size:128;index:idx_logger_log_time,priority:1"`
 ```
 
-`CaddyLogArchive` 同步加字段，归档不丢数据。
+`CaddyLogArchive` 已随归档机制一并移除（见第 7 节）。
 
 三条解析路径均覆盖：
 
@@ -115,16 +115,16 @@ API 层 `CaddyLogReq.logKind` 已接通，`CaddyLogItem` 返回 `level` / `logge
 | 合并 | `mergeCaddyLogSnippet`，在 `mergeCaddyManagedBlocks` 中与 `mergeGlobalOptions`、`mergeEntryBlock` 同链 |
 | 路由 | `GET /caddy/log-snippet`、`PUT /caddy/log-snippet`、`POST /caddy/log-snippet/reset-default` |
 
-模板形态（带键名的块参数，Caddy 2.9+）：
+模板形态（位置参数；Caddy 官方文档确认 snippet 参数只有 `{args[n]}` 位置形式，没有 `{args.name}` 键名形式）：
 
 ```caddyfile
 (subdomain-log) {
   log {
-    output file /var/log/caddy/{args.name}.log {
-      roll_size {args.size}mb
+    output file /var/log/caddy/{args[0]}.log {
+      roll_size {args[1]}mb
       roll_keep 1
     }
-    level {args.level}
+    level {args[2]}
     format json
   }
 }
@@ -133,14 +133,12 @@ API 层 `CaddyLogReq.logKind` 已接通，`CaddyLogItem` 返回 `level` / `logge
 站点侧：
 
 ```caddyfile
-import subdomain-log {
-  name myapp
-  size 10
-  level INFO
-}
+import subdomain-log myapp 10 INFO
 ```
 
-采用带键名的块参数而非位置参数 `{args[0]}`，避免将来加参数要改所有站点。
+> 三个参数依次为 name / size / level。曾一度改用带键名的块参数（`{args.name}`），
+> 后经 Caddy 官方文档确认 snippet 参数只有位置形式，键名写法在 Caddy 中整体失效，
+> 已回退为位置参数；存量站点侧的旧写法由 `migrateSiteLogImports` 在每次应用配置时自动迁移（见 4.5）。
 
 ### 3.5 前端逻辑层
 
@@ -166,107 +164,52 @@ import subdomain-log {
 
 ---
 
-## 4. 未完成
+## 4. 未完成项收尾（已全部完成）
 
-### 4.1 P0：站点详情「日志」Tab 视图缺失
+### 4.1 ✅ 站点详情「日志」Tab 视图
 
-**这是当前最明显的缺口。** 逻辑层与 API 层全部就绪，但模板里没有渲染。
+前端已补齐：`SiteDetail.vue` 新增 `logs` TabPane，访问日志 / 错误日志 RadioButton 切换，
+共用表格走 `getCaddyLogsApi({ host, logKind, ... })`，错误日志视图额外显示 `level` / `logger` 两列。只读，不参与保存。
 
-现状：
+### 4.2 ✅ 高级 Tab 的日志三开关
 
-- `SiteDetailTab` 已含 `'logs'`
-- `Tabs` 里只有 `basic` / `protect` / `advanced` 三个 `TabPane`（`SiteDetail.vue` 378-581 行）
-- `getCaddyLogsApi` 已支持 `logKind` 参数（`api/caddy/server.ts:142`）
-- 无任何视图引用这些能力
+前端已补齐：访问日志 / 错误日志开关、单文件上限（MB）数字输入（范围取 `logSizeMinMb` / `logSizeMaxMb`）、
+`logErrorForced` 时禁用错误日志开关并给 Tooltip、只读展示 `logLevelLabel`；保存走现有 `requestSave('advanced')`。
 
-需要补：
+### 4.3 ✅ 全局设置的「日志模板」卡片
 
-```vue
-<TabPane key="logs" tab="日志">
-  <!-- RadioButton 切换 访问日志 / 错误日志 -->
-  <!-- 共用表格：getCaddyLogsApi({ host, logKind, page, pageSize, startTime, endTime }) -->
-  <!-- 错误日志视图额外显示 level、logger 两列 -->
-</TabPane>
-```
+前端已补齐：`views/caddy/settings/components/SettingsSiteLogCard.vue` 提供 snippet 原文编辑与恢复默认，
+同卡片带出保留策略设置；保存后提示「模板变更需重新应用站点配置才生效」。
 
-该 Tab 只读，不参与保存。
+### 4.4 ✅ 历史数据 `level` / `logger` 为空
 
-### 4.2 P0：高级 Tab 的日志三开关未渲染
+采用方案 B：启动期单条 SQL 分批回填（`common/ingest/caddy/log_field_backfill.go`）。
 
-`use-site-detail-edit.ts` 里 `logSettings` / `logLevel` / `logLevelLabel` / `logErrorForced` / `logInlineConflict` / `logSizeMinMb` / `logSizeMaxMb` 全部已导出，但 `SiteDetail.vue` 的 advanced Tab（537-581 行）没有对应控件。
+- 判定规则：`raw_log` 为 JSON 字符串标量的是旧 console 文本行（按访问日志补 `info` / `http.log.access`）；
+  含 `transaction` 键的是 Coraza 审计行（同上）；其余对象行从 `raw_log` 取 `level` / `logger`，取不到按访问日志兜底。
+- 每批 `LIMIT 1000`，`UPDATE ... FROM` 推进到 `RowsAffected` 为 0；全部完成后置位 `system_configs` 键
+  `caddy_log_field_backfill_done`，中途失败不置位，下次启动重跑（幂等）。
+- jsonb 的 `?` 操作符与 GORM 占位符冲突，JSON 判断一律用 `jsonb_exists` 函数形式。
 
-需要补：
+### 4.5 ✅ 现有 snippet 迁移
 
-- 开关「访问日志」「错误日志」
-- 数字输入「单文件上限（MB）」，范围取 `logSizeMinMb` / `logSizeMaxMb`
-- `logErrorForced` 为 true 时禁用错误日志开关并给 Tooltip
-- 只读展示 `logLevelLabel`
-- 保存走现有 `requestSave('advanced')`，保存链路已在 composable 内接好
+决策：统一迁移，模板与站点侧写法全部改为位置参数。原因：Caddy 官方文档确认 snippet 参数只有
+`{args[n]}` 位置形式，键名参数 `{args.name}` 不存在，原模板与站点侧块参数写法在 Caddy 中整体失效。
 
-### 4.3 P1：全局设置的「日志模板」卡片缺失
+迁移规则（`internal/logic/caddy/log_snippet_migrate.go`，在 `mergeCaddyManagedBlocks` 合并 snippet 之后自动执行）：
 
-`api/caddy/log-snippet.ts` 已定义三个接口，但 `views/caddy/settings/` 下无任何引用（只有 `api/caddy/index.ts` 做了 re-export）。
+| 存量形态 | 迁移结果 |
+|---|---|
+| 单行 `import subdomain-log <name>` | 补为 `import subdomain-log <name> 10 DEBUG`（存量站点原本 level debug，保持日志量不骤减） |
+| 多行块 `import subdomain-log { name X size Y level Z }` | 整块替换为单行 `import subdomain-log X Y Z` |
+| 已经是 3 参数的单行 | 不动 |
 
-需要补一张卡片：snippet 原文 textarea、恢复默认按钮、保存后提示「模板变更需重新应用站点配置才生效」。
+幂等，保留行缩进与 CRLF；块内缺 `size` / `level` 按 `10` / `DEBUG` 补齐，缺 `name` 时整块保持原样。
+默认 `:80` 入口块模板同步写为 `import subdomain-log local 10 INFO`。
 
-### 4.4 P1：历史数据 `level` / `logger` 为空
+### 4.6 ✅ 内联 `log` 指令的冲突处理
 
-`level` / `logger` 是新增列，AutoMigrate 会加列但历史行为空串。
-
-影响：
-
-- 错误日志视图筛不到历史数据（`logger <> ''` 条件把空串排除）
-- 访问日志视图同样筛不到历史数据（`logger = 'http.log.access'` 不匹配空串）
-
-三种处理方向，尚未决策：
-
-| 方案 | 说明 | 代价 |
-|---|---|---|
-| A. 接受空值 | 新数据才有分流能力，文档说明 | 零成本，但历史查询体验断层 |
-| B. 按 `raw_log` 回填 | 从 `raw_log` JSON 解析 `level` / `logger` 回填 | 需处理非 JSON 的老格式；大批量 UPDATE |
-| C. 查询兼容空值 | `access` 条件放宽为 `logger = 'http.log.access' OR logger = ''` | 会混入历史错误日志，语义不纯 |
-
-倾向 A + C 结合：历史数据按「未知类别」单独处理，不污染 access/error 两个视图。
-
-### 4.5 P1：现有 snippet 迁移
-
-当前生产 Caddyfile 里手写的 snippet 是：
-
-```caddyfile
-(subdomain-log) {
-  log {
-    output file /var/log/caddy/{args[0]}.log {
-      roll_size 10MB
-      roll_keep 10
-      roll_keep_for 7d
-    }
-    level debug
-    format json
-  }
-}
-```
-
-与 LogFlux 托管的新模板差异：
-
-| 项 | 现有 | 新模板 | 影响 |
-|---|---|---|---|
-| 参数形式 | `{args[0]}` 位置参数 | `{args.name}` 键名参数 | 站点侧 `import` 写法需改 |
-| `roll_keep` | 10 | 1 | 归档文件从最多 10 个降到 1 个 |
-| `roll_keep_for` | 7d | 移除 | `roll_keep 1` 已足够，两者取更严格者 |
-| `level` | `debug` | 参数化 `INFO` | 不再记录 debug |
-
-**迁移是行为变更，会影响现有所有站点。** 需确认：
-
-1. 是否保留现有站点行为，只对新站点生效
-2. 还是统一迁移，接受短期的日志量变化
-
-注：日志已入库，磁盘上的文件只是采集缓冲，`roll_keep 1` 不会丢失可查询的历史数据。
-
-### 4.6 P2：内联 `log` 指令的冲突处理
-
-`logInlineConflict` 已能检测站点块里手写的 `log { }`。此时三开关不应生效（会与内联指令冲突）。
-
-UI 层需在此情况下禁用控件并提示「检测到内联 log 指令，请在原文模式维护」。目前检测逻辑在，提示未接。
+前端已接提示：检测到内联 `log { }` 时禁用三开关控件并提示「检测到内联 log 指令，请在原文模式维护」。
 
 ---
 
@@ -288,6 +231,7 @@ UI 层需在此情况下禁用控件并提示「检测到内联 log 指令，请
 | `site-capabilities.test.ts` | 36（含既有 + 本次新增的块级写入用例） |
 | `site-detail-diff.test.ts` | 4 |
 | `log_snippet_merge_test.go` | 覆盖插入/替换/无全局块/幂等/CRLF |
+| `log_snippet_migrate_test.go` | 覆盖单行 1 参/块形式/已迁移/缩进 CRLF/幂等/多站点/同名前缀 |
 | `common_test.go` | 归档文件名识别 |
 | `log_model_breakdown_test.go` | 单条 SQL 聚合语义 |
 
@@ -295,7 +239,7 @@ UI 层需在此情况下禁用控件并提示「检测到内联 log 指令，请
 
 ## 6. 数据库变更
 
-`caddy_logs` 与 `caddy_logs_archive` 新增 `level`、`logger` 两列，`log_ingest_cursors` 新增 `file_id`，`log_sources` 新增 `server_id` 且唯一索引改为 `(path, server_id)`。
+`caddy_logs` 新增 `level`、`logger` 两列，`log_ingest_cursors` 新增 `file_id`，`log_sources` 新增 `server_id` 且唯一索引改为 `(path, server_id)`。
 
 均由 GORM AutoMigrate 处理。**注意**：`log_sources` 的唯一索引变更在已有表上可能需要手工处理——旧索引 `path` 单列唯一会与新复合索引并存，若此前存在跨节点同路径数据，迁移时可能冲突。
 
@@ -305,15 +249,29 @@ UI 层需在此情况下禁用控件并提示「检测到内联 log 指令，请
 SELECT path, COUNT(*) FROM log_sources GROUP BY path HAVING COUNT(*) > 1;
 ```
 
----
+## 7. 7 天日志保留
 
-## 7. 后续优先级建议
+站点日志的保留策略以 `system_configs` 为唯一真值，接口与清理任务统一从 `model/system/log_retention.go` 读写，缺省 7 天。
 
-| 优先级 | 事项 | 依据 |
-|---|---|---|
-| P0 | 站点详情「日志」Tab（4.1） | 逻辑已完备，只差视图，收益最直接 |
-| P0 | 高级 Tab 三开关（4.2） | 同上 |
-| P1 | 全局设置日志模板卡片（4.3） | 无 UI 则模板只能走 API 改 |
-| P1 | snippet 迁移决策（4.5） | 阻塞存量站点上线新能力 |
-| P2 | 历史数据空值处理（4.4） | 不影响新数据 |
-| P2 | 内联 log 冲突提示（4.6） | 边界场景 |
+| 项 | 内容 |
+|---|---|
+| 存储键 | `caddy_log_retention`，值为 `{"enabled":bool,"days":int}` |
+| 缺省 | 键不存在、JSON 解析失败、days 越界（<1 或 >3650）时按 `{enabled:true, days:7}` 处理 |
+| 开关 | `enabled=false` 时清理任务跳过本轮，不删除任何日志；查询接口照常返回当前配置 |
+| 删除语义 | 每天凌晨 2 点删除 `log_time` 早于「现在 − days」的 `caddy_logs` 行；单批 2000 行、单轮最多 500 批，单轮删不完的留待下一轮 |
+
+配套变更与升级注意事项：
+
+- 清理任务（`internal/tasks/log_cleanup.go`）**无条件启动**，是否清理由保留策略决定；不再受配置文件 `Archive.Enabled` 门控。
+- 旧 `Archive` 配置段（`Enabled` / `RetentionDay` / `ArchiveTable`）已废弃，字段保留只为旧配置文件解析不报错，运行时不读取。
+- 归档机制整体移除：归档表 `caddy_logs_archive`、存储过程 `archive_old_logs()`、`CaddyLogArchive` 结构体均已删除。**数据库里的旧表与旧函数不会自动删除**，如需清理可手工执行：
+  ```sql
+  DROP TABLE IF EXISTS caddy_logs_archive;
+  DROP FUNCTION IF EXISTS archive_old_logs(INTEGER);
+  ```
+- 清理是破坏性路径：读库失败时跳过本轮并告警，**不回落默认天数**（`LoadLogRetentionStrict`），与查询接口的宽容读取刻意不同。
+- 历史日志的 `level` / `logger` 空值由启动期回填补齐（见 4.4），完成标记 `caddy_log_field_backfill_done` 置位后不再重跑。
+
+## 8. 后续优先级建议
+
+4.1~4.6 已全部完成，当前无遗留项；升级注意事项见第 7 节。

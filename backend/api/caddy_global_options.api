@@ -32,6 +32,15 @@ type (
 	CaddyLogSnippetUpdateReq {
 		Raw string `json:"raw,optional"`
 	}
+	// Caddy 日志保留策略（站点日志按天数清理）
+	CaddyLogRetentionResp {
+		Enabled       bool `json:"enabled"`
+		RetentionDays int  `json:"retentionDays"`
+	}
+	CaddyLogRetentionUpdateReq {
+		Enabled       bool `json:"enabled,default=true"`
+		RetentionDays int  `json:"retentionDays,optional"`
+	}
 )
 
 @server (
@@ -64,4 +73,10 @@ service logflux-api {
 
 	@handler ResetCaddyLogSnippet
 	post /caddy/log-snippet/reset-default returns (CaddyLogSnippetResp)
+
+	@handler GetCaddyLogRetention
+	get /caddy/log-retention returns (CaddyLogRetentionResp)
+
+	@handler UpdateCaddyLogRetention
+	put /caddy/log-retention (CaddyLogRetentionUpdateReq) returns (CaddyLogRetentionResp)
 }
