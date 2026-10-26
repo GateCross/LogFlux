@@ -25,6 +25,13 @@ type (
 		Raw            string `json:"raw,optional"`
 		SyncFromConfig bool   `json:"syncFromConfig,optional"`
 	}
+	// Caddy Log Snippet（参数化站点日志 snippet 定义）
+	CaddyLogSnippetResp {
+		Raw string `json:"raw"`
+	}
+	CaddyLogSnippetUpdateReq {
+		Raw string `json:"raw,optional"`
+	}
 )
 
 @server (
@@ -48,4 +55,13 @@ service logflux-api {
 
 	@handler ResetCaddyEntryBlock
 	post /caddy/entry-block/reset-default returns (CaddyEntryBlockResp)
+
+	@handler GetCaddyLogSnippet
+	get /caddy/log-snippet returns (CaddyLogSnippetResp)
+
+	@handler UpdateCaddyLogSnippet
+	put /caddy/log-snippet (CaddyLogSnippetUpdateReq) returns (CaddyLogSnippetResp)
+
+	@handler ResetCaddyLogSnippet
+	post /caddy/log-snippet/reset-default returns (CaddyLogSnippetResp)
 }

@@ -173,13 +173,23 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		}
 	}
 
-	// 初始化日志摄取管理器（tail WAF 审计日志并入库）
-	// 注意：access.log 由 IPRegionMiddleware 直接写入 DB，无需 tail；仅 WAF 审计日志需要 tail
+	// 初始化日志摄取管理器：WAF 审计日志与站点日志文件都从这里 tail 入库。
+	// 站点日志由 Caddy 写入 /var/log/caddy/<name>.log，LogFlux 自身不经过 middleware，
+	// 因此必须由采集器读取文件，否则站点级访问/错误日志不会进入 caddy_logs。
 	ingestMgr := ingest.NewIngestManager(db)
 	ingestMgr.SetCaddyGeoResolver(ipRegionMgr.Resolve)
-	var wafSources []ingestmodel.LogSource
-	db.Where("enabled = ? AND name = ?", true, "WAF 审计日志").Find(&wafSources)
-	for _, src := range wafSources {
+
+	// 本机节点先补注册站点日志目录源：重启后即使没有配置变更，
+	// 站点日志也能继续被采集，不必等下一次 writer.Apply 触发。
+	var localServers []caddymodel.CaddyServer
+	db.Where("type = ?", "local").Find(&localServers)
+	for _, srv := range localServers {
+		ingest.EnsureSiteLogSource(db, srv.ID, logx.WithContext(context.Background()))
+	}
+
+	var caddySources []ingestmodel.LogSource
+	db.Where("enabled = ? AND type = ?", true, "caddy").Find(&caddySources)
+	for _, src := range caddySources {
 		ingestMgr.StartSource(src)
 	}
 

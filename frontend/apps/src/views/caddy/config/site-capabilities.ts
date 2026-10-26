@@ -1,4 +1,10 @@
+import type { SiteLogSettings } from './site-log-settings';
 import { detectChildIndent, findHeaderLine } from './caddy-config-utils';
+import {
+  parseSiteLogImport,
+  renderSiteImportBlock,
+  SITE_LOG_IMPORT_HEAD_RE,
+} from './site-log-settings';
 
 /**
  * 站点能力识别与写回（纯函数，无 API 依赖）。
@@ -218,4 +224,98 @@ export function renderCapabilityLines(
     return [`import ${anchor.importName} ${name}`];
   }
   return [`import ${anchor.importName}`];
+}
+
+/** 站点块头里的第一个 host token 取域名前缀，作为日志文件名兜底 */
+function deriveLogNameFromHeader(headerLine: string): string {
+  const token = (headerLine ?? '').trim().split(/\s+/)[0] ?? '';
+  const host = token.replace(/^https?:\/\//, '').split('/')[0] ?? '';
+  const prefix = host.split(':')[0]?.split('.')[0] ?? '';
+  return prefix && !prefix.startsWith('(') ? prefix : '';
+}
+
+/**
+ * 从行数组里摘掉所有 import subdomain-log：单行写法删一行，块写法删到配对的 }。
+ *
+ * 新写法与旧写法可能同时存在（用户手工改过），两种都清干净再统一写回，
+ * 避免留下两份互相覆盖的日志配置。
+ */
+function stripSiteLogImports(elements: string[]): string[] {
+  const kept: string[] = [];
+  for (let idx = 0; idx < elements.length; idx += 1) {
+    const line = elements[idx] ?? '';
+    if (!SITE_LOG_IMPORT_HEAD_RE.test(line)) {
+      kept.push(line);
+      continue;
+    }
+    // 单行写法到此为止；块写法数花括号跳过整块（块参数本身不含嵌套括号）
+    let depth = countBraces(line);
+    while (depth > 0 && idx + 1 < elements.length) {
+      idx += 1;
+      depth += countBraces(elements[idx] ?? '');
+    }
+  }
+  return kept;
+}
+
+/** 行内花括号净增量：{ 加一、} 减一 */
+function countBraces(line: string): number {
+  let depth = 0;
+  for (const char of line) {
+    if (char === '{') depth += 1;
+    else if (char === '}') depth -= 1;
+  }
+  return depth;
+}
+
+/**
+ * 把站点日志三开关写回单个站点块。
+ *
+ * 名字优先沿用块内既有 import 的参数，其次用调用方给的名字，最后回落到
+ * 块头域名前缀，避免仅改开关时把日志文件名改掉、把历史日志切成两份。
+ * 两开关全关时不写任何行（level OFF 不是合法指令），只做删除。
+ * 其余字节（注释、缩进、顺序）一概不动，连续应用幂等。
+ */
+export function applySiteLogToSiteBlock(
+  siteBlock: string,
+  settings: SiteLogSettings,
+  name?: string,
+): string {
+  if (!siteBlock) return siteBlock;
+
+  const elements = siteBlock.split('\n');
+  const headerIdx = findHeaderLine(elements);
+  if (headerIdx < 0) return siteBlock;
+
+  const existing = parseSiteLogImport(siteBlock);
+  const resolvedName =
+    existing?.name ||
+    name?.trim() ||
+    deriveLogNameFromHeader(elements[headerIdx] ?? '') ||
+    'site';
+
+  const indent = detectChildIndent(elements, headerIdx);
+  // 块内续行比指令行再深一级，沿用站点既有缩进（Tab 站点不混入空格缩进）
+  const argIndent = indent.includes('\t') ? `${indent}\t` : `${indent}  `;
+  const crlfSuffix = siteBlock.includes('\r\n') ? '\r' : '';
+  const desired = renderSiteImportBlock(settings, resolvedName).map((line) => {
+    if (!line.startsWith('  ')) return `${indent}${line}${crlfSuffix}`;
+    return `${argIndent}${line.slice(2)}${crlfSuffix}`;
+  });
+
+  // 已按期望形态存在（且没有残留的旧写法）时原样返回，避免移动既有行的位置
+  const stripped = stripSiteLogImports(elements);
+  const unchanged = elements.length === stripped.length;
+  if (unchanged && desired.every((want) => elements.includes(want))) {
+    return siteBlock;
+  }
+
+  const base = unchanged ? elements : stripped;
+  // 删除后块头行号可能前移，重新定位
+  const targetIdx = unchanged ? headerIdx : findHeaderLine(base);
+  if (targetIdx < 0) return siteBlock;
+
+  const parts = base.slice();
+  parts.splice(targetIdx + 1, 0, ...desired);
+  return parts.join('\n');
 }

@@ -154,6 +154,49 @@ export function siteMetricsForHost(
   return map.get(host) ?? null;
 }
 
+/** 站点全部域名（去重、去端口协议）对应的 host 列表 */
+function siteHosts(domains: string[] | undefined): string[] {
+  const hosts = new Set<string>();
+  for (const domain of domains ?? []) {
+    const host = normalizeSiteHost(domain);
+    if (host) hosts.add(host);
+  }
+  return [...hosts];
+}
+
+/**
+ * 按站点聚合全域名指标：一个站点挂多个域名时，各域名的流量都应计入本站点。
+ * total/blocked 任一域名缺值即视为整站缺值（后端未上线该字段时按 — 降级）；
+ * 4xx/5xx 恒为数值，缺失按 0 累加。
+ */
+export function siteMetricsForDomains(
+  map: SiteMetricsMap,
+  domains: string[] | undefined,
+): SiteMetricsCounters | null {
+  const hosts = siteHosts(domains);
+  if (hosts.length === 0) return null;
+
+  let count4xx = 0;
+  let count5xx = 0;
+  let total: number | undefined = 0;
+  let blocked: number | undefined = 0;
+
+  for (const host of hosts) {
+    const metrics = map.get(host);
+    count4xx += metrics?.count4xx ?? 0;
+    count5xx += metrics?.count5xx ?? 0;
+    // 任一无数据即整体退回 undefined，避免半有半无时给出失真的小计
+    total = total === undefined || metrics?.total === undefined
+      ? undefined
+      : total + metrics.total;
+    blocked = blocked === undefined || metrics?.blocked === undefined
+      ? undefined
+      : blocked + metrics.blocked;
+  }
+
+  return { count4xx, count5xx, total, blocked };
+}
+
 /**
  * 站点命中的证书剩余天数：按域名匹配证书 SAN（支持 *.example.com 泛域名后缀），
  * 多张命中取最小剩余天数（最紧迫者决定展示）；未命中或无数据返回 null。

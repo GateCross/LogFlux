@@ -12,6 +12,7 @@ import {
   metricCountColor,
   normalizeSiteHost,
   siteCertDaysLeft,
+  siteMetricsForDomains,
   sitePrimaryHost,
   siteProtectBadge,
   statusLabel,
@@ -225,6 +226,53 @@ www.demo.com {
     });
     expect(map.get('b.example.com')?.total).toBeUndefined();
     expect(map.get('b.example.com')?.blocked).toBeUndefined();
+  });
+
+  it('siteMetricsForDomains 汇总站点全部域名的流量', () => {
+    const map = buildSiteMetricsMap([
+      { host: 'a.example.com', count4xx: 2, count5xx: 1, total: 120, blocked: 3 },
+      { host: 'b.example.com', count4xx: 5, count5xx: 4, total: 80, blocked: 7 },
+    ]);
+
+    // 主域名只有 120 请求：旧实现会漏掉 b.example.com 的 80 请求与 7 次拦截
+    const metrics = siteMetricsForDomains(map, ['a.example.com', 'b.example.com']);
+    expect(metrics).toEqual({
+      count4xx: 7,
+      count5xx: 5,
+      total: 200,
+      blocked: 10,
+    });
+  });
+
+  it('siteMetricsForDomains 去除端口与协议后仍能匹配', () => {
+    const map = buildSiteMetricsMap([
+      { host: 'a.example.com', count4xx: 0, count5xx: 0, total: 10, blocked: 0 },
+      { host: 'b.example.com', count4xx: 0, count5xx: 0, total: 5, blocked: 0 },
+    ]);
+    const metrics = siteMetricsForDomains(map, [
+      'https://a.example.com',
+      'b.example.com:8443',
+    ]);
+    expect(metrics?.total).toBe(15);
+  });
+
+  it('siteMetricsForDomains 任一域名缺值则 total/blocked 整体降级为 undefined', () => {
+    const map = buildSiteMetricsMap([
+      { host: 'a.example.com', count4xx: 2, count5xx: 1, total: 120, blocked: 3 },
+      // 后端只回了一个域名的新字段，另一个没有 → 不做半有半无的小计
+      { host: 'b.example.com', count4xx: 1, count5xx: 0 },
+    ]);
+    const metrics = siteMetricsForDomains(map, ['a.example.com', 'b.example.com']);
+    expect(metrics?.total).toBeUndefined();
+    expect(metrics?.blocked).toBeUndefined();
+    // 4xx/5xx 恒为数值，缺失按 0 累加
+    expect(metrics?.count4xx).toBe(3);
+    expect(metrics?.count5xx).toBe(1);
+  });
+
+  it('siteMetricsForDomains 无可用域名返回 null', () => {
+    expect(siteMetricsForDomains(new Map(), [])).toBeNull();
+    expect(siteMetricsForDomains(new Map(), [':8080'])).toBeNull();
   });
 
   it('siteCertDaysLeft 按域名/泛域名匹配并取最小剩余天数', () => {

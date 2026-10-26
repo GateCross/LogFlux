@@ -13,6 +13,8 @@ type (
 		SortBy    string `form:"sortBy,optional"` // logTime
 		Order     string `form:"order,optional"`  // asc|desc
 		OnlyWaf   bool   `form:"onlyWaf,optional"` // 仅查询 WAF 防护/拦截日志
+		// 日志种类：access 只看访问日志，error 只看错误日志，空值不过滤
+		LogKind   string `form:"logKind,optional"`
 	}
 	CaddyLogItem {
 		ID        uint   `json:"id"`
@@ -29,6 +31,9 @@ type (
 		RemoteIP  string `json:"remoteIp"`
 		ClientIP  string `json:"clientIp"`
 		UserAgent string `json:"userAgent"`
+		// 日志级别与 logger 命名空间，用于区分访问日志与错误日志
+		Level     string `json:"level,optional"`
+		Logger    string `json:"logger,optional"`
 		RawLog    string `json:"rawLog"`
 		// WAF 审计元数据原始 JSON，含 source/interrupted/matched_rules
 		ExtraData string `json:"extraData,optional"`

@@ -108,6 +108,9 @@ func (i *CaddyIngestor) ParseLine(line string) (*caddymodel.CaddyLog, error) {
 		ClientIP:  matches[13],
 		RawLog:    mustJSONRaw(line),
 		ExtraData: "{}",
+		// console 文本格式不含级别信息，按访问日志处理
+		Level:  "info",
+		Logger: "http.log.access",
 	}
 	i.fillGeo(entry)
 	return entry, nil
@@ -282,6 +285,14 @@ func (i *CaddyIngestor) resolveStartOffset(filePath string) int64 {
 	if err != nil {
 		return offset
 	}
+	// 文件被替换（滚动后同名重建）时 inode 会变，旧偏移指向的是另一个文件的内容，
+	// 继续沿用会跳过新文件的头部或读到错位数据，必须从头采集。
+	if cursor.FileID != 0 {
+		if current := fileIdentity(info); current != 0 && current != cursor.FileID {
+			logx.Infof("日志文件已更换（inode 变化），从头采集: %s", filePath)
+			return 0
+		}
+	}
 	if offset > info.Size() {
 		return 0
 	}
@@ -297,15 +308,26 @@ func (i *CaddyIngestor) saveOffset(filePath string, offset int64) error {
 	cursor := ingestmodel.LogIngestCursor{
 		FilePath: filePath,
 		Offset:   offset,
+		FileID:   i.currentFileID(filePath),
 	}
 
 	return i.db.Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "file_path"}},
 		DoUpdates: clause.Assignments(map[string]any{
 			"offset":     offset,
+			"file_id":    cursor.FileID,
 			"updated_at": time.Now(),
 		}),
 	}).Create(&cursor).Error
+}
+
+// currentFileID 读取文件当前 inode 标识；取不到时返回 0（下次比对按未知处理）。
+func (i *CaddyIngestor) currentFileID(filePath string) uint64 {
+	info, err := os.Stat(filePath)
+	if err != nil {
+		return 0
+	}
+	return fileIdentity(info)
 }
 
 func (i *CaddyIngestor) startDir(dirPath string, scanIntervalSec int) {
@@ -362,7 +384,9 @@ func (i *CaddyIngestor) scanDir(dirPath string) {
 			continue
 		}
 		name := entry.Name()
-		if !shared.IsLogFileName(name) {
+		// 只采活动日志文件：滚动归档（-size/-time 后缀）会被跳过，
+		// 否则归档文件会以新文件名被再次从头采集，造成历史日志重复入库。
+		if !shared.IsActiveLogFileName(name) {
 			continue
 		}
 		filePath := filepath.Join(dirPath, name)
@@ -456,6 +480,11 @@ func (i *CaddyIngestor) parseJSONLine(line string) (*caddymodel.CaddyLog, error)
 		entry.LogTime = time.Now()
 	}
 
+	// level / logger 是区分访问日志与错误日志的依据：
+	// 访问日志固定 logger=http.log.access，错误日志来自其它命名空间。
+	entry.Level = shared.AsString(data["level"])
+	entry.Logger = shared.AsString(data["logger"])
+
 	entry.Status = int(shared.AsFloat(data["status"]))
 	entry.Size = int64(shared.AsFloat(data["size"]))
 
@@ -493,6 +522,11 @@ func parseCorazaAuditJSON(line string, data map[string]any) (*caddymodel.CaddyLo
 		entry.ClientIP = shared.AsString(tx["client_ip"])
 		entry.RemoteIP = shared.AsString(tx["host_ip"])
 	}
+
+	// WAF 审计行归属访问日志：它由 Coraza 在请求处理链路中产生，
+	// 不设 level/logger 会让它在「错误日志」视图里错位。
+	entry.Level = "info"
+	entry.Logger = "http.log.access"
 
 	if entry.LogTime.IsZero() {
 		entry.LogTime = time.Now()

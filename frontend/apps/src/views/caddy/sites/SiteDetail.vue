@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 /**
- * 站点详情整页（对齐雷池防护应用，替代原 SiteDrawer 抽屉）：
+ * 站点详情整页（对齐雷池防护应用，取代早期的抽屉形态）：
  * 大头部（站点名 + 域名 + 防护模式开关组 + 今日请求/拦截）
  * + 横向 Tab（基本信息 / 防护 / 高级），每 Tab 独立保存，走既有 diff 确认制。
  * 防护模式开关组写全局 simple-waf 配置（waf_policies），改动前提示对全部站点生效。
@@ -51,8 +51,10 @@ import {
   SITE_METRICS_WINDOW_MINUTES,
   buildCatalogSitesFromConfigPayload,
   buildConfigWorkbenchQuery,
+  buildSiteMetricsMap,
   catalogModeLabel,
   formatMetricCount,
+  siteMetricsForDomains,
 } from '../catalog/service-catalog-utils';
 import {
   ADVANCED_CAPABILITY_ITEMS,
@@ -120,10 +122,10 @@ const {
 
 const siteMetrics = computed(() => {
   const list = (metricsData.value as SiteMetricsItem[] | undefined) ?? [];
-  return (
-    list.find((item) => String(item.host ?? '').trim().toLowerCase() === host.value) ??
-    null
-  );
+  if (list.length === 0) return null;
+  // 详情页按当前站点聚合全部域名：只查了主域名会漏掉其它域名的流量
+  const map = buildSiteMetricsMap(list, host.value ? [host.value] : []);
+  return siteMetricsForDomains(map, site.value?.domains ?? [host.value]);
 });
 
 const todayTotal = computed(() =>
@@ -132,7 +134,14 @@ const todayTotal = computed(() =>
 const todayBlocked = computed(() =>
   loadingMetrics.value ? '…' : formatMetricCount(siteMetrics.value?.blocked),
 );
+const today4xx = computed(() =>
+  loadingMetrics.value ? '…' : formatMetricCount(siteMetrics.value?.count4xx),
+);
+const today5xx = computed(() =>
+  loadingMetrics.value ? '…' : formatMetricCount(siteMetrics.value?.count5xx),
+);
 const blockedDanger = computed(() => Number(siteMetrics.value?.blocked ?? 0) > 0);
+const serverErrorDanger = computed(() => Number(siteMetrics.value?.count5xx ?? 0) > 0);
 
 // ---------- 防护模式开关组：读全局 simple-waf，改动经确认后 apply（对全部站点生效） ----------
 const {
@@ -228,6 +237,8 @@ const {
   pendingDiff,
   saving,
   confirmError,
+  blockDiff,
+  changedLineCount,
   unchangedLineCount,
   requestSave,
   confirmSave,
@@ -288,7 +299,6 @@ function goCertificates() {
             <div class="header-main">
               <div class="header-titles">
                 <span class="site-name">{{ site.name || '未命名站点' }}</span>
-                <Tag v-if="!site.enabled" color="error">已停用</Tag>
                 <Tag>{{ catalogModeLabel(site.mode) }}</Tag>
               </div>
               <div class="header-domains" :title="site.domains.join('、')">
@@ -307,6 +317,20 @@ function goCertificates() {
                 </span>
                 <span class="stat-label">今日拦截</span>
               </div>
+              <Tooltip title="近 24 小时客户端错误（4xx），大量出现通常意味着接口或链接失效">
+                <div class="stat">
+                  <span class="stat-value">{{ today4xx }}</span>
+                  <span class="stat-label">4xx</span>
+                </div>
+              </Tooltip>
+              <Tooltip title="近 24 小时服务端错误（5xx），通常意味着上游不可用">
+                <div class="stat">
+                  <span class="stat-value" :class="{ danger: serverErrorDanger }">
+                    {{ today5xx }}
+                  </span>
+                  <span class="stat-label">5xx</span>
+                </div>
+              </Tooltip>
             </div>
 
             <div class="header-mode">
@@ -585,16 +609,20 @@ function goCertificates() {
         :message="confirmError"
       />
       <div class="diff-hint">
-        仅替换该站点块（其余 {{ unchangedLineCount }} 行不变），确认后执行「校验 → 应用 → 落库」：
+        仅替换该站点块（块外其余 {{ unchangedLineCount }} 行不变），本次改动
+        {{ changedLineCount }} 行；确认后执行「校验 → 应用 → 落库」：
       </div>
       <div class="diff-box">
         <div
-          v-for="(line, index) in (pendingDiff?.block ?? '').split('\n')"
-          :key="index"
-          class="diff-line diff-added"
+          v-for="row in blockDiff"
+          :key="row.key"
+          class="diff-line"
+          :class="`diff-${row.type}`"
         >
-          <span class="diff-sign">+</span>
-          <span class="diff-text">{{ line }}</span>
+          <span class="diff-sign">{{
+            row.type === 'added' ? '+' : row.type === 'removed' ? '-' : ' '
+          }}</span>
+          <span class="diff-text">{{ row.right ?? row.left }}</span>
         </div>
       </div>
     </Modal>
@@ -772,10 +800,23 @@ function goCertificates() {
 .diff-sign {
   width: 18px;
   flex-shrink: 0;
-  color: rgba(0, 0, 0, 45%);
+  color: hsl(var(--muted-foreground));
 }
 
+/* 用主题语义变量着色，深浅色主题下都可读 */
 .diff-added {
-  background: rgba(82, 196, 26, 18%);
+  background: hsl(var(--success) / 18%);
+}
+
+.diff-removed {
+  background: hsl(var(--destructive) / 14%);
+}
+
+.diff-changed {
+  background: hsl(var(--warning) / 18%);
+}
+
+.diff-same {
+  color: hsl(var(--muted-foreground));
 }
 </style>

@@ -1,5 +1,5 @@
 /**
- * 站点详情页编辑状态与保存链路（自 SiteDrawer 迁移，解析层零重写）。
+ * 站点详情页编辑状态与保存链路（自早期抽屉形态迁移，解析层零重写）。
  *
  * - 基本/防护/高级三个 Tab 各自独立 buildNext：只收集本 Tab 的字段域改动，
  *   外科编辑复用 site-block-edit（块头/reverse_proxy/tls 定点替换）与
@@ -13,15 +13,29 @@ import { message } from 'antdv-next';
 import { previewCaddyConfigApi, pushCaddyConfigApi } from '#/api/caddy/server';
 import { apiErrorMessage } from '#/utils/api-error-message';
 
+import { buildLineDiff, type DiffRow } from '../config/caddy-config-diff';
 import { useUploadedCertOptions } from '../certificates/use-uploaded-certs';
 import type { CatalogSiteCard } from '../catalog/service-catalog-utils';
 import {
   applyCapabilityToSiteBlock,
+  applySiteLogToSiteBlock,
   extractSiteCapabilities,
   renderCapabilityLines,
   type SiteCapabilityKey,
   type SiteCapabilitiesSnapshot,
 } from '../config/site-capabilities';
+import {
+  DEFAULT_SITE_LOG_SETTINGS,
+  describeSiteLogLevel,
+  isSameSiteLogSettings,
+  normalizeSiteLogSizeMb,
+  readSiteLogSettings,
+  settingsToLevel,
+  SITE_LOG_SIZE_MAX_MB,
+  SITE_LOG_SIZE_MIN_MB,
+  validateSiteLogSettings,
+  type SiteLogSettings,
+} from '../config/site-log-settings';
 import {
   applyBasicEditsToSiteBlock,
   parseManualTlsPaths,
@@ -31,7 +45,7 @@ import {
   type EditableTlsMode,
 } from './site-block-edit';
 
-export type SiteDetailTab = 'basic' | 'protect' | 'advanced';
+export type SiteDetailTab = 'basic' | 'protect' | 'advanced' | 'logs';
 
 /** 防护 Tab 的 per-site 能力开关（挂载默认继承全局，改这里只影响当前站点） */
 export const PROTECT_CAPABILITY_ITEMS: Array<{
@@ -72,14 +86,24 @@ export const ADVANCED_CAPABILITY_ITEMS: Array<{
     label: '压缩',
     hint: '挂载 import compression（zstd/gzip）',
   },
-  {
-    key: 'accessLog',
-    label: '独立访问日志',
-    hint: '挂载 import subdomain-log，按域名分文件',
-  },
 ];
 
 const ALL_CAPABILITY_ITEMS = [...PROTECT_CAPABILITY_ITEMS, ...ADVANCED_CAPABILITY_ITEMS];
+
+/**
+ * 站点块里是否存在独立于 snippet 的内联 log 指令。
+ *
+ * 三开关只写 import subdomain-log，管不到用户手写的 log { ... }；两者同时存在时
+ * 后写的一条会覆盖前一条，所以这里探到内联指令就让 UI 禁用并引导去原文模式。
+ */
+function hasInlineSiteLogDirective(siteBlock: string): boolean {
+  for (const line of (siteBlock ?? '').split('\n')) {
+    const trimmed = line.replace(/\r$/, '').trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    if (/^log(?:\s*\{|\s*$)/.test(trimmed)) return true;
+  }
+  return false;
+}
 
 /** 能力开关当前值；undefined 表示该能力状态 unknown，开关禁用 */
 type CapabilityToggles = Record<SiteCapabilityKey, boolean | undefined>;
@@ -140,6 +164,48 @@ export function useSiteDetailEdit(options: SiteDetailEditOptions) {
     errorPage: false,
   });
 
+  // ---------- 「日志」分组：三开关 + 单文件上限，读写都落在站点块 import 参数上 ----------
+
+  /** 日志表单态；由站点块里的 import subdomain-log 回填，保存时再写回 */
+  const logSettings = reactive<SiteLogSettings>({ ...DEFAULT_SITE_LOG_SETTINGS });
+
+  /** 站点块里另有内联 log 指令：三开关管不到它，禁用并提示去原文模式 */
+  const logInlineConflict = computed(() =>
+    hasInlineSiteLogDirective(site.value?.raw ?? ''),
+  );
+
+  /** 生效 level 只读展示：INFO 含访问+错误，ERROR 只留错误，OFF 表示整条 import 不写 */
+  const logLevel = computed(() => settingsToLevel(logSettings));
+
+  /** 生效档位的中文说明，配合只读 level 一起展示 */
+  const logLevelLabel = computed(() =>
+    describeSiteLogLevel({
+      access: logSettings.access,
+      error: logSettings.error,
+      sizeMb: normalizeSiteLogSizeMb(logSettings.sizeMb),
+    }),
+  );
+
+  /** 错误日志开关是否受访问日志钳制（开访问必然连带错误，无权单独关闭） */
+  const logErrorForced = computed(() => logSettings.access);
+
+  // level 是最低级别而非白名单：开启访问日志时强制把错误日志拉回开启，
+  // 避免 UI 停留在 Caddy 无法表达的「开访问 + 关错误」组合上。
+  watch(
+    () => logSettings.access,
+    (access) => {
+      if (access) logSettings.error = true;
+    },
+  );
+
+  function normalizeLogSettings(): SiteLogSettings {
+    return {
+      access: logSettings.access,
+      error: logSettings.error,
+      sizeMb: normalizeSiteLogSizeMb(logSettings.sizeMb),
+    };
+  }
+
   /** 站点是否存在可编辑的 reverse_proxy 指令（静态/重定向站点上游与跳过验证不可用） */
   const hasUpstreamDirective = computed(() => {
     const raw = site.value?.raw;
@@ -160,7 +226,6 @@ export function useSiteDetailEdit(options: SiteDetailEditOptions) {
 
   /** 当前选中的证书记录 id；清空选择不动已填路径，仍允许手动输入 */
   const selectedCertId = ref<number | undefined>();
-
   /** 既有 manual 双路径与某上传证书一致时回显选中（不清除用户已做的选择） */
   function syncCertSelection() {
     if (selectedCertId.value != null) return;
@@ -204,6 +269,11 @@ export function useSiteDetailEdit(options: SiteDetailEditOptions) {
       const status = caps?.[item.key]?.status;
       toggles[item.key] = status === 'unknown' ? undefined : status === 'on';
     }
+    // 日志三开关从站点块 import 参数回填；块内没有 import 即两开关全关
+    const parsedLog = readSiteLogSettings(current?.raw ?? '');
+    logSettings.access = parsedLog.settings.access;
+    logSettings.error = parsedLog.settings.error;
+    logSettings.sizeMb = parsedLog.settings.sizeMb;
     confirmError.value = '';
   }
 
@@ -226,7 +296,13 @@ export function useSiteDetailEdit(options: SiteDetailEditOptions) {
    */
   function buildNextForScope(
     scope: SiteDetailTab,
-  ): { block: string; config: string; nextHost?: string } | null {
+  ): {
+    block: string;
+    /** 改动前的站点块原文，供 diff 弹窗渲染删除行 */
+    previousBlock: string;
+    config: string;
+    nextHost?: string;
+  } | null {
     const current = site.value;
     const raw = current?.raw;
     if (!current || !raw) return null;
@@ -288,6 +364,15 @@ export function useSiteDetailEdit(options: SiteDetailEditOptions) {
       );
     }
 
+    // 日志分组：三开关与现状不同才写回，相同则保持字节不变（重复保存无 diff）
+    if (scope === 'advanced' && !logInlineConflict.value) {
+      const desiredLog = normalizeLogSettings();
+      const currentLog = readSiteLogSettings(nextBlock).settings;
+      if (!isSameSiteLogSettings(desiredLog, currentLog)) {
+        nextBlock = applySiteLogToSiteBlock(nextBlock, desiredLog, logName.value);
+      }
+    }
+
     if (nextBlock === raw) return null;
     const nextConfig = replaceSiteBlockInConfig(config.value, raw, nextBlock);
     if (nextConfig === config.value) return null;
@@ -296,7 +381,7 @@ export function useSiteDetailEdit(options: SiteDetailEditOptions) {
       scope === 'basic' && editsDomainsChanged(current)
         ? firstValidHost(basic.domains)
         : undefined;
-    return { block: nextBlock, config: nextConfig, nextHost };
+    return { block: nextBlock, previousBlock: raw, config: nextConfig, nextHost };
   }
 
   function editsDomainsChanged(current: CatalogSiteCard): boolean {
@@ -317,14 +402,39 @@ export function useSiteDetailEdit(options: SiteDetailEditOptions) {
   const pendingDiff = ref<{
     scope: SiteDetailTab;
     block: string;
+    /** 改动前的站点块原文，供 diff 弹窗渲染删除行 */
+    previousBlock: string;
     config: string;
     nextHost?: string;
   } | null>(null);
   const saving = ref(false);
 
-  const unchangedLineCount = computed(() =>
-    config.value.trim() ? config.value.trim().split('\n').length : 0,
+  /**
+   * 变更预览：按「旧块 → 新块」做行级 diff。
+   * 只展示真正变动的行，未变化的行既不渲染也不计数，
+   * 避免旧实现把整块当新增、把整份配置行数当成"未变行数"。
+   */
+  const blockDiff = computed(() => {
+    const pending = pendingDiff.value;
+    if (!pending) return [] as DiffRow[];
+    return buildLineDiff(pending.previousBlock, pending.block);
+  });
+
+  /** 本次真正改动的行数（新增 + 删除 + 修改），用于弹窗摘要 */
+  const changedLineCount = computed(
+    () => blockDiff.value.filter((row) => row.type !== 'same').length,
   );
+
+  /** 该站点块之外、本次完全不动的配置行数 */
+  const unchangedLineCount = computed(() => {
+    const pending = pendingDiff.value;
+    if (!pending) return 0;
+    const total = config.value.trim() ? config.value.trim().split('\n').length : 0;
+    const previous = pending.previousBlock.trim()
+      ? pending.previousBlock.trim().split('\n').length
+      : 0;
+    return Math.max(0, total - previous);
+  });
 
   function requestSave(scope: SiteDetailTab) {
     if (scope === 'basic') {
@@ -337,6 +447,14 @@ export function useSiteDetailEdit(options: SiteDetailEditOptions) {
         (!basic.manualCertPath.trim() || !basic.manualKeyPath.trim())
       ) {
         message.warning('手动证书模式需同时填写证书与私钥路径');
+        return;
+      }
+    }
+    if (scope === 'advanced' && !logInlineConflict.value) {
+      // 大小上限必须是 1..1024 的整数；「开访问 + 关错误」由 UI 强制拉平，不会出现在这里
+      const problems = validateSiteLogSettings(normalizeLogSettings());
+      if (problems.length > 0) {
+        message.warning(problems[0]!);
         return;
       }
     }
@@ -392,6 +510,13 @@ export function useSiteDetailEdit(options: SiteDetailEditOptions) {
     basicEditable,
     capabilities,
     logName,
+    logSettings,
+    logLevel,
+    logLevelLabel,
+    logErrorForced,
+    logInlineConflict,
+    logSizeMinMb: SITE_LOG_SIZE_MIN_MB,
+    logSizeMaxMb: SITE_LOG_SIZE_MAX_MB,
     hasUpstreamDirective,
     certOptions,
     certLoading,
@@ -402,6 +527,8 @@ export function useSiteDetailEdit(options: SiteDetailEditOptions) {
     pendingDiff,
     saving,
     confirmError,
+    blockDiff,
+    changedLineCount,
     unchangedLineCount,
     requestSave,
     confirmSave,

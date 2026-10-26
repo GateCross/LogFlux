@@ -48,21 +48,22 @@ func oracleHostCounts(rows []fixtureLogRow, hosts []string, start, end time.Time
 	return out
 }
 
-// 将预言机结果转为 model 风格的稀疏计数切片
+// 将预言机结果转为 model 风格的稀疏计数行
 // （无匹配行的 host 省略——与按 host 聚合接口契约一致）。
-func rowsToSparse(oracle map[string][3]int64) (rowsTotal, rows4xx, rows5xx []caddymodel.HostStatusCount) {
+func rowsToSparse(oracle map[string][3]int64) []caddymodel.HostStatusBreakdown {
+	rows := make([]caddymodel.HostStatusBreakdown, 0, len(oracle))
 	for host, counts := range oracle {
-		if counts[0] > 0 {
-			rowsTotal = append(rowsTotal, caddymodel.HostStatusCount{Host: host, Count: counts[0]})
+		if counts[0] == 0 && counts[1] == 0 && counts[2] == 0 {
+			continue
 		}
-		if counts[1] > 0 {
-			rows4xx = append(rows4xx, caddymodel.HostStatusCount{Host: host, Count: counts[1]})
-		}
-		if counts[2] > 0 {
-			rows5xx = append(rows5xx, caddymodel.HostStatusCount{Host: host, Count: counts[2]})
-		}
+		rows = append(rows, caddymodel.HostStatusBreakdown{
+			Host:     host,
+			Total:    counts[0],
+			Count4xx: counts[1],
+			Count5xx: counts[2],
+		})
 	}
-	return rowsTotal, rows4xx, rows5xx
+	return rows
 }
 
 // Property 6: 近窗按 host 聚合
@@ -130,10 +131,10 @@ func TestProperty6_NearWindowHostAggregation(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			oracle := oracleHostCounts(fixtures, tc.hosts, start, end)
-			rowsTotal, rows4xx, rows5xx := rowsToSparse(oracle)
+			rowsBreakdown := rowsToSparse(oracle)
 
 			// Model 返回稀疏行；merge 须对请求的全部 host 补 0
-			got := mergeHostMetrics(tc.hosts, rowsTotal, rows4xx, rows5xx, blockedRows)
+			got := mergeHostMetrics(tc.hosts, rowsBreakdown, blockedRows)
 			if len(got) != len(tc.hosts) {
 				t.Fatalf("expected %d items, got %d", len(tc.hosts), len(got))
 			}
@@ -157,8 +158,8 @@ func TestProperty6_NearWindowHostAggregation(t *testing.T) {
 	t.Run("no logs for host returns zero not omit", func(t *testing.T) {
 		hosts := []string{"ghost.example.com", "a.example.com"}
 		oracle := oracleHostCounts(fixtures, hosts, start, end)
-		rowsTotal, rows4xx, rows5xx := rowsToSparse(oracle)
-		got := mergeHostMetrics(hosts, rowsTotal, rows4xx, rows5xx, blockedRows)
+		rowsBreakdown := rowsToSparse(oracle)
+		got := mergeHostMetrics(hosts, rowsBreakdown, blockedRows)
 		if len(got) != 2 {
 			t.Fatalf("expected 2 items including zero host, got %d", len(got))
 		}
@@ -174,32 +175,18 @@ func TestProperty6_NearWindowHostAggregation(t *testing.T) {
 // 仅为站点指标服务测试实现按 host 状态聚合。
 type mockCaddyLogModel struct {
 	caddymodel.CaddyLogModel // 嵌入 nil 以满足未用方法
-	totalFn                  func(ctx context.Context, start, end time.Time, hosts []string) ([]caddymodel.HostStatusCount, error)
-	countFn                  func(ctx context.Context, start, end time.Time, hosts []string, min, max int) ([]caddymodel.HostStatusCount, error)
-	calls                    []mockCountCall
-	totalCalls               int
+	breakdownFn              func(ctx context.Context, start, end time.Time, hosts []string) ([]caddymodel.HostStatusBreakdown, error)
+	breakdownCalls           int
+	lastHosts                []string
 }
 
-type mockCountCall struct {
-	Hosts []string
-	Min   int
-	Max   int
-}
-
-func (m *mockCaddyLogModel) CountAllByHosts(ctx context.Context, start, end time.Time, hosts []string) ([]caddymodel.HostStatusCount, error) {
-	m.totalCalls++
-	if m.totalFn != nil {
-		return m.totalFn(ctx, start, end, hosts)
+func (m *mockCaddyLogModel) CountBreakdownByHosts(ctx context.Context, start, end time.Time, hosts []string) ([]caddymodel.HostStatusBreakdown, error) {
+	m.breakdownCalls++
+	m.lastHosts = append([]string(nil), hosts...)
+	if m.breakdownFn != nil {
+		return m.breakdownFn(ctx, start, end, hosts)
 	}
-	return []caddymodel.HostStatusCount{}, nil
-}
-
-func (m *mockCaddyLogModel) CountStatusByHosts(ctx context.Context, start, end time.Time, hosts []string, min, max int) ([]caddymodel.HostStatusCount, error) {
-	m.calls = append(m.calls, mockCountCall{Hosts: append([]string(nil), hosts...), Min: min, Max: max})
-	if m.countFn != nil {
-		return m.countFn(ctx, start, end, hosts, min, max)
-	}
-	return []caddymodel.HostStatusCount{}, nil
+	return []caddymodel.HostStatusBreakdown{}, nil
 }
 
 // 仅为站点指标服务测试实现按 host 拦截聚合。
@@ -258,19 +245,11 @@ func (m *mockCaddyLogModel) Recent(context.Context, time.Time, time.Time, int) (
 
 func TestGetSiteMetrics_ServiceZeroFillAndRanges(t *testing.T) {
 	mock := &mockCaddyLogModel{
-		totalFn: func(ctx context.Context, start, end time.Time, hosts []string) ([]caddymodel.HostStatusCount, error) {
-			// 稀疏：仅 a.example.com 有请求；empty.example.com 省略
-			return []caddymodel.HostStatusCount{{Host: "a.example.com", Count: 10}}, nil
-		},
-		countFn: func(ctx context.Context, start, end time.Time, hosts []string, min, max int) ([]caddymodel.HostStatusCount, error) {
+		breakdownFn: func(ctx context.Context, start, end time.Time, hosts []string) ([]caddymodel.HostStatusBreakdown, error) {
 			// 稀疏：仅 a.example.com 有数据；empty.example.com 省略
-			if min == 400 && max == 500 {
-				return []caddymodel.HostStatusCount{{Host: "a.example.com", Count: 2}}, nil
-			}
-			if min == 500 && max == 600 {
-				return []caddymodel.HostStatusCount{{Host: "a.example.com", Count: 3}}, nil
-			}
-			return nil, fmt.Errorf("unexpected range %d-%d", min, max)
+			return []caddymodel.HostStatusBreakdown{
+				{Host: "a.example.com", Total: 10, Count4xx: 2, Count5xx: 3},
+			}, nil
 		},
 	}
 	wafMock := &mockWafEventModel{
@@ -300,18 +279,12 @@ func TestGetSiteMetrics_ServiceZeroFillAndRanges(t *testing.T) {
 		t.Fatalf("expected zero-filled empty host, got %+v", resp.List[1])
 	}
 
-	// 必须调用 model 两次：先 4xx 再 5xx；总请求与拦截各一次
-	if len(mock.calls) != 2 {
-		t.Fatalf("expected 2 CountStatusByHosts calls, got %d", len(mock.calls))
+	// 聚合只应发生一次：总请求与 4xx/5xx 由同一条条件聚合出，拦截另算一次
+	if mock.breakdownCalls != 1 {
+		t.Fatalf("expected 1 CountBreakdownByHosts call, got %d", mock.breakdownCalls)
 	}
-	if mock.calls[0].Min != 400 || mock.calls[0].Max != 500 {
-		t.Fatalf("first call should be 4xx range, got %+v", mock.calls[0])
-	}
-	if mock.calls[1].Min != 500 || mock.calls[1].Max != 600 {
-		t.Fatalf("second call should be 5xx range, got %+v", mock.calls[1])
-	}
-	if mock.totalCalls != 1 {
-		t.Fatalf("expected 1 CountAllByHosts call, got %d", mock.totalCalls)
+	if len(mock.lastHosts) != 2 || mock.lastHosts[0] != "a.example.com" || mock.lastHosts[1] != "empty.example.com" {
+		t.Fatalf("expected breakdown called with requested hosts, got %+v", mock.lastHosts)
 	}
 	if wafMock.blockedCalls != 1 {
 		t.Fatalf("expected 1 CountInterruptedByHosts call, got %d", wafMock.blockedCalls)
@@ -352,7 +325,7 @@ func TestGetSiteMetrics_Validation(t *testing.T) {
 	t.Run("default window when omitted", func(t *testing.T) {
 		var gotWindow time.Duration
 		mock := &mockCaddyLogModel{
-			countFn: func(ctx context.Context, start, end time.Time, hosts []string, min, max int) ([]caddymodel.HostStatusCount, error) {
+			breakdownFn: func(ctx context.Context, start, end time.Time, hosts []string) ([]caddymodel.HostStatusBreakdown, error) {
 				gotWindow = end.Sub(start)
 				return nil, nil
 			},
@@ -384,7 +357,7 @@ func TestGetSiteMetrics_Validation(t *testing.T) {
 			t.Run(tc.name, func(t *testing.T) {
 				var gotWindow time.Duration
 				mock := &mockCaddyLogModel{
-					countFn: func(ctx context.Context, start, end time.Time, hosts []string, min, max int) ([]caddymodel.HostStatusCount, error) {
+					breakdownFn: func(ctx context.Context, start, end time.Time, hosts []string) ([]caddymodel.HostStatusBreakdown, error) {
 						gotWindow = end.Sub(start)
 						return nil, nil
 					},
@@ -406,8 +379,8 @@ func TestGetSiteMetrics_Validation(t *testing.T) {
 
 	t.Run("dedupe hosts", func(t *testing.T) {
 		mock := &mockCaddyLogModel{
-			countFn: func(ctx context.Context, start, end time.Time, hosts []string, min, max int) ([]caddymodel.HostStatusCount, error) {
-				return []caddymodel.HostStatusCount{}, nil
+			breakdownFn: func(ctx context.Context, start, end time.Time, hosts []string) ([]caddymodel.HostStatusBreakdown, error) {
+				return []caddymodel.HostStatusBreakdown{}, nil
 			},
 		}
 		wafMock := &mockWafEventModel{}
@@ -421,8 +394,8 @@ func TestGetSiteMetrics_Validation(t *testing.T) {
 		if len(resp.List) != 2 {
 			t.Fatalf("expected deduped 2 hosts, got %d: %+v", len(resp.List), resp.List)
 		}
-		if mock.calls[0].Hosts[0] != "a.example.com" || len(mock.calls[0].Hosts) != 2 {
-			t.Fatalf("model should receive deduped hosts, got %+v", mock.calls[0].Hosts)
+		if len(mock.lastHosts) != 2 || mock.lastHosts[0] != "a.example.com" {
+			t.Fatalf("model should receive deduped hosts, got %+v", mock.lastHosts)
 		}
 	})
 }
@@ -430,14 +403,10 @@ func TestGetSiteMetrics_Validation(t *testing.T) {
 func TestGetSiteMetricsLogic_EndToEndWithMock(t *testing.T) {
 	// 覆盖 handler → logic → service 的集成路径
 	mock := &mockCaddyLogModel{
-		totalFn: func(ctx context.Context, start, end time.Time, hosts []string) ([]caddymodel.HostStatusCount, error) {
-			return []caddymodel.HostStatusCount{{Host: "api.example.com", Count: 20}}, nil
-		},
-		countFn: func(ctx context.Context, start, end time.Time, hosts []string, min, max int) ([]caddymodel.HostStatusCount, error) {
-			if min == 500 {
-				return []caddymodel.HostStatusCount{{Host: "api.example.com", Count: 7}}, nil
-			}
-			return []caddymodel.HostStatusCount{}, nil
+		breakdownFn: func(ctx context.Context, start, end time.Time, hosts []string) ([]caddymodel.HostStatusBreakdown, error) {
+			return []caddymodel.HostStatusBreakdown{
+				{Host: "api.example.com", Total: 20, Count4xx: 0, Count5xx: 7},
+			}, nil
 		},
 	}
 	wafMock := &mockWafEventModel{

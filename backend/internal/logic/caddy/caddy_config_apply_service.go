@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	ingest "logflux/common/ingest"
 	"logflux/internal/svc"
 	"logflux/internal/utils/safego"
 
@@ -189,22 +190,38 @@ func (s *caddyConfigApplyService) persist(server *caddymodel.CaddyServer, config
 	return historyID, nil
 }
 
-// mergeManagedBlocks 把库里保存的全局选项与 :80 入口块模板合并进配置。
+// mergeManagedBlocks 把库里保存的全局选项、:80 入口块模板与日志 snippet 定义合并进配置。
 //
-// 读库失败按"未配置"处理不阻断应用；模板本身不合法（缺 :80 地址）属于
+// 读库失败按"未配置"处理不阻断应用；模板本身不合法（缺 :80 地址、块头不对）属于
 // 数据错误，直接报错避免把坏配置推给 Caddy。
 func (s *caddyConfigApplyService) mergeManagedBlocks(config string) (string, error) {
-	return mergeCaddyManagedBlocks(config, loadCaddyGlobalOptions(s.svcCtx.DB), loadCaddyEntryBlock(s.svcCtx.DB))
+	return mergeCaddyManagedBlocks(
+		config,
+		loadCaddyGlobalOptions(s.svcCtx.DB),
+		loadCaddyEntryBlock(s.svcCtx.DB),
+		loadCaddyLogSnippet(s.svcCtx.DB),
+	)
 }
 
-// mergeCaddyManagedBlocks 是合并的纯函数形态：先合并全局选项，再替换入口块。
-func mergeCaddyManagedBlocks(config string, opts CaddyGlobalOptionsValue, entryBlock string) (string, error) {
+// mergeCaddyManagedBlocks 是合并的纯函数形态：先合并全局选项，再替换入口块，
+// 最后按最终位置插入或替换日志 snippet 定义。
+//
+// 日志 snippet 必须排在全局块之后：全局块交由 mergeGlobalOptions 原位重建，
+// 先插 snippet 会打乱块头定位。
+func mergeCaddyManagedBlocks(config string, opts CaddyGlobalOptionsValue, entryBlock, logSnippet string) (string, error) {
 	merged := mergeGlobalOptions(config, opts)
-	return mergeEntryBlock(merged, entryBlock)
+	merged, err := mergeEntryBlock(merged, entryBlock)
+	if err != nil {
+		return "", err
+	}
+	return mergeCaddyLogSnippet(merged, logSnippet)
 }
 
 func (s *caddyConfigApplyService) scheduleLogSourceSync(server *caddymodel.CaddyServer) {
 	safego.New(context.Background(), "应用 Caddy 配置后同步日志源").Go(func() {
+		// 先保证站点日志目录可被采集，再按配置里声明的路径补充精确源：
+		// 目录源覆盖后续新建的站点文件，精确源覆盖显式配置的单文件路径。
+		ingest.EnsureSiteLogSource(s.svcCtx.DB, server.ID, s.logger)
 		syncCaddyLogSources(s.svcCtx, server, s.logger)
 	})
 }

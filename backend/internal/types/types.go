@@ -99,6 +99,14 @@ type CaddyEntryBlockUpdateReq struct {
 	SyncFromConfig bool   `json:"syncFromConfig,optional"`
 }
 
+type CaddyLogSnippetResp struct {
+	Raw string `json:"raw"`
+}
+
+type CaddyLogSnippetUpdateReq struct {
+	Raw string `json:"raw,optional"`
+}
+
 type CaddyGlobalOptionsResp struct {
 	AutoHttps       string   `json:"autoHttps,optional"`
 	TrustedProxies  []string `json:"trustedProxies,optional"`
@@ -130,6 +138,8 @@ type CaddyLogItem struct {
 	RemoteIP  string `json:"remoteIp"`
 	ClientIP  string `json:"clientIp"`
 	UserAgent string `json:"userAgent"`
+	Level     string `json:"level,optional"`
+	Logger    string `json:"logger,optional"`
 	RawLog    string `json:"rawLog"`
 	ExtraData string `json:"extraData,optional"`
 }
@@ -145,6 +155,7 @@ type CaddyLogReq struct {
 	SortBy    string `form:"sortBy,optional"`  // logTime
 	Order     string `form:"order,optional"`   // asc|desc
 	OnlyWaf   bool   `form:"onlyWaf,optional"` // 仅查询 WAF 防护/拦截日志
+	LogKind   string `form:"logKind,optional"`
 }
 
 type CaddyLogResp struct {

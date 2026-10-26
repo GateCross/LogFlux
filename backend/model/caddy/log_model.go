@@ -20,7 +20,20 @@ type CaddyLogQuery struct {
 	Page     int
 	PageSize int
 	OnlyWaf  bool
+	// LogKind 按日志种类过滤：access —— 访问日志；error —— 错误日志。
+	// 空值表示不过滤（保持旧行为）。
+	LogKind string
 }
+
+// 日志种类取值。
+const (
+	// CaddyLogKindAccess 只保留访问日志：Caddy 的 HTTP 访问日志固定用该 logger 名。
+	CaddyLogKindAccess = "access"
+	// CaddyLogKindError 只保留错误日志：logger 不属于访问链路，或级别为 error 及以上。
+	CaddyLogKindError = "error"
+	// caddyAccessLoggerName 是 Caddy 访问日志的 logger 命名空间。
+	caddyAccessLoggerName = "http.log.access"
+)
 
 // DashboardTrendRow 是看板趋势聚合行。
 type DashboardTrendRow struct {
@@ -42,6 +55,15 @@ type HostStatusCount struct {
 	Count int64  `gorm:"column:count"`
 }
 
+// 按 host 一次聚合出的分状态计数行。
+// 用单条 SQL 的条件聚合（FILTER）代替多次分组查询，避免同一时间窗被反复扫描。
+type HostStatusBreakdown struct {
+	Host     string `gorm:"column:host"`
+	Total    int64  `gorm:"column:total"`
+	Count4xx int64  `gorm:"column:count4xx"`
+	Count5xx int64  `gorm:"column:count5xx"`
+}
+
 type CaddyLogModel interface {
 	Create(ctx context.Context, log *CaddyLog) error
 	List(ctx context.Context, query CaddyLogQuery) ([]CaddyLog, int64, error)
@@ -55,6 +77,10 @@ type CaddyLogModel interface {
 	// 在时间窗内按 host 批量统计全部请求计数（不过滤状态）。
 	// hosts 为空时返回空切片；结果仅含有匹配行的 host。
 	CountAllByHosts(ctx context.Context, start, end time.Time, hosts []string) ([]HostStatusCount, error)
+	// 在时间窗内按 host 一次聚合出总请求数与 4xx/5xx 计数。
+	// 等价于 CountAllByHosts + 两次 CountStatusByHosts，但只扫描一遍日志表。
+	// hosts 为空时返回空切片；结果仅含有匹配行的 host。
+	CountBreakdownByHosts(ctx context.Context, start, end time.Time, hosts []string) ([]HostStatusBreakdown, error)
 	CountUniqueVisitor(ctx context.Context, start, end time.Time) (int64, error)
 	CountUniqueRemoteIP(ctx context.Context, start, end time.Time) (int64, error)
 	CountAttackIP(ctx context.Context, start, end time.Time, statuses []int) (int64, error)
@@ -106,6 +132,18 @@ func (m *defaultCaddyLogModel) List(ctx context.Context, query CaddyLogQuery) ([
 	}
 	if query.OnlyWaf {
 		db = db.Where("extra_data ->> 'source' = ?", "waf")
+	}
+	// 访问日志与错误日志共用一张表，靠 logger/level 区分：
+	// access 只用 logger 精确匹配；error 用「非访问 logger 或 error 级」兜底，
+	// 避免 Caddy 调整命名空间后错误日志整体消失。
+	switch query.LogKind {
+	case CaddyLogKindAccess:
+		db = db.Where("logger = ?", caddyAccessLoggerName)
+	case CaddyLogKindError:
+		db = db.Where(
+			"(level IN ? OR (logger <> '' AND logger <> ?))",
+			[]string{"error", "fatal", "panic"}, caddyAccessLoggerName,
+		)
 	}
 
 	var total int64
@@ -172,6 +210,27 @@ func (m *defaultCaddyLogModel) CountAllByHosts(ctx context.Context, start, end t
 	// 利用 host / log_time 相关索引：时间窗 + host IN + GROUP BY host
 	err := m.baseRange(ctx, start, end).
 		Select("host, COUNT(*) AS count").
+		Where("host IN ?", hosts).
+		Group("host").
+		Scan(&rows).Error
+	return rows, err
+}
+
+// 按 host 一次聚合出总请求数与 4xx/5xx 计数（PostgreSQL FILTER 条件聚合）。
+// 状态范围与 CountStatusByHosts 保持一致：4xx ∈ [400,500)，5xx ∈ [500,600)。
+// 空 hosts 直接返回空结果；无匹配日志的 host 不会出现在返回值中。
+func (m *defaultCaddyLogModel) CountBreakdownByHosts(ctx context.Context, start, end time.Time, hosts []string) ([]HostStatusBreakdown, error) {
+	rows := make([]HostStatusBreakdown, 0)
+	if len(hosts) == 0 {
+		return rows, nil
+	}
+	// 时间窗 + host IN 只扫一遍，三种计数在同一批次内用条件聚合分流；
+	// 比拆成三条 GROUP BY 少扫两次表，且三次计数天然处于同一快照，不会互相错位。
+	err := m.baseRange(ctx, start, end).
+		Select(`host,
+			COUNT(*) AS total,
+			COUNT(*) FILTER (WHERE status >= 400 AND status < 500) AS count4xx,
+			COUNT(*) FILTER (WHERE status >= 500 AND status < 600) AS count5xx`).
 		Where("host IN ?", hosts).
 		Group("host").
 		Scan(&rows).Error

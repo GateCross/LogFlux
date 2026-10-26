@@ -6,7 +6,7 @@ import (
 )
 
 // mergeCaddyManagedBlocks 是 Apply 在 adapt 前调用的合并入口，这里覆盖
-// 全局选项与入口块在同一份配置上叠加的最终形态。
+// 全局选项、入口块与日志 snippet 在同一份配置上叠加的最终形态。
 func TestMergeManagedBlocksCombinesOptionsAndEntry(t *testing.T) {
 	debugOn := true
 	opts := CaddyGlobalOptionsValue{
@@ -14,7 +14,7 @@ func TestMergeManagedBlocksCombinesOptionsAndEntry(t *testing.T) {
 		Debug:     &debugOn,
 	}
 	entryBlock := ":80 {\n  respond \"entry\"\n}"
-	got, err := mergeCaddyManagedBlocks(mergeTestBaseConfig, opts, entryBlock)
+	got, err := mergeCaddyManagedBlocks(mergeTestBaseConfig, opts, entryBlock, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,8 +29,23 @@ func TestMergeManagedBlocksCombinesOptionsAndEntry(t *testing.T) {
 	}
 }
 
+func TestMergeManagedBlocksAddsLogSnippet(t *testing.T) {
+	snippet := "(subdomain-log) {\n  log {\n    level INFO\n  }\n}"
+	got, err := mergeCaddyManagedBlocks(mergeTestBaseConfig, CaddyGlobalOptionsValue{}, "", snippet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 全局块在最前，snippet 紧随其后，站点块最后。
+	if strings.Index(got, "admin localhost:2019") > strings.Index(got, "(subdomain-log)") {
+		t.Fatalf("snippet 应在全局块之后:\n%s", got)
+	}
+	if strings.Index(got, "(subdomain-log)") > strings.Index(got, ":80 {") {
+		t.Fatalf("snippet 应在第一个站点块之前:\n%s", got)
+	}
+}
+
 func TestMergeManagedBlocksEmptyKeepsConfig(t *testing.T) {
-	got, err := mergeCaddyManagedBlocks(mergeTestBaseConfig, CaddyGlobalOptionsValue{}, "")
+	got, err := mergeCaddyManagedBlocks(mergeTestBaseConfig, CaddyGlobalOptionsValue{}, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +55,7 @@ func TestMergeManagedBlocksEmptyKeepsConfig(t *testing.T) {
 }
 
 func TestMergeManagedBlocksRejectsBadEntryTemplate(t *testing.T) {
-	if _, err := mergeCaddyManagedBlocks(mergeTestBaseConfig, CaddyGlobalOptionsValue{}, "example.com {\n}\n"); err == nil {
+	if _, err := mergeCaddyManagedBlocks(mergeTestBaseConfig, CaddyGlobalOptionsValue{}, "example.com {\n}\n", ""); err == nil {
 		t.Fatal("缺 :80 地址的模板应报错")
 	}
 }

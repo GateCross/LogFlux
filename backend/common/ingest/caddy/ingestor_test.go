@@ -2,6 +2,8 @@ package caddy
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -87,13 +89,138 @@ func TestSaveOffset_UpsertCursor(t *testing.T) {
 
 	filePath := "/tmp/logflux-cursor-save.log"
 	mock.ExpectQuery(`INSERT INTO "log_ingest_cursors"`).
-		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), filePath, int64(256), int64(256), sqlmock.AnyArg()).
+		WithArgs(
+			sqlmock.AnyArg(), sqlmock.AnyArg(), // created_at, updated_at
+			filePath, int64(256), sqlmock.AnyArg(), // file_path, offset, file_id
+			sqlmock.AnyArg(), int64(256), sqlmock.AnyArg(), // ON CONFLICT: file_id, offset, updated_at
+		).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
 
 	if err := ingestor.saveOffset(filePath, 256); err != nil {
 		t.Fatalf("saveOffset() error = %v", err)
 	}
 
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("sql expectations not met: %v", err)
+	}
+}
+
+// 文件被替换（滚动后同名重建）时 inode 改变，旧偏移必须作废。
+func TestResolveStartOffset_ResetsWhenFileReplaced(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "access.log")
+	if err := os.WriteFile(filePath, []byte("first\n"), 0o600); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	info, err := os.Stat(filePath)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	currentID := fileIdentity(info)
+	if currentID == 0 {
+		t.Skip("当前平台无 inode 语义，跳过")
+	}
+
+	sqldb, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+	if err != nil {
+		t.Fatalf("failed to open sqlmock: %v", err)
+	}
+	defer sqldb.Close()
+
+	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqldb}), &gorm.Config{SkipDefaultTransaction: true})
+	if err != nil {
+		t.Fatalf("failed to open gorm: %v", err)
+	}
+
+	ingestor := NewCaddyIngestor(gdb)
+
+	// 游标记录的是「另一个文件」的 inode，偏移不应被沿用
+	mock.ExpectQuery(`SELECT \* FROM "log_ingest_cursors" WHERE file_path = \$1 LIMIT \$2`).
+		WithArgs(filePath, 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "file_path", "offset", "file_id"}).
+			AddRow(1, filePath, int64(999), currentID+1))
+
+	if offset := ingestor.resolveStartOffset(filePath); offset != 0 {
+		t.Fatalf("expected offset reset to 0 for replaced file, got %d", offset)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("sql expectations not met: %v", err)
+	}
+}
+
+// inode 未变时应正常沿用游标偏移。
+func TestResolveStartOffset_KeepsOffsetWhenFileUnchanged(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "access.log")
+	if err := os.WriteFile(filePath, []byte("0123456789"), 0o600); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	info, err := os.Stat(filePath)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	currentID := fileIdentity(info)
+	if currentID == 0 {
+		t.Skip("当前平台无 inode 语义，跳过")
+	}
+
+	sqldb, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+	if err != nil {
+		t.Fatalf("failed to open sqlmock: %v", err)
+	}
+	defer sqldb.Close()
+
+	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqldb}), &gorm.Config{SkipDefaultTransaction: true})
+	if err != nil {
+		t.Fatalf("failed to open gorm: %v", err)
+	}
+
+	ingestor := NewCaddyIngestor(gdb)
+
+	mock.ExpectQuery(`SELECT \* FROM "log_ingest_cursors" WHERE file_path = \$1 LIMIT \$2`).
+		WithArgs(filePath, 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "file_path", "offset", "file_id"}).
+			AddRow(1, filePath, int64(4), currentID))
+
+	if offset := ingestor.resolveStartOffset(filePath); offset != 4 {
+		t.Fatalf("expected offset kept at 4, got %d", offset)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("sql expectations not met: %v", err)
+	}
+}
+
+// 历史游标没有 file_id（旧数据），按「未知」处理，沿用偏移不误判。
+func TestResolveStartOffset_LegacyCursorWithoutFileID(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "access.log")
+	if err := os.WriteFile(filePath, []byte("0123456789"), 0o600); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	sqldb, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+	if err != nil {
+		t.Fatalf("failed to open sqlmock: %v", err)
+	}
+	defer sqldb.Close()
+
+	gdb, err := gorm.Open(postgres.New(postgres.Config{Conn: sqldb}), &gorm.Config{SkipDefaultTransaction: true})
+	if err != nil {
+		t.Fatalf("failed to open gorm: %v", err)
+	}
+
+	ingestor := NewCaddyIngestor(gdb)
+
+	mock.ExpectQuery(`SELECT \* FROM "log_ingest_cursors" WHERE file_path = \$1 LIMIT \$2`).
+		WithArgs(filePath, 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "file_path", "offset", "file_id"}).
+			AddRow(1, filePath, int64(6), uint64(0)))
+
+	if offset := ingestor.resolveStartOffset(filePath); offset != 6 {
+		t.Fatalf("expected legacy cursor offset kept at 6, got %d", offset)
+	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("sql expectations not met: %v", err)
 	}

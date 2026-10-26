@@ -58,6 +58,7 @@ func (s *LogService) GetCaddyLogs(req *types.CaddyLogReq) (*types.CaddyLogResp, 
 		Page:     req.Page,
 		PageSize: req.PageSize,
 		OnlyWaf:  req.OnlyWaf,
+		LogKind:  req.LogKind,
 	})
 	if err != nil {
 		return nil, xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "查询 Caddy 日志失败", err)
@@ -86,6 +87,8 @@ func (s *LogService) GetCaddyLogs(req *types.CaddyLogReq) (*types.CaddyLogResp, 
 			RemoteIP:  logItem.RemoteIP,
 			ClientIP:  logItem.ClientIP,
 			UserAgent: logItem.UserAgent,
+			Level:     logItem.Level,
+			Logger:    logItem.Logger,
 			RawLog:    logItem.RawLog,
 			ExtraData: logItem.ExtraData,
 		})
@@ -118,17 +121,10 @@ func (s *LogService) GetSiteMetrics(req *types.SiteMetricsReq) (*types.SiteMetri
 	start := end.Add(-time.Duration(windowMinutes) * time.Minute)
 
 	logModel := s.caddyLogModel()
-	rowsTotal, err := logModel.CountAllByHosts(s.ctx, start, end, hosts)
+	// 总请求/4xx/5xx 走单条条件聚合，避免同一时间窗被扫描三遍
+	rowsBreakdown, err := logModel.CountBreakdownByHosts(s.ctx, start, end, hosts)
 	if err != nil {
 		return nil, xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "统计站点请求数失败", err)
-	}
-	rows4xx, err := logModel.CountStatusByHosts(s.ctx, start, end, hosts, 400, 500)
-	if err != nil {
-		return nil, xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "统计站点 4xx 失败", err)
-	}
-	rows5xx, err := logModel.CountStatusByHosts(s.ctx, start, end, hosts, 500, 600)
-	if err != nil {
-		return nil, xerr.NewCodeErrorWithCause(xerr.ServerCommonError, "统计站点 5xx 失败", err)
 	}
 
 	rowsBlocked, err := s.wafEventModel().CountInterruptedByHosts(s.ctx, start, end, hosts)
@@ -137,7 +133,7 @@ func (s *LogService) GetSiteMetrics(req *types.SiteMetricsReq) (*types.SiteMetri
 	}
 
 	return &types.SiteMetricsResp{
-		List: mergeHostMetrics(hosts, rowsTotal, rows4xx, rows5xx, rowsBlocked),
+		List: mergeHostMetrics(hosts, rowsBreakdown, rowsBlocked),
 	}, nil
 }
 
@@ -145,12 +141,13 @@ func (s *LogService) GetSiteMetrics(req *types.SiteMetricsReq) (*types.SiteMetri
 // 导出给测试用于验证 Property 6 的聚合语义。
 func mergeHostMetrics(
 	hosts []string,
-	rowsTotal, rows4xx, rows5xx []caddymodel.HostStatusCount,
+	rowsBreakdown []caddymodel.HostStatusBreakdown,
 	rowsBlocked []wafmodel.HostInterruptedCount,
 ) []types.SiteMetricsItem {
-	total := hostCountMap(rowsTotal)
-	count4xx := hostCountMap(rows4xx)
-	count5xx := hostCountMap(rows5xx)
+	breakdown := make(map[string]caddymodel.HostStatusBreakdown, len(rowsBreakdown))
+	for _, row := range rowsBreakdown {
+		breakdown[row.Host] = row
+	}
 	blocked := make(map[string]int64, len(rowsBlocked))
 	for _, row := range rowsBlocked {
 		blocked[row.Host] = row.Count
@@ -158,23 +155,16 @@ func mergeHostMetrics(
 
 	list := make([]types.SiteMetricsItem, 0, len(hosts))
 	for _, host := range hosts {
+		counts := breakdown[host]
 		list = append(list, types.SiteMetricsItem{
 			Host:     host,
-			Total:    total[host],
-			Count4xx: count4xx[host],
-			Count5xx: count5xx[host],
+			Total:    counts.Total,
+			Count4xx: counts.Count4xx,
+			Count5xx: counts.Count5xx,
 			Blocked:  blocked[host],
 		})
 	}
 	return list
-}
-
-func hostCountMap(rows []caddymodel.HostStatusCount) map[string]int64 {
-	out := make(map[string]int64, len(rows))
-	for _, row := range rows {
-		out[row.Host] = row.Count
-	}
-	return out
 }
 
 // 去空白并去重，保持首次出现顺序。

@@ -185,7 +185,12 @@ func syncCaddyLogSources(svcCtx *svc.ServiceContext, server *caddymodel.CaddySer
 	}
 
 	var autoSources []ingestmodel.LogSource
-	svcCtx.DB.Where("type = ? AND name LIKE ?", "caddy", "Caddy Auto:%").Find(&autoSources)
+	// 只处理本节点自己的自动源：多节点部署时全局扫描会把别的节点
+	// 正在使用的日志源一并禁用，导致对方日志时断时续。
+	svcCtx.DB.Where(
+		"type = ? AND name LIKE ? AND server_id = ?",
+		"caddy", "Caddy Auto:%", server.ID,
+	).Find(&autoSources)
 	for _, source := range autoSources {
 		if _, ok := pathSet[source.Path]; !ok {
 			svcCtx.DB.Model(&ingestmodel.LogSource{}).Where("id = ?", source.ID).Update("enabled", false)
@@ -194,16 +199,17 @@ func syncCaddyLogSources(svcCtx *svc.ServiceContext, server *caddymodel.CaddySer
 
 	for path := range pathSet {
 		var source ingestmodel.LogSource
-		err := svcCtx.DB.Where("path = ?", path).First(&source).Error
+		err := svcCtx.DB.Where("path = ? AND server_id = ?", path, server.ID).First(&source).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			newSource := ingestmodel.LogSource{
-				Name:    fmt.Sprintf("Caddy 自动: %s", path),
-				Path:    path,
-				Type:    "caddy",
-				Enabled: true,
+				Name:     fmt.Sprintf("Caddy 自动: %s", path),
+				Path:     path,
+				Type:     "caddy",
+				Enabled:  true,
+				ServerID: server.ID,
 			}
 			if err := svcCtx.DB.Create(&newSource).Error; err == nil {
-				logger.Infof("自动添加日志源: %s", path)
+				logger.Infof("自动添加日志源: %s (节点 %d)", path, server.ID)
 			}
 			continue
 		}
@@ -259,7 +265,8 @@ func ensureWafAuditLogSource(db *gorm.DB, auditLogPath string, logger logx.Logge
 	}
 
 	var source ingestmodel.LogSource
-	err := db.Where("path = ?", path).First(&source).Error
+	// WAF 审计日志由本进程统一消费，不归属具体节点（server_id = 0）
+	err := db.Where("path = ? AND server_id = ?", path, 0).First(&source).Error
 	if err == nil {
 		// 已存在，确保启用
 		if !source.Enabled {
@@ -275,10 +282,11 @@ func ensureWafAuditLogSource(db *gorm.DB, auditLogPath string, logger logx.Logge
 	}
 
 	newSource := ingestmodel.LogSource{
-		Name:    "WAF 审计日志",
-		Path:    path,
-		Type:    "caddy",
-		Enabled: true,
+		Name:     "WAF 审计日志",
+		Path:     path,
+		Type:     "caddy",
+		Enabled:  true,
+		ServerID: 0,
 	}
 	if createErr := db.Create(&newSource).Error; createErr != nil {
 		if logger != nil {

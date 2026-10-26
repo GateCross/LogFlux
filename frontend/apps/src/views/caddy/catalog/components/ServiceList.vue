@@ -23,6 +23,7 @@ import type { CaddyCertificateApi } from '#/api/caddy/certificate';
 
 import {
   siteCertDaysLeft,
+  siteMetricsForDomains,
   siteProtectBadge,
   sitePrimaryHost,
   type CatalogSiteCard,
@@ -105,9 +106,12 @@ function capabilityBadges(site: CatalogSiteCard) {
 
 /** 今日拦截原始值：> 0 时数值标红 */
 function blockedCount(site: CatalogSiteCard): number {
-  const host = sitePrimaryHost(site.domains);
-  if (!host) return 0;
-  return props.siteMetricsMap.get(host)?.blocked ?? 0;
+  return siteMetricsForDomains(props.siteMetricsMap, site.domains)?.blocked ?? 0;
+}
+
+/** 今日 5xx 原始值：> 0 说明上游异常，是比拦截更该被看见的信号 */
+function serverErrorCount(site: CatalogSiteCard): number {
+  return siteMetricsForDomains(props.siteMetricsMap, site.domains)?.count5xx ?? 0;
 }
 </script>
 
@@ -184,7 +188,6 @@ function blockedCount(site: CatalogSiteCard): number {
               <span class="site-name" :title="site.name">
                 {{ site.name || '未命名站点' }}
               </span>
-              <Tag v-if="!site.enabled" color="error">已停用</Tag>
               <div class="site-more" @click.stop>
                 <Dropdown
                   :trigger="['click']"
@@ -233,6 +236,12 @@ function blockedCount(site: CatalogSiteCard): number {
                 </span>
                 <span class="stat-label">今日拦截</span>
               </div>
+              <!-- 5xx 只在出现时显示：上游异常的强信号，常态不占版面 -->
+              <Tooltip v-if="serverErrorCount(site) > 0" title="近 24 小时站点返回 5xx 的次数，通常意味着上游不可用">
+                <Tag class="stat-alert" color="error">
+                  5xx {{ serverErrorCount(site) }}
+                </Tag>
+              </Tooltip>
             </div>
 
             <div
@@ -355,8 +364,15 @@ function blockedCount(site: CatalogSiteCard): number {
 
 .site-stats {
   display: flex;
-  gap: 24px;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  align-items: center;
   margin-top: 10px;
+}
+
+.stat-alert {
+  margin-inline-end: 0;
+  font-size: 11px;
 }
 
 .stat {

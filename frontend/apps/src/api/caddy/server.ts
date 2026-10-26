@@ -124,6 +124,10 @@ export namespace CaddyServerApi {
     remoteIp: string;
     clientIp: string;
     userAgent: string;
+    /** 日志级别；错误日志视图用于区分严重程度 */
+    level?: string;
+    /** logger 命名空间；错误日志视图用于定位来源模块 */
+    logger?: string;
     rawLog: string;
     /** WAF 审计元数据原始 JSON，用 parseWafLog 解析 */
     extraData?: string;
@@ -134,6 +138,8 @@ export namespace CaddyServerApi {
     endTime?: string;
     host?: string;
     keyword?: string;
+    /** 日志种类：access 只看访问日志，error 只看错误日志；不传则不过滤 */
+    logKind?: 'access' | 'error';
     order?: 'asc' | 'desc';
     page?: number;
     pageSize?: number;

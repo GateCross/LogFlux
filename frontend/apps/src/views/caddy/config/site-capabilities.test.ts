@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import {
   applyCapabilityToSiteBlock,
+  applySiteLogToSiteBlock,
   describeSiteCapabilities,
   extractSiteCapabilities,
   renderCapabilityLines,
 } from './site-capabilities';
+import type { SiteLogSettings } from './site-log-settings';
+import { DEFAULT_SITE_LOG_SETTINGS } from './site-log-settings';
 
 const PVE_SITE = `pve.example.com {
   import deny_403_redirect
@@ -223,5 +226,140 @@ describe('applyCapabilityToSiteBlock', () => {
 
   it('无块头的文本原样返回', () => {
     expect(applyCapabilityToSiteBlock('just text', 'waf', ['import waf_protect'])).toBe('just text');
+  });
+});
+
+const BLOCK_LOG_SITE = `myapp.example.com {
+  import subdomain-log {
+    name myapp
+    size 20
+    level ERROR
+  }
+  handle {
+    reverse_proxy localhost:3000
+  }
+}`;
+
+const TAB_SITE = `tab.example.com {
+\timport waf_protect
+\thandle {
+\t\treverse_proxy localhost:3000
+\t}
+}`;
+
+function makeLog(overrides: Partial<SiteLogSettings> = {}): SiteLogSettings {
+  return { ...DEFAULT_SITE_LOG_SETTINGS, ...overrides };
+}
+
+describe('accessLog 能力识别兼容块参数写法', () => {
+  it('带块参数的 import subdomain-log 识别为开启', () => {
+    expect(extractSiteCapabilities(BLOCK_LOG_SITE).accessLog.status).toBe('on');
+  });
+
+  it('旧单行写法仍识别为开启', () => {
+    expect(extractSiteCapabilities(LAN_SITE).accessLog.status).toBe('on');
+  });
+
+  it('块参数 import 不被误计入 otherImports', () => {
+    expect(extractSiteCapabilities(BLOCK_LOG_SITE).otherImports).toEqual([]);
+  });
+});
+
+describe('applySiteLogToSiteBlock', () => {
+  it('裸站点开日志：块头后插入四行参数块，其余字节不动', () => {
+    expect(applySiteLogToSiteBlock(BARE_SITE, makeLog(), 'plain')).toBe(
+      `plain.example.com {
+  import subdomain-log {
+    name plain
+    size 10
+    level INFO
+  }
+  handle {
+    reverse_proxy localhost:3000
+  }
+}`,
+    );
+  });
+
+  it('名字缺省时回落到块头域名前缀', () => {
+    const next = applySiteLogToSiteBlock(BARE_SITE, makeLog());
+    expect(next).toContain('    name plain\n');
+  });
+
+  it('仅记错误：level 写 ERROR', () => {
+    const next = applySiteLogToSiteBlock(BARE_SITE, makeLog({ access: false }), 'plain');
+    expect(next).toContain('    level ERROR\n');
+  });
+
+  it('两开关全关：清干净且不写任何行', () => {
+    const next = applySiteLogToSiteBlock(
+      BLOCK_LOG_SITE,
+      makeLog({ access: false, error: false }),
+    );
+    expect(next).not.toContain('subdomain-log');
+    // 整块 5 行（import 行 + 三个参数 + 闭括号）全部消失
+    expect(next.split('\n')).toHaveLength(BLOCK_LOG_SITE.split('\n').length - 5);
+    expect(next).toContain('    reverse_proxy localhost:3000');
+  });
+
+  it('旧的单行写法整行被新块替换，不留下两份配置', () => {
+    const next = applySiteLogToSiteBlock(LAN_SITE, makeLog(), 'local');
+    expect(next.match(/import subdomain-log/g)).toHaveLength(1);
+    expect(next).not.toContain('import subdomain-log local\n');
+    expect(next).toContain('    level INFO\n');
+  });
+
+  it('既有块写法只改设置：文件名沿用原参数', () => {
+    const next = applySiteLogToSiteBlock(BLOCK_LOG_SITE, makeLog({ sizeMb: 32 }));
+    expect(next).toContain('    name myapp\n');
+    expect(next).toContain('    size 32\n');
+    expect(next).toContain('    level INFO\n');
+    expect(next.match(/name myapp/g)).toHaveLength(1);
+  });
+
+  it('幂等：连续应用两次结果一致', () => {
+    const once = applySiteLogToSiteBlock(BARE_SITE, makeLog(), 'plain');
+    expect(applySiteLogToSiteBlock(once, makeLog(), 'plain')).toBe(once);
+  });
+
+  it('内容一致的重复应用返回原文本（字节级不变）', () => {
+    const once = applySiteLogToSiteBlock(BARE_SITE, makeLog(), 'plain');
+    const twice = applySiteLogToSiteBlock(once, makeLog(), 'plain');
+    expect(twice).toBe(once);
+  });
+
+  it('块写法插入后仍是 CRLF', () => {
+    const crlf = BARE_SITE.split('\n').join('\r\n');
+    const next = applySiteLogToSiteBlock(crlf, makeLog(), 'plain');
+    expect(next).toContain('  import subdomain-log {\r\n');
+    expect(next.split('\r\n')[2]).toBe('    name plain');
+    expect(next.includes('\r\n')).toBe(true);
+  });
+
+  it('tab 缩进站点沿用 Tab，不混入空格缩进', () => {
+    const next = applySiteLogToSiteBlock(TAB_SITE, makeLog(), 'tab');
+    expect(next).toContain('\timport subdomain-log {\n');
+    expect(next).toContain('\t\tname tab\n');
+    expect(next).not.toContain('  import subdomain-log');
+  });
+
+  it('保留块内注释与其它指令顺序', () => {
+    const withComment = `a.example.com {
+  # 保留这行注释
+  import waf_protect
+  handle {
+    reverse_proxy localhost:3000
+  }
+}`;
+    const next = applySiteLogToSiteBlock(withComment, makeLog(), 'a');
+    expect(next).toContain('  # 保留这行注释\n');
+    expect(next.indexOf('# 保留这行注释')).toBeLessThan(
+      next.indexOf('import waf_protect'),
+    );
+  });
+
+  it('无块头或空文本原样返回', () => {
+    expect(applySiteLogToSiteBlock('just text', makeLog(), 'x')).toBe('just text');
+    expect(applySiteLogToSiteBlock('', makeLog(), 'x')).toBe('');
   });
 });

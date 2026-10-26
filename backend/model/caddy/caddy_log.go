@@ -10,12 +10,20 @@ type CaddyLog struct {
 	UpdatedAt time.Time
 
 	// Parsed from [{ts}]
-	LogTime time.Time `gorm:"index:idx_log_time_status,priority:1;index:idx_log_time;not null"` // 复合索引和单独索引
+	// LogTime 同时参与 idx_host_log_time 的复合索引（priority:1），
+	// 缺了这一处声明，idx_host_log_time 会退化成只有 host 的单列索引。
+	LogTime time.Time `gorm:"index:idx_log_time_status,priority:1;index:idx_log_time;index:idx_host_log_time,priority:1;not null"`
 
 	// GeoIP fields
 	Country  string `gorm:"size:100;index"`
 	Province string `gorm:"size:100"`
 	City     string `gorm:"size:100"`
+
+	// 日志级别与 logger 命名空间，取自 Caddy JSON 的 level / logger 字段。
+	// 访问日志为 logger=http.log.access；错误日志来自其它命名空间（http.log、tls 等）。
+	// 这两个字段是「访问日志 / 错误日志分开查看」的唯一数据依据。
+	Level  string `gorm:"size:16;index:idx_level_log_time,priority:1"`
+	Logger string `gorm:"size:128;index:idx_logger_log_time,priority:1"`
 
 	// Request fields
 	Host   string `gorm:"size:255;index:idx_host_log_time,priority:2"` // Host 和 LogTime 复合索引
@@ -51,6 +59,10 @@ type CaddyLogArchive struct {
 	Country  string `gorm:"size:100;index"`
 	Province string `gorm:"size:100"`
 	City     string `gorm:"size:100"`
+
+	// 与 CaddyLog 保持同构，归档时不能丢字段
+	Level  string `gorm:"size:16;index"`
+	Logger string `gorm:"size:128;index"`
 
 	Host   string `gorm:"size:255;index"`
 	Method string `gorm:"size:10"`

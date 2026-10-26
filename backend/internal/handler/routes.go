@@ -271,6 +271,21 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				},
 				{
 					Method:  http.MethodGet,
+					Path:    "/caddy/log-snippet",
+					Handler: caddy.GetCaddyLogSnippetHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPut,
+					Path:    "/caddy/log-snippet",
+					Handler: caddy.UpdateCaddyLogSnippetHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/caddy/log-snippet/reset-default",
+					Handler: caddy.ResetCaddyLogSnippetHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
 					Path:    "/caddy/global-options",
 					Handler: caddy.GetCaddyGlobalOptionsHandler(serverCtx),
 				},

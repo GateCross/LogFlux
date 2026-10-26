@@ -26,10 +26,8 @@ import {
   buildSiteMetricsMap,
   collectCatalogHosts,
   formatMetricCount,
-  siteCertDaysLeft,
-  siteMetricsForHost,
+  siteMetricsForDomains,
   sitePrimaryHost,
-  siteProtectBadge,
   type CatalogSiteCard,
   type SiteMetricsMap,
 } from '../service-catalog-utils';
@@ -269,22 +267,12 @@ export function useServiceCatalogPage() {
   function todayDisplay(site: CatalogSiteCard, kind: 'total' | 'blocked') {
     if (loadingSiteMetrics.value && !siteMetricsLoaded.value) return '…';
     if (siteMetricsError.value) return '—';
-    const metrics = siteMetricsForHost(siteMetricsMap.value, site.domains);
+    const metrics = siteMetricsForDomains(siteMetricsMap.value, site.domains);
     if (!metrics) return '—';
     return formatMetricCount(kind === 'total' ? metrics.total : metrics.blocked);
   }
 
-  /** 卡片证书天数 chip：按域名匹配证书库存取最小剩余天数 */
-  function certDaysLeft(site: CatalogSiteCard) {
-    return siteCertDaysLeft(certList.value, site.domains);
-  }
-
-  /** 卡片防护模式徽章：站点挂载 × 全局 WAF 引擎状态 */
-  function protectBadge(site: CatalogSiteCard) {
-    return siteProtectBadge(site, wafStatus.value);
-  }
-
-  /** 打开站点详情整页（对齐雷池，替代原抽屉） */
+  /** 打开站点详情整页（对齐雷池，取代早期的抽屉形态） */
   function openSiteDetail(site: CatalogSiteCard) {
     if (!selectedServerId.value) return;
     const host = site.primaryHost || sitePrimaryHost(site.domains);
@@ -346,8 +334,6 @@ export function useServiceCatalogPage() {
     openAccessLogs,
     openSiteDetail,
     todayDisplay,
-    certDaysLeft,
-    protectBadge,
     setKeyword,
   };
 }
