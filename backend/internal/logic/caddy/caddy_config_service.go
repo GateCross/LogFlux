@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	caddymodel "logflux/model/caddy"
 	"regexp"
 	"strconv"
 	"strings"
@@ -910,16 +909,6 @@ func caddyRedirectCode(code int) string {
 	default:
 		return strconv.Itoa(code)
 	}
-}
-
-func caddyConfigFromServer(server *caddymodel.CaddyServer) (string, string) {
-	if server == nil {
-		return "", emptyModulesJSON
-	}
-	if strings.TrimSpace(server.Config) == "" {
-		return "", emptyModulesJSON
-	}
-	return server.Config, normalizeCaddyModulesJSON(server.Modules)
 }
 
 func resolveCaddyConfigModules(mode, requestModules string) string {

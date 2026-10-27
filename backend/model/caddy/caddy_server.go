@@ -10,11 +10,10 @@ import (
 // 0 同时是证书库存查询「全部服务器」的既有取值，两者一致。
 const LegacyServerID uint = 0
 
-// CaddyServer 仅保存 Caddy Admin API 的连接信息。
+// CaddyServer 只保存 Caddy Admin API 的连接信息，且永远只有一行。
 //
-// 单实例改造后配置不再存这里：Caddyfile 全文与 Modules 已迁到
-// system_configs 的 caddy_config 键（见 config_store.go），本表只作为
-// Admin API 地址与 Token 的载体，且永远只有一行。
+// 配置真值在 system_configs 的 caddy_config 键（见 config_store.go），不在这张表。
+// 本表由启动播种维护，不再有增删改入口。
 type CaddyServer struct {
 	ID        uint `gorm:"primarykey"`
 	CreatedAt time.Time
@@ -22,13 +21,12 @@ type CaddyServer struct {
 	Name      string `gorm:"uniqueIndex;not null"`
 	Url       string `gorm:"not null"`
 	Token     string
-	Type      string `gorm:"default:'local'"` // 历史列，恒为 local
-	Username  string
-	Password  string
-	// Config 与 Modules 为单实例改造前的配置存储列，仅作数据搬迁来源保留，
-	// 运行时不再读写；配置真值在 system_configs 的 caddy_config 键。
-	Config  string `gorm:"type:text"`
-	Modules string `gorm:"type:jsonb"`
+	// 以下列是单实例改造前的历史遗留，运行时不再读写，保留只为老库迁移不报错。
+	Type     string `gorm:"default:'local'"`
+	Username string
+	Password string
+	Config   string `gorm:"type:text"`
+	Modules  string `gorm:"type:jsonb"`
 }
 
 func (CaddyServer) TableName() string {

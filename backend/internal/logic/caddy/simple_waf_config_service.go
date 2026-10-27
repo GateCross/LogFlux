@@ -171,7 +171,7 @@ func (s *simpleWafConfigService) buildCandidate(req *types.SimpleWafConfigUpdate
 	}
 
 	// 站点选择来自用户意图，配置文本来自库内现状；两者都可能被并发改过。
-	if err := verifyBaseHash(s.svcCtx.DB.WithContext(s.ctx), req.BaseHash); err != nil {
+	if err := checkBaseHash(s.svcCtx.DB.WithContext(s.ctx), req.BaseHash); err != nil {
 		return nil, err
 	}
 

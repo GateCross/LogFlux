@@ -451,8 +451,34 @@ P4-0 ~ P4-4 全部落地，后端 `go build ./... && go vet ./... && go test ./.
 | `frontend type-contract.test.ts`（改写） | 去掉 server/status 类型，改为配置历史与配置模型 |
 | `frontend certificate-utils.test.ts`（改写） | 去掉 `isLocalServer` 与按 serverId 过滤 |
 
-### 13.6 仍未做
+### 13.6 清理轮（同日，ponytail 复查）
+
+首轮提交后按 ponytail 复查，清掉改造留下的死代码：
+
+| 位置 | 删除内容 | 依据 |
+|---|---|---|
+| `logic/caddy/caddy_config_service.go` | `caddyConfigFromServer` | 改造后无人调用，只剩它自己读 `server.Config/Modules` |
+| `logic/caddy/caddy_config_source.go` | `loadCaddyConfigValue` | 与 `loadCurrentCaddyConfig` 重复，直接内联 |
+| `logic/caddy/caddy_config_apply_service.go` | `verifyBaseHash` | 只是 `checkBaseHash` 的同义包装，调用点改用原名 |
+| `logic/caddy/caddy_config_service_test.go` | `caddyConfigJSONFor` | 与 `caddyConfigJSON` 重复，合并成一个 |
+| `svc/service_context.go` | 播种时不再写 `Type`/`Modules` 的注释误导 | 见下 |
+
+**一次回退**：曾试图连 `Type`/`Modules` 一起从播种里删掉，但
+`Modules` 是 jsonb 列，空串写入 Postgres 会直接报错（`TestEnsureDefaultCaddyServerSeedsLocalNodeWhenEmpty` 当场失败），
+`Type` 又参与 `findPreferredCaddyServer` 的 local 优先查询。两列都保留，并补了注释说明原因。
+
+**Jev 复核结论**（三项都问了，置信度是「值得做」的概率）：
+
+| 问题 | 值得做 | 处置 |
+|---|---|---|
+| 现在 DROP `caddy_servers` 表 | 0.17 | 不做。方案本来就说留一轮，删表不可回滚 |
+| 保留 `/caddy/server/:serverId/config` 兼容别名 | 0.28 | 不做。仓库内无外部调用方证据 |
+| 把 Admin 地址硬编码、删掉整条读表链路 | 0.56 | 不做。读表只多一次查询，换来的是地址可换（如改 admin 端口），删了反而把可配置性焊死 |
+
+### 13.7 仍未做
 
 - `caddy_servers` 表的 DROP（按方案留待下一轮）
 - 老路径 `/caddy/server/:id/config` 的兼容别名（方案第 12 节第 3 条待确认；当前按「直接删」执行）
+- `simpleWafCandidate` 的 `LastGood` / `LastModules` / `CaddyChanged` 三个字段无消费方（改造前就这样，非本次引入）
+
 

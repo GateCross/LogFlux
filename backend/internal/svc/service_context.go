@@ -304,15 +304,15 @@ const (
 	systemConfigKeyNodeSeeded = "caddy_node_seeded"
 )
 
-// ensureDefaultCaddyServer 首次启动时播种一个 local 节点，
-// 让新部署不必先手动填 http://localhost:2019 才能用。
+// ensureDefaultCaddyServer 首次启动时播种唯一的 Admin API 连接行，
+// 让新部署不必先手动填地址才能用。
 //
-// 用 system_configs 的标记键保证只播种一次：用户主动删光节点后重启不会被重建。
+// 用 system_configs 的标记键保证只播种一次：用户删掉后重启不会被重建。
 func ensureDefaultCaddyServer(db *gorm2.DB) {
 	if db == nil {
 		return
 	}
-	// 标记键存在 = 已播种过（或用户已删光），一律不再处理
+	// 标记键存在 = 已播种过（或用户已删除），一律不再处理
 	var marker systemmodel.SystemConfig
 	if err := db.Where("key = ?", systemConfigKeyNodeSeeded).First(&marker).Error; err == nil {
 		return
@@ -320,22 +320,24 @@ func ensureDefaultCaddyServer(db *gorm2.DB) {
 
 	var count int64
 	if err := db.Model(&caddymodel.CaddyServer{}).Count(&count).Error; err != nil {
-		logx.Errorf("统计 Caddy 节点数量失败: %v", err)
+		logx.Errorf("统计 Caddy 连接行数量失败: %v", err)
 		return
 	}
 
 	if count == 0 {
 		server := &caddymodel.CaddyServer{
-			Name:    defaultCaddyServerName,
-			Url:     defaultCaddyServerURL,
+			Name: defaultCaddyServerName,
+			Url:  defaultCaddyServerURL,
+			// Type 参与 findPreferredCaddyServer 的 local 优先查询；
+			// Modules 是 jsonb 列，空串写入 Postgres 会报错，必须写 "{}"。
 			Type:    "local",
-			Modules: "{}", // jsonb 列，空串写入 Postgres 会报错
+			Modules: "{}",
 		}
 		if err := db.Create(server).Error; err != nil {
-			logx.Errorf("创建默认 Caddy 节点失败: %v", err)
+			logx.Errorf("创建默认 Caddy 连接行失败: %v", err)
 			return
 		}
-		logx.Infof("已创建默认 Caddy 节点: %s (%s)", defaultCaddyServerName, defaultCaddyServerURL)
+		logx.Infof("已创建默认 Caddy 连接行: %s (%s)", defaultCaddyServerName, defaultCaddyServerURL)
 	}
 
 	// 无论是否插入都写标记：删光节点后重启不重建

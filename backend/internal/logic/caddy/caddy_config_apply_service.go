@@ -52,11 +52,6 @@ func checkBaseHash(db *gorm.DB, baseHash string) error {
 	return nil
 }
 
-// verifyBaseHash 从库里重新取一份最新配置再校验，避免用请求上下文里的旧快照判断。
-func verifyBaseHash(db *gorm.DB, baseHash string) error {
-	return checkBaseHash(db, baseHash)
-}
-
 // configWriteOptions 表达一次配置写入的全部差异，供三条写路径共用同一套语义。
 type configWriteOptions struct {
 	// history 表 action 名，必填。

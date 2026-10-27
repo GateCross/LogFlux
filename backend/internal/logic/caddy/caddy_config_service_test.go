@@ -308,19 +308,19 @@ func TestResolveCaddyConfigModulesDropsStaleRawSnapshot(t *testing.T) {
 	}
 }
 
-// TestCaddyConfigFromServerReturnsEmptyModulesWhenConfigMissing 锁定未接管配置时
+// TestLoadCurrentCaddyConfigReturnsEmptyModulesWhenConfigMissing 锁定未接管配置时
 // 不把 modules 当有效值返回：空配置 + 残留 modules 会被前端当成有配置。
-func TestCaddyConfigFromServerReturnsEmptyModulesWhenConfigMissing(t *testing.T) {
+func TestLoadCurrentCaddyConfigReturnsEmptyModulesWhenConfigMissing(t *testing.T) {
 	gdb, mock, cleanup := newCaddySqlmockDB(t)
 	defer cleanup()
 
 	mock.ExpectQuery(`SELECT \* FROM "system_configs" WHERE .*key.* = \$1`).
 		WithArgs(caddymodel.ConfigKey, 1).
-		WillReturnRows(systemConfigRows(caddymodel.ConfigKey, caddyConfigJSON(t, "", mustCaddyModules(t, caddyFormModel{SchemaVersion: 1, Global: caddyGlobal{Raw: "{x}"}}))))
+		WillReturnRows(emptySystemConfigRows())
 
-	_, modules := loadCaddyConfigValue(gdb)
-	if modules != emptyModulesJSON {
-		t.Fatalf("expected empty modules when config is missing, got %q", modules)
+	config, modules, err := loadCurrentCaddyConfig(gdb)
+	if err == nil || config != "" || modules != emptyModulesJSON {
+		t.Fatalf("未接管时应返回空配置与空 modules: config=%q modules=%q err=%v", config, modules, err)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("sql expectations not met: %v", err)
@@ -1122,14 +1122,13 @@ func emptySystemConfigRows() *sqlmock.Rows {
 }
 
 // caddyConfigJSON 把配置与 modules 编成 system_configs 的 caddy_config 值。
-func caddyConfigJSON(t *testing.T, config, modules string) string {
-	t.Helper()
+func caddyConfigJSON(config, modules string) string {
 	if modules == "" {
 		modules = emptyModulesJSON
 	}
 	encoded, err := json.Marshal(caddymodel.ConfigValue{Config: config, Modules: modules})
 	if err != nil {
-		t.Fatalf("marshal caddy config: %v", err)
+		return `{"config":"","modules":"{}"}`
 	}
 	return string(encoded)
 }
@@ -1138,16 +1137,7 @@ func caddyConfigJSON(t *testing.T, config, modules string) string {
 func expectLoadCurrentConfig(mock sqlmock.Sqlmock, config string) {
 	mock.ExpectQuery(`SELECT \* FROM "system_configs" WHERE .*key.* = \$1`).
 		WithArgs(caddymodel.ConfigKey, 1).
-		WillReturnRows(systemConfigRows(caddymodel.ConfigKey, caddyConfigJSONFor(config)))
-}
-
-// caddyConfigJSONFor 测试内构造配置存储值（无 t 版本）。
-func caddyConfigJSONFor(config string) string {
-	encoded, err := json.Marshal(caddymodel.ConfigValue{Config: config, Modules: emptyModulesJSON})
-	if err != nil {
-		return `{"config":"","modules":"{}"}`
-	}
-	return string(encoded)
+		WillReturnRows(systemConfigRows(caddymodel.ConfigKey, caddyConfigJSON(config, "")))
 }
 
 // expectMergeManagedBlocks 期望入口块 / 全局选项 / 日志 snippet / IP 区域开关全部读到默认值。

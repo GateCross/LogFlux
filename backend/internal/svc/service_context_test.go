@@ -61,7 +61,7 @@ func TestEnsureDefaultCaddyServerWritesMarkerOnlyWhenNodesExist(t *testing.T) {
 	}
 }
 
-// 空库：插入一条 local 节点（modules 必须是 "{}"），再写标记。
+// 空库：插入一条 Admin API 连接行，再写标记。
 func TestEnsureDefaultCaddyServerSeedsLocalNodeWhenEmpty(t *testing.T) {
 	db, mock, cleanup := newSvcMockDB(t)
 	defer cleanup()
@@ -100,7 +100,7 @@ func TestEnsureDefaultCaddyServerSeedsLocalNodeWhenEmpty(t *testing.T) {
 	ensureDefaultCaddyServer(db)
 
 	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Fatalf("空库应插入节点并写标记: %v", err)
+		t.Fatalf("空库应插入连接行并写标记: %v", err)
 	}
 }
 
