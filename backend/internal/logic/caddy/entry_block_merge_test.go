@@ -112,7 +112,7 @@ func systemConfigsEmptyRows() *sqlmock.Rows {
 // 走 mergeManagedBlocks 而非纯 mergeCaddyManagedBlocks：waf_protect 由前者补，
 // 纯函数版本只做合并，拿不到这层保证。
 func TestMergeManagedBlocksNoDanglingImports(t *testing.T) {
-	db, mock, cleanup := newStatusProbeMockDB(t)
+	db, mock, cleanup := newCaddySqlmockDB(t)
 	defer cleanup()
 
 	// 入口块模板、全局选项、ip_region 开关、日志 snippet 各读一次 system_configs，
@@ -187,7 +187,7 @@ func TestRemoveCaddyDirectiveLine(t *testing.T) {
 // geo_auth 跟随 ip_region 开关：关闭时既无 import 也无定义，开启时两者都在。
 func TestMergeManagedBlocksGeoAuthFollowsIPRegionSwitch(t *testing.T) {
 	t.Run("ip_region 关闭", func(t *testing.T) {
-		db, mock, cleanup := newStatusProbeMockDB(t)
+		db, mock, cleanup := newCaddySqlmockDB(t)
 		defer cleanup()
 		mock.ExpectQuery(`SELECT \* FROM "system_configs"`).WillReturnRows(systemConfigsEmptyRows())
 		mock.ExpectQuery(`SELECT \* FROM "system_configs"`).WillReturnRows(systemConfigsEmptyRows())
@@ -208,7 +208,7 @@ func TestMergeManagedBlocksGeoAuthFollowsIPRegionSwitch(t *testing.T) {
 	})
 
 	t.Run("ip_region 开启", func(t *testing.T) {
-		db, mock, cleanup := newStatusProbeMockDB(t)
+		db, mock, cleanup := newCaddySqlmockDB(t)
 		defer cleanup()
 		// 入口块模板、全局选项、日志 snippet 走默认值，只有 ip_region 有值。
 		ipRegionRows := func() *sqlmock.Rows {

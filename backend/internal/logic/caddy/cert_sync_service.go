@@ -53,30 +53,14 @@ func NewCertSyncService(ctx context.Context, svcCtx *svc.ServiceContext) *CertSy
 	}
 }
 
-// Sync 同步证书库存；serverID 为 0 时同步全部服务器。
-// 同步即结算：卷里消失的本机证书下架，远端仅保留声明行。
-func (s *CertSyncService) Sync(serverID uint) error {
+// Sync 同步证书库存（单实例：只有唯一一份库存）。
+// 同步即结算：卷里消失的证书下架，只有 Caddyfile 声明的行保留为 pending。
+func (s *CertSyncService) Sync() error {
 	if s == nil || s.svcCtx == nil {
 		return xerr.NewSystemErrorWith("证书同步服务未初始化")
 	}
 
-	db := s.svcCtx.DB.WithContext(s.ctx)
-	query := db
-	if serverID > 0 {
-		query = db.Where("id = ?", serverID)
-	}
-	var servers []caddymodel.CaddyServer
-	if err := query.Order("id asc").Find(&servers).Error; err != nil {
-		return xerr.NewSystemErrorWith(fmt.Sprintf("查询 Caddy 服务器失败: %v", err))
-	}
-
-	certDir := s.certStorageDir()
-	for i := range servers {
-		if err := s.syncServer(&servers[i], certDir); err != nil {
-			return err
-		}
-	}
-	return nil
+	return s.syncInventory(s.certStorageDir())
 }
 
 func (s *CertSyncService) certStorageDir() string {
@@ -86,28 +70,27 @@ func (s *CertSyncService) certStorageDir() string {
 	return config.DefaultCaddyCertStorageDir
 }
 
-func (s *CertSyncService) syncServer(server *caddymodel.CaddyServer, certDir string) error {
-	declared, err := extractDeclaredCerts(server.Config)
+// syncInventory 结算一次证书库存：卷扫描（真值）+ Caddyfile 声明（应有清单）。
+func (s *CertSyncService) syncInventory(certDir string) error {
+	currentConfig, _, _ := loadCurrentCaddyConfig(s.svcCtx.DB)
+	declared, err := extractDeclaredCerts(currentConfig)
 	if err != nil {
-		// 声明解析失败时跳过该服务器并保留既有库存，待配置修复后下次同步恢复
-		s.logger.Errorf("[证书中心] 解析 Caddyfile 声明失败，跳过该服务器: server=%s err=%v", server.Name, err)
+		// 声明解析失败时跳过同步并保留既有库存，待配置修复后下次同步恢复
+		s.logger.Errorf("[证书中心] 解析 Caddyfile 声明失败，跳过本次同步: err=%v", err)
 		return nil
 	}
 
-	var scanned []scannedCertInfo
-	// 只有本机服务器与后端同容器同卷，可扫描证书目录；remote 无文件通道
-	if strings.TrimSpace(server.Type) != "remote" {
-		scanned, err = scanLocalCertificates(certDir)
-		if err != nil {
-			return xerr.NewSystemErrorWith(fmt.Sprintf("扫描证书目录失败: %s err=%v", certDir, err))
-		}
+	// 单实例：证书目录与后端同容器同卷，恒可扫描
+	scanned, err := scanLocalCertificates(certDir)
+	if err != nil {
+		return xerr.NewSystemErrorWith(fmt.Sprintf("扫描证书目录失败: %s err=%v", certDir, err))
 	}
 
 	model := s.svcCtx.CertificateModel
 	if model == nil {
 		return xerr.NewSystemErrorWith("证书模型未初始化")
 	}
-	existing, err := model.List(s.ctx, caddymodel.CertificateQuery{ServerID: server.ID})
+	existing, err := model.List(s.ctx, caddymodel.CertificateQuery{ServerID: caddymodel.LegacyServerID})
 	if err != nil {
 		return xerr.NewSystemErrorWith(fmt.Sprintf("查询证书库存失败: %v", err))
 	}
@@ -132,19 +115,18 @@ func (s *CertSyncService) syncServer(server *caddymodel.CaddyServer, certDir str
 		case os.IsNotExist(statErr):
 			deleteIDs = append(deleteIDs, row.ID)
 		default:
-			s.logger.Errorf("[证书中心] 检查上传证书文件状态失败，保留库存待下次同步: server=%s path=%s err=%v", server.Name, row.StoragePath, statErr)
+			s.logger.Errorf("[证书中心] 检查上传证书文件状态失败，保留库存待下次同步: path=%s err=%v", row.StoragePath, statErr)
 			aliveUploads = append(aliveUploads, row)
 		}
 	}
 
 	merged := mergeCertInventory(certMergeInput{
-		ServerID:   server.ID,
-		ServerType: server.Type,
-		Declared:   declared,
-		Scanned:    scanned,
-		Uploads:    aliveUploads,
-		Existing:   existing,
-		Now:        time.Now(),
+		ServerID: caddymodel.LegacyServerID,
+		Declared: declared,
+		Scanned:  scanned,
+		Uploads:  aliveUploads,
+		Existing: existing,
+		Now:      time.Now(),
 	})
 	deleteIDs = append(deleteIDs, merged.DeleteIDs...)
 
@@ -152,14 +134,14 @@ func (s *CertSyncService) syncServer(server *caddymodel.CaddyServer, certDir str
 		if err := model.DeleteByIDs(s.ctx, deleteIDs); err != nil {
 			return xerr.NewSystemErrorWith(fmt.Sprintf("下架证书失败: %v", err))
 		}
-		s.logger.Infof("[证书中心] 已下架证书 %d 张: server=%s", len(deleteIDs), server.Name)
+		s.logger.Infof("[证书中心] 已下架证书 %d 张", len(deleteIDs))
 	}
 	if len(merged.Upserts) > 0 {
 		if err := model.UpsertBatch(s.ctx, merged.Upserts); err != nil {
 			return xerr.NewSystemErrorWith(fmt.Sprintf("写入证书库存失败: %v", err))
 		}
 	}
-	s.notifyCertState(server, merged.Upserts)
+	s.notifyCertState(merged.Upserts)
 	return nil
 }
 
@@ -170,7 +152,7 @@ func (s *CertSyncService) syncServer(server *caddymodel.CaddyServer, certDir str
 // 同一张证书按「状态:级别:到期时间戳」去重（LastNotifiedKey）：每日同步与
 // 手动刷新重复触发时已通知过的组合不再重发，直接匹配渠道因此绕不开的规则静默期
 // 在这里补上门槛；状态跃迁（临期→过期）或证书续期（到期时间变化）换键后恢复提醒。
-func (s *CertSyncService) notifyCertState(server *caddymodel.CaddyServer, rows []*caddymodel.Certificate) {
+func (s *CertSyncService) notifyCertState(rows []*caddymodel.Certificate) {
 	mgr := s.svcCtx.NotificationMgr
 	if mgr == nil || len(rows) == 0 {
 		return
@@ -191,21 +173,21 @@ func (s *CertSyncService) notifyCertState(server *caddymodel.CaddyServer, rows [
 				notification.EventCertExpired,
 				notification.LevelCritical,
 				"证书已过期",
-				fmt.Sprintf("证书 %s（服务器: %s）已过期，请尽快更换", row.PrimaryDomain, server.Name),
+				fmt.Sprintf("证书 %s 已过期，请尽快更换", row.PrimaryDomain),
 			)
 		case daysLeft <= 1:
 			event = notification.NewEvent(
 				notification.EventCertExpiring,
 				notification.LevelCritical,
 				"证书即将到期",
-				fmt.Sprintf("证书 %s（服务器: %s）明天到期，请尽快更换", row.PrimaryDomain, server.Name),
+				fmt.Sprintf("证书 %s 明天到期，请尽快更换", row.PrimaryDomain),
 			)
 		default:
 			event = notification.NewEvent(
 				notification.EventCertExpiring,
 				notification.LevelWarning,
 				"证书即将到期",
-				fmt.Sprintf("证书 %s（服务器: %s）距到期还有 %d 天", row.PrimaryDomain, server.Name, daysLeft),
+				fmt.Sprintf("证书 %s 距到期还有 %d 天", row.PrimaryDomain, daysLeft),
 			)
 		}
 
@@ -215,8 +197,7 @@ func (s *CertSyncService) notifyCertState(server *caddymodel.CaddyServer, rows [
 		}
 		event.WithDataMap(map[string]interface{}{
 			"domain":   row.PrimaryDomain,
-			"serverId": server.ID,
-			"server":   server.Name,
+			"serverId": caddymodel.LegacyServerID,
 			"daysLeft": daysLeft,
 			"status":   status,
 		})
@@ -565,13 +546,12 @@ type scannedCertInfo struct {
 
 // certMergeInput 双源合并的输入；Uploads 只含文件仍在盘上的上传行。
 type certMergeInput struct {
-	ServerID   uint
-	ServerType string
-	Declared   []declaredCertInfo
-	Scanned    []scannedCertInfo
-	Uploads    []caddymodel.Certificate
-	Existing   []caddymodel.Certificate
-	Now        time.Time
+	ServerID uint
+	Declared []declaredCertInfo
+	Scanned  []scannedCertInfo
+	Uploads  []caddymodel.Certificate
+	Existing []caddymodel.Certificate
+	Now      time.Time
 }
 
 type certMergeResult struct {
@@ -582,11 +562,10 @@ type certMergeResult struct {
 // mergeCertInventory 按 (serverID, 主域名) 合并三路输入为库存行集合：
 //
 // 优先级 上传行 > 卷扫描真值 > Caddyfile 声明；
-// 声明行在 local 服务器无扫描命中时为 missing，remote 服务器恒为 pending（零值有效期）；
+// 声明行在无扫描命中时为 missing（本机声明了 HTTPS 但卷里没有文件）；
 // 扫描/上传行按实际有效期计算 status；既有非上传行若不再出现于合并结果则下架。
 // 声明域名与证书 SAN 求交匹配（apex 与 www 混用也能对上），主域名以声明侧为准。
 func mergeCertInventory(input certMergeInput) certMergeResult {
-	isLocal := strings.TrimSpace(input.ServerType) != "remote"
 	now := input.Now
 	rows := make(map[string]*caddymodel.Certificate)
 	order := make([]string, 0)
@@ -610,7 +589,7 @@ func mergeCertInventory(input certMergeInput) certMergeResult {
 			PrimaryDomain: decl.PrimaryDomain,
 			Domains:       strings.Join(decl.Domains, ","),
 			Source:        decl.Source,
-			Status:        certDeclaredStatus(isLocal),
+			Status:        certDeclaredStatus(),
 		}
 		if hit := matchScanned(scannedByDomain, decl.Domains, usedScanned); hit != nil {
 			fillRowFromScanned(row, hit)
@@ -725,11 +704,10 @@ func mergeCertInventory(input certMergeInput) certMergeResult {
 	return result
 }
 
-func certDeclaredStatus(isLocal bool) string {
-	if isLocal {
-		return caddymodel.CertStatusMissing
-	}
-	return caddymodel.CertStatusPending
+// certDeclaredStatus 只有声明没有真值时的状态：单实例下证书卷就在本机，
+// 探不到文件即为 missing（而不是待确认）。
+func certDeclaredStatus() string {
+	return caddymodel.CertStatusMissing
 }
 
 func indexScannedByDomain(scanned []scannedCertInfo) map[string]*scannedCertInfo {
@@ -872,9 +850,12 @@ func scanCertFile(root, path string) (*scannedCertInfo, error) {
 	}, nil
 }
 
-// certUploadDir 上传证书的落盘目录：/config/certs/<serverID>/<主域名>。
-func certUploadDir(serverID uint, primaryDomain string) string {
-	return filepath.Join(certUploadBaseDir, fmt.Sprintf("%d", serverID), certStorageDirName(primaryDomain))
+// certUploadDir 上传证书的落盘目录：/config/certs/<主域名>。
+//
+// 单实例不再按节点分目录，存量 /config/certs/<serverID>/<域名>/ 里的文件
+// 由证书库存的 StoragePath 定位，仍可正常删除。
+func certUploadDir(primaryDomain string) string {
+	return filepath.Join(certUploadBaseDir, certStorageDirName(primaryDomain))
 }
 
 // certStorageDirName 域名转目录名，剔除路径分隔符与通配符等危险字符。
@@ -889,14 +870,11 @@ func certStorageDirName(domain string) string {
 	return cleaned
 }
 
-// resolveLocalCertServer 解析上传目标服务器；仅本机服务器有文件通道。
-func resolveLocalCertServer(db *gorm.DB, serverID uint) (*caddymodel.CaddyServer, error) {
-	server, err := findPreferredCaddyServer(db, serverID)
+// resolveLocalCertServer 返回上传证书的落点（唯一实例，恒为本机）。
+func resolveLocalCertServer(db *gorm.DB) (*caddymodel.CaddyServer, error) {
+	server, err := findPreferredCaddyServer(db)
 	if err != nil {
 		return nil, xerr.NewBusinessErrorWith(err.Error())
-	}
-	if strings.TrimSpace(server.Type) == "remote" {
-		return nil, xerr.NewBusinessErrorWith("远端服务器不支持上传证书，请选择本机服务器")
 	}
 	return server, nil
 }

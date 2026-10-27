@@ -1,6 +1,6 @@
 /** 配置加载/预览/保存与 Blocks/Raw 草稿 */
 
-import { computed, reactive, ref, type Ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
 import { message } from 'antdv-next';
 import { useQueryClient } from '@tanstack/vue-query';
 
@@ -97,7 +97,6 @@ export const lbPolicyOptions = [
 ];
 
 export interface UseCaddyConfigIOOptions {
-  selectedServerId: Ref<number | undefined>;
   /** 服务目录等入口深链 mode */
   resolveRouteMode?: () => CaddyPageMode | undefined;
   /** 切换/加载配置时重置站点指标缓存 */
@@ -107,7 +106,7 @@ export interface UseCaddyConfigIOOptions {
 }
 
 export function useCaddyConfigIO(options: UseCaddyConfigIOOptions) {
-  const { selectedServerId, resolveRouteMode, onConfigReset, onConfigReady } = options;
+  const { resolveRouteMode, onConfigReset, onConfigReady } = options;
   const queryClient = useQueryClient();
 
   const loadingConfig = ref(false);
@@ -313,22 +312,16 @@ export function useCaddyConfigIO(options: UseCaddyConfigIOOptions) {
   }
 
   async function fetchConfig() {
-    const serverId = selectedServerId.value;
-    if (!serverId) return;
     const requestVersion = ++configRequestVersion;
     configErrorMessage.value = null;
     loadingConfig.value = true;
     try {
       const data = await queryClient.fetchQuery({
-        queryKey: qk.caddy.config(serverId),
-        queryFn: () =>
-          getCaddyConfigApi(serverId, withListDetailErrorMode()),
+        queryKey: qk.caddy.config(),
+        queryFn: () => getCaddyConfigApi(withListDetailErrorMode()),
       });
-      // 服务器已经切换或有更新的加载请求时，丢弃过期响应。
-      if (
-        requestVersion !== configRequestVersion ||
-        selectedServerId.value !== serverId
-      ) {
+      // 有更新的加载请求时丢弃过期响应。
+      if (requestVersion !== configRequestVersion) {
         return;
       }
       // 远程权威快照 → seed 本地草稿（configContent / formModel / quickSiteDrafts）
@@ -372,10 +365,7 @@ export function useCaddyConfigIO(options: UseCaddyConfigIOOptions) {
       applyRouteModeDeepLink();
       onConfigReady?.();
     } catch (error) {
-      if (
-        requestVersion === configRequestVersion &&
-        selectedServerId.value === serverId
-      ) {
+      if (requestVersion === configRequestVersion) {
         // 页内 Alert 展示错误
         configErrorMessage.value = apiErrorMessage(error, '获取配置失败');
       }
@@ -629,11 +619,6 @@ export function useCaddyConfigIO(options: UseCaddyConfigIOOptions) {
   }
 
   async function previewBeforeSave(kind: SavePreviewKind) {
-    if (!selectedServerId.value) {
-      message.warning('请先选择 Caddy 服务器');
-      return;
-    }
-
     const config = kind === 'raw' ? configContent.value : generatedConfig.value;
     const modules =
       kind === 'blocks'
@@ -653,7 +638,7 @@ export function useCaddyConfigIO(options: UseCaddyConfigIOOptions) {
 
     previewing.value = true;
     try {
-      const preview = await previewCaddyConfigApi(selectedServerId.value, {
+      const preview = await previewCaddyConfigApi({
         baseHash: configHash.value || undefined,
         config,
         mode: kind === 'blocks' ? 'quick' : 'raw',
@@ -680,11 +665,11 @@ export function useCaddyConfigIO(options: UseCaddyConfigIOOptions) {
   }
 
   /** 写完配置后同步哈希；失败不阻断主流程，下次读取会自动刷新。 */
-  async function refreshConfigHash(serverId: number) {
+  async function refreshConfigHash() {
     try {
       const data = await queryClient.fetchQuery({
-        queryKey: qk.caddy.config(serverId),
-        queryFn: () => getCaddyConfigApi(serverId, withListDetailErrorMode()),
+        queryKey: qk.caddy.config(),
+        queryFn: () => getCaddyConfigApi(withListDetailErrorMode()),
       });
       configHash.value = data?.hash ?? '';
     } catch {
@@ -693,13 +678,10 @@ export function useCaddyConfigIO(options: UseCaddyConfigIOOptions) {
   }
 
   async function confirmSave() {
-    if (!selectedServerId.value) return;
     saving.value = true;
     try {
       const content = savePreview.config || savePreview.original;
-      const serverId = selectedServerId.value;
       await pushCaddyConfigApi(
-        serverId,
         content,
         savePreview.kind === 'blocks' ? savePreview.modules : undefined,
         configHash.value || undefined,
@@ -707,14 +689,14 @@ export function useCaddyConfigIO(options: UseCaddyConfigIOOptions) {
       message.success('配置已保存并自动热重载 Caddy');
       // 前缀匹配：config（含 simple-waf）、history、catalog、metrics
       await invalidateListDetailQueryKeys(queryClient, [
-        qk.caddy.config(serverId),
-        ['caddy', 'history', serverId],
-        qk.caddy.catalog(serverId),
-        ['caddy', 'metrics', serverId],
+        qk.caddy.config(),
+        ['caddy', 'history'],
+        qk.caddy.catalog(),
+        ['caddy', 'metrics'],
       ]);
       configContent.value = content;
       // 写入成功后必须重新取哈希，否则下一次保存会拿旧哈希一直报冲突。
-      await refreshConfigHash(serverId);
+      await refreshConfigHash();
       if (savePreview.kind === 'blocks' && savePreview.modules) {
         loadModules(savePreview.modules);
         lastEditMode.value = 'blocks';

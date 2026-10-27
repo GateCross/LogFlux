@@ -23,15 +23,10 @@ func NewRefreshCertificatesLogic(ctx context.Context, svcCtx *svc.ServiceContext
 	}
 }
 
-// RefreshCertificates 手动触发一次双源同步；serverId 为 0 时同步全部服务器。
-func (l *RefreshCertificatesLogic) RefreshCertificates(req *types.CertificateRefreshReq) (resp *types.BaseResp, err error) {
-	serverID := uint(0)
-	if req != nil {
-		serverID = req.ServerId
-	}
-
+// RefreshCertificates 手动触发一次双源同步；单实例下只有一份库存。
+func (l *RefreshCertificatesLogic) RefreshCertificates() (resp *types.BaseResp, err error) {
 	service := NewCertSyncService(l.ctx, l.svcCtx)
-	if err := service.Sync(serverID); err != nil {
+	if err := service.Sync(); err != nil {
 		return nil, err
 	}
 	return &types.BaseResp{Code: 0, Msg: "刷新完成"}, nil

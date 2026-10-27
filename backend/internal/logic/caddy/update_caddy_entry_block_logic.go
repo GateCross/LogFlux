@@ -30,16 +30,16 @@ func NewUpdateCaddyEntryBlockLogic(ctx context.Context, svcCtx *svc.ServiceConte
 
 // UpdateCaddyEntryBlock 保存入口块模板；只落库不触发 Apply，整体应用时统一合并。
 //
-// syncFromConfig 为 true 时忽略请求体 raw，改从当前 server.Config 提取 :80 块
+// syncFromConfig 为 true 时忽略请求体 raw，改从当前生效配置提取 :80 块
 // 存为模板——用于用户在配置编辑器里改好入口块后"同步为模板"。
 func (l *UpdateCaddyEntryBlockLogic) UpdateCaddyEntryBlock(req *types.CaddyEntryBlockUpdateReq) (resp *types.CaddyEntryBlockResp, err error) {
 	var raw string
 	if req.SyncFromConfig {
-		server, err := findPreferredCaddyServer(l.svcCtx.DB.WithContext(l.ctx), 0)
+		current, _, err := loadCurrentCaddyConfig(l.svcCtx.DB.WithContext(l.ctx))
 		if err != nil {
 			return nil, err
 		}
-		extracted, err := extractCaddyEntryBlock(server.Config)
+		extracted, err := extractCaddyEntryBlock(current)
 		if err != nil {
 			return nil, err
 		}

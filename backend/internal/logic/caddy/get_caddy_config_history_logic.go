@@ -24,11 +24,12 @@ func NewGetCaddyConfigHistoryLogic(ctx context.Context, svcCtx *svc.ServiceConte
 	}
 }
 
+// GetCaddyConfigHistory 返回唯一的配置历史；server_id 列保留但恒为 0，不再参与过滤。
 func (l *GetCaddyConfigHistoryLogic) GetCaddyConfigHistory(req *types.CaddyConfigHistoryListReq) (resp *types.CaddyConfigHistoryListResp, err error) {
 	var history []caddymodel.CaddyConfigHistory
 	var total int64
 
-	db := l.svcCtx.DB.WithContext(l.ctx).Model(&caddymodel.CaddyConfigHistory{}).Where("server_id = ?", req.ServerId)
+	db := l.svcCtx.DB.WithContext(l.ctx).Model(&caddymodel.CaddyConfigHistory{})
 
 	if err := db.Count(&total).Error; err != nil {
 		return nil, err

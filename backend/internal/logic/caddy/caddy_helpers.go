@@ -185,11 +185,10 @@ func syncCaddyLogSources(svcCtx *svc.ServiceContext, server *caddymodel.CaddySer
 	}
 
 	var autoSources []ingestmodel.LogSource
-	// 只处理本节点自己的自动源：多节点部署时全局扫描会把别的节点
-	// 正在使用的日志源一并禁用，导致对方日志时断时续。
+	// 只处理自动源：手工注册的源归用户维护，不随配置扫描被禁用。
 	svcCtx.DB.Where(
 		"type = ? AND name LIKE ? AND server_id = ?",
-		"caddy", "Caddy Auto:%", server.ID,
+		"caddy", "Caddy Auto:%", caddymodel.LegacyServerID,
 	).Find(&autoSources)
 	for _, source := range autoSources {
 		if _, ok := pathSet[source.Path]; !ok {
@@ -199,17 +198,17 @@ func syncCaddyLogSources(svcCtx *svc.ServiceContext, server *caddymodel.CaddySer
 
 	for path := range pathSet {
 		var source ingestmodel.LogSource
-		err := svcCtx.DB.Where("path = ? AND server_id = ?", path, server.ID).First(&source).Error
+		err := svcCtx.DB.Where("path = ? AND server_id = ?", path, caddymodel.LegacyServerID).First(&source).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			newSource := ingestmodel.LogSource{
 				Name:     fmt.Sprintf("Caddy 自动: %s", path),
 				Path:     path,
 				Type:     "caddy",
 				Enabled:  true,
-				ServerID: server.ID,
+				ServerID: caddymodel.LegacyServerID,
 			}
 			if err := svcCtx.DB.Create(&newSource).Error; err == nil {
-				logger.Infof("自动添加日志源: %s (节点 %d)", path, server.ID)
+				logger.Infof("自动添加日志源: %s", path)
 			}
 			continue
 		}

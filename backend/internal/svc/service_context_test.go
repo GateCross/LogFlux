@@ -6,6 +6,8 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+
+	caddymodel "logflux/model/caddy"
 )
 
 // 播种默认节点的三个分支：标记键已存在、已有节点、首次空库。
@@ -99,6 +101,48 @@ func TestEnsureDefaultCaddyServerSeedsLocalNodeWhenEmpty(t *testing.T) {
 
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("空库应插入节点并写标记: %v", err)
+	}
+}
+
+// 启动顺序：迁移必须先于播种执行，否则新库播种的 local 行会先被写出来，
+// 老库则可能因为读不到 caddy_config 而在迁移前被当作「未接管」。
+func TestStartupMigratesConfigBeforeSeeding(t *testing.T) {
+	db, mock, cleanup := newSvcMockDB(t)
+	defer cleanup()
+
+	// 迁移：配置键不存在 → 读 caddy_servers 迁移 → 三张表归零 → 写标记
+	mock.ExpectQuery(`SELECT \* FROM "system_configs"`).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at", "updated_at", "key", "value"}))
+	mock.ExpectQuery(`SELECT count\(\*\) FROM information_schema\.tables`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(int64(1)))
+	mock.ExpectQuery(`SELECT \* FROM "caddy_servers"`).WillReturnRows(
+		sqlmock.NewRows([]string{"id", "created_at", "updated_at", "name", "url", "token", "type", "username", "password", "config", "modules"}).
+			AddRow(uint(1), nil, nil, "local", "http://localhost:2019", "", "local", "", "", "legacy", "{}"),
+	)
+	mock.ExpectQuery(`SELECT \* FROM "system_configs"`).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at", "updated_at", "key", "value"}))
+	mock.ExpectQuery(`INSERT INTO "system_configs"`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(uint(2)))
+	for i := 0; i < 3; i++ {
+		mock.ExpectQuery(`SELECT count\(\*\) FROM information_schema\.tables`).
+			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(int64(1)))
+		mock.ExpectExec(`UPDATE .* SET .*server_id`).WillReturnResult(sqlmock.NewResult(0, 1))
+	}
+	mock.ExpectQuery(`SELECT \* FROM "system_configs"`).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at", "updated_at", "key", "value"}))
+	mock.ExpectQuery(`INSERT INTO "system_configs"`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(uint(3)))
+
+	// 播种：标记键已存在 → 不再查 count、不插节点
+	mock.ExpectQuery(`SELECT \* FROM "system_configs"`).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at", "updated_at", "key", "value"}).
+			AddRow(uint(4), nil, nil, systemConfigKeyNodeSeeded, "2026-01-01T00:00:00Z"))
+
+	caddymodel.MigrateLegacyConfig(db)
+	ensureDefaultCaddyServer(db)
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("启动迁移与播种顺序不符: %v", err)
 	}
 }
 

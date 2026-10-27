@@ -30,7 +30,7 @@ const routes: RouteRecordRaw[] = [
     },
   },
   {
-    /** 站点详情整页（对齐雷池，替代原抽屉）：query 携带 serverId + host，从站点卡片进入 */
+    /** 站点详情整页（对齐雷池，替代原抽屉）：query 携带 host，从站点卡片进入 */
     name: 'CaddySiteDetail',
     path: '/caddy/catalog/site',
     component: () => import('#/views/caddy/sites/SiteDetail.vue'),

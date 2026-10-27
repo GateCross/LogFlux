@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRouter } from 'vue-router';
 import { useQueryClient } from '@tanstack/vue-query';
 
 import { Page } from '@vben/common-ui';
@@ -40,7 +40,6 @@ import WafSourcesCard from './components/WafSourcesCard.vue';
 
 defineOptions({ name: 'CaddySettings' });
 
-const route = useRoute();
 const vueRouter = useRouter();
 
 /** 保存成功提示：写明还需在「配置管理」页应用（后端仅落库，不触发应用） */
@@ -50,24 +49,9 @@ const RESET_SUCCESS_TIP = '已恢复默认模板';
 
 const queryClient = useQueryClient();
 
-// ---------- WAF 节点与「高级配置」入口 ----------
-/** WAF 卡当前节点：由本页持有，深链 ?serverId= 与高级配置跳转共用 */
-const advancedServerId = ref<number>();
-
-// 深链初始化：/caddy/settings?serverId=123 直达指定节点
-const initialServerId = Number(route.query.serverId);
-if (Number.isFinite(initialServerId) && initialServerId > 0) {
-  advancedServerId.value = initialServerId;
-}
-
-/** 进入配置管理页（菜单已隐藏，路由保留）：带上当前节点上下文 */
+/** 进入配置管理页（菜单已隐藏，路由保留） */
 function goAdvancedConfig() {
-  void vueRouter.push({
-    name: 'CaddyConfig',
-    query: advancedServerId.value
-      ? { serverId: String(advancedServerId.value) }
-      : undefined,
-  });
+  void vueRouter.push({ name: 'CaddyConfig' });
 }
 
 // ---------- 全局选项 ----------
@@ -294,8 +278,8 @@ function handleResetEntry() {
       <!-- 站点日志：保留天数与 (subdomain-log) 模板 -->
       <SettingsSiteLogCard />
 
-      <!-- WAF 防护：复用 simple-waf 接口与 WafPanel，节点级状态 -->
-      <SettingsWafCard v-model:server-id="advancedServerId" />
+      <!-- WAF 防护：复用 simple-waf 接口与 WafPanel -->
+      <SettingsWafCard />
 
       <!-- WAF 来源：原「WAF 来源」页面并入 -->
       <WafSourcesCard />

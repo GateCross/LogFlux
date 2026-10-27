@@ -137,7 +137,7 @@ export function useSiteMetrics(options: UseSiteMetricsOptions) {
       for (let i = 0; i < hosts.length; i += SITE_METRICS_HOST_CHUNK) {
         const chunk = hosts.slice(i, i + SITE_METRICS_HOST_CHUNK);
         const list = await queryClient.fetchQuery({
-          queryKey: qk.caddy.metrics(0, chunk.join(',')),
+          queryKey: qk.caddy.metrics(chunk.join(',')),
           queryFn: () =>
             getSiteMetricsApi(
               {

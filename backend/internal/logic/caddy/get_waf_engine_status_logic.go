@@ -66,7 +66,6 @@ func (l *GetWafEngineStatusLogic) GetWafEngineStatus() (resp *types.WafEngineSta
 	}
 
 	return &types.WafEngineStatusResp{
-		ServerId:       0,
 		CurrentVersion: currentVersion,
 		LatestVersion:  latestVersion,
 		CanUpgrade:     canUpgrade,

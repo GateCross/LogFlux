@@ -8,7 +8,6 @@ import {
   certStatusColor,
   deriveUploadCertPairPaths,
   formatCertDateRange,
-  isLocalServer,
   isSelectableUploadedCert,
   isZeroIsoDate,
   type CertificateItem,
@@ -17,7 +16,6 @@ import {
 function item(overrides: Partial<CertificateItem>): CertificateItem {
   return {
     id: 1,
-    serverId: 1,
     domains: 'a.example.com',
     primaryDomain: 'a.example.com',
     issuer: "Let's Encrypt",
@@ -38,7 +36,7 @@ describe('certStatusLabel / certSourceLabel', () => {
     expect(certStatusLabel('expiring')).toBe('即将到期');
     expect(certStatusLabel('expired')).toBe('已过期');
     expect(certStatusLabel('missing')).toBe('缺失');
-    expect(certStatusLabel('pending')).toBe('远端（仅声明）');
+    expect(certStatusLabel('pending')).toBe('仅声明');
     expect(certSourceLabel('acme_http')).toBe('ACME 自动');
     expect(certSourceLabel('acme_dns')).toBe('DNS 自动');
     expect(certSourceLabel('internal')).toBe('内部 CA');
@@ -100,7 +98,7 @@ describe('formatCertDateRange / isZeroIsoDate', () => {
     ).toBe('2026-01-01 ~ 2027-01-01');
   });
 
-  it('零值时间显示占位：远端声明行只有一端或全无', () => {
+  it('零值时间显示占位：仅声明行只有一端或全无', () => {
     expect(isZeroIsoDate('0001-01-01T00:00:00Z')).toBe(true);
     expect(isZeroIsoDate('')).toBe(true);
     expect(isZeroIsoDate(undefined)).toBe(true);
@@ -113,30 +111,22 @@ describe('formatCertDateRange / isZeroIsoDate', () => {
   });
 });
 
-describe('isLocalServer', () => {
-  it('remote 禁选上传，缺省 type 视为 local', () => {
-    expect(isLocalServer({ type: 'local' })).toBe(true);
-    expect(isLocalServer({})).toBe(true);
-    expect(isLocalServer({ type: 'remote' })).toBe(false);
-  });
-});
-
 describe('deriveUploadCertPairPaths', () => {
   it('storagePath 为证书文件路径：证书原样、私钥取同目录 privkey.pem', () => {
     expect(
-      deriveUploadCertPairPaths('/config/certs/1/a.example.com/fullchain.pem'),
+      deriveUploadCertPairPaths('/config/certs/a.example.com/fullchain.pem'),
     ).toEqual({
-      certPath: '/config/certs/1/a.example.com/fullchain.pem',
-      keyPath: '/config/certs/1/a.example.com/privkey.pem',
+      certPath: '/config/certs/a.example.com/fullchain.pem',
+      keyPath: '/config/certs/a.example.com/privkey.pem',
     });
   });
 
   it('反斜杠归一为 Caddy 可用的正斜杠', () => {
     expect(
-      deriveUploadCertPairPaths('\\config\\certs\\2\\b.example.com\\fullchain.pem'),
+      deriveUploadCertPairPaths('\\config\\certs\\b.example.com\\fullchain.pem'),
     ).toEqual({
-      certPath: '/config/certs/2/b.example.com/fullchain.pem',
-      keyPath: '/config/certs/2/b.example.com/privkey.pem',
+      certPath: '/config/certs/b.example.com/fullchain.pem',
+      keyPath: '/config/certs/b.example.com/privkey.pem',
     });
   });
 
@@ -172,40 +162,31 @@ describe('isSelectableUploadedCert / buildUploadedCertOptions', () => {
     expect(isSelectableUploadedCert(item({ source: 'acme_http' }))).toBe(false);
   });
 
-  it('按 serverId 过滤并附推导出的双路径', () => {
+  it('筛选可用的上传证书并附推导出的双路径', () => {
     const list: CertificateItem[] = [
       item({
         id: 1,
-        serverId: 1,
         source: 'upload',
-        storagePath: '/config/certs/1/a.example.com/fullchain.pem',
+        storagePath: '/config/certs/a.example.com/fullchain.pem',
       }),
       item({
         id: 2,
-        serverId: 2,
-        source: 'upload',
-        storagePath: '/config/certs/2/b.example.com/fullchain.pem',
-      }),
-      item({
-        id: 3,
-        serverId: 1,
         source: 'upload',
         status: 'expired',
-        storagePath: '/config/certs/1/c.example.com/fullchain.pem',
+        storagePath: '/config/certs/c.example.com/fullchain.pem',
       }),
       item({
         id: 4,
-        serverId: 1,
         source: 'internal',
-        storagePath: '/config/certs/1/d.example.com/fullchain.pem',
+        storagePath: '/config/certs/d.example.com/fullchain.pem',
       }),
     ];
-    const options = buildUploadedCertOptions(list, 1);
+    const options = buildUploadedCertOptions(list);
     expect(options).toHaveLength(1);
     expect(options[0]).toMatchObject({
       value: 1,
-      certPath: '/config/certs/1/a.example.com/fullchain.pem',
-      keyPath: '/config/certs/1/a.example.com/privkey.pem',
+      certPath: '/config/certs/a.example.com/fullchain.pem',
+      keyPath: '/config/certs/a.example.com/privkey.pem',
     });
     // 标签含主域名与有效期区间
     expect(options[0]!.label).toContain('a.example.com');
@@ -213,28 +194,9 @@ describe('isSelectableUploadedCert / buildUploadedCertOptions', () => {
   });
 
   it('storagePath 推导不出的行剔除', () => {
-    const options = buildUploadedCertOptions(
-      [item({ id: 9, source: 'upload', storagePath: '' })],
-      1,
-    );
+    const options = buildUploadedCertOptions([
+      item({ id: 9, source: 'upload', storagePath: '' }),
+    ]);
     expect(options).toEqual([]);
-  });
-
-  it('serverId 缺省时不按服务器过滤', () => {
-    const list: CertificateItem[] = [
-      item({
-        id: 1,
-        serverId: 1,
-        source: 'upload',
-        storagePath: '/config/certs/1/a.example.com/fullchain.pem',
-      }),
-      item({
-        id: 2,
-        serverId: 2,
-        source: 'upload',
-        storagePath: '/config/certs/2/b.example.com/fullchain.pem',
-      }),
-    ];
-    expect(buildUploadedCertOptions(list)).toHaveLength(2);
   });
 });

@@ -6,21 +6,12 @@ import (
 	"logflux/common/result"
 	"logflux/internal/logic/caddy"
 	"logflux/internal/svc"
-	"logflux/internal/types"
-
-	"github.com/zeromicro/go-zero/rest/httpx"
 )
 
 func RefreshCertificatesHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req types.CertificateRefreshReq
-		if err := httpx.Parse(r, &req); err != nil {
-			httpx.ErrorCtx(r.Context(), w, err)
-			return
-		}
-
 		l := caddy.NewRefreshCertificatesLogic(r.Context(), svcCtx)
-		resp, err := l.RefreshCertificates(&req)
+		resp, err := l.RefreshCertificates()
 		result.HttpResult(r, w, resp, err)
 	}
 }

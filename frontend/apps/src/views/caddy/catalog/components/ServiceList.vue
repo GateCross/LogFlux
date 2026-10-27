@@ -32,7 +32,6 @@ import {
 import { describeSiteCapabilities } from '../../config/site-capabilities';
 
 const props = defineProps<{
-  selectedServerId?: number;
   loading: boolean;
   keyword: string;
   siteCardsCount: number;
@@ -130,13 +129,7 @@ function serverErrorCount(site: CatalogSiteCard): number {
       </span>
       <div class="toolbar-actions">
         <Button :loading="props.loading" @click="emit('refresh')">刷新</Button>
-        <Button
-          type="primary"
-          :disabled="!props.selectedServerId"
-          @click="emit('addSite')"
-        >
-          添加站点
-        </Button>
+        <Button type="primary" @click="emit('addSite')">添加站点</Button>
       </div>
     </div>
 
@@ -149,21 +142,10 @@ function serverErrorCount(site: CatalogSiteCard): number {
     />
 
     <Spin :spinning="props.loading">
-      <div v-if="!props.selectedServerId" class="sidebar-empty">
-        <Empty description="请选择 Caddy 节点以查看站点" />
-      </div>
-      <div v-else-if="props.filteredSites.length === 0" class="sidebar-empty">
-        <Empty
-          :description="props.siteCardsCount === 0 ? '当前节点暂无站点' : '无匹配站点'"
-        >
+      <div v-if="props.filteredSites.length === 0" class="sidebar-empty">
+        <Empty :description="props.siteCardsCount === 0 ? '暂无站点' : '无匹配站点'">
           <Space>
-            <Button
-              type="primary"
-              :disabled="!props.selectedServerId"
-              @click="emit('addSite')"
-            >
-              添加站点
-            </Button>
+            <Button type="primary" @click="emit('addSite')">添加站点</Button>
             <Button @click="emit('openWorkbench')">打开配置工作台</Button>
           </Space>
         </Empty>

@@ -18,7 +18,6 @@ type BatchDeleteNotificationLogsReq struct {
 }
 
 type CaddyConfigHistoryDetailReq struct {
-	ServerId  uint `path:"serverId"`
 	HistoryId uint `path:"historyId"`
 }
 
@@ -41,9 +40,8 @@ type CaddyConfigHistoryItem struct {
 }
 
 type CaddyConfigHistoryListReq struct {
-	ServerId uint `path:"serverId"`
-	Page     int  `form:"page,default=1"`
-	PageSize int  `form:"pageSize,default=20"`
+	Page     int `form:"page,default=1"`
+	PageSize int `form:"pageSize,default=20"`
 }
 
 type CaddyConfigHistoryListResp struct {
@@ -52,7 +50,6 @@ type CaddyConfigHistoryListResp struct {
 }
 
 type CaddyConfigPreviewReq struct {
-	ServerId uint   `path:"serverId"`
 	Mode     string `json:"mode,optional"`     // quick | raw；为空时根据 modules 自动判断
 	Config   string `json:"config,optional"`   // 原始 Caddyfile 或前端兜底生成结果
 	Modules  string `json:"modules,optional"`  // 结构化配置(JSON)
@@ -66,10 +63,6 @@ type CaddyConfigPreviewResp struct {
 	Actions []string `json:"actions"`
 }
 
-type CaddyConfigReq struct {
-	ServerId uint `path:"serverId"`
-}
-
 type CaddyConfigResp struct {
 	Config  string `json:"config"`
 	Modules string `json:"modules,optional"`
@@ -77,13 +70,11 @@ type CaddyConfigResp struct {
 }
 
 type CaddyConfigRollbackReq struct {
-	ServerId  uint   `path:"serverId"`
 	HistoryId uint   `json:"historyId"`
 	BaseHash  string `json:"baseHash,optional"` // 回滚起点配置哈希；不一致说明他人已改
 }
 
 type CaddyConfigUpdateReq struct {
-	ServerId uint   `path:"serverId"`
 	Mode     string `json:"mode,optional"`     // quick | raw；为空时兼容旧版请求
 	Config   string `json:"config,optional"`   // 原始 Caddyfile 或前端兜底生成结果
 	Modules  string `json:"modules,optional"`  // 结构化配置(JSON)
@@ -97,24 +88,6 @@ type CaddyEntryBlockResp struct {
 type CaddyEntryBlockUpdateReq struct {
 	Raw            string `json:"raw,optional"`
 	SyncFromConfig bool   `json:"syncFromConfig,optional"`
-}
-
-type CaddyLogSnippetResp struct {
-	Raw string `json:"raw"`
-}
-
-type CaddyLogSnippetUpdateReq struct {
-	Raw string `json:"raw,optional"`
-}
-
-type CaddyLogRetentionResp struct {
-	Enabled       bool `json:"enabled"`
-	RetentionDays int  `json:"retentionDays"`
-}
-
-type CaddyLogRetentionUpdateReq struct {
-	Enabled       bool `json:"enabled,default=true"`
-	RetentionDays int  `json:"retentionDays,optional"`
 }
 
 type CaddyGlobalOptionsResp struct {
@@ -173,43 +146,26 @@ type CaddyLogResp struct {
 	Total int64          `json:"total"`
 }
 
-type CaddyServerItem struct {
-	ID        uint   `json:"id"`
-	Name      string `json:"name"`
-	Url       string `json:"url"`
-	Type      string `json:"type"`
-	CreatedAt string `json:"createdAt"`
+type CaddyLogRetentionResp struct {
+	Enabled       bool `json:"enabled"`
+	RetentionDays int  `json:"retentionDays"`
 }
 
-type CaddyServerListResp struct {
-	List []CaddyServerItem `json:"list"`
+type CaddyLogRetentionUpdateReq struct {
+	Enabled       bool `json:"enabled,default=true"`
+	RetentionDays int  `json:"retentionDays,optional"`
 }
 
-type CaddyServerReq struct {
-	Name     string `json:"name"`
-	Url      string `json:"url"`                // http://localhost:2019 或远程 IP
-	Token    string `json:"token,optional"`     // 远程鉴权（如需要）
-	Type     string `json:"type,default=local"` // local | remote
-	Username string `json:"username,optional"`
-	Password string `json:"password,optional"`
+type CaddyLogSnippetResp struct {
+	Raw string `json:"raw"`
 }
 
-type CaddyServerStatusItem struct {
-	ServerId     uint   `json:"serverId"`
-	Name         string `json:"name"`
-	Reachable    bool   `json:"reachable"`
-	LatencyMs    int64  `json:"latencyMs"`
-	ProbedAt     string `json:"probedAt"`
-	ErrorMessage string `json:"errorMessage,optional"`
-}
-
-type CaddyServerStatusListResp struct {
-	List []CaddyServerStatusItem `json:"list"`
+type CaddyLogSnippetUpdateReq struct {
+	Raw string `json:"raw,optional"`
 }
 
 type CertificateItem struct {
 	ID            uint   `json:"id"`
-	ServerId      uint   `json:"serverId"`      // 所属 Caddy 服务器
 	Domains       string `json:"domains"`       // SAN 列表，逗号分隔
 	PrimaryDomain string `json:"primaryDomain"` // 主域名（库存合并键）
 	Issuer        string `json:"issuer"`        // 签发者展示名
@@ -223,20 +179,14 @@ type CertificateItem struct {
 }
 
 type CertificateListReq struct {
-	ServerId uint `form:"serverId,optional"`
 }
 
 type CertificateListResp struct {
 	List []CertificateItem `json:"list"`
 }
 
-type CertificateRefreshReq struct {
-	ServerId uint `json:"serverId,optional"` // 只刷新指定服务器，缺省刷新全部
-}
-
 type CertificateUploadReq struct {
-	ServerId uint   `form:"serverId,optional"` // 目标服务器，缺省使用默认本机服务器
-	Domains  string `form:"domains,optional"`  // 补充域名，逗号分隔，与证书 SAN 合并展示
+	Domains string `form:"domains,optional"` // 补充域名，逗号分隔，与证书 SAN 合并展示
 }
 
 type ChangePasswordReq struct {
@@ -630,11 +580,9 @@ type SetupStatusResp struct {
 }
 
 type SimpleWafConfigReq struct {
-	ServerId uint `form:"serverId,optional"` // 为空时使用默认 Caddy 服务器
 }
 
 type SimpleWafConfigResp struct {
-	ServerId                uint            `json:"serverId"`
 	Enabled                 bool            `json:"enabled"`
 	Integrated              bool            `json:"integrated"`
 	Mode                    string          `json:"mode"`
@@ -657,7 +605,6 @@ type SimpleWafConfigResp struct {
 }
 
 type SimpleWafConfigUpdateReq struct {
-	ServerId                uint     `json:"serverId,optional"`          // 为空时使用默认 Caddy 服务器
 	Enabled                 bool     `json:"enabled"`                    // 是否将 WAF 挂载到站点
 	Mode                    string   `json:"mode,default=detectiononly"` // off | detectiononly | on
 	Strength                string   `json:"strength,default=low_fp"`    // low_fp | balanced | high_blocking
@@ -755,16 +702,6 @@ type TriggerTaskReq struct {
 	ID uint `path:"id"`
 }
 
-type UpdateCaddyServerReq struct {
-	ID       uint   `path:"id"`
-	Name     string `json:"name,optional"`
-	Url      string `json:"url,optional"`
-	Token    string `json:"token,optional"`
-	Type     string `json:"type,optional"`
-	Username string `json:"username,optional"`
-	Password string `json:"password,optional"`
-}
-
 type UpdateUserReq struct {
 	ID       uint   `path:"id"`
 	Password string `json:"password,optional"`
@@ -802,7 +739,6 @@ type UserPreferencesReq struct {
 }
 
 type WafEngineStatusResp struct {
-	ServerId       uint   `json:"serverId"`
 	CurrentVersion string `json:"currentVersion,optional"`
 	LatestVersion  string `json:"latestVersion,optional"`
 	CanUpgrade     bool   `json:"canUpgrade"`

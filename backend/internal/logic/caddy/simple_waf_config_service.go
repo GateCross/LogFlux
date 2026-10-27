@@ -30,7 +30,6 @@ type simpleWafConfigService struct {
 }
 
 type simpleWafNormalizedConfig struct {
-	ServerID                uint
 	Enabled                 bool
 	Mode                    string
 	Strength                string
@@ -63,18 +62,14 @@ func newSimpleWafConfigService(ctx context.Context, svcCtx *svc.ServiceContext, 
 	}
 }
 
+// Get 读取 WAF 面板状态；单实例下没有「针对哪个节点」这一层参数。
 func (s *simpleWafConfigService) Get(req *types.SimpleWafConfigReq) (*types.SimpleWafConfigResp, error) {
-	serverID := uint(0)
-	if req != nil {
-		serverID = req.ServerId
-	}
-
 	policy, err := s.findOrCreateDefaultPolicy()
 	if err != nil {
 		return nil, err
 	}
 
-	server, config, _, loadErr := s.loadPreferredConfig(serverID)
+	server, config, _, loadErr := s.loadPreferredConfig()
 	if loadErr != nil {
 		resp := s.buildResponse(server, policy, nil, nil, nil)
 		resp.Message = localizeWafPolicyMessage(loadErr.Error())
@@ -176,7 +171,7 @@ func (s *simpleWafConfigService) buildCandidate(req *types.SimpleWafConfigUpdate
 	}
 
 	// 站点选择来自用户意图，配置文本来自库内现状；两者都可能被并发改过。
-	if err := verifyBaseHash(s.svcCtx.DB.WithContext(s.ctx), normalized.ServerID, req.BaseHash); err != nil {
+	if err := verifyBaseHash(s.svcCtx.DB.WithContext(s.ctx), req.BaseHash); err != nil {
 		return nil, err
 	}
 
@@ -193,7 +188,7 @@ func (s *simpleWafConfigService) buildCandidate(req *types.SimpleWafConfigUpdate
 		return nil, err
 	}
 
-	server, config, modules, err := s.loadPreferredConfig(normalized.ServerID)
+	server, config, modules, err := s.loadPreferredConfig()
 	if err != nil {
 		if server == nil {
 			return nil, err
@@ -222,14 +217,15 @@ func (s *simpleWafConfigService) buildCandidate(req *types.SimpleWafConfigUpdate
 	}, nil
 }
 
-func (s *simpleWafConfigService) loadPreferredConfig(serverID uint) (*caddymodel.CaddyServer, string, string, error) {
-	server, err := findPreferredCaddyServer(s.svcCtx.DB.WithContext(s.ctx), serverID)
+// loadPreferredConfig 取唯一的 Caddy 管理目标与当前生效配置。
+func (s *simpleWafConfigService) loadPreferredConfig() (*caddymodel.CaddyServer, string, string, error) {
+	server, err := findPreferredCaddyServer(s.svcCtx.DB.WithContext(s.ctx))
 	if err != nil {
 		return nil, "", emptyModulesJSON, err
 	}
 
 	applyService := newCaddyConfigApplyService(s.svcCtx, s.logger)
-	config, modules, err := applyService.loadCurrent(server)
+	config, modules, err := applyService.loadCurrent()
 	if err != nil {
 		return server, "", emptyModulesJSON, err
 	}
@@ -305,9 +301,6 @@ func (s *simpleWafConfigService) buildResponse(server *caddymodel.CaddyServer, p
 	resp.CrsVersion = helper.crsCurrentVersion()
 	resp.CaddyVersion = helper.caddyCurrentVersion()
 	resp.RulesInfo = helper.mountedCRSRulesSummary()
-	if server != nil {
-		resp.ServerId = server.ID
-	}
 	if policy != nil {
 		resp.Mode = normalizePolicyEngineMode(policy.EngineMode)
 		resp.Strength = normalizeSimpleWafStrength(policy.CrsTemplate, policy.CrsParanoiaLevel)
@@ -424,7 +417,6 @@ func normalizeSimpleWafConfigReq(req *types.SimpleWafConfigUpdateReq) (simpleWaf
 	}
 
 	return simpleWafNormalizedConfig{
-		ServerID:                req.ServerId,
 		Enabled:                 enabled,
 		Mode:                    mode,
 		Strength:                strength,

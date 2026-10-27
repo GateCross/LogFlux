@@ -4,6 +4,7 @@
 > 基线提交：`4376821` feat: 首次启动播种默认节点并修复入口块悬空 snippet
 > 前置方案：`node-scope-convergence-plan.md`（P0a/P0b/P1/P2 已落地）、`node-management-removal-plan.md`（作废，被本文取代）
 > 决策：**确定永远只有一个 Caddy 节点**，不存在第二实例
+> 状态：**P4-0 ~ P4-4 已全部落地**（见第 13 节实施记录）
 
 ---
 
@@ -373,3 +374,85 @@ cd frontend && pnpm exec vitest run --dom apps/src/views/caddy
 1. **`caddy_servers` 表留还是删？** 方案建议先留（可回滚），确认稳定后下一轮再删。
 2. **老部署若真有多节点数据，只保留 id 最小的那个配置**——是否接受？
 3. **API 路径变更会破坏任何现有集成吗？** 若有外部脚本调 `/caddy/server/:id/config`，需要保留兼容路径。
+
+---
+
+## 13. 实施记录（2026-10-27）
+
+P4-0 ~ P4-4 全部落地，后端 `go build ./... && go vet ./... && go test ./...` 全绿，
+前端 `vue-tsc --noEmit` 零错误、`vitest run apps/src/views/caddy apps/src/api` 251 用例通过。
+
+### 13.1 与原方案的差异
+
+| 项 | 原方案 | 实际落地 | 原因 |
+|---|---|---|---|
+| 迁移代码位置 | `internal/logic/caddy/caddy_config_store.go` | `model/caddy/config_store.go` | `svc` 包不能反向依赖 `logic/caddy`（import cycle），迁移只能放在 `svc` 可依赖的 model 层 |
+| 配置读写函数 | `loadCaddyConfig` / `saveCaddyConfig`（包内私有） | `caddymodel.LoadConfig` / `SaveConfig`（导出） | 同一原因：`svc` 启动迁移与 `logic/caddy` 都要用 |
+| 服务器解析 | `findPreferredCaddyServer(db, serverID)` | `findPreferredCaddyServer(db)` | 参数已无意义，直接删掉；内部仍是「local 优先，其次 id 最小」 |
+| 证书上传目录 | 保留 `/config/certs/<serverID>/<域名>/` | 新上传写 `/config/certs/<域名>/` | 单实例下 serverID 恒为 0，多一层 `0/` 无意义；存量文件靠库存 `storagePath` 定位，删除仍正常 |
+| 证书声明状态 | `local` 为 missing、`remote` 为 pending | 恒为 missing | 单实例没有 remote，pending 分支不可达 |
+| 前端 `ServerToolbar` | 只删节点 Select 与在线状态 Tag | 连带删掉「刷新 / 节点管理」整组按钮 | 节点 CRUD 与状态探测接口已删，按钮点不到东西 |
+
+### 13.2 删除的文件
+
+后端：
+`add_caddy_server_handler.go`、`delete_caddy_server_handler.go`、`get_caddy_servers_handler.go`、
+`get_caddy_server_status_handler.go`、`update_caddy_server_handler.go`，
+`add_caddy_server_logic.go`、`delete_caddy_server_logic.go`、`get_caddy_servers_logic.go`、
+`get_caddy_server_status_logic.go`、`update_caddy_server_logic.go`，
+以及三个状态探测测试（`get_caddy_server_status_logic_test.go`、
+`get_caddy_server_status_preservation_test.go`、`get_caddy_server_status_bug_condition_test.go`）。
+
+前端：
+`config/components/ServerFormModal.vue`、`config/composables/useCaddyServers.ts`、
+`config/composables/useCaddyServers.test.ts`、`catalog/components/EditPanel.vue`、
+`catalog/components/StatusActions.vue`、`shared/caddy-server-status.ts`、
+`shared/caddy-server-status.test.ts`、`shared/use-caddy-server-status.ts`。
+
+### 13.3 API 契约变化
+
+| 原路径 | 新路径 |
+|---|---|
+| `GET /caddy/server/:serverId/config` | `GET /caddy/config` |
+| `POST /caddy/server/:serverId/config` | `POST /caddy/config` |
+| `POST /caddy/server/:serverId/config/preview` | `POST /caddy/config/preview` |
+| `GET /caddy/server/:serverId/config/history` | `GET /caddy/config/history` |
+| `GET /caddy/server/:serverId/config/history/:historyId` | `GET /caddy/config/history/:historyId` |
+| `POST /caddy/server/:serverId/config/rollback` | `POST /caddy/config/rollback` |
+| `GET/POST/PUT/DELETE /caddy/server[/:id]`、`GET /caddy/server/status` | **删除** |
+| `POST /caddy/certificates/refresh` 的 `serverId` | 请求体删除，改为无参 |
+
+`CertificateItem` / `SimpleWafConfig` / `WafEngineStatusResp` 的 `serverId` 字段一并删除。
+`caddy_config_history` / `caddy_certificates` / `log_sources` 的 `server_id` **列保留**，写入恒为 0。
+
+### 13.4 迁移行为
+
+`caddymodel.MigrateLegacyConfig(db)` 在 `NewServiceContext` 中于 `AutoMigrate` 之后、
+`ensureDefaultCaddyServer` 之前执行：
+
+1. `system_configs` 已有 `caddy_config` 键 → 跳过搬迁（幂等）
+2. `caddy_servers` 不存在或为空 → 跳过
+3. 取 id 最小一行，把 `Config` / `Modules` 写入 `caddy_config`
+4. 多节点时 `logx.Errorf` 告警，只保留 id 最小的配置，不删任何数据
+5. `caddy_config_history` / `caddy_certificates` / `log_sources` 的 `server_id <> 0` 全部归零
+6. 写标记键 `caddy_config_migrated`
+
+`caddy_servers` 表**不删**，配置列保留但运行时不读写，只作迁移来源与回滚依据。
+
+### 13.5 新增与改写的测试
+
+| 文件 | 覆盖 |
+|---|---|
+| `model/caddy/config_store_test.go`（新建） | 读写往返、键不存在返回空、迁移跳过/单节点搬迁/多节点只取最小 id/缺表跳过 |
+| `internal/svc/service_context_test.go`（追加） | 启动顺序：迁移先于播种 |
+| `internal/logic/caddy/caddy_config_apply_service_test.go`（改写） | 落库失败回滚运行态、乐观并发的锁外/锁内校验、回滚受 baseHash 保护 |
+| `internal/logic/caddy/caddy_config_service_test.go`（改写） | 未接管提示、预览只 /adapt、更新走 adapt→load→history |
+| `internal/logic/caddy/cert_sync_service_test.go`（改写） | 去掉 remote/pending 分支，server_id 归零 |
+| `frontend type-contract.test.ts`（改写） | 去掉 server/status 类型，改为配置历史与配置模型 |
+| `frontend certificate-utils.test.ts`（改写） | 去掉 `isLocalServer` 与按 serverId 过滤 |
+
+### 13.6 仍未做
+
+- `caddy_servers` 表的 DROP（按方案留待下一轮）
+- 老路径 `/caddy/server/:id/config` 的兼容别名（方案第 12 节第 3 条待确认；当前按「直接删」执行）
+

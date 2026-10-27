@@ -30,7 +30,7 @@ vi.mock('#/api/list-detail-mutation', () => ({
 }));
 
 vi.mock('#/api/query-keys', () => ({
-  qk: { caddy: { config: (id: number) => ['caddy', 'config', id] } },
+  qk: { caddy: { config: () => ['caddy', 'config'] } },
 }));
 
 vi.mock('#/api/request', () => ({
@@ -46,11 +46,11 @@ vi.mock('antdv-next', () => ({
   message: { error: vi.fn(), success: vi.fn() },
 }));
 
-function serverConfig(serverId: number, overrides: Record<string, unknown> = {}) {
+function serverConfig(suffix = '1', overrides: Record<string, unknown> = {}) {
   return {
     audit: 'relevantonly',
-    availableSites: [`s${serverId}.example.com`],
-    importedSites: [`s${serverId}.example.com`],
+    availableSites: [`s${suffix}.example.com`],
+    importedSites: [`s${suffix}.example.com`],
     corazaVersion: '3.2.1',
     crsVersion: '4.0.0',
     enabled: true,
@@ -59,17 +59,14 @@ function serverConfig(serverId: number, overrides: Record<string, unknown> = {})
     requestBodyAccess: true,
     requestBodyLimit: 10 * 1024 * 1024,
     requestBodyNoFilesLimit: 1024 * 1024,
-    serverId,
-    siteAddresses: [`s${serverId}.example.com`],
+    siteAddresses: [`s${suffix}.example.com`],
     strength: 'balanced',
     ...overrides,
   };
 }
 
-function createWaf(serverId = 1) {
-  const selectedServerId = ref<number | undefined>(serverId);
-  const waf = useSimpleWaf({ selectedServerId });
-  return { selectedServerId, waf };
+function createWaf() {
+  return useSimpleWaf({});
 }
 
 describe('useSimpleWaf state machine', () => {
@@ -77,21 +74,21 @@ describe('useSimpleWaf state machine', () => {
     fetchQuery.mockReset();
   });
 
-  it('ready: 成功读取后记录归属并允许写操作', async () => {
-    fetchQuery.mockResolvedValue(serverConfig(1));
-    const { waf } = createWaf(1);
+  it('ready: 成功读取后允许写操作', async () => {
+    fetchQuery.mockResolvedValue(serverConfig('1'));
+    const waf = createWaf();
 
     await waf.fetchWafConfig();
 
     expect(waf.wafLoadState.value).toBe('ready');
-    expect(waf.wafLoadedServerId.value).toBe(1);
+    expect(waf.wafLoaded.value).toBe(true);
     expect(waf.wafActionsDisabled.value).toBe(false);
     expect(waf.wafForm.enabled).toBe(true);
   });
 
   it('error: 读失败清空表单并禁用写操作，避免用默认值覆盖线上策略', async () => {
-    fetchQuery.mockResolvedValueOnce(serverConfig(1));
-    const { waf } = createWaf(1);
+    fetchQuery.mockResolvedValueOnce(serverConfig('1'));
+    const waf = createWaf();
     await waf.fetchWafConfig();
     expect(waf.wafForm.enabled).toBe(true);
 
@@ -100,45 +97,45 @@ describe('useSimpleWaf state machine', () => {
 
     expect(waf.wafLoadState.value).toBe('error');
     expect(waf.wafStatus.value).toBeNull();
-    expect(waf.wafLoadedServerId.value).toBeNull();
+    expect(waf.wafLoaded.value).toBe(false);
     expect(waf.wafForm).toEqual(createDefaultWafForm());
     expect(waf.wafActionsDisabled.value).toBe(true);
   });
 
-  it('stale: 切换服务器后旧状态不再属于当前服务器', async () => {
-    fetchQuery.mockResolvedValue(serverConfig(1));
-    const { selectedServerId, waf } = createWaf(1);
+  it('stale: 重置后旧状态不再可用', async () => {
+    fetchQuery.mockResolvedValue(serverConfig('1'));
+    const waf = createWaf();
     await waf.fetchWafConfig();
 
-    selectedServerId.value = 2;
+    waf.resetWafState();
     await nextTick();
 
     expect(waf.isWafStale()).toBe(true);
     expect(waf.wafActionsDisabled.value).toBe(true);
   });
 
-  it('reset: 切服务器时作废在途请求，旧响应不会覆盖新状态', async () => {
+  it('reset: 作废在途请求，旧响应不会覆盖新状态', async () => {
     let resolveFirst: (value: unknown) => void = () => {};
     fetchQuery.mockImplementationOnce(
       () => new Promise((resolve) => {
         resolveFirst = resolve;
       }),
     );
-    const { waf } = createWaf(1);
+    const waf = createWaf();
 
     const pending = waf.fetchWafConfig();
     waf.resetWafState();
-    resolveFirst(serverConfig(1));
+    resolveFirst(serverConfig('1'));
     await pending;
 
     expect(waf.wafStatus.value).toBeNull();
-    expect(waf.wafLoadedServerId.value).toBeNull();
+    expect(waf.wafLoaded.value).toBe(false);
     expect(waf.wafLoadState.value).toBe('idle');
   });
 
   it('sync: 站点为空时保持空选择（表示跟随全部），不固化当前站点快照', async () => {
-    fetchQuery.mockResolvedValue(serverConfig(1, { siteAddresses: [] }));
-    const { waf } = createWaf(1);
+    fetchQuery.mockResolvedValue(serverConfig('1', { siteAddresses: [] }));
+    const waf = createWaf();
 
     await waf.fetchWafConfig();
 
@@ -147,8 +144,8 @@ describe('useSimpleWaf state machine', () => {
   });
 
   it('dirty: 表单改动后置脏，改回原值后恢复干净', async () => {
-    fetchQuery.mockResolvedValue(serverConfig(1));
-    const { waf } = createWaf(1);
+    fetchQuery.mockResolvedValue(serverConfig('1'));
+    const waf = createWaf();
     await waf.fetchWafConfig();
     expect(waf.wafDirty.value).toBe(false);
 
@@ -161,12 +158,12 @@ describe('useSimpleWaf state machine', () => {
 
   it('dirty: 站点集合顺序变化不算改动', async () => {
     fetchQuery.mockResolvedValue(
-      serverConfig(1, {
+      serverConfig('1', {
         availableSites: ['a.example.com', 'b.example.com'],
         siteAddresses: ['a.example.com', 'b.example.com'],
       }),
     );
-    const { waf } = createWaf(1);
+    const waf = createWaf();
     await waf.fetchWafConfig();
 
     waf.wafForm.siteAddresses = ['b.example.com', 'a.example.com'];
@@ -175,7 +172,7 @@ describe('useSimpleWaf state machine', () => {
   });
 
   it('dirty: 未加载成功时永远不算脏，避免误弹确认', () => {
-    const { waf } = createWaf(1);
+    const waf = createWaf();
     waf.wafForm.strength = 'high_blocking';
 
     expect(waf.wafDirty.value).toBe(false);
@@ -183,13 +180,13 @@ describe('useSimpleWaf state machine', () => {
 
   it('effective: 站点选择为空时回退到全部可用站点', async () => {
     fetchQuery.mockResolvedValue(
-      serverConfig(1, {
+      serverConfig('1', {
         availableSites: ['a.example.com', 'b.example.com'],
         importedSites: ['a.example.com', 'b.example.com'],
         siteAddresses: [],
       }),
     );
-    const { waf } = createWaf(1);
+    const waf = createWaf();
     await waf.fetchWafConfig();
 
     expect(waf.wafSiteStates.value.map((item) => item.site)).toEqual([
@@ -207,13 +204,13 @@ describe('useSimpleWaf state machine', () => {
 
   it('site states: 关闭 WAF 时已挂载站点标为将移除', async () => {
     fetchQuery.mockResolvedValue(
-      serverConfig(1, {
+      serverConfig('1', {
         availableSites: ['a.example.com', 'b.example.com'],
         importedSites: ['a.example.com'],
         siteAddresses: ['a.example.com'],
       }),
     );
-    const { waf } = createWaf(1);
+    const waf = createWaf();
     await waf.fetchWafConfig();
 
     waf.wafForm.enabled = false;
@@ -226,16 +223,16 @@ describe('useSimpleWaf state machine', () => {
 
   describe('validateWafForm', () => {
     it('happy path: 合法区间返回 null', async () => {
-      fetchQuery.mockResolvedValue(serverConfig(1));
-      const { waf } = createWaf(1);
+      fetchQuery.mockResolvedValue(serverConfig('1'));
+      const waf = createWaf();
       await waf.fetchWafConfig();
 
       expect(waf.validateWafForm()).toBeNull();
     });
 
     it('boundary: 超过后端 1GB 上限被拒绝', async () => {
-      fetchQuery.mockResolvedValue(serverConfig(1));
-      const { waf } = createWaf(1);
+      fetchQuery.mockResolvedValue(serverConfig('1'));
+      const waf = createWaf();
       await waf.fetchWafConfig();
 
       waf.wafForm.requestBodyLimitMB = WAF_REQUEST_BODY_MAX_MB + 1;
@@ -243,8 +240,8 @@ describe('useSimpleWaf state machine', () => {
     });
 
     it('boundary: 无文件上限大于总上限被拒绝', async () => {
-      fetchQuery.mockResolvedValue(serverConfig(1));
-      const { waf } = createWaf(1);
+      fetchQuery.mockResolvedValue(serverConfig('1'));
+      const waf = createWaf();
       await waf.fetchWafConfig();
 
       waf.wafForm.requestBodyLimitMB = 5;
@@ -254,10 +251,9 @@ describe('useSimpleWaf state machine', () => {
   });
 
   it('apply payload: 携带 baseHash 用于乐观并发', async () => {
-    fetchQuery.mockResolvedValue(serverConfig(1));
+    fetchQuery.mockResolvedValue(serverConfig('1'));
     const baseHash = ref('abc123');
-    const selectedServerId = ref<number | undefined>(1);
-    const waf = useSimpleWaf({ baseHash, selectedServerId });
+    const waf = useSimpleWaf({ baseHash });
     await waf.fetchWafConfig();
 
     expect(waf.buildWafPayload().baseHash).toBe('abc123');

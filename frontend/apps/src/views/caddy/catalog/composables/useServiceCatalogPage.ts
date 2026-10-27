@@ -6,7 +6,6 @@ import { message } from 'antdv-next';
 
 import {
   getCaddyConfigApi,
-  getCaddyServerListApi,
   getSiteMetricsApi,
   type SiteMetricsItem,
 } from '#/api/caddy/server';
@@ -31,17 +30,11 @@ import {
   type CatalogSiteCard,
   type SiteMetricsMap,
 } from '../service-catalog-utils';
-import { useCaddyServerStatus } from '../../shared/use-caddy-server-status';
-
-export function serverLabel(server: Record<string, any>) {
-  return server.name || server.url || `Server #${server.id}`;
-}
 
 export function useServiceCatalogPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  const selectedServerId = ref<number>();
   const keyword = ref('');
 
   /** 近窗指标：失败降级，不阻塞目录浏览 */
@@ -51,60 +44,14 @@ export function useServiceCatalogPage() {
   const siteMetricsLoaded = ref(false);
 
   const {
-    data: serversData,
-    loading: loadingServers,
-    errorMessage: serversErrorMessage,
-    refetch: refetchServers,
-  } = useListDetailQuery({
-    queryKey: qk.caddy.servers(),
-    queryFn: () => getCaddyServerListApi(withListDetailErrorMode()),
-    errorFallback: '获取服务器列表失败',
-  });
-
-  const servers = computed(() => serversData.value ?? []);
-
-  const {
-    loadingServerStatus,
-    serverStatusError,
-    serverStatusLoaded,
-    lastProbedAt,
-    selectedServerStatus,
-    serverStatusRows,
-    pruneByServers,
-    handleRefreshServerStatus,
-  } = useCaddyServerStatus({
-    servers,
-    selectedServerId,
-    labelOf: serverLabel,
-  });
-
-  watch(
-    servers,
-    (list) => {
-      if (list.length > 0 && !selectedServerId.value) {
-        selectedServerId.value = Number(list[0]?.id);
-      }
-      pruneByServers(list);
-      if (list.length === 0) {
-        siteMetricsMap.value = new Map();
-      }
-    },
-    { immediate: true },
-  );
-
-  const {
     data: configData,
     loading: loadingConfig,
     errorMessage: configErrorMessage,
     refetch: refetchConfig,
   } = useListDetailQuery({
-    queryKey: computed(() =>
-      qk.caddy.catalog(selectedServerId.value ?? 0),
-    ),
-    queryFn: () =>
-      getCaddyConfigApi(selectedServerId.value!, withListDetailErrorMode()),
+    queryKey: qk.caddy.catalog(),
+    queryFn: () => getCaddyConfigApi(withListDetailErrorMode()),
     errorFallback: '获取站点配置失败',
-    enabled: computed(() => Boolean(selectedServerId.value)),
   });
 
   const siteCards = computed(() => {
@@ -121,21 +68,17 @@ export function useServiceCatalogPage() {
     data: certData,
     loading: loadingCerts,
   } = useListDetailQuery({
-    queryKey: computed(() => qk.caddy.certificates(selectedServerId.value)),
-    queryFn: () =>
-      getCertificateListApi(selectedServerId.value, withListDetailErrorMode()),
+    queryKey: qk.caddy.certificates(),
+    queryFn: () => getCertificateListApi(withListDetailErrorMode()),
     errorFallback: '获取证书列表失败',
-    enabled: computed(() => Boolean(selectedServerId.value)),
   });
   const certList = computed(() => certData.value ?? []);
 
   /** 全局 WAF 状态（key 与 useSimpleWaf 一致，共享缓存）：卡片防护模式徽章数据源 */
   const { data: wafStatusData } = useListDetailQuery({
-    queryKey: computed(() => [...qk.caddy.config(selectedServerId.value ?? 0), 'simple-waf']),
-    queryFn: () =>
-      getSimpleWafConfigApi(selectedServerId.value, withListDetailErrorMode()),
+    queryKey: [...qk.caddy.config(), 'simple-waf'],
+    queryFn: () => getSimpleWafConfigApi(withListDetailErrorMode()),
     errorFallback: '获取 WAF 状态失败',
-    enabled: computed(() => Boolean(selectedServerId.value)),
   });
   const wafStatus = computed(() => wafStatusData.value ?? null);
 
@@ -145,13 +88,6 @@ export function useServiceCatalogPage() {
     siteMetricsLoaded.value = false;
     debouncedFetchSiteMetrics();
   });
-
-  const serverOptions = computed(() =>
-    servers.value.map((server) => ({
-      label: serverLabel(server),
-      value: Number(server.id),
-    })),
-  );
 
   const filteredSites = computed(() => {
     const q = keyword.value.trim().toLowerCase();
@@ -164,12 +100,7 @@ export function useServiceCatalogPage() {
     });
   });
 
-  async function fetchServers() {
-    await refetchServers();
-  }
-
   async function fetchConfigSites() {
-    if (!selectedServerId.value) return;
     await refetchConfig();
   }
 
@@ -192,7 +123,6 @@ export function useServiceCatalogPage() {
         // window=24h 契约：windowMinutes=1440 进 query key，与旧 15 分钟窗缓存隔离
         const list = await queryClient.fetchQuery({
           queryKey: qk.caddy.metrics(
-            selectedServerId.value ?? 0,
             chunk.join(','),
             SITE_METRICS_WINDOW_MINUTES,
           ),
@@ -224,24 +154,10 @@ export function useServiceCatalogPage() {
     debouncedFetchSiteMetrics();
   }
 
-  function handleServerChange(value: unknown) {
-    const next = Number(value);
-    if (!Number.isFinite(next)) return;
-    selectedServerId.value = next;
-  }
-
-  function selectServerFromStatus(id: number) {
-    if (!Number.isFinite(id)) return;
-    selectedServerId.value = id;
-  }
-
   function openConfigWorkbench(mode?: 'blocks' | 'waf' | 'raw' | 'preview') {
     router.push({
       name: 'CaddyConfig',
-      query: buildConfigWorkbenchQuery({
-        serverId: selectedServerId.value,
-        mode,
-      }),
+      query: buildConfigWorkbenchQuery({ mode }),
     });
   }
 
@@ -274,7 +190,6 @@ export function useServiceCatalogPage() {
 
   /** 打开站点详情整页（对齐雷池，取代早期的抽屉形态） */
   function openSiteDetail(site: CatalogSiteCard) {
-    if (!selectedServerId.value) return;
     const host = site.primaryHost || sitePrimaryHost(site.domains);
     if (!host) {
       message.warning('该站点无可识别域名，请用配置工作台编辑');
@@ -282,7 +197,7 @@ export function useServiceCatalogPage() {
     }
     router.push({
       name: 'CaddySiteDetail',
-      query: { serverId: String(selectedServerId.value), host },
+      query: { host },
     });
   }
 
@@ -297,11 +212,7 @@ export function useServiceCatalogPage() {
   }
 
   return {
-    servers,
-    selectedServerId,
-    loadingServers,
     loadingConfig,
-    serversErrorMessage,
     configErrorMessage,
     siteCards,
     configRaw,
@@ -314,21 +225,10 @@ export function useServiceCatalogPage() {
     certList,
     loadingCerts,
     wafStatus,
-    serverOptions,
-    loadingServerStatus,
-    serverStatusError,
-    serverStatusLoaded,
-    lastProbedAt,
-    selectedServerStatus,
-    serverStatusRows,
     filteredSites,
     fetchConfigSites,
-    fetchServers,
-    handleRefreshServerStatus,
     handleRefreshSiteMetrics,
     handleRefreshSites,
-    handleServerChange,
-    selectServerFromStatus,
     openConfigWorkbench,
     openWaf,
     openAccessLogs,

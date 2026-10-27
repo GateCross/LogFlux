@@ -20,14 +20,6 @@ function clonePayload<T>(value: T): T {
 
 // 样例响应
 
-const sampleCaddyServer: CaddyServerApi.CaddyServer = {
-  id: 1,
-  name: 'edge-1',
-  url: 'http://127.0.0.1:2019',
-  type: 'local',
-  createdAt: '2024-01-01T00:00:00Z',
-};
-
 const sampleCaddyConfig: CaddyServerApi.CaddyConfig = {
   config: '{\n  auto_https off\n}\n',
   modules: '{"sites":[]}',
@@ -42,14 +34,12 @@ const sampleConfigPreview: CaddyServerApi.ConfigPreview = {
 
 const sampleConfigHistoryItem: CaddyServerApi.ConfigHistoryItem = {
   id: 10,
-  serverId: 1,
   action: 'save',
   hash: 'abc123',
   createdAt: '2024-02-01T12:00:00Z',
 };
 
 const sampleSimpleWafConfig: CaddySimpleWafApi.SimpleWafConfig = {
-  serverId: 1,
   enabled: true,
   integrated: false,
   mode: 'detectiononly',
@@ -90,7 +80,6 @@ const sampleWafSource: CaddyWafSourceApi.WafSource = {
 };
 
 const sampleWafEngineStatus: CaddyWafSourceApi.WafEngineStatus = {
-  serverId: 1,
   currentVersion: '3.2.1',
   latestVersion: '3.3.0',
   canUpgrade: true,
@@ -131,10 +120,6 @@ const sampleIpRegionConfig: CaddyIpRegionApi.IpRegionConfig = {
   allowList: ['中国', '日本'],
 };
 
-const sampleServerListResult: CaddyServerApi.CaddyServerListResult = {
-  list: [sampleCaddyServer],
-};
-
 const sampleHistoryListResult: CaddyServerApi.ConfigHistoryListResult = {
   list: [sampleConfigHistoryItem],
   total: 1,
@@ -149,21 +134,9 @@ const sampleWafSourceListResult: CaddyWafSourceApi.WafSourceListResult = {
 // Arbitraries — 生成与收紧类型字段一致的运行时对象
 // ---------------------------------------------------------------------------
 
-const caddyServerArb: fc.Arbitrary<CaddyServerApi.CaddyServer> = fc.record({
-  id: fc.integer({ min: 1, max: 1_000_000 }),
-  name: fc.string({ minLength: 1, maxLength: 32 }),
-  url: fc.webUrl(),
-  type: fc.constantFrom('local', 'remote'),
-  createdAt: fc.constantFrom(
-    '2024-01-01T00:00:00Z',
-    '2025-06-15T12:30:00Z',
-  ),
-});
-
 const configHistoryItemArb: fc.Arbitrary<CaddyServerApi.ConfigHistoryItem> =
   fc.record({
     id: fc.integer({ min: 1, max: 1_000_000 }),
-    serverId: fc.integer({ min: 1, max: 1_000_000 }),
     action: fc.constantFrom('save', 'rollback', 'apply'),
     hash: fc.string({ minLength: 4, maxLength: 40 }),
     createdAt: fc.constantFrom(
@@ -194,7 +167,6 @@ const wafSourceArb: fc.Arbitrary<CaddyWafSourceApi.WafSource> = fc.record({
 
 const simpleWafConfigArb: fc.Arbitrary<CaddySimpleWafApi.SimpleWafConfig> =
   fc.record({
-    serverId: fc.integer({ min: 0, max: 1_000_000 }),
     enabled: fc.boolean(),
     integrated: fc.boolean(),
     mode: fc.constantFrom('detectiononly', 'off', 'on'),
@@ -218,7 +190,6 @@ const simpleWafConfigArb: fc.Arbitrary<CaddySimpleWafApi.SimpleWafConfig> =
 
 const wafEngineStatusArb: fc.Arbitrary<CaddyWafSourceApi.WafEngineStatus> =
   fc.record({
-    serverId: fc.integer({ min: 0, max: 1_000_000 }),
     currentVersion: fc.option(fc.string({ maxLength: 16 }), { nil: undefined }),
     latestVersion: fc.option(fc.string({ maxLength: 16 }), { nil: undefined }),
     canUpgrade: fc.boolean(),
@@ -242,13 +213,13 @@ const configPreviewArb: fc.Arbitrary<CaddyServerApi.ConfigPreview> = fc.record({
 });
 
 describe('API_Contract type tightening — runtime payload equivalence', () => {
-    it('Property 5: listOf 对列表响应保持元素深度等价', () => {
+  it('Property 5: listOf 对列表响应保持元素深度等价', () => {
     fc.assert(
       fc.property(
-        fc.array(caddyServerArb, { maxLength: 20 }),
+        fc.array(configHistoryItemArb, { maxLength: 20 }),
         fc.option(fc.integer({ min: 0, max: 10_000 }), { nil: undefined }),
         (list, total) => {
-          const envelope: ListResult<CaddyServerApi.CaddyServer> = {
+          const envelope: ListResult<CaddyServerApi.ConfigHistoryItem> = {
             list,
             ...(total === undefined ? {} : { total }),
           };
@@ -280,25 +251,13 @@ describe('API_Contract type tightening — runtime payload equivalence', () => {
   it('Property 5: 核心模型恒等/克隆映射后业务字段深度等价', () => {
     fc.assert(
       fc.property(
-        caddyServerArb,
         caddyConfigArb,
         configPreviewArb,
         configHistoryItemArb,
         simpleWafConfigArb,
         wafSourceArb,
         wafEngineStatusArb,
-        (
-          server,
-          config,
-          preview,
-          history,
-          waf,
-          source,
-          engine,
-        ) => {
-          expect(identityMap(server)).toEqual(server);
-          expect(clonePayload(server)).toEqual(server);
-
+        (config, preview, history, waf, source, engine) => {
           expect(identityMap(config)).toEqual(config);
           expect(clonePayload(config)).toEqual(config);
 
@@ -324,16 +283,15 @@ describe('API_Contract type tightening — runtime payload equivalence', () => {
 
   // --- 既有成功响应样例（可读示例，对齐 Req 5.1 主类型清单） ---
 
-  it('样例：CaddyServer 列表 listOf 后字段深度等价', () => {
-    const mapped = listOf(sampleServerListResult);
+  it('样例：配置历史列表 listOf 后字段深度等价', () => {
+    const mapped = listOf(sampleHistoryListResult);
     expect(mapped).toHaveLength(1);
-    expect(mapped[0]).toEqual(sampleCaddyServer);
+    expect(mapped[0]).toEqual(sampleConfigHistoryItem);
     expect(mapped[0]).toMatchObject({
-      id: 1,
-      name: 'edge-1',
-      url: 'http://127.0.0.1:2019',
-      type: 'local',
-      createdAt: '2024-01-01T00:00:00Z',
+      id: 10,
+      action: 'save',
+      hash: 'abc123',
+      createdAt: '2024-02-01T12:00:00Z',
     });
   });
 
@@ -346,7 +304,6 @@ describe('API_Contract type tightening — runtime payload equivalence', () => {
     expect(totalOf(sampleHistoryListResult)).toBe(1);
     expect(historyMapped[0]).toEqual({
       id: 10,
-      serverId: 1,
       action: 'save',
       hash: 'abc123',
       createdAt: '2024-02-01T12:00:00Z',
@@ -358,7 +315,6 @@ describe('API_Contract type tightening — runtime payload equivalence', () => {
     expect(mapped).toEqual(sampleSimpleWafConfig);
     // 显式核对关键业务字段，防止类型收紧时静默丢字段
     expect(mapped).toMatchObject({
-      serverId: 1,
       enabled: true,
       integrated: false,
       mode: 'detectiononly',
@@ -392,7 +348,6 @@ describe('API_Contract type tightening — runtime payload equivalence', () => {
 
     expect(identityMap(sampleWafEngineStatus)).toEqual(sampleWafEngineStatus);
     expect(clonePayload(sampleWafEngineStatus)).toMatchObject({
-      serverId: 1,
       currentVersion: '3.2.1',
       latestVersion: '3.3.0',
       canUpgrade: true,

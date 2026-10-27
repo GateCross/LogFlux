@@ -15,8 +15,6 @@ import {
   siteMetricsForDomains,
   sitePrimaryHost,
   siteProtectBadge,
-  statusLabel,
-  statusTagColor,
 } from './service-catalog-utils';
 
 function sampleModel(): CaddyFormModel {
@@ -277,9 +275,9 @@ www.demo.com {
 
   it('siteCertDaysLeft 按域名/泛域名匹配并取最小剩余天数', () => {
     const certs = [
-      { id: 1, serverId: 1, domains: 'www.example.com,api.example.com', primaryDomain: 'www.example.com', issuer: '', source: 'upload' as const, notBefore: '', notAfter: '', lastSyncedAt: '', storagePath: '', status: 'valid' as const, daysLeft: 30 },
-      { id: 2, serverId: 1, domains: '*.example.com', primaryDomain: '*.example.com', issuer: '', source: 'acme_dns' as const, notBefore: '', notAfter: '', lastSyncedAt: '', storagePath: '', status: 'expiring' as const, daysLeft: 7 },
-      { id: 3, serverId: 1, domains: 'other.org', primaryDomain: 'other.org', issuer: '', source: 'upload' as const, notBefore: '', notAfter: '', lastSyncedAt: '', storagePath: '', status: 'valid' as const, daysLeft: 90 },
+      { id: 1, domains: 'www.example.com,api.example.com', primaryDomain: 'www.example.com', issuer: '', source: 'upload' as const, notBefore: '', notAfter: '', lastSyncedAt: '', storagePath: '', status: 'valid' as const, daysLeft: 30 },
+      { id: 2, domains: '*.example.com', primaryDomain: '*.example.com', issuer: '', source: 'acme_dns' as const, notBefore: '', notAfter: '', lastSyncedAt: '', storagePath: '', status: 'expiring' as const, daysLeft: 7 },
+      { id: 3, domains: 'other.org', primaryDomain: 'other.org', issuer: '', source: 'upload' as const, notBefore: '', notAfter: '', lastSyncedAt: '', storagePath: '', status: 'valid' as const, daysLeft: 90 },
     ];
     // 同时命中精确与泛域名时取最小剩余天数
     expect(siteCertDaysLeft(certs, ['www.example.com', ':443'])).toBe(7);
@@ -321,21 +319,8 @@ www.demo.com {
     expect(metricCountColor(2, '4xx')).toBe('warning');
   });
 
-  it('探测状态标签', () => {
-    expect(statusLabel(undefined)).toBe('未探测');
-    expect(statusLabel({ serverId: 1, name: 'n', reachable: true, latencyMs: 12, probedAt: '' })).toBe(
-      '在线',
-    );
-    expect(statusTagColor({ serverId: 1, name: 'n', reachable: false, latencyMs: 0, probedAt: '' })).toBe(
-      'error',
-    );
-  });
-
   it('深链 query 复用配置工作台与访问日志，不引入新数据源', () => {
-    expect(buildConfigWorkbenchQuery({ serverId: 3, mode: 'waf' })).toEqual({
-      serverId: '3',
-      mode: 'waf',
-    });
+    expect(buildConfigWorkbenchQuery({ mode: 'waf' })).toEqual({ mode: 'waf' });
     expect(buildAccessLogQuery([':8080', 'log.example.com'])).toEqual({ host: 'log.example.com' });
     expect(buildAccessLogQuery([':8080'])).toEqual({});
   });

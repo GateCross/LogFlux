@@ -39,7 +39,6 @@ export function diffSideClass(
 }
 
 export interface UseConfigHistoryOptions {
-  selectedServerId: Ref<number | undefined>;
   /** 当前将要发布的配置文本（对比右侧） */
   previewConfig: Ref<string> | { value: string };
   /** 已加载配置的哈希；回滚前做乐观并发校验，他人改动过则拒绝 */
@@ -49,7 +48,7 @@ export interface UseConfigHistoryOptions {
 }
 
 export function useConfigHistory(options: UseConfigHistoryOptions) {
-  const { selectedServerId, previewConfig, configHash, onRolledBack } = options;
+  const { previewConfig, configHash, onRolledBack } = options;
   const queryClient = useQueryClient();
 
   const historyDrawerVisible = ref(false);
@@ -73,28 +72,24 @@ export function useConfigHistory(options: UseConfigHistoryOptions) {
   });
 
   /** 回滚改写服务端配置：失效 config（含 simple-waf）、history、catalog */
-  async function invalidateAfterConfigMutation(serverId: number) {
+  async function invalidateAfterConfigMutation() {
     await invalidateListDetailQueryKeys(queryClient, [
-      qk.caddy.config(serverId),
-      ['caddy', 'history', serverId],
-      qk.caddy.catalog(serverId),
-      ['caddy', 'metrics', serverId],
+      qk.caddy.config(),
+      ['caddy', 'history'],
+      qk.caddy.catalog(),
+      ['caddy', 'metrics'],
     ]);
   }
 
   async function openHistory() {
-    if (!selectedServerId.value) return;
     historyDrawerVisible.value = true;
     historyLoading.value = true;
     historyErrorMessage.value = null;
     try {
       const data = await queryClient.fetchQuery({
-        queryKey: qk.caddy.history(selectedServerId.value, 1, 50),
+        queryKey: qk.caddy.history(1, 50),
         queryFn: () =>
-          getCaddyConfigHistoryListApi(
-            selectedServerId.value!,
-            withListDetailErrorMode(),
-          ),
+          getCaddyConfigHistoryListApi(withListDetailErrorMode()),
       });
       historyList.value = data?.list ?? [];
     } catch (error) {
@@ -105,21 +100,12 @@ export function useConfigHistory(options: UseConfigHistoryOptions) {
   }
 
   async function openHistoryDetail(id: number) {
-    if (!selectedServerId.value) return;
     historyErrorMessage.value = null;
     try {
       historyDetail.value = await queryClient.fetchQuery({
-        queryKey: [
-          ...qk.caddy.history(selectedServerId.value, 1, 1),
-          'detail',
-          id,
-        ],
+        queryKey: [...qk.caddy.history(1, 1), 'detail', id],
         queryFn: () =>
-          getCaddyConfigHistoryDetailApi(
-            selectedServerId.value!,
-            id,
-            withListDetailErrorMode(),
-          ),
+          getCaddyConfigHistoryDetailApi(id, withListDetailErrorMode()),
       });
       historyDetailVisible.value = true;
     } catch (error) {
@@ -128,21 +114,12 @@ export function useConfigHistory(options: UseConfigHistoryOptions) {
   }
 
   async function openHistoryCompare(id: number) {
-    if (!selectedServerId.value) return;
     historyErrorMessage.value = null;
     try {
       const detail = await queryClient.fetchQuery({
-        queryKey: [
-          ...qk.caddy.history(selectedServerId.value, 1, 1),
-          'detail',
-          id,
-        ],
+        queryKey: [...qk.caddy.history(1, 1), 'detail', id],
         queryFn: () =>
-          getCaddyConfigHistoryDetailApi(
-            selectedServerId.value!,
-            id,
-            withListDetailErrorMode(),
-          ),
+          getCaddyConfigHistoryDetailApi(id, withListDetailErrorMode()),
       });
       historyCompareLeft.value = detail?.config ?? '';
       historyDiffOnly.value = false;
@@ -153,20 +130,18 @@ export function useConfigHistory(options: UseConfigHistoryOptions) {
   }
 
   function rollbackHistory(id: number) {
-    if (!selectedServerId.value) return;
-    const serverId = selectedServerId.value;
     Modal.confirm({
       title: '确认回滚',
       content: '确定要回滚到该版本吗？',
       async onOk() {
         try {
-          await rollbackCaddyConfigApi(serverId, {
+          await rollbackCaddyConfigApi({
             historyId: id,
             baseHash: configHash?.value || undefined,
           });
           message.success('回滚成功');
           // 先失效相关缓存，再 fetchConfig() / openHistory，避免 staleTime 命中旧数据
-          await invalidateAfterConfigMutation(serverId);
+          await invalidateAfterConfigMutation();
           await onRolledBack?.();
           await openHistory();
         } catch (error) {

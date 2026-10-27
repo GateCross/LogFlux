@@ -2,8 +2,6 @@ package caddy
 
 import (
 	"context"
-	"fmt"
-	caddymodel "logflux/model/caddy"
 
 	"logflux/internal/svc"
 	"logflux/internal/types"
@@ -25,13 +23,9 @@ func NewGetCaddyConfigLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Ge
 	}
 }
 
-func (l *GetCaddyConfigLogic) GetCaddyConfig(req *types.CaddyConfigReq) (resp *types.CaddyConfigResp, err error) {
-	var server caddymodel.CaddyServer
-	if err := l.svcCtx.DB.WithContext(l.ctx).First(&server, req.ServerId).Error; err != nil {
-		return nil, fmt.Errorf("服务器不存在")
-	}
-
-	config, modules, err := loadCurrentCaddyConfig(&server)
+// GetCaddyConfig 返回当前生效配置；单实例下没有「选哪个节点」这一层。
+func (l *GetCaddyConfigLogic) GetCaddyConfig() (resp *types.CaddyConfigResp, err error) {
+	config, modules, err := loadCurrentCaddyConfig(l.svcCtx.DB.WithContext(l.ctx))
 	if err == nil {
 		return &types.CaddyConfigResp{
 			Config:  config,
@@ -49,5 +43,4 @@ func (l *GetCaddyConfigLogic) GetCaddyConfig(req *types.CaddyConfigReq) (resp *t
 		Config:  defaultConfig,
 		Modules: emptyModulesJSON,
 	}, nil
-
 }

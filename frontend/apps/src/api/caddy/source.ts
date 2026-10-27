@@ -45,7 +45,6 @@ export namespace CaddyWafSourceApi {
 
   /** WAF 引擎状态 — 对齐 backend WafEngineStatusResp */
   export interface WafEngineStatus {
-    serverId: number;
     currentVersion?: string;
     latestVersion?: string;
     canUpgrade: boolean;

@@ -110,6 +110,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	backfillWafPolicyCRSDefaults(db)
 	initWafWorkspace(&c)
 	initCronWorkspace(&c)
+	// 单实例改造：先把 caddy_servers 里的配置搬进 system_configs 并归零历史 server_id，
+	// 再做任何 Caddy 相关读写，否则新代码会读不到老库里的配置。
+	caddymodel.MigrateLegacyConfig(db)
 	ensureDefaultCaddyServer(db)
 
 	// 后端日志直接写入数据库（异步）
@@ -175,13 +178,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	ingestMgr := ingest.NewIngestManager(db)
 	ingestMgr.SetCaddyGeoResolver(ipRegionMgr.Resolve)
 
-	// 本机节点先补注册站点日志目录源：重启后即使没有配置变更，
-	// 站点日志也能继续被采集，不必等下一次 writer.Apply 触发。
-	var localServers []caddymodel.CaddyServer
-	db.Where("type = ?", "local").Find(&localServers)
-	for _, srv := range localServers {
-		ingest.EnsureSiteLogSource(db, srv.ID, logx.WithContext(context.Background()))
-	}
+	// 补注册站点日志目录源：重启后即使没有配置变更，站点日志也能继续被采集，
+	// 不必等下一次 writer.Apply 触发。单实例下只有一份目录源。
+	ingest.EnsureSiteLogSource(db, logx.WithContext(context.Background()))
 
 	var caddySources []ingestmodel.LogSource
 	db.Where("enabled = ? AND type = ?", true, "caddy").Find(&caddySources)

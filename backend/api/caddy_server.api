@@ -4,45 +4,9 @@ import "base.api"
 
 type (
 	// Caddy 管理
-	CaddyServerReq {
-		Name     string `json:"name"`
-		Url      string `json:"url"` // http://localhost:2019 或远程 IP
-		Token    string `json:"token,optional"` // 远程鉴权（如需要）
-		Type     string `json:"type,default=local"` // local | remote
-		Username string `json:"username,optional"`
-		Password string `json:"password,optional"`
-	}
-	CaddyServerItem {
-		ID        uint   `json:"id"`
-		Name      string `json:"name"`
-		Url       string `json:"url"`
-		Type      string `json:"type"`
-		CreatedAt string `json:"createdAt"`
-	}
-	CaddyServerListResp {
-		List []CaddyServerItem `json:"list"`
-	}
-	UpdateCaddyServerReq {
-		ID       uint   `path:"id"`
-		Name     string `json:"name,optional"`
-		Url      string `json:"url,optional"`
-		Token    string `json:"token,optional"`
-		Type     string `json:"type,optional"`
-		Username string `json:"username,optional"`
-		Password string `json:"password,optional"`
-	}
-	// 服务器状态探测（只读；复用 GET /config/）
-	CaddyServerStatusItem {
-		ServerId     uint   `json:"serverId"`
-		Name         string `json:"name"`
-		Reachable    bool   `json:"reachable"`
-		LatencyMs    int64  `json:"latencyMs"`
-		ProbedAt     string `json:"probedAt"`
-		ErrorMessage string `json:"errorMessage,optional"`
-	}
-	CaddyServerStatusListResp {
-		List []CaddyServerStatusItem `json:"list"`
-	}
+	//
+	// 单实例：不存在「多个节点」，因此没有服务器 CRUD，也没有 serverId 路径参数。
+	// caddy_servers 表只保留 Admin API 连接信息，由启动播种维护。
 	// Docker 发现：标签扫描 → 仅会话级候选（无发现库，永不自动 /load）
 	DockerDiscoveryCandidate {
 		CandidateId    string   `json:"candidateId"`
@@ -66,18 +30,13 @@ type (
 		Message   string                     `json:"message,optional"`
 	}
 	// 代理配置
-	CaddyConfigReq {
-		ServerId uint `path:"serverId"`
-	}
 	CaddyConfigUpdateReq {
-		ServerId uint   `path:"serverId"`
 		Mode     string `json:"mode,optional"` // quick | raw；为空时兼容旧版请求
 		Config   string `json:"config,optional"` // 原始 Caddyfile 或前端兜底生成结果
 		Modules  string `json:"modules,optional"` // 结构化配置(JSON)
 		BaseHash string `json:"baseHash,optional"` // 编辑起点配置哈希；不一致说明他人已改
 	}
 	CaddyConfigPreviewReq {
-		ServerId uint   `path:"serverId"`
 		Mode     string `json:"mode,optional"` // quick | raw；为空时根据 modules 自动判断
 		Config   string `json:"config,optional"` // 原始 Caddyfile 或前端兜底生成结果
 		Modules  string `json:"modules,optional"` // 结构化配置(JSON)
@@ -95,7 +54,6 @@ type (
 		Hash string `json:"hash,optional"` // 当前库内配置哈希；写请求回传做乐观并发
 	}
 	CaddyConfigHistoryListReq {
-		ServerId uint `path:"serverId"`
 		Page     int  `form:"page,default=1"`
 		PageSize int  `form:"pageSize,default=20"`
 	}
@@ -111,7 +69,6 @@ type (
 		Total int64                    `json:"total"`
 	}
 	CaddyConfigHistoryDetailReq {
-		ServerId  uint `path:"serverId"`
 		HistoryId uint `path:"historyId"`
 	}
 	CaddyConfigHistoryDetailResp {
@@ -124,7 +81,6 @@ type (
 		CreatedAt string `json:"createdAt"`
 	}
 	CaddyConfigRollbackReq {
-		ServerId  uint   `path:"serverId"`
 		HistoryId uint   `json:"historyId"`
 		BaseHash  string `json:"baseHash,optional"` // 回滚起点配置哈希；不一致说明他人已改
 	}
@@ -137,39 +93,24 @@ type (
 	middleware: ActiveUser
 )
 service logflux-api {
-	@handler GetCaddyServers
-	get /caddy/server returns (CaddyServerListResp)
-
-	@handler GetCaddyServerStatus
-	get /caddy/server/status returns (CaddyServerStatusListResp)
-
 	@handler DiscoverDockerServices
 	get /caddy/discovery/docker returns (DockerDiscoveryResp)
 
-	@handler AddCaddyServer
-	post /caddy/server (CaddyServerReq) returns (BaseResp)
-
-	@handler UpdateCaddyServer
-	put /caddy/server/:id (UpdateCaddyServerReq) returns (BaseResp)
-
-	@handler DeleteCaddyServer
-	delete /caddy/server/:id (IDReq) returns (BaseResp)
-
 	@handler GetCaddyConfig
-	get /caddy/server/:serverId/config (CaddyConfigReq) returns (CaddyConfigResp)
+	get /caddy/config returns (CaddyConfigResp)
 
 	@handler UpdateCaddyConfig
-	post /caddy/server/:serverId/config (CaddyConfigUpdateReq) returns (BaseResp)
+	post /caddy/config (CaddyConfigUpdateReq) returns (BaseResp)
 
 	@handler PreviewCaddyConfig
-	post /caddy/server/:serverId/config/preview (CaddyConfigPreviewReq) returns (CaddyConfigPreviewResp)
+	post /caddy/config/preview (CaddyConfigPreviewReq) returns (CaddyConfigPreviewResp)
 
 	@handler GetCaddyConfigHistory
-	get /caddy/server/:serverId/config/history (CaddyConfigHistoryListReq) returns (CaddyConfigHistoryListResp)
+	get /caddy/config/history (CaddyConfigHistoryListReq) returns (CaddyConfigHistoryListResp)
 
 	@handler GetCaddyConfigHistoryDetail
-	get /caddy/server/:serverId/config/history/:historyId (CaddyConfigHistoryDetailReq) returns (CaddyConfigHistoryDetailResp)
+	get /caddy/config/history/:historyId (CaddyConfigHistoryDetailReq) returns (CaddyConfigHistoryDetailResp)
 
 	@handler RollbackCaddyConfig
-	post /caddy/server/:serverId/config/rollback (CaddyConfigRollbackReq) returns (BaseResp)
+	post /caddy/config/rollback (CaddyConfigRollbackReq) returns (BaseResp)
 }

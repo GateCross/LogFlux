@@ -130,5 +130,5 @@ func (executor *certSyncExecutor) SyncCertificates(ctx context.Context) error {
 	if executor == nil || executor.svcCtx == nil {
 		return fmt.Errorf("证书同步执行器服务上下文为空")
 	}
-	return caddylogic.NewCertSyncService(ctx, executor.svcCtx).Sync(0)
+	return caddylogic.NewCertSyncService(ctx, executor.svcCtx).Sync()
 }

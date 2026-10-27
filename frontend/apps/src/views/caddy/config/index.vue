@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { Page } from '@vben/common-ui';
-import { Alert, Button, Card, Empty, Spin } from 'antdv-next';
+import { Alert, Card, Spin } from 'antdv-next';
 
 import DockerDiscoveryModal from './DockerDiscoveryModal.vue';
 import ServerToolbar from './components/ServerToolbar.vue';
@@ -16,8 +16,6 @@ import { useCaddyConfigPage } from './composables/useCaddyConfigPage';
 defineOptions({ name: 'CaddyConfig' });
 
 const {
-  servers,
-  serversErrorMessage,
   configErrorMessage,
   loadingConfig,
   mode,
@@ -33,20 +31,12 @@ const {
   wafPanelProps,
   savePreviewProps,
   historyDrawerProps,
-  handleServerChange,
-  openAddServerModal,
-  openEditServerModal,
-  deleteCurrentServer,
-  saveServer,
-  fetchServers,
-  handleRefreshServerStatus,
   openHistory,
   applyPreset,
   openDockerDiscovery,
   parseRawToBlocks,
   previewBeforeSave,
   handleModeChange,
-  setServerModalVisible,
   setActiveQuickSiteId,
   setWafPreviewVisible,
   setSavePreviewOpen,
@@ -82,27 +72,11 @@ const {
       <Card variant="borderless" class="caddy-shell">
         <ServerToolbar
           v-bind="serverToolbarProps"
-          @update:selected-server-id="handleServerChange"
-          @update:server-modal-visible="setServerModalVisible"
-          @refresh-list="fetchServers"
-          @refresh-status="handleRefreshServerStatus"
-          @open-add="openAddServerModal"
-          @open-edit="openEditServerModal"
-          @delete-server="deleteCurrentServer"
           @open-history="openHistory"
           @apply-preset="applyPreset"
           @parse-raw="parseRawToBlocks(true)"
           @save-raw="previewBeforeSave('raw')"
           @save-blocks="previewBeforeSave('blocks')"
-          @save-server="saveServer"
-        />
-
-        <Alert
-          v-if="serversErrorMessage"
-          class="mb-3"
-          type="error"
-          show-icon
-          :message="serversErrorMessage"
         />
 
         <Alert
@@ -114,57 +88,50 @@ const {
         />
 
         <Spin :spinning="loadingConfig">
-          <div v-if="servers.length === 0" class="empty-state">
-            <Empty description="未找到 Caddy 服务器，请先添加节点">
-              <Button type="primary" @click="openAddServerModal">添加服务器</Button>
-            </Empty>
-          </div>
-          <template v-else>
-            <ModeStrip :mode="mode" :mode-options="modeOptions" @change="handleModeChange" />
+          <ModeStrip :mode="mode" :mode-options="modeOptions" @change="handleModeChange" />
 
-            <Alert
-              v-if="mode === 'blocks' && quickValidationErrors.length"
-              class="mb-3"
-              :message="quickValidationErrors[0]"
-              show-icon
-              type="error"
-            />
+          <Alert
+            v-if="mode === 'blocks' && quickValidationErrors.length"
+            class="mb-3"
+            :message="quickValidationErrors[0]"
+            show-icon
+            type="error"
+          />
 
-            <BlocksWorkbench
-              v-if="mode === 'blocks'"
-              v-bind="blocksWorkbenchProps"
-              @update:active-quick-site-id="setActiveQuickSiteId"
-              @add-upstream="addUpstream"
-              @remove-upstream="removeUpstream"
-              @refresh-metrics="handleRefreshSiteMetrics"
-              @open-docker="openDockerDiscovery"
-              @add-site="addQuickSite"
-              @open-access-logs="(domains, e) => openAccessLogs(domains, e)"
-              @duplicate-site="duplicateQuickSite"
-              @remove-site="removeQuickSite"
-            />
+          <BlocksWorkbench
+            v-if="mode === 'blocks'"
+            v-bind="blocksWorkbenchProps"
+            @update:active-quick-site-id="setActiveQuickSiteId"
+            @add-upstream="addUpstream"
+            @remove-upstream="removeUpstream"
+            @refresh-metrics="handleRefreshSiteMetrics"
+            @open-docker="openDockerDiscovery"
+            @add-site="addQuickSite"
+            @open-access-logs="(domains, e) => openAccessLogs(domains, e)"
+            @duplicate-site="duplicateQuickSite"
+            @remove-site="removeQuickSite"
+          />
 
-            <WafPanel
-              v-else-if="mode === 'waf'"
-              v-bind="wafPanelProps"
-              @update:waf-preview-visible="setWafPreviewVisible"
-              @save="saveWafConfig"
-              @preview="previewWafConfig"
-              @apply="applyWafConfig"
-              @refresh="fetchWafConfig"
-            />
+          <WafPanel
+            v-else-if="mode === 'waf'"
+            v-bind="wafPanelProps"
+            @update:waf-preview-visible="setWafPreviewVisible"
+            @save="saveWafConfig"
+            @preview="previewWafConfig"
+            @apply="applyWafConfig"
+            @refresh="fetchWafConfig"
+          />
 
-            <RawEditorPanel
-              v-else-if="mode === 'raw'"
-              v-model="configContent"
-            />
+          <RawEditorPanel
+            v-else-if="mode === 'raw'"
+            v-model="configContent"
+          />
 
-            <RawEditorPanel
-              v-else
-              :model-value="previewConfig"
-              readonly
-            />
-          </template>
+          <RawEditorPanel
+            v-else
+            :model-value="previewConfig"
+            readonly
+          />
         </Spin>
       </Card>
     </div>
@@ -205,13 +172,6 @@ const {
 
 .caddy-shell {
   min-height: calc(100vh - 140px);
-}
-
-.empty-state {
-  min-height: 420px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .mb-3 {

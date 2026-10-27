@@ -19,7 +19,7 @@ import (
 //
 // adapt → load → persist 必须作为整体执行：若无互斥，两个并发写请求交错
 // （A.load → B.load → B.persist → A.persist）会出现运行态与库内配置分叉，
-// 且双方都返回成功；配置写频率极低，全局单锁即可，无需按服务器细分。
+// 且双方都返回成功；配置写频率极低，全局单锁即可。
 var caddyConfigWriteMu sync.Mutex
 
 type caddyConfigApplyService struct {
@@ -31,37 +31,30 @@ func newCaddyConfigApplyService(svcCtx *svc.ServiceContext, logger logx.Logger) 
 	return &caddyConfigApplyService{svcCtx: svcCtx, logger: logger}
 }
 
-func (s *caddyConfigApplyService) loadCurrent(server *caddymodel.CaddyServer) (string, string, error) {
-	return loadCurrentCaddyConfig(server)
+// loadCurrent 读取当前生效配置（存于 system_configs，单实例下只有一份）。
+func (s *caddyConfigApplyService) loadCurrent() (string, string, error) {
+	return loadCurrentCaddyConfig(s.svcCtx.DB)
 }
 
 // checkBaseHash 做乐观并发检查。
 //
 // baseHash 为空表示旧版客户端，保持向后兼容直接放行；非空时与库内当前哈希比对，
 // 不一致说明期间有人改过配置，继续写会静默覆盖对方的改动。
-func checkBaseHash(server *caddymodel.CaddyServer, baseHash string) error {
+func checkBaseHash(db *gorm.DB, baseHash string) error {
 	baseHash = strings.TrimSpace(baseHash)
-	if baseHash == "" || server == nil {
+	if baseHash == "" || db == nil {
 		return nil
 	}
-	current := hashConfig(server.Config)
-	if current != baseHash {
+	current, _ := caddymodel.LoadConfig(db)
+	if hashConfig(current) != baseHash {
 		return fmt.Errorf("配置已被他人修改，请刷新后重试")
 	}
 	return nil
 }
 
 // verifyBaseHash 从库里重新取一份最新配置再校验，避免用请求上下文里的旧快照判断。
-func verifyBaseHash(db *gorm.DB, serverID uint, baseHash string) error {
-	if strings.TrimSpace(baseHash) == "" {
-		return nil
-	}
-	// serverID 为 0 表示"默认服务器"，必须先解析成实际记录再比对。
-	server, err := findPreferredCaddyServer(db, serverID)
-	if err != nil {
-		return err
-	}
-	return checkBaseHash(server, baseHash)
+func verifyBaseHash(db *gorm.DB, baseHash string) error {
+	return checkBaseHash(db, baseHash)
 }
 
 // configWriteOptions 表达一次配置写入的全部差异，供三条写路径共用同一套语义。
@@ -93,25 +86,15 @@ func (s *caddyConfigApplyService) Apply(server *caddymodel.CaddyServer, config, 
 	caddyConfigWriteMu.Lock()
 	defer caddyConfigWriteMu.Unlock()
 
-	// 锁内重读库内最新行再校验 baseHash：请求开始时的内存快照不可信，
-	// 从加载 server 到落库之间隔着 adapt/load 两次带重试的 HTTP 调用（窗口可达数十秒），
+	// 锁内重读库内最新配置再校验 baseHash：请求开始时的内存快照不可信，
+	// 从加载到落库之间隔着 adapt/load 两次带重试的 HTTP 调用（窗口可达数十秒），
 	// 期间他人落库的修改若不在此重新比对，会被携带"当时合法"哈希的后写者覆盖。
-	var fresh caddymodel.CaddyServer
-	if err := s.svcCtx.DB.First(&fresh, server.ID).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return fmt.Errorf("Caddy 服务器不存在")
-		}
-		return fmt.Errorf("查询 Caddy 服务器失败: %w", err)
-	}
-	if err := checkBaseHash(&fresh, opts.BaseHash); err != nil {
+	if err := checkBaseHash(s.svcCtx.DB, opts.BaseHash); err != nil {
 		return err
 	}
-	// 以库内最新值为回滚基准，并同步回调用方持有的对象，落库与响应展示都以它为准。
-	*server = fresh
+	previousConfig, previousModules := caddymodel.LoadConfig(s.svcCtx.DB)
 
 	normalizedModules := normalizeCaddyModulesJSON(modules)
-	previousConfig := server.Config
-	previousModules := server.Modules
 
 	// adapt 前合并全局选项与 :80 入口块模板：库里单独保存的设置在每次应用时
 	// 统一收口到最终配置，后续 adapt/load/persist 都以合并结果为准。
@@ -135,9 +118,7 @@ func (s *caddyConfigApplyService) Apply(server *caddymodel.CaddyServer, config, 
 		return err
 	}
 
-	if _, err := s.persist(server, config, normalizedModules, opts, previousConfig, previousModules); err != nil {
-		server.Config = previousConfig
-		server.Modules = previousModules
+	if _, err := s.persist(config, normalizedModules, opts, previousConfig, previousModules); err != nil {
 		// 未接管过的服务器没有可回退的配置，运行态保持新配置，等下次应用覆盖。
 		if strings.TrimSpace(previousConfig) == "" {
 			return fmt.Errorf("保存 Caddy 配置到数据库失败: %w", err)
@@ -152,7 +133,7 @@ func (s *caddyConfigApplyService) Apply(server *caddymodel.CaddyServer, config, 
 	return nil
 }
 
-func (s *caddyConfigApplyService) persist(server *caddymodel.CaddyServer, config, modules string, opts configWriteOptions, previousConfig, previousModules string) (uint, error) {
+func (s *caddyConfigApplyService) persist(config, modules string, opts configWriteOptions, previousConfig, previousModules string) (uint, error) {
 	var historyID uint
 	if err := s.svcCtx.DB.Transaction(func(tx *gorm.DB) error {
 		if opts.InTx != nil {
@@ -161,19 +142,17 @@ func (s *caddyConfigApplyService) persist(server *caddymodel.CaddyServer, config
 			}
 		}
 		if opts.SnapshotBefore {
-			if err := createCaddyPolicyHistory(tx, server.ID, caddymodel.CaddyHistoryActionSimpleWafLastGood, previousConfig, previousModules); err != nil {
+			if err := createCaddyPolicyHistory(tx, caddymodel.LegacyServerID, caddymodel.CaddyHistoryActionSimpleWafLastGood, previousConfig, previousModules); err != nil {
 				return err
 			}
 		}
 
-		server.Config = config
-		server.Modules = modules
-		if err := tx.Save(server).Error; err != nil {
-			return fmt.Errorf("保存 Caddy 服务器配置失败: %w", err)
+		if err := caddymodel.SaveConfig(tx, config, modules); err != nil {
+			return fmt.Errorf("保存 Caddy 配置失败: %w", err)
 		}
 
 		history := &caddymodel.CaddyConfigHistory{
-			ServerID: server.ID,
+			ServerID: caddymodel.LegacyServerID,
 			Action:   opts.HistoryAction,
 			Hash:     hashConfig(config),
 			Config:   config,
@@ -284,27 +263,21 @@ func (s *caddyConfigApplyService) scheduleLogSourceSync(server *caddymodel.Caddy
 	safego.New(context.Background(), "应用 Caddy 配置后同步日志源").Go(func() {
 		// 先保证站点日志目录可被采集，再按配置里声明的路径补充精确源：
 		// 目录源覆盖后续新建的站点文件，精确源覆盖显式配置的单文件路径。
-		ingest.EnsureSiteLogSource(s.svcCtx.DB, server.ID, s.logger)
+		ingest.EnsureSiteLogSource(s.svcCtx.DB, s.logger)
 		syncCaddyLogSources(s.svcCtx, server, s.logger)
 	})
 }
 
-func findPreferredCaddyServer(db *gorm.DB, serverID uint) (*caddymodel.CaddyServer, error) {
+// findPreferredCaddyServer 返回唯一的 Caddy 管理目标（Admin API 地址与 Token）。
+//
+// 单实例下不存在「选哪个节点」，一律优先 local 行、其次 id 最小的行；
+// 配置本身不在这张表里，这里只取连接信息。
+func findPreferredCaddyServer(db *gorm.DB) (*caddymodel.CaddyServer, error) {
 	if db == nil {
 		return nil, fmt.Errorf("数据库为空")
 	}
 
 	var server caddymodel.CaddyServer
-	if serverID > 0 {
-		if err := db.First(&server, serverID).Error; err != nil {
-			if err == gorm.ErrRecordNotFound {
-				return nil, fmt.Errorf("Caddy 服务器不存在")
-			}
-			return nil, fmt.Errorf("查询 Caddy 服务器失败: %w", err)
-		}
-		return &server, nil
-	}
-
 	err := db.Where("type = ?", "local").Order("id asc").First(&server).Error
 	if err == gorm.ErrRecordNotFound {
 		err = db.Order("id asc").First(&server).Error

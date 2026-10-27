@@ -15,7 +15,6 @@ import {
   Input,
   message,
   Modal,
-  Select,
   Space,
   Table,
   Tag,
@@ -29,58 +28,27 @@ import {
   refreshCertificatesApi,
   uploadCertificateApi,
 } from '#/api/caddy/certificate';
-import { getCaddyServerListApi } from '#/api/caddy/server';
 import { withListDetailErrorMode } from '#/api/list-detail';
 import { invalidateListDetailQueries } from '#/api/list-detail-mutation';
 import { qk } from '#/api/query-keys';
 import { useListDetailQuery } from '#/composables/use-list-detail-query';
 import { apiErrorMessage } from '#/utils/api-error-message';
 
-import { serverLabel } from '../catalog/composables/useServiceCatalogPage';
 import {
   certDaysBadge,
   certSourceLabel,
   certStatusLabel,
   certStatusColor,
   formatCertDateRange,
-  isLocalServer,
 } from './certificate-utils';
 
 /**
  * 证书中心：双源合并库存（卷扫描真值 + Caddyfile 声明）。
- * remote 服务器只有声明行（远端（仅声明）），有效期与天数如实显示占位。
+ * 只有声明没有真值的行如实显示占位。
  */
 defineOptions({ name: 'CaddyCertificates' });
 
 const queryClient = useQueryClient();
-
-const {
-  data: serversData,
-  loading: loadingServers,
-  errorMessage: serversErrorMessage,
-} = useListDetailQuery({
-  queryKey: qk.caddy.servers(),
-  queryFn: () => getCaddyServerListApi(withListDetailErrorMode()),
-  errorFallback: '获取服务器列表失败',
-});
-
-const servers = computed(() => serversData.value ?? []);
-const serverNameMap = computed(
-  () => new Map(servers.value.map((server) => [Number(server.id), serverLabel(server)])),
-);
-
-/** 库存过滤：undefined = 全部服务器 */
-const filterServerId = ref<number | undefined>();
-const filterOptions = computed(() =>
-  servers.value.map((server) => ({
-    label: serverLabel(server),
-    value: Number(server.id),
-  })),
-);
-
-function handleFilterChange(value: unknown) {
-  filterServerId.value = value == null || value === '' ? undefined : Number(value);
-}
 
 const {
   data: certData,
@@ -88,9 +56,8 @@ const {
   errorMessage: certsErrorMessage,
   refetch,
 } = useListDetailQuery({
-  queryKey: computed(() => qk.caddy.certificates(filterServerId.value)),
-  queryFn: () =>
-    getCertificateListApi(filterServerId.value, withListDetailErrorMode()),
+  queryKey: qk.caddy.certificates(),
+  queryFn: () => getCertificateListApi(withListDetailErrorMode()),
   errorFallback: '获取证书库存失败',
 });
 
@@ -104,11 +71,10 @@ const columns = [
   { title: '状态', dataIndex: 'status', key: 'status', width: 130 },
   { title: '来源', dataIndex: 'source', key: 'source', width: 110 },
   { title: '存储路径', dataIndex: 'storagePath', key: 'storagePath', width: 220, ellipsis: true },
-  { title: '所属服务器', key: 'server', width: 150, ellipsis: true },
   { title: '操作', key: 'actions', width: 90, fixed: 'right' as const },
 ];
 
-/** 复制存储路径，供站点抽屉「手动证书」直接引用 */
+/** 复制存储路径，供站点 TLS「手动证书」直接引用 */
 async function handleCopyStoragePath(record: CaddyCertificateApi.CertificateItem) {
   const text = (record.storagePath || '').trim();
   if (!text) {
@@ -123,7 +89,7 @@ async function handleCopyStoragePath(record: CaddyCertificateApi.CertificateItem
   }
 }
 
-/** 失效全部证书库存缓存（前缀匹配所有 serverId 维度） */
+/** 失效证书库存缓存 */
 async function invalidateCertificates() {
   await invalidateListDetailQueries(queryClient, ['caddy', 'certificates']);
 }
@@ -132,7 +98,7 @@ const refreshing = ref(false);
 async function handleRefresh() {
   refreshing.value = true;
   try {
-    await refreshCertificatesApi(filterServerId.value);
+    await refreshCertificatesApi();
     message.success('证书库存已刷新');
     await invalidateCertificates();
     await refetch();
@@ -160,36 +126,21 @@ function handleDelete(record: CaddyCertificateApi.CertificateItem) {
   });
 }
 
-// 上传：仅 local 服务器有文件通道，remote 禁选并标注
+// 上传：证书落盘到本机 /config/certs/，没有服务器可选
 const uploadOpen = ref(false);
 const uploading = ref(false);
 const uploadError = ref('');
 const certFile = ref<File | null>(null);
 const keyFile = ref<File | null>(null);
 const uploadForm = reactive({
-  serverId: undefined as number | undefined,
   domains: '',
 });
-
-const uploadServerOptions = computed(() =>
-  servers.value.map((server) => {
-    const label = serverLabel(server);
-    return {
-      label: isLocalServer(server) ? label : `${label}（远端，无文件通道）`,
-      value: Number(server.id),
-      disabled: !isLocalServer(server),
-    };
-  }),
-);
-const hasLocalServer = computed(() => servers.value.some(isLocalServer));
 
 function openUpload() {
   uploadError.value = '';
   certFile.value = null;
   keyFile.value = null;
   uploadForm.domains = '';
-  const firstLocal = servers.value.find(isLocalServer);
-  uploadForm.serverId = firstLocal ? Number(firstLocal.id) : undefined;
   uploadOpen.value = true;
 }
 
@@ -212,10 +163,6 @@ function removeKeyFile() {
 }
 
 async function handleUploadOk() {
-  if (!uploadForm.serverId) {
-    uploadError.value = '请选择上传目标服务器';
-    return;
-  }
   if (!certFile.value || !keyFile.value) {
     uploadError.value = '请选择证书文件与私钥文件';
     return;
@@ -227,7 +174,6 @@ async function handleUploadOk() {
       {
         certFile: certFile.value,
         keyFile: keyFile.value,
-        serverId: uploadForm.serverId,
         domains: uploadForm.domains,
       },
       withListDetailErrorMode(),
@@ -247,13 +193,6 @@ async function handleUploadOk() {
 <template>
   <Page title="证书中心" description="证书库存与到期状态：ACME 自动续期由 Caddy 负责，面板只读展示">
     <Alert
-      v-if="serversErrorMessage"
-      class="mb-4"
-      type="error"
-      show-icon
-      :message="serversErrorMessage"
-    />
-    <Alert
       v-if="certsErrorMessage"
       class="mb-4"
       type="error"
@@ -263,18 +202,8 @@ async function handleUploadOk() {
 
     <Card variant="borderless">
       <div class="toolbar">
-        <Select
-          v-if="filterOptions.length > 1"
-          :value="filterServerId"
-          :options="filterOptions"
-          :loading="loadingServers"
-          allow-clear
-          placeholder="全部服务器"
-          class="filter-select"
-          @change="handleFilterChange"
-        />
         <Space>
-          <Tooltip title="重新扫描证书卷并合并 Caddyfile 声明（remote 服务器仅同步声明）">
+          <Tooltip title="重新扫描证书卷并合并 Caddyfile 声明">
             <Button :loading="refreshing" @click="handleRefresh">手动刷新</Button>
           </Tooltip>
           <Button type="primary" @click="openUpload">上传证书</Button>
@@ -334,9 +263,6 @@ async function handleUploadOk() {
             </div>
             <span v-else>—</span>
           </template>
-          <template v-else-if="column.key === 'server'">
-            {{ serverNameMap.get(record.serverId) || `Server #${record.serverId}` }}
-          </template>
           <template v-else-if="column.key === 'actions'">
             <Button
               size="small"
@@ -355,16 +281,8 @@ async function handleUploadOk() {
       v-model:open="uploadOpen"
       title="上传证书"
       :confirm-loading="uploading"
-      :ok-button-props="{ disabled: !hasLocalServer }"
       @ok="handleUploadOk"
     >
-      <Alert
-        v-if="!hasLocalServer"
-        class="mb-3"
-        type="warning"
-        show-icon
-        message="没有可上传的本地服务器：远端节点无文件通道，不能上传证书文件"
-      />
       <Alert
         v-if="uploadError"
         class="mb-3"
@@ -373,13 +291,6 @@ async function handleUploadOk() {
         :message="uploadError"
       />
       <Form :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }">
-        <FormItem label="目标服务器">
-          <Select
-            v-model:value="uploadForm.serverId"
-            :options="uploadServerOptions"
-            placeholder="选择本地服务器"
-          />
-        </FormItem>
         <FormItem label="证书文件">
           <Upload
             :before-upload="beforeCertUpload"
@@ -408,7 +319,7 @@ async function handleUploadOk() {
         </FormItem>
       </Form>
       <div class="upload-hint">
-        上传后证书存入服务器 /config/certs/ 目录，可在站点抽屉 TLS「手动证书」中引用其路径。
+        上传后证书存入 /config/certs/ 目录，可在站点 TLS「手动证书」中引用其路径。
       </div>
     </Modal>
   </Page>
@@ -426,12 +337,8 @@ async function handleUploadOk() {
 .toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   margin-bottom: 16px;
-}
-
-.filter-select {
-  width: 240px;
 }
 
 .san-note {

@@ -80,7 +80,6 @@ type (
 		ActivateNow bool   `json:"activateNow,optional"`
 	}
 	WafEngineStatusResp {
-		ServerId        uint   `json:"serverId"`
 		CurrentVersion string `json:"currentVersion,optional"`
 		LatestVersion  string `json:"latestVersion,optional"`
 		CanUpgrade     bool   `json:"canUpgrade"`
@@ -89,10 +88,8 @@ type (
 		Message        string `json:"message,optional"`
 	}
 	SimpleWafConfigReq {
-		ServerId uint `form:"serverId,optional"` // 为空时使用默认 Caddy 服务器
 	}
 	SimpleWafConfigUpdateReq {
-		ServerId                    uint     `json:"serverId,optional"` // 为空时使用默认 Caddy 服务器
 		Enabled                     bool     `json:"enabled"`           // 是否将 WAF 挂载到站点
 		Mode                        string   `json:"mode,default=detectiononly"` // off | detectiononly | on
 		Strength                    string   `json:"strength,default=low_fp"`    // low_fp | balanced | high_blocking
@@ -113,7 +110,6 @@ type (
 		Rules      []CrsRuleItem `json:"rules"`
 	}
 	SimpleWafConfigResp {
-		ServerId                    uint            `json:"serverId"`
 		Enabled                     bool            `json:"enabled"`
 		Integrated                  bool            `json:"integrated"`
 		Mode                        string          `json:"mode"`

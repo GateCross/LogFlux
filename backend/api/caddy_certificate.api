@@ -3,14 +3,12 @@ syntax = "v1"
 import "base.api"
 
 type (
-	// 证书库存查询；serverId 缺省返回全部服务器
+	// 证书库存查询（单实例：没有 serverId 维度）
 	CertificateListReq {
-		ServerId uint `form:"serverId,optional"`
 	}
 	// 单张证书的库存投影
 	CertificateItem {
 		ID            uint   `json:"id"`
-		ServerId      uint   `json:"serverId"`                   // 所属 Caddy 服务器
 		Domains       string `json:"domains"`                    // SAN 列表，逗号分隔
 		PrimaryDomain string `json:"primaryDomain"`              // 主域名（库存合并键）
 		Issuer        string `json:"issuer"`                     // 签发者展示名
@@ -25,15 +23,10 @@ type (
 	CertificateListResp {
 		List []CertificateItem `json:"list"`
 	}
-	// 手动刷新证书库存（卷扫描 + Caddyfile 声明合并）
-	CertificateRefreshReq {
-		ServerId uint `json:"serverId,optional"` // 只刷新指定服务器，缺省刷新全部
-	}
-	// 证书上传：multipart 表单（cert/key 两个 PEM 文件 + serverId + domains 可选），
+	// 证书上传：multipart 表单（cert/key 两个 PEM 文件 + domains 可选），
 	// 非文件字段沿用 form 标签
 	CertificateUploadReq {
-		ServerId uint   `form:"serverId,optional"` // 目标服务器，缺省使用默认本机服务器
-		Domains  string `form:"domains,optional"`  // 补充域名，逗号分隔，与证书 SAN 合并展示
+		Domains string `form:"domains,optional"` // 补充域名，逗号分隔，与证书 SAN 合并展示
 	}
 )
 
@@ -51,7 +44,7 @@ service logflux-api {
 	post /caddy/certificates/upload (CertificateUploadReq) returns (BaseResp)
 
 	@handler RefreshCertificates
-	post /caddy/certificates/refresh (CertificateRefreshReq) returns (BaseResp)
+	post /caddy/certificates/refresh returns (BaseResp)
 
 	@handler DeleteCertificate
 	delete /caddy/certificates/:id (IDReq) returns (BaseResp)

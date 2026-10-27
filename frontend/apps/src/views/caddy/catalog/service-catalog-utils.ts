@@ -50,16 +50,6 @@ export interface SiteMetricsCounters {
 
 export type SiteMetricsMap = Map<string, SiteMetricsCounters>;
 
-// 节点探测展示语义统一从 shared 复用（配置管理 / 服务目录）
-export type { ServerStatusItem } from '../shared/caddy-server-status';
-export {
-  formatLatency,
-  mergeServerStatusRows,
-  statusErrorSummary,
-  statusLabel,
-  statusTagColor,
-} from '../shared/caddy-server-status';
-
 /** 从站点域名中提取可用于 metrics / 日志过滤的 host（去掉端口与协议） */
 export function normalizeSiteHost(domain: string): string {
   const raw = String(domain ?? '').trim();
@@ -432,13 +422,9 @@ function attachSiteBlockRaw(cards: CatalogSiteCard[], configContent: string): vo
 
 /** 配置工作台深链 query（不触发 /load） */
 export function buildConfigWorkbenchQuery(options: {
-  serverId?: number | string | null;
   mode?: 'blocks' | 'waf' | 'raw' | 'preview';
 }): Record<string, string> {
   const query: Record<string, string> = {};
-  if (options.serverId !== undefined && options.serverId !== null && options.serverId !== '') {
-    query.serverId = String(options.serverId);
-  }
   if (options.mode) {
     query.mode = options.mode;
   }

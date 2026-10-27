@@ -3,6 +3,7 @@ package caddy
 import (
 	"context"
 	"fmt"
+
 	caddymodel "logflux/model/caddy"
 
 	"logflux/internal/svc"
@@ -26,18 +27,19 @@ func NewRollbackCaddyConfigLogic(ctx context.Context, svcCtx *svc.ServiceContext
 }
 
 func (l *RollbackCaddyConfigLogic) RollbackCaddyConfig(req *types.CaddyConfigRollbackReq) (resp *types.BaseResp, err error) {
-	var server caddymodel.CaddyServer
-	if err := l.svcCtx.DB.WithContext(l.ctx).First(&server, req.ServerId).Error; err != nil {
-		return nil, fmt.Errorf("服务器不存在")
+	db := l.svcCtx.DB.WithContext(l.ctx)
+	server, err := findPreferredCaddyServer(db)
+	if err != nil {
+		return nil, err
 	}
 
 	var history caddymodel.CaddyConfigHistory
-	if err := l.svcCtx.DB.WithContext(l.ctx).Where("id = ? AND server_id = ?", req.HistoryId, req.ServerId).First(&history).Error; err != nil {
+	if err := db.Where("id = ?", req.HistoryId).First(&history).Error; err != nil {
 		return nil, fmt.Errorf("历史记录不存在")
 	}
 
 	applyService := newCaddyConfigApplyService(l.svcCtx, l.Logger)
-	if err := applyService.Apply(&server, history.Config, history.Modules, configWriteOptions{
+	if err := applyService.Apply(server, history.Config, history.Modules, configWriteOptions{
 		HistoryAction: caddymodel.CaddyHistoryActionRollback,
 		BaseHash:      req.BaseHash,
 	}); err != nil {

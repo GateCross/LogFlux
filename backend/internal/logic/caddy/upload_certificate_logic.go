@@ -56,8 +56,8 @@ func NewUploadCertificateLogic(ctx context.Context, svcCtx *svc.ServiceContext) 
 }
 
 // UploadCertificate 校验证书与私钥配对后落盘并入库（source=upload）。
-// 落盘路径 /config/certs/<serverID>/<主域名>/{fullchain.pem,privkey.pem}（0600），
-// 私钥内容不回显、不进日志；仅本机服务器可上传。
+// 落盘路径 /config/certs/<主域名>/{fullchain.pem,privkey.pem}（0600），
+// 私钥内容不回显、不进日志。
 func (l *UploadCertificateLogic) UploadCertificate(req *types.CertificateUploadReq) (resp *types.BaseResp, err error) {
 	files := certificateUploadFilesFrom(l.ctx)
 	if files == nil || len(files.CertPEM) == 0 || len(files.KeyPEM) == 0 {
@@ -67,12 +67,7 @@ func (l *UploadCertificateLogic) UploadCertificate(req *types.CertificateUploadR
 		return nil, xerr.NewSystemErrorWith("证书模型未初始化")
 	}
 
-	serverID := uint(0)
-	if req != nil {
-		serverID = req.ServerId
-	}
-	server, err := resolveLocalCertServer(l.svcCtx.DB.WithContext(l.ctx), serverID)
-	if err != nil {
+	if _, err := resolveLocalCertServer(l.svcCtx.DB.WithContext(l.ctx)); err != nil {
 		return nil, err
 	}
 
@@ -107,15 +102,15 @@ func (l *UploadCertificateLogic) UploadCertificate(req *types.CertificateUploadR
 		domains = mergeCertDomainList(domains, declared)
 	}
 
-	certPath := filepath.Join(certUploadDir(server.ID, primaryDomain), certUploadCertFileName)
-	keyPath := filepath.Join(certUploadDir(server.ID, primaryDomain), certUploadKeyFileName)
+	certPath := filepath.Join(certUploadDir(primaryDomain), certUploadCertFileName)
+	keyPath := filepath.Join(certUploadDir(primaryDomain), certUploadKeyFileName)
 	if err := writeCertPair(certPath, keyPath, files.CertPEM, files.KeyPEM); err != nil {
 		return nil, xerr.NewSystemErrorWith(err.Error())
 	}
 
 	now := time.Now()
 	row := &caddymodel.Certificate{
-		ServerID:      server.ID,
+		ServerID:      caddymodel.LegacyServerID,
 		PrimaryDomain: primaryDomain,
 		Domains:       strings.Join(domains, ","),
 		Issuer:        info.Issuer,
@@ -133,7 +128,7 @@ func (l *UploadCertificateLogic) UploadCertificate(req *types.CertificateUploadR
 		return nil, xerr.NewSystemErrorWith("写入证书库存失败")
 	}
 
-	l.Logger.Infof("[证书中心] 上传证书成功: server=%s domain=%s", server.Name, primaryDomain)
+	l.Logger.Infof("[证书中心] 上传证书成功: domain=%s", primaryDomain)
 	return &types.BaseResp{Code: 0, Msg: "上传成功"}, nil
 }
 

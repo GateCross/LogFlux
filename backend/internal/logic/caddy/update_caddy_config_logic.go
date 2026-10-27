@@ -2,7 +2,6 @@ package caddy
 
 import (
 	"context"
-	"fmt"
 	caddymodel "logflux/model/caddy"
 
 	"logflux/internal/svc"
@@ -29,12 +28,14 @@ func NewUpdateCaddyConfigLogic(ctx context.Context, svcCtx *svc.ServiceContext) 
 }
 
 func (l *UpdateCaddyConfigLogic) UpdateCaddyConfig(req *types.CaddyConfigUpdateReq) (resp *types.BaseResp, err error) {
-	var server caddymodel.CaddyServer
-	if err := l.svcCtx.DB.WithContext(l.ctx).First(&server, req.ServerId).Error; err != nil {
-		return nil, fmt.Errorf("服务器不存在")
+	db := l.svcCtx.DB.WithContext(l.ctx)
+	// 配置写的是 system_configs 里的唯一副本，caddy_servers 只提供 Admin API 地址。
+	server, err := findPreferredCaddyServer(db)
+	if err != nil {
+		return nil, err
 	}
 	// 提前校验一次避免无谓的文本处理，写入器内还会再校验兜底。
-	if err := checkBaseHash(&server, req.BaseHash); err != nil {
+	if err := checkBaseHash(db, req.BaseHash); err != nil {
 		return nil, err
 	}
 	applyService := newCaddyConfigApplyService(l.svcCtx, l.Logger)
@@ -56,7 +57,7 @@ func (l *UpdateCaddyConfigLogic) UpdateCaddyConfig(req *types.CaddyConfigUpdateR
 	}
 
 	modules := resolveCaddyConfigModules(req.Mode, req.Modules)
-	if err := applyService.Apply(&server, candidate.Config, modules, configWriteOptions{
+	if err := applyService.Apply(server, candidate.Config, modules, configWriteOptions{
 		HistoryAction: caddymodel.CaddyHistoryActionUpdate,
 		BaseHash:      req.BaseHash,
 	}); err != nil {

@@ -4,9 +4,7 @@ import { Page } from '@vben/common-ui';
 import { Alert, Card } from 'antdv-next';
 
 import SiteCreateModal from '../sites/SiteCreateModal.vue';
-import EditPanel from './components/EditPanel.vue';
 import ServiceList from './components/ServiceList.vue';
-import StatusActions from './components/StatusActions.vue';
 import { useServiceCatalogPage } from './composables/useServiceCatalogPage';
 
 defineOptions({ name: 'CaddyCatalog' });
@@ -14,11 +12,7 @@ defineOptions({ name: 'CaddyCatalog' });
 const createModalOpen = ref(false);
 
 const {
-  servers,
-  selectedServerId,
-  loadingServers,
   loadingConfig,
-  serversErrorMessage,
   configErrorMessage,
   siteCards,
   configRaw,
@@ -28,19 +22,9 @@ const {
   siteMetricsError,
   certList,
   wafStatus,
-  serverOptions,
-  loadingServerStatus,
-  serverStatusError,
-  serverStatusLoaded,
-  lastProbedAt,
-  selectedServerStatus,
-  serverStatusRows,
   filteredSites,
   fetchConfigSites,
-  handleRefreshServerStatus,
   handleRefreshSites,
-  handleServerChange,
-  selectServerFromStatus,
   openConfigWorkbench,
   openWaf,
   openAccessLogs,
@@ -51,14 +35,7 @@ const {
 </script>
 
 <template>
-  <Page title="站点" description="查看已登记节点上的站点与今日请求/拦截统计">
-    <Alert
-      v-if="serversErrorMessage"
-      class="mb-4"
-      type="error"
-      show-icon
-      :message="serversErrorMessage"
-    />
+  <Page title="站点" description="查看站点与今日请求/拦截统计">
     <Alert
       v-if="configErrorMessage"
       class="mb-4"
@@ -67,38 +44,8 @@ const {
       :message="configErrorMessage"
     />
 
-    <Card variant="borderless" class="mb-4">
-      <EditPanel
-        :selected-server-id="selectedServerId"
-        :server-options="serverOptions"
-        :loading-servers="loadingServers"
-        :selected-server-status="selectedServerStatus"
-        :loading-server-status="loadingServerStatus"
-        :loading-config="loadingConfig"
-        @update:selected-server-id="handleServerChange"
-        @refresh-status="handleRefreshServerStatus"
-        @open-workbench="openConfigWorkbench"
-        @open-waf="openWaf"
-      />
-    </Card>
-
-    <!-- 单节点时隐藏：多节点总览网格与最近探测时间仅在多节点场景有意义 -->
-    <Card v-if="servers.length > 1" variant="borderless" class="mb-4">
-      <StatusActions
-        :servers-count="servers.length"
-        :last-probed-at="lastProbedAt"
-        :server-status-error="serverStatusError"
-        :server-status-loaded="serverStatusLoaded"
-        :selected-server-id="selectedServerId"
-        :server-status-rows="serverStatusRows"
-        @select-server="selectServerFromStatus"
-        @open-workbench="() => openConfigWorkbench()"
-      />
-    </Card>
-
     <Card variant="borderless">
       <ServiceList
-        :selected-server-id="selectedServerId"
         :loading="loadingConfig"
         :keyword="keyword"
         :site-cards-count="siteCards.length"
@@ -120,7 +67,6 @@ const {
 
     <SiteCreateModal
       v-model:open="createModalOpen"
-      :server-id="selectedServerId"
       :config="configRaw"
       :base-hash="configHash || undefined"
       @created="fetchConfigSites"

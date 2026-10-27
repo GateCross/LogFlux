@@ -19,13 +19,12 @@ import (
 	"logflux/internal/types"
 )
 
-func mustCaddyTestServer(url, config string) *caddymodel.CaddyServer {
+func mustCaddyTestServer(url string) *caddymodel.CaddyServer {
 	return &caddymodel.CaddyServer{
-		ID:     1,
-		Name:   "test",
-		Url:    url,
-		Type:   "local",
-		Config: config,
+		ID:   1,
+		Name: "test",
+		Url:  url,
+		Type: "local",
 	}
 }
 
@@ -50,15 +49,18 @@ func TestCaddyConfigApplyRollsBackRuntimeWhenPersistFails(t *testing.T) {
 	gdb, mock, cleanup := newCaddySqlmockDB(t)
 	defer cleanup()
 
-	// Apply 锁内重读库内最新行
-	mock.ExpectQuery(`SELECT .* FROM "caddy_servers"`).WillReturnRows(
-		caddyServerRows(time.Now(), caddyMock.URL, integrationBaseConfig),
-	)
+	// 锁内读库内最新配置（system_configs）与各类单例模板
+	expectLoadCurrentConfig(mock, integrationBaseConfig)
+	expectMergeManagedBlocks(mock)
 	mock.ExpectBegin()
-	mock.ExpectExec(`UPDATE "caddy_servers"`).WillReturnError(errors.New("db down"))
+	// SaveConfig 走 FirstOrCreate：键不存在时才 INSERT，这里让 INSERT 失败
+	mock.ExpectQuery(`SELECT \* FROM "system_configs" WHERE .*key.* = \$1`).
+		WithArgs(caddymodel.ConfigKey, 1).
+		WillReturnRows(emptySystemConfigRows())
+	mock.ExpectQuery(`INSERT INTO "system_configs"`).WillReturnError(errors.New("db down"))
 	mock.ExpectRollback()
 
-	srv := mustCaddyTestServer(caddyMock.URL, integrationBaseConfig)
+	srv := mustCaddyTestServer(caddyMock.URL)
 	writer := newCaddyConfigApplyService(&svc.ServiceContext{DB: gdb}, nil)
 	nextConfig := integrationBaseConfig + "\n# candidate\n"
 	err := writer.Apply(srv, nextConfig, emptyModulesJSON, configWriteOptions{
@@ -103,12 +105,9 @@ func TestCaddyConfigApplyRejectsStaleBaseHash(t *testing.T) {
 	gdb, mock, cleanup := newCaddySqlmockDB(t)
 	defer cleanup()
 
-	// Apply 锁内重读库内最新行，baseHash 与库内哈希不一致在 adapt 之前拒绝
-	mock.ExpectQuery(`SELECT .* FROM "caddy_servers"`).WillReturnRows(
-		caddyServerRows(time.Now(), caddyMock.URL, integrationBaseConfig),
-	)
+	expectLoadCurrentConfig(mock, integrationBaseConfig)
 
-	srv := mustCaddyTestServer(caddyMock.URL, integrationBaseConfig)
+	srv := mustCaddyTestServer(caddyMock.URL)
 	writer := newCaddyConfigApplyService(&svc.ServiceContext{DB: gdb}, nil)
 	err := writer.Apply(srv, integrationBaseConfig, emptyModulesJSON, configWriteOptions{
 		HistoryAction: "update",
@@ -140,14 +139,12 @@ func TestCaddyConfigApplyRechecksBaseHashInsideLock(t *testing.T) {
 	gdb, mock, cleanup := newCaddySqlmockDB(t)
 	defer cleanup()
 
-	// 锁内重读返回"他人已改过"的新配置，与请求快照 differentConfig 不同
+	// 锁内读到"他人已改过"的新配置，与请求快照不同
 	snapshotConfig := integrationBaseConfig
 	dirtyConfig := integrationBaseConfig + "\n# changed by someone else\n"
-	mock.ExpectQuery(`SELECT .* FROM "caddy_servers"`).WillReturnRows(
-		caddyServerRows(time.Now(), caddyMock.URL, dirtyConfig),
-	)
+	expectLoadCurrentConfig(mock, dirtyConfig)
 
-	srv := mustCaddyTestServer(caddyMock.URL, snapshotConfig)
+	srv := mustCaddyTestServer(caddyMock.URL)
 	writer := newCaddyConfigApplyService(&svc.ServiceContext{DB: gdb}, nil)
 	err := writer.Apply(srv, integrationBaseConfig, emptyModulesJSON, configWriteOptions{
 		HistoryAction: "update",
@@ -165,7 +162,7 @@ func TestCaddyConfigApplyRechecksBaseHashInsideLock(t *testing.T) {
 }
 
 // TestRollbackCaddyConfigGuardedByBaseHash 回滚路径同样受乐观并发保护：
-// 校验由 Apply 锁内重读库内最新行统一执行，外层不再重复校验。
+// 校验由 Apply 锁内读库内最新配置统一执行，外层不再重复校验。
 func TestRollbackCaddyConfigGuardedByBaseHash(t *testing.T) {
 	gdb, mock, cleanup := newCaddySqlmockDB(t)
 	defer cleanup()
@@ -174,22 +171,20 @@ func TestRollbackCaddyConfigGuardedByBaseHash(t *testing.T) {
 		return sqlmock.NewRows([]string{
 			"id", "created_at", "updated_at", "server_id", "action", "hash", "config", "modules",
 		}).AddRow(
-			uint(7), time.Now(), time.Now(), uint(1), "update", "irrelevant",
+			uint(7), time.Now(), time.Now(), uint(0), "update", "irrelevant",
 			integrationBaseConfig, "{}",
 		)
 	}
 
-	// logic 侧先取服务器与历史记录
-	mock.ExpectQuery(`SELECT .* FROM "caddy_servers"`).
-		WillReturnRows(caddyServerRows(time.Now(), "http://127.0.0.1:2019", integrationBaseConfig))
+	// logic 侧先取管理目标与历史记录
+	mock.ExpectQuery(`SELECT \* FROM "caddy_servers"`).
+		WillReturnRows(caddyServerRows(time.Now(), "http://127.0.0.1:2019", ""))
 	mock.ExpectQuery(`SELECT .* FROM "caddy_config_history"`).WillReturnRows(historyRows())
-	// Apply 锁内重读库内最新行，baseHash 不一致在 adapt 之前拒绝
-	mock.ExpectQuery(`SELECT .* FROM "caddy_servers"`).
-		WillReturnRows(caddyServerRows(time.Now(), "http://127.0.0.1:2019", integrationBaseConfig))
+	// Apply 锁内读库内最新配置，baseHash 不一致在 adapt 之前拒绝
+	expectLoadCurrentConfig(mock, integrationBaseConfig)
 
 	logic := NewRollbackCaddyConfigLogic(context.Background(), &svc.ServiceContext{DB: gdb})
 	_, err := logic.RollbackCaddyConfig(&types.CaddyConfigRollbackReq{
-		ServerId:  1,
 		HistoryId: 7,
 		BaseHash:  "stale-hash",
 	})

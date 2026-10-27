@@ -308,25 +308,34 @@ func TestResolveCaddyConfigModulesDropsStaleRawSnapshot(t *testing.T) {
 	}
 }
 
+// TestCaddyConfigFromServerReturnsEmptyModulesWhenConfigMissing 锁定未接管配置时
+// 不把 modules 当有效值返回：空配置 + 残留 modules 会被前端当成有配置。
 func TestCaddyConfigFromServerReturnsEmptyModulesWhenConfigMissing(t *testing.T) {
-	server := &caddymodel.CaddyServer{
-		Config:  "",
-		Modules: mustCaddyModules(t, caddyFormModel{SchemaVersion: 1, Global: caddyGlobal{Raw: "{x}"}}),
-	}
-	_, modules := caddyConfigFromServer(server)
+	gdb, mock, cleanup := newCaddySqlmockDB(t)
+	defer cleanup()
+
+	mock.ExpectQuery(`SELECT \* FROM "system_configs" WHERE .*key.* = \$1`).
+		WithArgs(caddymodel.ConfigKey, 1).
+		WillReturnRows(systemConfigRows(caddymodel.ConfigKey, caddyConfigJSON(t, "", mustCaddyModules(t, caddyFormModel{SchemaVersion: 1, Global: caddyGlobal{Raw: "{x}"}}))))
+
+	_, modules := loadCaddyConfigValue(gdb)
 	if modules != emptyModulesJSON {
 		t.Fatalf("expected empty modules when config is missing, got %q", modules)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("sql expectations not met: %v", err)
 	}
 }
 
 func TestLoadCurrentCaddyConfigRequiresManagedConfig(t *testing.T) {
-	server := &caddymodel.CaddyServer{
-		Type:    "local",
-		Config:  "",
-		Modules: mustCaddyModules(t, caddyFormModel{SchemaVersion: 1, Global: caddyGlobal{Raw: "{\"stale\":true}"}}),
-	}
+	gdb, mock, cleanup := newCaddySqlmockDB(t)
+	defer cleanup()
 
-	config, modules, err := loadCurrentCaddyConfig(server)
+	mock.ExpectQuery(`SELECT \* FROM "system_configs" WHERE .*key.* = \$1`).
+		WithArgs(caddymodel.ConfigKey, 1).
+		WillReturnRows(emptySystemConfigRows())
+
+	config, modules, err := loadCurrentCaddyConfig(gdb)
 	if err == nil {
 		t.Fatalf("expected unmanaged config error")
 	}
@@ -339,33 +348,19 @@ func TestLoadCurrentCaddyConfigRequiresManagedConfig(t *testing.T) {
 	if !strings.Contains(err.Error(), "尚未由 LogFlux 接管") {
 		t.Fatalf("expected unmanaged error, got %v", err)
 	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("sql expectations not met: %v", err)
+	}
 }
 
 func TestGetCaddyConfigReturnsUnmanagedPrompt(t *testing.T) {
 	gdb, mock, cleanup := newCaddySqlmockDB(t)
 	defer cleanup()
 
-	now := time.Now()
-	modules := mustCaddyModules(t, caddyFormModel{
-		SchemaVersion: 1,
-		Global:        caddyGlobal{Raw: "{\"stale\":true}"},
-		Sites: []caddySite{{
-			ID:      "site-1",
-			Name:    "app",
-			Enabled: true,
-			Domains: []string{"example.com"},
-			Routes: []caddyRoute{{
-				ID:      "r1",
-				Name:    "默认路由",
-				Enabled: true,
-				Handles: []caddyHandle{{ID: "h1", Type: "reverse_proxy", Enabled: true, Upstream: "localhost:8888"}},
-			}},
-		}},
-	})
-	mock.ExpectQuery(`SELECT .* FROM "caddy_servers"`).WillReturnRows(caddyServerRowsWithModules(now, "http://127.0.0.1:2019", "", modules))
+	expectLoadCurrentConfig(mock, "")
 
 	logic := NewGetCaddyConfigLogic(context.Background(), &svc.ServiceContext{DB: gdb})
-	resp, err := logic.GetCaddyConfig(&types.CaddyConfigReq{ServerId: 1})
+	resp, err := logic.GetCaddyConfig()
 	if err != nil {
 		t.Fatalf("GetCaddyConfig() error = %v", err)
 	}
@@ -398,8 +393,7 @@ func TestPreviewCaddyConfigOnlyAdapts(t *testing.T) {
 	defer cleanup()
 
 	now := time.Now()
-	mock.ExpectQuery(`SELECT .* FROM "caddy_servers"`).WillReturnRows(caddyServerRows(now, caddyMock.URL, integrationBaseConfig))
-
+	mock.ExpectQuery(`SELECT \* FROM "caddy_servers"`).WillReturnRows(caddyServerRows(now, caddyMock.URL, ""))
 	modules := mustCaddyModules(t, caddyFormModel{
 		SchemaVersion: 1,
 		Global:        caddyGlobal{},
@@ -426,7 +420,6 @@ func TestPreviewCaddyConfigOnlyAdapts(t *testing.T) {
 
 	logic := NewPreviewCaddyConfigLogic(context.Background(), &svc.ServiceContext{DB: gdb})
 	resp, err := logic.PreviewCaddyConfig(&types.CaddyConfigPreviewReq{
-		ServerId: 1,
 		Mode:     caddyConfigModeQuick,
 		Modules:  modules,
 	})
@@ -479,16 +472,18 @@ func TestUpdateCaddyConfigUsesAdaptThenLoadAndHistory(t *testing.T) {
 	defer cleanup()
 
 	now := time.Now()
-	// 已有配置 → apply 走 load 后再 persist 分支
-	mock.ExpectQuery(`SELECT .* FROM "caddy_servers"`).WillReturnRows(
-		caddyServerRows(now, caddyMock.URL, integrationBaseConfig),
+	// 已有配置 → apply 走 load 后再 persist 分支：
+	// logic 先取管理目标（caddy_servers），Apply 锁内再读当前配置（system_configs）。
+	mock.ExpectQuery(`SELECT \* FROM "caddy_servers"`).WillReturnRows(
+		caddyServerRows(now, caddyMock.URL, ""),
 	)
-	// Apply 锁内重读库内最新行
-	mock.ExpectQuery(`SELECT .* FROM "caddy_servers"`).WillReturnRows(
-		caddyServerRows(now, caddyMock.URL, integrationBaseConfig),
-	)
+	expectLoadCurrentConfig(mock, integrationBaseConfig)
+	expectMergeManagedBlocks(mock)
 	mock.ExpectBegin()
-	mock.ExpectExec(regexp.QuoteMeta(`UPDATE "caddy_servers" SET`)).WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectQuery(`SELECT \* FROM "system_configs" WHERE .*key.* = \$1`).
+		WithArgs(caddymodel.ConfigKey, 1).
+		WillReturnRows(emptySystemConfigRows())
+	mock.ExpectQuery(regexp.QuoteMeta(`INSERT INTO "system_configs"`)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(3))
 	mock.ExpectQuery(regexp.QuoteMeta(`INSERT INTO "caddy_config_history"`)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(11))
 	mock.ExpectCommit()
 
@@ -529,7 +524,6 @@ func TestUpdateCaddyConfigUsesAdaptThenLoadAndHistory(t *testing.T) {
 
 	logic := NewUpdateCaddyConfigLogic(context.Background(), &svc.ServiceContext{DB: gdb})
 	resp, err := logic.UpdateCaddyConfig(&types.CaddyConfigUpdateReq{
-		ServerId: 1,
 		Mode:     caddyConfigModeQuick,
 		Modules:  modules,
 	})
@@ -1111,4 +1105,67 @@ func caddyServerRowsWithModules(now time.Time, url, config, modules string) *sql
 
 func caddyServerRows(now time.Time, url, config string) *sqlmock.Rows {
 	return caddyServerRowsWithModules(now, url, config, "{}")
+}
+
+// systemConfigRows 构造 system_configs 查询结果；value 为该键的 JSON 值。
+func systemConfigRows(key, value string) *sqlmock.Rows {
+	return sqlmock.NewRows([]string{
+		"id", "created_at", "updated_at", "key", "value",
+	}).AddRow(uint(1), nil, nil, key, value)
+}
+
+// emptySystemConfigRows system_configs 里查不到该键。
+func emptySystemConfigRows() *sqlmock.Rows {
+	return sqlmock.NewRows([]string{
+		"id", "created_at", "updated_at", "key", "value",
+	})
+}
+
+// caddyConfigJSON 把配置与 modules 编成 system_configs 的 caddy_config 值。
+func caddyConfigJSON(t *testing.T, config, modules string) string {
+	t.Helper()
+	if modules == "" {
+		modules = emptyModulesJSON
+	}
+	encoded, err := json.Marshal(caddymodel.ConfigValue{Config: config, Modules: modules})
+	if err != nil {
+		t.Fatalf("marshal caddy config: %v", err)
+	}
+	return string(encoded)
+}
+
+// expectLoadCurrentConfig 期望一次库内配置读取并返回给定配置。
+func expectLoadCurrentConfig(mock sqlmock.Sqlmock, config string) {
+	mock.ExpectQuery(`SELECT \* FROM "system_configs" WHERE .*key.* = \$1`).
+		WithArgs(caddymodel.ConfigKey, 1).
+		WillReturnRows(systemConfigRows(caddymodel.ConfigKey, caddyConfigJSONFor(config)))
+}
+
+// caddyConfigJSONFor 测试内构造配置存储值（无 t 版本）。
+func caddyConfigJSONFor(config string) string {
+	encoded, err := json.Marshal(caddymodel.ConfigValue{Config: config, Modules: emptyModulesJSON})
+	if err != nil {
+		return `{"config":"","modules":"{}"}`
+	}
+	return string(encoded)
+}
+
+// expectMergeManagedBlocks 期望入口块 / 全局选项 / 日志 snippet / IP 区域开关全部读到默认值。
+func expectMergeManagedBlocks(mock sqlmock.Sqlmock) {
+	// 入口块模板不存在 → 用内置默认
+	mock.ExpectQuery(`SELECT \* FROM "system_configs" WHERE .*key.* = \$1`).
+		WithArgs(systemConfigKeyCaddyEntryBlock, 1).
+		WillReturnRows(emptySystemConfigRows())
+	// IP 区域开关
+	mock.ExpectQuery(`SELECT \* FROM "system_configs" WHERE .*key.* = \$1`).
+		WithArgs("ip_region", 1).
+		WillReturnRows(emptySystemConfigRows())
+	// 全局选项
+	mock.ExpectQuery(`SELECT \* FROM "system_configs" WHERE .*key.* = \$1`).
+		WithArgs(systemConfigKeyCaddyGlobalOptions, 1).
+		WillReturnRows(emptySystemConfigRows())
+	// 日志 snippet
+	mock.ExpectQuery(`SELECT \* FROM "system_configs" WHERE .*key.* = \$1`).
+		WithArgs(systemConfigKeyCaddyLogSnippet, 1).
+		WillReturnRows(emptySystemConfigRows())
 }

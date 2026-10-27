@@ -83,8 +83,7 @@ export const wafAuditOptions: Array<{ label: string; value: SimpleWafAudit }> = 
 ];
 
 export interface UseSimpleWafOptions {
-  selectedServerId: Ref<number | undefined>;
-  /** 当前服务器 Caddyfile 原文；预览用它算 diff */
+  /** 当前 Caddyfile 原文；预览用它算 diff */
   currentConfig?: Ref<string>;
   /** 当前配置哈希；apply 时回传做乐观并发 */
   baseHash?: Ref<string>;
@@ -93,11 +92,11 @@ export interface UseSimpleWafOptions {
 }
 
 export function useSimpleWaf(options: UseSimpleWafOptions) {
-  const { selectedServerId, currentConfig, baseHash, onApplied } = options;
+  const { currentConfig, baseHash, onApplied } = options;
   const queryClient = useQueryClient();
 
   const wafLoading = ref(false);
-  /** 每次加载递增，避免旧服务器的慢响应覆盖当前 WAF 草稿。 */
+  /** 每次加载递增，避免慢响应覆盖当前 WAF 草稿。 */
   let wafRequestVersion = 0;
   const wafSaving = ref(false);
   const wafApplying = ref(false);
@@ -111,14 +110,12 @@ export function useSimpleWaf(options: UseSimpleWafOptions) {
   const wafErrorMessage = ref<null | string>(null);
   /** 显式加载态：读失败后禁止保存/预览/应用，避免拿默认值覆盖线上策略。 */
   const wafLoadState = ref<WafLoadState>('idle');
-  /** 当前 wafStatus 归属的服务器；与 selectedServerId 不一致说明数据已过期。 */
-  const wafLoadedServerId = ref<null | number>(null);
+  /** wafStatus 是否已成功读回；false 说明数据未就绪。 */
+  const wafLoaded = ref(false);
   const wafForm = reactive(createDefaultWafForm());
 
-  /** 只有成功读到当前服务器状态才允许写操作。 */
-  const wafActionsDisabled = computed(
-    () => wafLoadState.value !== 'ready' || wafLoadedServerId.value !== selectedServerId.value,
-  );
+  /** 只有成功读到当前状态才允许写操作。 */
+  const wafActionsDisabled = computed(() => wafLoadState.value !== 'ready');
 
   const wafAvailableSites = computed(() =>
     Array.isArray(wafStatus.value?.availableSites) ? wafStatus.value.availableSites : [],
@@ -159,7 +156,7 @@ export function useSimpleWaf(options: UseSimpleWafOptions) {
     );
   });
 
-  /** 作废在途请求并回到未知态；切服务器时调用。 */
+  /** 作废在途请求并回到未知态。 */
   function resetWafState() {
     wafRequestVersion += 1;
     wafStatus.value = null;
@@ -168,13 +165,13 @@ export function useSimpleWaf(options: UseSimpleWafOptions) {
     wafLastApply.value = null;
     wafErrorMessage.value = null;
     wafLoadState.value = 'idle';
-    wafLoadedServerId.value = null;
+    wafLoaded.value = false;
     Object.assign(wafForm, createDefaultWafForm());
   }
 
-  /** 当前 WAF 状态是否不属于选中服务器（含从未加载）。 */
+  /** 当前 WAF 状态是否尚未读回（含从未加载）。 */
   function isWafStale() {
-    return wafLoadedServerId.value !== selectedServerId.value;
+    return !wafLoaded.value;
   }
 
   const wafStatusText = computed(() => {
@@ -247,32 +244,27 @@ export function useSimpleWaf(options: UseSimpleWafOptions) {
       requestBodyAccess: wafForm.requestBodyAccess,
       requestBodyLimit: mbToBytes(wafForm.requestBodyLimitMB),
       requestBodyNoFilesLimit: mbToBytes(wafForm.requestBodyNoFilesLimitMB),
-      serverId: selectedServerId.value,
       siteAddresses: [...wafForm.siteAddresses],
       strength: wafForm.strength,
     };
   }
 
-  /** config 前缀匹配：含 `qk.caddy.config(id)` 与 `[...config, 'simple-waf']` */
+  /** config 前缀匹配：含 `qk.caddy.config()` 与 `[...config, 'simple-waf']` */
   async function invalidateWafRelatedQueries(opts?: { applied?: boolean }) {
-    if (!selectedServerId.value) return;
-    const serverId = selectedServerId.value;
     if (opts?.applied) {
       // apply 会改写运行中配置：连带 history / catalog / metrics
       await invalidateListDetailQueryKeys(queryClient, [
-        qk.caddy.config(serverId),
-        ['caddy', 'history', serverId],
-        qk.caddy.catalog(serverId),
-        ['caddy', 'metrics', serverId],
+        qk.caddy.config(),
+        ['caddy', 'history'],
+        qk.caddy.catalog(),
+        ['caddy', 'metrics'],
       ]);
       return;
     }
-    await invalidateListDetailQueries(queryClient, qk.caddy.config(serverId));
+    await invalidateListDetailQueries(queryClient, qk.caddy.config());
   }
 
   async function fetchWafConfig() {
-    const serverId = selectedServerId.value;
-    if (!serverId) return;
     const requestVersion = ++wafRequestVersion;
     wafLoading.value = true;
     wafErrorMessage.value = null;
@@ -280,29 +272,22 @@ export function useSimpleWaf(options: UseSimpleWafOptions) {
     try {
       // WAF 远程状态走 query cache；wafForm 仍是本地草稿
       const data = await queryClient.fetchQuery({
-        queryKey: [...qk.caddy.config(serverId), 'simple-waf'],
-        queryFn: () =>
-          getSimpleWafConfigApi(serverId, withListDetailErrorMode()),
+        queryKey: [...qk.caddy.config(), 'simple-waf'],
+        queryFn: () => getSimpleWafConfigApi(withListDetailErrorMode()),
       });
-      // 服务器已经切换或有更新的加载请求时，丢弃过期响应。
-      if (
-        requestVersion !== wafRequestVersion ||
-        selectedServerId.value !== serverId
-      ) {
+      // 有更新的加载请求时，丢弃过期响应。
+      if (requestVersion !== wafRequestVersion) {
         return;
       }
       syncWafForm(data);
-      wafLoadedServerId.value = serverId;
+      wafLoaded.value = true;
       wafLoadState.value = 'ready';
     } catch (error) {
-      if (
-        requestVersion === wafRequestVersion &&
-        selectedServerId.value === serverId
-      ) {
+      if (requestVersion === wafRequestVersion) {
         wafErrorMessage.value = apiErrorMessage(error, '获取防火墙配置失败');
         // 读失败必须回到未知态：保留旧表单会让用户拿着过期/默认值继续提交。
         wafStatus.value = null;
-        wafLoadedServerId.value = null;
+        wafLoaded.value = false;
         Object.assign(wafForm, createDefaultWafForm());
         wafLoadState.value = 'error';
       }
@@ -333,7 +318,7 @@ export function useSimpleWaf(options: UseSimpleWafOptions) {
   const wafValidationError = computed(() => validateWafForm());
 
   async function saveWafConfig() {
-    if (!selectedServerId.value || wafActionsDisabled.value) return;
+    if (wafActionsDisabled.value) return;
     const invalid = validateWafForm();
     if (invalid) {
       message.error(invalid);
@@ -354,7 +339,7 @@ export function useSimpleWaf(options: UseSimpleWafOptions) {
   }
 
   async function previewWafConfig() {
-    if (!selectedServerId.value || wafActionsDisabled.value) return;
+    if (wafActionsDisabled.value) return;
     const invalid = validateWafForm();
     if (invalid) {
       message.error(invalid);
@@ -394,7 +379,7 @@ export function useSimpleWaf(options: UseSimpleWafOptions) {
   }
 
   function applyWafConfig() {
-    if (!selectedServerId.value || wafActionsDisabled.value) return;
+    if (wafActionsDisabled.value) return;
     Modal.confirm({
       title: '确认应用到 Caddy',
       content: describeApplyImpact(),
@@ -414,7 +399,7 @@ export function useSimpleWaf(options: UseSimpleWafOptions) {
           await invalidateWafRelatedQueries({ applied: true });
           if (data) {
             syncWafForm(data);
-            wafLoadedServerId.value = selectedServerId.value ?? null;
+            wafLoaded.value = true;
             wafLoadState.value = 'ready';
           } else {
             await fetchWafConfig();
@@ -453,7 +438,7 @@ export function useSimpleWaf(options: UseSimpleWafOptions) {
     wafAuditOptions,
     wafLoadState,
     wafActionsDisabled,
-    wafLoadedServerId,
+    wafLoaded,
     isWafStale,
     resetWafState,
     validateWafForm,

@@ -71,11 +71,7 @@ const route = useRoute();
 const router = useRouter();
 const queryClient = useQueryClient();
 
-// ---------- 路由参数：query 携带 serverId + host（主域名作为站点查找键） ----------
-const serverId = computed(() => {
-  const raw = Number(route.query.serverId);
-  return Number.isInteger(raw) && raw > 0 ? raw : undefined;
-});
+// ---------- 路由参数：query 携带 host（主域名作为站点查找键） ----------
 const host = computed(() => String(route.query.host ?? '').trim().toLowerCase());
 
 // ---------- 站点定位：与目录页共享 catalog 查询缓存，不建平行数据源 ----------
@@ -85,10 +81,9 @@ const {
   errorMessage: configErrorMessage,
   refetch: refetchConfig,
 } = useListDetailQuery({
-  queryKey: computed(() => qk.caddy.catalog(serverId.value ?? 0)),
-  queryFn: () => getCaddyConfigApi(serverId.value!, withListDetailErrorMode()),
+  queryKey: qk.caddy.catalog(),
+  queryFn: () => getCaddyConfigApi(withListDetailErrorMode()),
   errorFallback: '获取站点配置失败',
-  enabled: computed(() => Boolean(serverId.value)),
 });
 
 const configRaw = computed(() => configData.value?.config ?? '');
@@ -111,7 +106,7 @@ const {
   loading: loadingMetrics,
 } = useListDetailQuery({
   queryKey: computed(() =>
-    qk.caddy.metrics(serverId.value ?? 0, host.value, SITE_METRICS_WINDOW_MINUTES),
+    qk.caddy.metrics(host.value, SITE_METRICS_WINDOW_MINUTES),
   ),
   queryFn: () =>
     getSiteMetricsApi(
@@ -119,7 +114,7 @@ const {
       withListDetailErrorMode(),
     ),
   errorFallback: '获取站点今日指标失败',
-  enabled: computed(() => Boolean(serverId.value && host.value)),
+  enabled: computed(() => Boolean(host.value)),
 });
 
 const siteMetrics = computed(() => {
@@ -151,10 +146,9 @@ const {
   errorMessage: wafErrorMessage,
   refetch: refetchWaf,
 } = useListDetailQuery({
-  queryKey: computed(() => [...qk.caddy.config(serverId.value ?? 0), 'simple-waf']),
-  queryFn: () => getSimpleWafConfigApi(serverId.value!, withListDetailErrorMode()),
+  queryKey: [...qk.caddy.config(), 'simple-waf'],
+  queryFn: () => getSimpleWafConfigApi(withListDetailErrorMode()),
   errorFallback: '获取 WAF 状态失败',
-  enabled: computed(() => Boolean(serverId.value)),
 });
 const wafStatus = computed(() => wafData.value ?? null);
 
@@ -182,7 +176,7 @@ function handleWafModeChange(value: unknown) {
   Modal.confirm({
     title: '防护模式将写入全局 WAF 配置',
     content:
-      '此设置对全部站点生效：修改的是当前节点的全局 WAF 引擎模式，应用后影响所有已挂载 WAF 的站点。确认继续？',
+      '此设置对全部站点生效：修改的是全局 WAF 引擎模式，应用后影响所有已挂载 WAF 的站点。确认继续？',
     okText: '确认并应用',
     cancelText: '取消',
     async onOk() {
@@ -196,7 +190,6 @@ function handleWafModeChange(value: unknown) {
           requestBodyAccess: status.requestBodyAccess ?? true,
           requestBodyLimit: status.requestBodyLimit || 10 * 1024 * 1024,
           requestBodyNoFilesLimit: status.requestBodyNoFilesLimit || 1024 * 1024,
-          serverId: serverId.value,
           siteAddresses: Array.isArray(status.siteAddresses)
             ? [...status.siteAddresses]
             : [],
@@ -206,9 +199,9 @@ function handleWafModeChange(value: unknown) {
         message.success(data?.message || '防护模式已应用，对全部站点生效');
         // 应用会改写运行中配置：连带失效配置/目录/指标缓存并重取 WAF 状态
         await invalidateListDetailQueryKeys(queryClient, [
-          qk.caddy.config(serverId.value ?? 0),
-          qk.caddy.catalog(serverId.value ?? 0),
-          ['caddy', 'metrics', serverId.value ?? 0],
+          qk.caddy.config(),
+          qk.caddy.catalog(),
+          ['caddy', 'metrics'],
         ]);
         await refetchWaf();
         await refetchConfig();
@@ -252,7 +245,6 @@ const {
   confirmSave,
   cancelSave,
 } = useSiteDetailEdit({
-  serverId,
   config: configRaw,
   baseHash: configHash,
   site,
@@ -272,7 +264,7 @@ function goCatalog() {
 function openWorkbenchRaw() {
   router.push({
     name: 'CaddyConfig',
-    query: buildConfigWorkbenchQuery({ serverId: serverId.value, mode: 'raw' }),
+    query: buildConfigWorkbenchQuery({ mode: 'raw' }),
   });
 }
 
@@ -287,9 +279,9 @@ const sitePrimaryHost = computed(() => site.value?.primaryHost || host.value);
 
 <template>
   <Page title="站点详情" description="站点防护与上游配置的整页视图">
-    <template v-if="!serverId">
+    <template v-if="!host">
       <Card variant="borderless">
-        <Empty description="缺少 serverId 参数，请从站点列表进入">
+        <Empty description="缺少 host 参数，请从站点列表进入">
           <Button @click="goCatalog">返回站点列表</Button>
         </Empty>
       </Card>

@@ -20,7 +20,6 @@ export namespace CaddySimpleWafApi {
 
   /** 简易 WAF 配置读响应 — 对齐 backend SimpleWafConfigResp */
   export interface SimpleWafConfig {
-    serverId: number;
     enabled: boolean;
     integrated?: boolean;
     mode: SimpleWafMode | string;
@@ -50,7 +49,6 @@ export namespace CaddySimpleWafApi {
     requestBodyAccess: boolean;
     requestBodyLimit: number;
     requestBodyNoFilesLimit: number;
-    serverId?: number;
     siteAddresses?: string[];
     strength: SimpleWafStrength;
     /** 编辑起点的 Caddyfile 哈希；与库内不一致时后端拒绝写入 */
@@ -61,13 +59,10 @@ export namespace CaddySimpleWafApi {
 /**
  * 获取简易 WAF 配置 — GET /caddy/waf/simple-config
  */
-export async function getSimpleWafConfigApi(
-  serverId?: number,
-  config?: RequestClientConfig,
-) {
+export async function getSimpleWafConfigApi(config?: RequestClientConfig) {
   return requestClient.get<CaddySimpleWafApi.SimpleWafConfig>(
     '/caddy/waf/simple-config',
-    { params: serverId ? { serverId } : undefined, ...config },
+    config,
   );
 }
 

@@ -146,7 +146,7 @@ auto.example.com {
 }
 
 manual.example.com {
-  tls /config/certs/1/manual.example.com/fullchain.pem /config/certs/1/manual.example.com/privkey.pem
+  tls /config/certs/manual.example.com/fullchain.pem /config/certs/manual.example.com/privkey.pem
 }
 
 dns.example.com {
@@ -273,8 +273,7 @@ func TestMergeCertInventory(t *testing.T) {
 
 	t.Run("本机声明+扫描命中合并为真值", func(t *testing.T) {
 		result := mergeCertInventory(certMergeInput{
-			ServerID:   1,
-			ServerType: "local",
+			ServerID: 0,
 			Declared:   []declaredCertInfo{{PrimaryDomain: "ok.example.com", Domains: []string{"ok.example.com"}, Source: caddymodel.CertSourceAcmeHTTP}},
 			Scanned: []scannedCertInfo{{
 				PrimaryDomain: "ok.example.com",
@@ -301,8 +300,7 @@ func TestMergeCertInventory(t *testing.T) {
 
 	t.Run("本机声明无扫描命中为 missing", func(t *testing.T) {
 		result := mergeCertInventory(certMergeInput{
-			ServerID:   1,
-			ServerType: "local",
+			ServerID: 0,
 			Declared:   []declaredCertInfo{{PrimaryDomain: "gap.example.com", Domains: []string{"gap.example.com"}, Source: caddymodel.CertSourceAcmeHTTP}},
 			Now:        now,
 		})
@@ -315,33 +313,19 @@ func TestMergeCertInventory(t *testing.T) {
 		}
 	})
 
-	t.Run("远端声明恒为 pending", func(t *testing.T) {
+		t.Run("上传行覆盖同域合并结果并沿用 ID", func(t *testing.T) {
 		result := mergeCertInventory(certMergeInput{
-			ServerID:   2,
-			ServerType: "remote",
-			Declared:   []declaredCertInfo{{PrimaryDomain: "far.example.com", Domains: []string{"far.example.com"}, Source: caddymodel.CertSourceAcmeHTTP}},
-			Now:        now,
-		})
-		row := result.Upserts[0]
-		if row.Status != caddymodel.CertStatusPending || !row.NotAfter.IsZero() {
-			t.Errorf("远端声明行应为 pending 且有效期零值: %+v", row)
-		}
-	})
-
-	t.Run("上传行覆盖同域合并结果并沿用 ID", func(t *testing.T) {
-		result := mergeCertInventory(certMergeInput{
-			ServerID:   1,
-			ServerType: "local",
+			ServerID: 0,
 			Declared:   []declaredCertInfo{{PrimaryDomain: "up.example.com", Domains: []string{"up.example.com"}, Source: caddymodel.CertSourceAcmeHTTP}},
 			Uploads: []caddymodel.Certificate{{
 				ID:            77,
-				ServerID:      1,
+				ServerID: 0,
 				PrimaryDomain: "up.example.com",
 				Domains:       "up.example.com",
 				Source:        caddymodel.CertSourceUpload,
 				NotBefore:     expiringInfo.NotBefore,
 				NotAfter:      expiringInfo.NotAfter,
-				StoragePath:   "/config/certs/1/up.example.com/fullchain.pem",
+				StoragePath:   "/config/certs/up.example.com/fullchain.pem",
 			}},
 			Now: now,
 		})
@@ -362,22 +346,21 @@ func TestMergeCertInventory(t *testing.T) {
 
 	t.Run("上传行按 SAN 重定向到声明域名：弃用旧 ID、沿用目标行 ID、下架旧行", func(t *testing.T) {
 		result := mergeCertInventory(certMergeInput{
-			ServerID:   1,
-			ServerType: "local",
+			ServerID: 0,
 			Declared:   []declaredCertInfo{{PrimaryDomain: "site.example.com", Domains: []string{"site.example.com"}, Source: caddymodel.CertSourceDeclared}},
 			Uploads: []caddymodel.Certificate{{
 				ID:            88,
-				ServerID:      1,
+				ServerID: 0,
 				PrimaryDomain: "certcn.example.com",
 				Domains:       "certcn.example.com,site.example.com",
 				Source:        caddymodel.CertSourceUpload,
 				NotBefore:     expiringInfo.NotBefore,
 				NotAfter:      expiringInfo.NotAfter,
-				StoragePath:   "/config/certs/1/certcn.example.com/fullchain.pem",
+				StoragePath:   "/config/certs/certcn.example.com/fullchain.pem",
 			}},
 			Existing: []caddymodel.Certificate{
-				{ID: 50, ServerID: 1, PrimaryDomain: "site.example.com", Source: caddymodel.CertSourceDeclared},
-				{ID: 88, ServerID: 1, PrimaryDomain: "certcn.example.com", Source: caddymodel.CertSourceUpload},
+				{ID: 50, ServerID: 0, PrimaryDomain: "site.example.com", Source: caddymodel.CertSourceDeclared},
+				{ID: 88, ServerID: 0, PrimaryDomain: "certcn.example.com", Source: caddymodel.CertSourceUpload},
 			},
 			Now: now,
 		})
@@ -401,12 +384,11 @@ func TestMergeCertInventory(t *testing.T) {
 
 	t.Run("卷里消失的本机证书下架", func(t *testing.T) {
 		result := mergeCertInventory(certMergeInput{
-			ServerID:   1,
-			ServerType: "local",
+			ServerID: 0,
 			Declared:   []declaredCertInfo{{PrimaryDomain: "kept.example.com", Domains: []string{"kept.example.com"}, Source: caddymodel.CertSourceAcmeHTTP}},
 			Existing: []caddymodel.Certificate{
-				{ID: 11, ServerID: 1, PrimaryDomain: "kept.example.com", Source: caddymodel.CertSourceAcmeHTTP},
-				{ID: 12, ServerID: 1, PrimaryDomain: "gone.example.com", Source: caddymodel.CertSourceAcmeHTTP},
+				{ID: 11, ServerID: 0, PrimaryDomain: "kept.example.com", Source: caddymodel.CertSourceAcmeHTTP},
+				{ID: 12, ServerID: 0, PrimaryDomain: "gone.example.com", Source: caddymodel.CertSourceAcmeHTTP},
 			},
 			Now: now,
 		})
@@ -428,8 +410,7 @@ func TestMergeCertInventory(t *testing.T) {
 	t.Run("声明域名与证书 SAN 求交匹配", func(t *testing.T) {
 		// 站点声明 www2.example.com，证书 CN/SAN 是 apex + www2
 		result := mergeCertInventory(certMergeInput{
-			ServerID:   1,
-			ServerType: "local",
+			ServerID: 0,
 			Declared:   []declaredCertInfo{{PrimaryDomain: "www2.example.com", Domains: []string{"www2.example.com"}, Source: caddymodel.CertSourceAcmeHTTP}},
 			Scanned: []scannedCertInfo{{
 				PrimaryDomain: "apex.example.com",
@@ -456,8 +437,7 @@ func TestMergeCertInventory(t *testing.T) {
 
 	t.Run("未被声明认领的扫描行独立入库", func(t *testing.T) {
 		result := mergeCertInventory(certMergeInput{
-			ServerID:   1,
-			ServerType: "local",
+			ServerID: 0,
 			Scanned: []scannedCertInfo{{
 				PrimaryDomain: "orphan.example.com",
 				Domains:       []string{"orphan.example.com"},
@@ -582,17 +562,15 @@ func TestNotifyCertStateDedupedByNotifiedKey(t *testing.T) {
 	model := &fakeCertNotifyModel{keys: map[uint]string{}}
 	svcCtx := &svc.ServiceContext{NotificationMgr: mgr, CertificateModel: model}
 	service := NewCertSyncService(context.Background(), svcCtx)
-	server := &caddymodel.CaddyServer{ID: 1, Name: "local-default"}
-
 	row := &caddymodel.Certificate{
 		ID:            7,
-		ServerID:      1,
+		ServerID:      0,
 		PrimaryDomain: "soon.example.com",
 		NotAfter:      now.Add(5 * 24 * time.Hour),
 	}
 
 	// 第一轮同步：临期 warning 发一次并落去重键
-	service.notifyCertState(server, []*caddymodel.Certificate{row})
+	service.notifyCertState([]*caddymodel.Certificate{row})
 	if len(mgr.events) != 1 {
 		t.Fatalf("临期证书应发 1 次通知, 实际 %d", len(mgr.events))
 	}
@@ -603,14 +581,14 @@ func TestNotifyCertStateDedupedByNotifiedKey(t *testing.T) {
 
 	// 第二轮同步（模拟手动刷新）：同键已标记，静默跳过
 	row.LastNotifiedKey = key
-	service.notifyCertState(server, []*caddymodel.Certificate{row})
+	service.notifyCertState([]*caddymodel.Certificate{row})
 	if len(mgr.events) != 1 {
 		t.Fatalf("同键重复同步不应重发, 实际 %d 次", len(mgr.events))
 	}
 
 	// 状态跃迁为已过期：换键恢复提醒
 	row.NotAfter = now.Add(-time.Hour)
-	service.notifyCertState(server, []*caddymodel.Certificate{row})
+	service.notifyCertState([]*caddymodel.Certificate{row})
 	if len(mgr.events) != 2 {
 		t.Fatalf("过期跃迁应再发 1 次, 实际 %d 次", len(mgr.events))
 	}
@@ -621,7 +599,7 @@ func TestNotifyCertStateDedupedByNotifiedKey(t *testing.T) {
 	// 续期后再次临期：到期时间变化换键，恢复提醒
 	row.NotAfter = now.Add(10 * 24 * time.Hour)
 	row.LastNotifiedKey = model.keys[row.ID]
-	service.notifyCertState(server, []*caddymodel.Certificate{row})
+	service.notifyCertState([]*caddymodel.Certificate{row})
 	if len(mgr.events) != 3 {
 		t.Fatalf("续期后再次临期应恢复提醒, 实际 %d 次", len(mgr.events))
 	}

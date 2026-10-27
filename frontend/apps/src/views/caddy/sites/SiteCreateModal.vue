@@ -45,7 +45,6 @@ import {
  */
 const props = defineProps<{
   open: boolean;
-  serverId?: number;
   config: string;
   baseHash?: string;
 }>();
@@ -79,14 +78,14 @@ const tlsOptions: Array<{ value: CreateTlsMode; label: string; hint: string }> =
   { value: 'off', label: '暂不启用', hint: '仅 HTTP，内网或已有前置网关时使用' },
 ];
 
-// 已有证书下拉：仅弹窗打开时拉取，按当前服务器过滤（source=upload 且未失效）
+// 已有证书下拉：仅弹窗打开时拉取（source=upload 且未失效）
 const router = useRouter();
 const {
   options: certOptions,
   loading: certLoading,
   errorMessage: certErrorMessage,
   refetch: refetchCerts,
-} = useUploadedCertOptions(() => props.serverId, () => props.open);
+} = useUploadedCertOptions(() => props.open);
 /** 当前选中的证书记录 id；路径写入 form，选中态只作回显 */
 const selectedCertId = ref<number | undefined>();
 
@@ -133,11 +132,10 @@ watch(
 );
 
 async function fetchWafStatus() {
-  if (!props.serverId) return;
   wafStatusError.value = '';
   wafBusy.value = true;
   try {
-    wafStatus.value = await getSimpleWafConfigApi(props.serverId);
+    wafStatus.value = await getSimpleWafConfigApi();
   } catch (error) {
     wafStatus.value = null;
     wafStatusError.value = apiErrorMessage(error, '获取 WAF 状态失败');
@@ -158,12 +156,11 @@ function handleSaveClick() {
 }
 
 async function handleConfirm() {
-  if (!props.serverId) return;
   confirmBusy.value = true;
   confirmError.value = '';
   try {
     // 先走后端 /adapt 校验，坏配置在这一步被拦下，不会触达运行态
-    const preview = await previewCaddyConfigApi(props.serverId, {
+    const preview = await previewCaddyConfigApi({
       mode: 'raw',
       config: nextConfig.value,
       baseHash: props.baseHash || undefined,
@@ -173,7 +170,6 @@ async function handleConfirm() {
       return;
     }
     await pushCaddyConfigApi(
-      props.serverId,
       nextConfig.value,
       undefined,
       props.baseHash || undefined,
@@ -193,14 +189,12 @@ async function handleConfirm() {
 
 /** 挂载 WAF：重取最新 simple-config 再仅追加本站点地址，避免用弹窗打开时的旧快照覆盖并发改动 */
 async function mountSiteToWaf(): Promise<boolean> {
-  if (!props.serverId) return false;
   const address = createdSiteAddress(form);
   try {
-    const latest = await getSimpleWafConfigApi(props.serverId);
+    const latest = await getSimpleWafConfigApi();
     if (!latest?.enabled) return false;
     const siteAddresses = [...new Set([...(latest.siteAddresses ?? []), address])];
     await applySimpleWafConfigApi({
-      serverId: latest.serverId,
       enabled: latest.enabled,
       mode: latest.mode as CaddySimpleWafApi.SimpleWafMode,
       strength: latest.strength as CaddySimpleWafApi.SimpleWafStrength,

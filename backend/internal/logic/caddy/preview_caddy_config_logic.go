@@ -27,9 +27,10 @@ func NewPreviewCaddyConfigLogic(ctx context.Context, svcCtx *svc.ServiceContext)
 }
 
 func (l *PreviewCaddyConfigLogic) PreviewCaddyConfig(req *types.CaddyConfigPreviewReq) (resp *types.CaddyConfigPreviewResp, err error) {
-	var server caddymodel.CaddyServer
-	if err := l.svcCtx.DB.WithContext(l.ctx).First(&server, req.ServerId).Error; err != nil {
-		return nil, fmt.Errorf("服务器不存在")
+	var server *caddymodel.CaddyServer
+	server, err = findPreferredCaddyServer(l.svcCtx.DB.WithContext(l.ctx))
+	if err != nil {
+		return nil, err
 	}
 
 	configService := newCaddyConfigService()
@@ -53,7 +54,7 @@ func (l *PreviewCaddyConfigLogic) PreviewCaddyConfig(req *types.CaddyConfigPrevi
 		Errors:  []string{},
 		Actions: append([]string{}, candidate.Actions...),
 	}
-	if err := adaptCaddyfile(&server, candidate.Config); err != nil {
+	if err := adaptCaddyfile(server, candidate.Config); err != nil {
 		resp.Valid = false
 		resp.Errors = append(resp.Errors, fmt.Sprintf("Caddy /adapt 校验失败: %v", err))
 		resp.Actions = append(resp.Actions, "未执行 Caddy /load")

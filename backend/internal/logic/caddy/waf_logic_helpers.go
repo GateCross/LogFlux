@@ -450,22 +450,28 @@ func (helper *wafLogicHelper) mountedCRSRulesSummary() *types.CrsRuleSummary {
 	return summary
 }
 
+// primaryCaddyServer 返回唯一的 Caddy 管理目标与当前生效配置。
+//
+// 单实例下面板操作对象与用户所见必然一致：配置真值在 system_configs，
+// caddy_servers 只提供 Admin API 地址。
 func (helper *wafLogicHelper) primaryCaddyServer() (*caddymodel.CaddyServer, error) {
-	var server caddymodel.CaddyServer
-	err := helper.svcCtx.DB.WithContext(helper.ctx).Where("type = ?", "local").Order("id asc").First(&server).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		err = helper.svcCtx.DB.WithContext(helper.ctx).Order("id asc").First(&server).Error
-	}
+	server, err := findPreferredCaddyServer(helper.svcCtx.DB.WithContext(helper.ctx))
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("Caddy 服务器不存在")
 		}
 		return nil, fmt.Errorf("查询 Caddy 服务器失败: %w", err)
 	}
-	if strings.TrimSpace(server.Config) == "" {
+	if helper.currentConfig() == "" {
 		return nil, fmt.Errorf("Caddy 配置为空，请先保存 Caddy 配置")
 	}
-	return &server, nil
+	return server, nil
+}
+
+// currentConfig 读当前生效配置文本；未接管或读库失败按空串处理。
+func (helper *wafLogicHelper) currentConfig() string {
+	config, _, _ := loadCurrentCaddyConfig(helper.svcCtx.DB.WithContext(helper.ctx))
+	return config
 }
 
 type wafCaddyLoader struct {
@@ -510,7 +516,7 @@ func (helper *wafLogicHelper) activateRelease(release *wafmodel.WafRelease) erro
 
 	var lastErr error
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		if err := helper.activateReleaseOnce(activator, release.Version, server.Config, timeoutSec); err != nil {
+		if err := helper.activateReleaseOnce(activator, release.Version, helper.currentConfig(), timeoutSec); err != nil {
 			lastErr = err
 			if attempt < maxAttempts {
 				helper.logger.Errorf("激活版本重试中: version=%s attempt=%d/%d err=%v", release.Version, attempt, maxAttempts, err)

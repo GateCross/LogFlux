@@ -27,18 +27,14 @@ func NewListCertificatesLogic(ctx context.Context, svcCtx *svc.ServiceContext) *
 	}
 }
 
-// ListCertificates 返回证书库存；serverId 为 0 时返回全部服务器。
+// ListCertificates 返回唯一的证书库存。
 // 有真值的行按当前时刻实时计算状态与剩余天数，避免读到每日同步前的旧状态。
 func (l *ListCertificatesLogic) ListCertificates(req *types.CertificateListReq) (resp *types.CertificateListResp, err error) {
 	if l.svcCtx.CertificateModel == nil {
 		return nil, xerr.NewSystemErrorWith("证书模型未初始化")
 	}
 
-	serverID := uint(0)
-	if req != nil {
-		serverID = req.ServerId
-	}
-	rows, err := l.svcCtx.CertificateModel.List(l.ctx, caddymodel.CertificateQuery{ServerID: serverID})
+	rows, err := l.svcCtx.CertificateModel.List(l.ctx, caddymodel.CertificateQuery{ServerID: caddymodel.LegacyServerID})
 	if err != nil {
 		return nil, xerr.NewSystemErrorWith("查询证书库存失败")
 	}
@@ -49,7 +45,6 @@ func (l *ListCertificatesLogic) ListCertificates(req *types.CertificateListReq) 
 		row := rows[i]
 		item := types.CertificateItem{
 			ID:            row.ID,
-			ServerId:      row.ServerID,
 			Domains:       row.Domains,
 			PrimaryDomain: row.PrimaryDomain,
 			Issuer:        row.Issuer,

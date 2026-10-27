@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"logflux/common/result"
@@ -48,7 +47,7 @@ func UploadCertificateHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	}
 }
 
-// parseCertificateUploadMultipart 解析 cert/key 两个 PEM 文件与 serverId/domains 表单值；
+// parseCertificateUploadMultipart 解析 cert/key 两个 PEM 文件与 domains 表单值；
 // 文件内容经 ctx 传给 logic，缺失或超限直接返回中文错误。
 func parseCertificateUploadMultipart(ctx context.Context, r *http.Request) (*types.CertificateUploadReq, context.Context, error) {
 	if err := r.ParseMultipartForm(certUploadMaxRequestBytes); err != nil {
@@ -64,18 +63,8 @@ func parseCertificateUploadMultipart(ctx context.Context, r *http.Request) (*typ
 		return nil, ctx, err
 	}
 
-	serverID := uint(0)
-	if rawValue := strings.TrimSpace(r.FormValue("serverId")); rawValue != "" {
-		parsed, parseErr := strconv.ParseUint(rawValue, 10, 64)
-		if parseErr != nil {
-			return nil, ctx, fmt.Errorf("serverId 参数无效")
-		}
-		serverID = uint(parsed)
-	}
-
 	req := &types.CertificateUploadReq{
-		ServerId: serverID,
-		Domains:  strings.TrimSpace(r.FormValue("domains")),
+		Domains: strings.TrimSpace(r.FormValue("domains")),
 	}
 
 	uploadCtx := logiccaddy.WithCertificateUploadFiles(ctx, &logiccaddy.CertificateUploadFiles{

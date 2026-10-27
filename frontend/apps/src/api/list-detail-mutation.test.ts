@@ -349,13 +349,13 @@ describe('mutation 后列表缓存与后端一致', () => {
     );
   });
 
-  it('Property 7 unit: qk.caddy.servers 前缀 invalidate 后与后端一致', async () => {
+  it('Property 7 unit: qk.caddy.certificates 前缀 invalidate 后与后端一致', async () => {
     type Server = { id: number; name: string };
     let servers: Server[] = [
       { id: 1, name: 's1' },
       { id: 2, name: 's2' },
     ];
-    const key = qk.caddy.servers();
+    const key = qk.caddy.certificates();
     const queryFn = async () => servers.map((s) => ({ ...s }));
 
     await queryClient.prefetchQuery({ queryKey: key, queryFn });

@@ -1,7 +1,7 @@
 /**
  * 证书中心展示纯函数：状态/来源文案、剩余天数徽章、有效期区间；
  * 另含「使用已有证书」下拉的选项构造与双路径推导（建站弹窗/站点抽屉共用）。
- * remote 服务器行只有声明（status=pending、零值时间），展示层如实呈现"未知"。
+ * 只有声明没有真值的行（零值时间），展示层如实呈现"未知"。
  */
 
 import type {
@@ -18,7 +18,7 @@ const STATUS_LABELS: Record<CertificateItem['status'], string> = {
   expiring: '即将到期',
   expired: '已过期',
   missing: '缺失',
-  pending: '远端（仅声明）',
+  pending: '仅声明',
 };
 
 const SOURCE_LABELS: Record<CertificateItem['source'], string> = {
@@ -37,7 +37,7 @@ export function certSourceLabel(source: CertificateItem['source']): string {
   return SOURCE_LABELS[source] ?? source;
 }
 
-/** 零值时间（remote 声明行）：go 零值 0001-01-01 或空串 */
+/** 零值时间（仅声明行）：go 零值 0001-01-01 或空串 */
 export function isZeroIsoDate(value: string | null | undefined): boolean {
   if (!value) return true;
   return value.startsWith('0001-') || value.startsWith('0001-01-01');
@@ -94,17 +94,12 @@ export function certStatusColor(status: CertificateItem['status']): string {
   return 'default';
 }
 
-/** 上传目标服务器选项：remote 禁选并标注无文件通道 */
-export function isLocalServer(server: { type?: string }): boolean {
-  return (server.type ?? 'local') !== 'remote';
-}
-
 /** 上传证书的私钥文件名 — 对齐 backend certUploadKeyFileName */
 export const UPLOAD_KEY_FILE_NAME = 'privkey.pem';
 
 /**
  * 从库存 storagePath 推导证书/私钥两个文件路径。
- * 上传证书落盘布局固定：/config/certs/<serverID>/<域名>/{fullchain,privkey}.pem，
+ * 上传证书落盘布局固定：/config/certs/<域名>/{fullchain,privkey}.pem，
  * storagePath 即证书文件完整路径；私钥取同目录 privkey.pem。
  * 路径为空或定位不到目录时返回 null；反斜杠归一为 Caddy 可用的正斜杠。
  */
@@ -133,17 +128,15 @@ export interface CertSelectOption {
 }
 
 /**
- * 构造"使用已有证书"下拉选项：serverId 过滤 + 上传来源 + 未失效，
+ * 构造"使用已有证书"下拉选项：上传来源 + 未失效，
  * 附推导出的证书/私钥路径；storagePath 推导不出的行剔除。
  */
 export function buildUploadedCertOptions(
   list: CertificateItem[],
-  serverId?: number,
 ): CertSelectOption[] {
   const result: CertSelectOption[] = [];
   for (const item of list) {
     if (!isSelectableUploadedCert(item)) continue;
-    if (serverId != null && item.serverId !== serverId) continue;
     const paths = deriveUploadCertPairPaths(item.storagePath);
     if (!paths) continue;
     const domain = item.primaryDomain || item.domains || `证书 #${item.id}`;

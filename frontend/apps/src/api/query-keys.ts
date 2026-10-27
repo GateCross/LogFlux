@@ -8,13 +8,12 @@ export const qk = {
         : ([...qk.dashboard.all, 'summary', params] as const),
   },
   caddy: {
-    servers: () => ['caddy', 'servers'] as const,
-    config: (serverId: number) => ['caddy', 'config', serverId] as const,
-    history: (serverId: number, page: number, pageSize: number) =>
-      ['caddy', 'history', serverId, page, pageSize] as const,
-    catalog: (serverId: number) => ['caddy', 'catalog', serverId] as const,
-    certificates: (serverId?: number) =>
-      ['caddy', 'certificates', serverId ?? 'all'] as const,
+    /** 单实例：配置、目录、证书都只有一份，key 不再带 serverId */
+    config: () => ['caddy', 'config'] as const,
+    history: (page: number, pageSize: number) =>
+      ['caddy', 'history', page, pageSize] as const,
+    catalog: () => ['caddy', 'catalog'] as const,
+    certificates: () => ['caddy', 'certificates'] as const,
     logs: (params: object) => ['caddy', 'logs', params] as const,
     access: (params?: object) => ['caddy', 'access', params] as const,
     globalOptions: (params?: object) =>
@@ -28,10 +27,10 @@ export const qk = {
     wafEventStats: (params?: object) =>
       ['caddy', 'waf-event-stats', params] as const,
     /** 站点指标；windowMinutes 传入时进 key（不同窗口缓存隔离，如 24h=1440） */
-    metrics: (serverId: number, siteKey?: string, windowMinutes?: number) =>
+    metrics: (siteKey?: string, windowMinutes?: number) =>
       windowMinutes == null
-        ? (['caddy', 'metrics', serverId, siteKey] as const)
-        : (['caddy', 'metrics', serverId, siteKey, windowMinutes] as const),
+        ? (['caddy', 'metrics', siteKey] as const)
+        : (['caddy', 'metrics', siteKey, windowMinutes] as const),
     systemLog: (params: object) => ['caddy', 'system-log', params] as const,
   },
   cron: {

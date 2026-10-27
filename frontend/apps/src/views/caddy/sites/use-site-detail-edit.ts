@@ -110,8 +110,7 @@ function hasInlineSiteLogDirective(siteBlock: string): boolean {
 type CapabilityToggles = Record<SiteCapabilityKey, boolean | undefined>;
 
 export interface SiteDetailEditOptions {
-  serverId: Ref<number | undefined>;
-  /** 当前服务器 Caddyfile 原文（详情页与目录页共享同一查询缓存） */
+  /** 当前 Caddyfile 原文（详情页与目录页共享同一查询缓存） */
   config: Ref<string>;
   /** 当前配置哈希；确认后回传做乐观并发 */
   baseHash: Ref<string>;
@@ -121,7 +120,7 @@ export interface SiteDetailEditOptions {
 }
 
 export function useSiteDetailEdit(options: SiteDetailEditOptions) {
-  const { serverId, config, baseHash, site } = options;
+  const { config, baseHash, site } = options;
 
   // 基本信息 Tab 恒为表单编辑（雷池式低门槛，不设"复杂站点只读"分支）：
   // 域名/TLS 恒可编辑；无 reverse_proxy 时上游输入框自带禁用提示。
@@ -214,16 +213,13 @@ export function useSiteDetailEdit(options: SiteDetailEditOptions) {
     return Boolean(site.value?.upstream || parseReverseProxyTarget(raw));
   });
 
-  // 从证书库选择：详情页打开且基本 Tab 可编辑时拉取，按当前服务器过滤上传证书
+  // 从证书库选择：详情页打开且基本 Tab 可编辑时拉取上传证书
   const {
     options: certOptions,
     loading: certLoading,
     errorMessage: certErrorMessage,
     refetch: refetchCerts,
-  } = useUploadedCertOptions(
-    () => serverId.value,
-    () => basicEditable.value,
-  );
+  } = useUploadedCertOptions(() => basicEditable.value);
 
   /** 当前选中的证书记录 id；清空选择不动已填路径，仍允许手动输入 */
   const selectedCertId = ref<number | undefined>();
@@ -279,7 +275,7 @@ export function useSiteDetailEdit(options: SiteDetailEditOptions) {
   }
 
   watch(
-    () => [site.value?.id, site.value?.raw, serverId.value],
+    () => [site.value?.id, site.value?.raw],
     () => resetState(),
     { immediate: true },
   );
@@ -470,11 +466,11 @@ export function useSiteDetailEdit(options: SiteDetailEditOptions) {
 
   async function confirmSave() {
     const next = pendingDiff.value;
-    if (!next || !serverId.value) return;
+    if (!next) return;
     saving.value = true;
     confirmError.value = '';
     try {
-      const preview = await previewCaddyConfigApi(serverId.value, {
+      const preview = await previewCaddyConfigApi({
         mode: 'raw',
         config: next.config,
         baseHash: baseHash.value || undefined,
@@ -484,7 +480,6 @@ export function useSiteDetailEdit(options: SiteDetailEditOptions) {
         return;
       }
       await pushCaddyConfigApi(
-        serverId.value,
         next.config,
         undefined,
         baseHash.value || undefined,
