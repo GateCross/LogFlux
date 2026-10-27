@@ -27,12 +27,10 @@ type CaddyLogQuery struct {
 
 // 日志种类取值。
 const (
-	// CaddyLogKindAccess 只保留访问日志：Caddy 的 HTTP 访问日志固定用该 logger 名。
+	// CaddyLogKindAccess 只保留访问日志：logger 落在访问链路命名空间内。
 	CaddyLogKindAccess = "access"
-	// CaddyLogKindError 只保留错误日志：logger 不属于访问链路，或级别为 error 及以上。
+	// CaddyLogKindError 只保留错误日志：logger 不属于访问链路。
 	CaddyLogKindError = "error"
-	// caddyAccessLoggerName 是 Caddy 访问日志的 logger 命名空间。
-	caddyAccessLoggerName = "http.log.access"
 )
 
 // DashboardTrendRow 是看板趋势聚合行。
@@ -133,16 +131,23 @@ func (m *defaultCaddyLogModel) List(ctx context.Context, query CaddyLogQuery) ([
 	if query.OnlyWaf {
 		db = db.Where("extra_data ->> 'source' = ?", "waf")
 	}
-	// 访问日志与错误日志共用一张表，靠 logger/level 区分：
-	// access 只用 logger 精确匹配；error 用「非访问 logger 或 error 级」兜底，
-	// 避免 Caddy 调整命名空间后错误日志整体消失。
+	// 访问日志与错误日志共用一张表，只按 logger 命名空间分流。
+	// 分类依据是 logger 而不是 level：level 是严重程度，与种类正交，
+	// 一条 5xx 的访问日志 logger 仍是 http.log.access.*，level 却是 error，
+	// 若把 level IN (...) 放进种类判定，它会在两个视图里同时出现。
+	// 两侧都是 De Morgan 互补条件，配 COALESCE 兜住 NULL：
+	// PG 里 '' NOT LIKE 'http.log.access%' 为 true（空串会错入错误视图），
+	// 且 NULL 参与比较一律得 NULL（NULL 行两个视图都会消失）。
 	switch query.LogKind {
 	case CaddyLogKindAccess:
-		db = db.Where("logger = ?", caddyAccessLoggerName)
+		db = db.Where(
+			"COALESCE(logger, '') = '' OR logger = ? OR logger LIKE ?",
+			caddyAccessLoggerName, caddyAccessLoggerName+".%",
+		)
 	case CaddyLogKindError:
 		db = db.Where(
-			"(level IN ? OR (logger <> '' AND logger <> ?))",
-			[]string{"error", "fatal", "panic"}, caddyAccessLoggerName,
+			"COALESCE(logger, '') <> '' AND logger <> ? AND logger NOT LIKE ?",
+			caddyAccessLoggerName, caddyAccessLoggerName+".%",
 		)
 	}
 

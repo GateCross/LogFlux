@@ -93,14 +93,37 @@ Logger string `gorm:"size:128;index:idx_logger_log_time,priority:1"`
 
 ### 3.3 查询分流
 
-`CaddyLogQuery.LogKind` 取值 `access` / `error`：
+`CaddyLogQuery.LogKind` 取值 `access` / `error`，**只按 `logger` 命名空间划分**：
 
 ```sql
--- access
-logger = 'http.log.access'
--- error：双条件兜底，避免 Caddy 调整命名空间后错误日志整体消失
-(level IN ('error','fatal','panic')) OR (logger <> '' AND logger <> 'http.log.access')
+-- access：访问命名空间内（含空值兜底）
+COALESCE(logger,'') = '' OR logger = 'http.log.access' OR logger LIKE 'http.log.access.%'
+-- error：访问命名空间之外
+COALESCE(logger,'') <> '' AND logger <> 'http.log.access' AND logger NOT LIKE 'http.log.access.%'
 ```
+
+两侧是 De Morgan 互补条件：任一 `caddy_logs` 行必然落入且只落入一个视图。`COALESCE` 用于兜住
+NULL —— PG 里 `'' NOT LIKE 'http.log.access%'` 为 true（空串会错入错误视图），而 `NULL` 参与
+任何比较都得 NULL（NULL 行两个视图都会消失）。
+
+> **`level` 不参与种类判定。** 它是严重程度，与种类正交：一条 5xx 访问日志的 `logger` 仍是
+> `http.log.access.*`，`level` 却是 `error`。早先把 `level IN ('error','fatal','panic')` 并进
+> `error` 条件，会让这类行同时出现在两个视图里，跟「切换后各看各的」冲突。
+>
+> **`logger` 不能等值比较。** Caddy 按 `log` 指令书写顺序自动生成 `log0`、`log1`…，
+> 站点写了名字则是 `http.log.access.<自定义名>`。早期用等值匹配，导致 302 行访问日志
+> 在「访问日志」视图查不到、反而全落进「错误日志」视图。
+
+分类规则收敛在两处，不再散落到各写入点：
+
+| 位置 | 作用 |
+|---|---|
+| `CaddyLog.BeforeCreate`（`model/caddy/caddy_log.go`） | 空 `logger` → `http.log.access`，空 `level` → `info`。4 条写入路径（JSON 访问日志、Coraza 审计、console 文本、面板中间件）都走 `db.Create`，一处兜底全覆盖，规则与 4.4 的回填一致 |
+| `CaddyLogQuery.LogKind` 分支 | 上面那对互补条件 |
+
+`CaddyAccessLoggerName` 常量是命名空间根名的唯一真值，采集侧与查询侧都引用它。
+单测 `TestList_LogKindPartitionsByLoggerNamespace` 锁定 WHERE 子句与绑定参数，
+`TestCaddyLog_BeforeCreateFillsLevelAndLogger` / `TestCaddyLogCreateAppliesHook` 锁定兜底与 hook 挂载。
 
 API 层 `CaddyLogReq.logKind` 已接通，`CaddyLogItem` 返回 `level` / `logger`。
 

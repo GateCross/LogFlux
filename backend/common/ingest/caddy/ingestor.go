@@ -108,9 +108,6 @@ func (i *CaddyIngestor) ParseLine(line string) (*caddymodel.CaddyLog, error) {
 		ClientIP:  matches[13],
 		RawLog:    mustJSONRaw(line),
 		ExtraData: "{}",
-		// console 文本格式不含级别信息，按访问日志处理
-		Level:  "info",
-		Logger: "http.log.access",
 	}
 	i.fillGeo(entry)
 	return entry, nil
@@ -522,11 +519,6 @@ func parseCorazaAuditJSON(line string, data map[string]any) (*caddymodel.CaddyLo
 		entry.ClientIP = shared.AsString(tx["client_ip"])
 		entry.RemoteIP = shared.AsString(tx["host_ip"])
 	}
-
-	// WAF 审计行归属访问日志：它由 Coraza 在请求处理链路中产生，
-	// 不设 level/logger 会让它在「错误日志」视图里错位。
-	entry.Level = "info"
-	entry.Logger = "http.log.access"
 
 	if entry.LogTime.IsZero() {
 		entry.LogTime = time.Now()

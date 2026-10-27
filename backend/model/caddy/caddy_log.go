@@ -1,7 +1,10 @@
 package caddy
 
 import (
+	"strings"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 type CaddyLog struct {
@@ -20,8 +23,9 @@ type CaddyLog struct {
 	City     string `gorm:"size:100"`
 
 	// 日志级别与 logger 命名空间，取自 Caddy JSON 的 level / logger 字段。
-	// 访问日志为 logger=http.log.access；错误日志来自其它命名空间（http.log、tls 等）。
-	// 这两个字段是「访问日志 / 错误日志分开查看」的唯一数据依据。
+	// logger 是「访问日志 / 错误日志分开查看」的唯一分类依据；
+	// level 只是严重程度，两者正交，不要把 level 混进种类判断。
+	// 空值由 BeforeCreate 兜底成 info / http.log.access。
 	Level  string `gorm:"size:16;index:idx_level_log_time,priority:1"`
 	Logger string `gorm:"size:128;index:idx_logger_log_time,priority:1"`
 
@@ -46,4 +50,25 @@ type CaddyLog struct {
 // TableName 返回表名
 func (CaddyLog) TableName() string {
 	return "caddy_logs"
+}
+
+// 访问日志的 logger 命名空间根名。
+// 站点给 log 指令写了名字时是 http.log.access.<名字>，同一 Caddyfile 里有多个站点时
+// Caddy 按书写顺序生成 http.log.access.log0、log1…，所以判定必须按前缀，不能等值比较。
+const caddyAccessLoggerName = "http.log.access"
+
+// BeforeCreate 把 level / logger 归一化后再入库。
+//
+// 采集侧有 4 条写入路径（JSON 访问日志、Coraza 审计、console 文本、面板中间件），
+// 都走 GORM 的 Create，所以这里兜一次就全覆盖，各路径不必各自记得填。
+// 规则与 log_field_backfill.go 对存量行的回填一致：空 logger 归访问日志，
+// 空 level 按 info 处理（Caddy 访问日志本身也只产出 INFO 与 ERROR 两级）。
+func (l *CaddyLog) BeforeCreate(tx *gorm.DB) error {
+	if strings.TrimSpace(l.Logger) == "" {
+		l.Logger = caddyAccessLoggerName
+	}
+	if strings.TrimSpace(l.Level) == "" {
+		l.Level = "info"
+	}
+	return nil
 }
