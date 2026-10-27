@@ -110,6 +110,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	backfillWafPolicyCRSDefaults(db)
 	initWafWorkspace(&c)
 	initCronWorkspace(&c)
+	ensureDefaultCaddyServer(db)
 
 	// 后端日志直接写入数据库（异步）
 	if writer := logging.NewDBWriter(db, "backend"); writer != nil {
@@ -296,6 +297,54 @@ func initCronWorkspace(c *config.Config) {
 	}
 
 	logx.Infof("定时任务脚本目录已初始化: %s", fmt.Sprintf("%s/{tasks,staging}", configuredDir))
+}
+
+const (
+	defaultCaddyServerName    = "local"
+	defaultCaddyServerURL     = "http://localhost:2019"
+	systemConfigKeyNodeSeeded = "caddy_node_seeded"
+)
+
+// ensureDefaultCaddyServer 首次启动时播种一个 local 节点，
+// 让新部署不必先手动填 http://localhost:2019 才能用。
+//
+// 用 system_configs 的标记键保证只播种一次：用户主动删光节点后重启不会被重建。
+func ensureDefaultCaddyServer(db *gorm2.DB) {
+	if db == nil {
+		return
+	}
+	// 标记键存在 = 已播种过（或用户已删光），一律不再处理
+	var marker systemmodel.SystemConfig
+	if err := db.Where("key = ?", systemConfigKeyNodeSeeded).First(&marker).Error; err == nil {
+		return
+	}
+
+	var count int64
+	if err := db.Model(&caddymodel.CaddyServer{}).Count(&count).Error; err != nil {
+		logx.Errorf("统计 Caddy 节点数量失败: %v", err)
+		return
+	}
+
+	if count == 0 {
+		server := &caddymodel.CaddyServer{
+			Name:    defaultCaddyServerName,
+			Url:     defaultCaddyServerURL,
+			Type:    "local",
+			Modules: "{}", // jsonb 列，空串写入 Postgres 会报错
+		}
+		if err := db.Create(server).Error; err != nil {
+			logx.Errorf("创建默认 Caddy 节点失败: %v", err)
+			return
+		}
+		logx.Infof("已创建默认 Caddy 节点: %s (%s)", defaultCaddyServerName, defaultCaddyServerURL)
+	}
+
+	// 无论是否插入都写标记：删光节点后重启不重建
+	if err := db.Where(systemmodel.SystemConfig{Key: systemConfigKeyNodeSeeded}).
+		Assign(systemmodel.SystemConfig{Value: time.Now().Format(time.RFC3339)}).
+		FirstOrCreate(&systemmodel.SystemConfig{}).Error; err != nil {
+		logx.Errorf("写入节点播种标记失败: %v", err)
+	}
 }
 
 func ensureCronTaskLogRetentionConstraints(db *gorm2.DB) {

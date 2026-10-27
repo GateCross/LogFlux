@@ -156,6 +156,44 @@ func ensureWafProtectSnippet(config string) (string, bool, error) {
 	return strings.Join(updated, ""), true, nil
 }
 
+// ensureSnippetDefinition 只保证"引用必有定义"：同名 snippet 已存在就原样返回，
+// 内容归用户所有，不做任何内容判定或替换。
+//
+// 与 ensureWafProtectSnippet 的分工：后者按内容判定（缺 coraza_waf 或 directives
+// 反引号就整块替换），会把用户写成 include 文件形式的 WAF 指令静默降级成只检测；
+// 这里只看块名，因此不会覆盖用户内容。
+func ensureSnippetDefinition(config, name, template string) (string, bool, error) {
+	if strings.TrimSpace(template) == "" || strings.TrimSpace(config) == "" {
+		return config, false, nil
+	}
+	blocks, lines, err := parseTopLevelCaddyBlocks(config)
+	if err != nil {
+		return "", false, err
+	}
+	for _, block := range blocks {
+		if block.Kind == "snippet" && block.Name == name {
+			return config, false, nil
+		}
+	}
+
+	newline := detectCaddyNewline(config)
+	normalized := strings.ReplaceAll(strings.TrimSpace(template), "\n", newline)
+	templateLines := splitLinesKeepEndings(normalized + newline)
+
+	insertAt := len(lines)
+	for _, block := range blocks {
+		if block.Kind == "site" {
+			insertAt = block.StartLine
+			break
+		}
+	}
+	insertPayload := append([]string{}, templateLines...)
+	if insertAt < len(lines) {
+		insertPayload = append(insertPayload, newline)
+	}
+	return strings.Join(insertLines(lines, insertAt, insertPayload), ""), true, nil
+}
+
 func ensureWafProtectSnippetBeforeSites(config string) (string, bool, error) {
 	blocks, lines, err := parseTopLevelCaddyBlocks(config)
 	if err != nil {

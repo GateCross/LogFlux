@@ -194,13 +194,60 @@ func (s *caddyConfigApplyService) persist(server *caddymodel.CaddyServer, config
 //
 // 读库失败按"未配置"处理不阻断应用；模板本身不合法（缺 :80 地址、块头不对）属于
 // 数据错误，直接报错避免把坏配置推给 Caddy。
+//
+// geo_auth 是唯一跟随开关的 snippet：IP 区域访问控制关闭时摘掉 import，避免留下
+// 无意义的 forward_auth；开启时才补定义，保证引用必有定义又不污染配置。
 func (s *caddyConfigApplyService) mergeManagedBlocks(config string) (string, error) {
-	return mergeCaddyManagedBlocks(
+	entryBlock := loadCaddyEntryBlock(s.svcCtx.DB)
+	ipRegionEnabled := isIPRegionEnabled(s.svcCtx.DB)
+	if !ipRegionEnabled {
+		// IP 区域访问控制关闭时摘掉 import，避免留下无意义的 forward_auth
+		entryBlock = removeCaddyDirectiveLine(entryBlock, "import geo_auth")
+	}
+	merged, err := mergeCaddyManagedBlocks(
 		config,
 		loadCaddyGlobalOptions(s.svcCtx.DB),
-		loadCaddyEntryBlock(s.svcCtx.DB),
+		entryBlock,
 		loadCaddyLogSnippet(s.svcCtx.DB),
 	)
+	if err != nil {
+		return "", err
+	}
+	if ipRegionEnabled {
+		merged, _, err = ensureSnippetDefinition(merged, "geo_auth", renderGeoAuthSnippet())
+		if err != nil {
+			return "", err
+		}
+	}
+	return merged, nil
+}
+
+// removeCaddyDirectiveLine 删掉配置中所有 trim 后等于该指令的行（含行尾换行）。
+func removeCaddyDirectiveLine(config, directive string) string {
+	lines := strings.Split(config, "\n")
+	kept := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if strings.TrimSpace(line) == directive {
+			continue
+		}
+		kept = append(kept, line)
+	}
+	return strings.Join(kept, "\n")
+}
+
+// renderGeoAuthSnippet IP 区域访问控制的统一片段定义。
+// forward_auth 直连后端 /api/internal/geo-check，403 直接透传给客户端。
+func renderGeoAuthSnippet() string {
+	return strings.Join([]string{
+		"(geo_auth) {",
+		"  forward_auth localhost:8888 {",
+		"    uri /api/internal/geo-check",
+		"    header_up X-Forwarded-Host {host}",
+		"    header_up X-Forwarded-Uri {uri}",
+		"    header_up X-Forwarded-Method {method}",
+		"  }",
+		"}",
+	}, "\n")
 }
 
 // mergeCaddyManagedBlocks 是合并的纯函数形态：先合并全局选项，再替换入口块，
@@ -217,6 +264,17 @@ func mergeCaddyManagedBlocks(config string, opts CaddyGlobalOptionsValue, entryB
 	merged, err = mergeCaddyLogSnippet(merged, logSnippet)
 	if err != nil {
 		return "", err
+	}
+	// waf_protect 与 subdomain-log 同层保证：入口块模板会 import 它，
+	// 少了这一步 Caddy 会把 import 当文件 glob 解析并报 snippet not found。
+	//
+	// 仅在确实应用了入口块模板时补定义：空模板表示不接管入口块，
+	// 此时配置里没有本层引入的 import，也就不该往配置里塞东西。
+	if strings.TrimSpace(entryBlock) != "" {
+		merged, _, err = ensureSnippetDefinition(merged, "waf_protect", renderWafProtectSnippet(detectCaddyNewline(merged)))
+		if err != nil {
+			return "", err
+		}
 	}
 	// snippet 定义就位后，把存量站点侧旧 import 写法迁移为三参数单行
 	return migrateSiteLogImports(merged), nil

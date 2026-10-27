@@ -82,7 +82,8 @@ const {
       />
     </Card>
 
-    <Card variant="borderless" class="mb-4">
+    <!-- 单节点时隐藏：多节点总览网格与最近探测时间仅在多节点场景有意义 -->
+    <Card v-if="servers.length > 1" variant="borderless" class="mb-4">
       <StatusActions
         :servers-count="servers.length"
         :last-probed-at="lastProbedAt"

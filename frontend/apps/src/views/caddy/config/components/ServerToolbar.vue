@@ -84,6 +84,7 @@ const saveLabel = computed(() => (props.mode === 'raw' ? '保存原始配置' : 
   <div class="caddy-toolbar">
     <div class="toolbar-group primary">
       <Select
+        v-if="props.serverOptions.length > 1"
         :value="props.selectedServerId"
         :loading="props.loadingServers"
         :options="props.serverOptions"

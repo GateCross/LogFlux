@@ -273,14 +273,17 @@ onBeforeUnmount(() => {
       <!-- 节点选择 + 高级配置入口：WafPanel 自带「WAF 防护配置」卡片 -->
       <div class="waf-toolbar">
         <div class="waf-toolbar-left">
-          <span class="waf-toolbar-label">节点</span>
-          <Select
-            :value="selectedServerId"
-            :options="serverOptions"
-            :loading="serversLoading"
-            style="width: 220px"
-            @change="handleServerChange"
-          />
+          <!-- 单节点时选择器是空操作，连标签一起隐藏 -->
+          <template v-if="serverOptions.length > 1">
+            <span class="waf-toolbar-label">节点</span>
+            <Select
+              :value="selectedServerId"
+              :options="serverOptions"
+              :loading="serversLoading"
+              style="width: 220px"
+              @change="handleServerChange"
+            />
+          </template>
         </div>
         <Button
           type="link"

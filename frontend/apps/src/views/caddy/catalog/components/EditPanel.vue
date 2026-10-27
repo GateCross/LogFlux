@@ -46,6 +46,7 @@ function handleServerChange(value: unknown) {
 <template>
   <Space v-if="section === 'toolbar'" wrap>
     <Select
+      v-if="serverOptions.length > 1"
       :value="selectedServerId"
       :options="serverOptions"
       :loading="loadingServers"

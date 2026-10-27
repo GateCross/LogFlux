@@ -8,9 +8,13 @@
 #      抢在 @lan 之前命中；这里全部用 route 保序。
 #   2. 全局需 auto_https disable_redirects，否则 Caddy 仍会为 :80
 #      自动插入 Location: https://{host} 的跳转（在“全局选项”里配置）。
+#
+# 本模板只 import 系统自身保证存在的 snippet（waf_protect / subdomain-log / geo_auth）。
+# 模板里的 import 若指向未定义的 snippet，Caddy 会按文件 glob 解析并在 adapt 时
+# 报错，表现为"预览能过、保存必失败"。新增能力一律内联，不要新增 import。
 :80 {
   import waf_protect
-  import compression
+  encode zstd gzip
   import subdomain-log local 10 INFO
 
   @lan remote_ip 127.0.0.1/8 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
@@ -26,12 +30,32 @@
     #   }
     # }
 
-    # 其余（LogFlux 本体）
+    # 其余（LogFlux 本体）：IP 区域校验 → 健康检查 → API 反代 → 前端静态
+    #
+    # geo_auth 必须留在这个 handle 内，不能提到 :80 顶层：forward_auth 的指令顺序
+    # 排在 route 之前，提到顶层会让 pve/ikuai 这些内网源站的流量也被 geo 校验拦下。
     handle {
-      import health_check
       import geo_auth
-      import api_proxy
-      import frontend_simple
+      handle /api/health {
+        respond "OK" 200
+      }
+      handle /api/* {
+        reverse_proxy localhost:8888 {
+          header_up Host {host}
+          header_up X-Real-IP {client_ip}
+          header_up X-Forwarded-For {client_ip}
+          header_up X-Forwarded-Proto {scheme}
+          transport http {
+            read_timeout 30s
+            write_timeout 30s
+          }
+        }
+      }
+      handle {
+        root * /app/frontend
+        try_files {path} /index.html
+        file_server
+      }
     }
   }
 

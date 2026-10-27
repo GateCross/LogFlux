@@ -264,6 +264,7 @@ async function handleUploadOk() {
     <Card variant="borderless">
       <div class="toolbar">
         <Select
+          v-if="filterOptions.length > 1"
           :value="filterServerId"
           :options="filterOptions"
           :loading="loadingServers"
