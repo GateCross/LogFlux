@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { computed, onBeforeUnmount } from 'vue';
+import { computed, onBeforeUnmount, onMounted } from 'vue';
 import { onBeforeRouteLeave, useRouter } from 'vue-router';
 import { Modal } from 'antdv-next';
 
@@ -106,6 +106,12 @@ function setWafPreviewVisible(value: boolean) {
 async function handleRefreshWaf() {
   await Promise.all([refetchConfig(), fetchWafConfig()]);
 }
+
+// 进页即读一次 WAF 状态：CRS/Coraza/Caddy 版本与已挂载规则数不必等「刷新」按钮。
+// 配置查询由 useListDetailQuery 自行发起，这里只补 WAF 状态。
+onMounted(() => {
+  void fetchWafConfig();
+});
 
 // ---------- 草稿保护 ----------
 function confirmDiscardWafDraft(title: string): Promise<boolean> {
