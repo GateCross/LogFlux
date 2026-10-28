@@ -16,14 +16,23 @@ version: 3.0.0
 
 ```
 backend/api/
-├── logflux.api         # 主入口，import 所有模块
-├── base.api            # 通用结构（BaseResp, IDReq 等）
-├── auth.api            # 认证相关
-├── route.api           # 路由菜单权限
-├── manage.api          # 系统管理（User, Role, Menu）
-├── notification.api    # 通知管理
-└── caddy_log.api       # 日志查询
+├── logflux.api                 # 主入口，import 所有模块
+├── base.api                    # 通用结构（BaseResp, IDReq 等）
+├── auth.api                    # 登录、刷新令牌、初始化管理员
+├── user.api                    # 用户管理（无角色/权限）
+├── dashboard.api               # 仪表盘统计
+├── caddy_server.api            # Caddy 配置、历史、回滚、Docker 发现
+├── caddy_certificate.api       # 证书中心
+├── caddy_global_options.api    # 全局选项 / 入口块 / 日志 snippet / 保留策略
+├── caddy_ip_region.api         # IP 区域访问控制
+├── caddy_log.api               # 日志查询与站点指标
+├── waf.api                     # WAF 源、上传、引擎、策略、事件
+├── notification.api            # 通知渠道/规则/模板/日志
+├── system_log.api              # 系统日志
+└── cron.api                    # 定时任务
 ```
+
+> 历史文件 `route.api` / `menu.api` / `role.api` / `manage.api` 已随 RBAC 与 `/security` 页面删除，不要重新创建。
 
 ### API 定义语法
 
@@ -75,9 +84,12 @@ service logflux-api {
 ```bash
 cd backend
 
-# 生成代码（使用 snake_case 风格）
-goctl api go -api api/logflux.api -dir . -style go_zero
- 
+# 推荐：用脚本生成（会处理 goctl 脚手架噪声）
+bash scripts/gen-api.sh
+
+# 等价手动命令（使用 snake_case 风格）
+goctl api go -api api/logflux.api -dir . --style go_zero
+
 # 约束：必须使用 --style go_zero（下划线命名），禁止 gozero/goZero。
 # 若出现 addcaddyserverhandler.go 等无下划线文件，先删除再重新生成。
 
@@ -99,9 +111,10 @@ internal/
 
 **项目已实现 `ResponseMiddleware` 自动包装响应**，位于 `backend/internal/middleware/response_middleware.go`。
 
-中间件会自动检测响应是否包含 `code` 和 `msg` 字段：
-- **未包装**：自动包装成 `{code: 200, msg: "success", data: {...}}`
+中间件会自动检测响应是否含 `code` 且含 `message` 或 `msg`：
+- **未包装**：按 `xerr.OK = 0` 包装成 `{code: 0, message: "成功", msg: "成功", data: {...}}`
 - **已包装**：直接放行
+- **非 JSON 或非 200**：原样透传
 
 **因此以下两种写法都可以正常工作**：
 
@@ -136,35 +149,32 @@ server := rest.MustNewServer(c.RestConf,
 server.Use(middleware.NewResponseMiddleware().Handle)
 ```
 
-### 权限中间件示例
+### 登录态中间件（无 RBAC）
 
 ```go
-// backend/internal/middleware/permission_middleware.go
-package middleware
-
-import (
-    "net/http"
-)
-
-type PermissionMiddleware struct {
-    svcCtx *svc.ServiceContext
+// backend/internal/middleware/active_user_middleware.go
+// 只校验「用户存在 + status=1」，不做角色/权限判断。
+// 历史 PermissionMiddleware 已随 RBAC 删除，不要重新实现。
+type ActiveUserMiddleware struct {
+    db *gorm.DB
 }
 
-func NewPermissionMiddleware(svcCtx *svc.ServiceContext) *PermissionMiddleware {
-    return &PermissionMiddleware{svcCtx: svcCtx}
-}
-
-func (m *PermissionMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
+func (m *ActiveUserMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
     return func(w http.ResponseWriter, r *http.Request) {
-        // 从 JWT 获取用户信息
-        userId := r.Context().Value("userId")
-        
-        // 权限检查逻辑
-        if !m.hasPermission(userId, r.URL.Path) {
-            httpx.Error(w, errors.New("权限不足"))
+        userID, err := userIDFromContext(r)
+        if err != nil {
+            writeAuthError(w, http.StatusUnauthorized, 401, "登录状态无效")
             return
         }
-        
+        var user usermodel.User
+        if err := m.db.Select("id", "status").First(&user, userID).Error; err != nil {
+            // gorm.ErrRecordNotFound → 401「用户不存在」
+            return
+        }
+        if user.Status == 0 {
+            writeAuthError(w, http.StatusForbidden, 403, "用户已被禁用")
+            return
+        }
         next(w, r)
     }
 }
@@ -487,7 +497,7 @@ type User struct {
     Password  string    `gorm:"size:100;not null" json:"-"`
     Email     string    `gorm:"size:100" json:"email"`
     Status    int       `gorm:"default:1;not null" json:"status"`  // 1=启用, 0=禁用
-    Roles     []Role    `gorm:"many2many:user_roles" json:"roles"`
+    // 无 Roles 字段：RBAC 已删除，只有「是否登录」与「账号是否启用」两个判断
 }
 ```
 
@@ -544,8 +554,11 @@ func (l *Logic) GetList(req *types.PageReq) (*types.ListResp, error) {
 ## goctl 常用命令
 
 ```bash
-# API 代码生成
-goctl api go -api api/logflux.api -dir . -style go_zero
+# API 代码生成（推荐脚本，会清理 goctl 脚手架噪声）
+bash scripts/gen-api.sh
+
+# 等价手动命令
+goctl api go -api api/logflux.api -dir . --style go_zero
 
 # 查看 API 文档
 goctl api doc --dir api

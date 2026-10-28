@@ -10,7 +10,8 @@ docker/
   runtime.Dockerfile         # CI 产物拼装镜像（配合 build-artifacts）
   caddy.Dockerfile           # 自定义 Caddy（含 Coraza/CRS 模块）
   docker-compose.yml         # 部署编排（使用预构建 image）
-  Caddyfile                  # Caddy 默认配置
+  Caddyfile                  # 容器内 Caddy 默认配置（受管模板）
+  entrypoint.sh              # 容器启动脚本：WAF 布局兜底、配置恢复、拉起后端与 Caddy
   config.example.yaml        # 后端配置模板
   .env.example               # compose 环境变量模板
 ```
@@ -194,7 +195,7 @@ active/rules/@owasp_crs/*.data
 
 ### 5.7 简单 WAF 设置（默认入口）
 
-前端入口：`Caddy管理` -> `Caddy配置` -> `防火墙`
+前端入口：`全局设置` 页的「WAF 设置」卡片（复用 `views/caddy/shared/components/WafPanel.vue`）
 
 默认入口只暴露常用项：
 
@@ -206,8 +207,8 @@ active/rules/@owasp_crs/*.data
 
 推荐发布流程：
 
-1. 在 `Caddy配置` 中先保存站点配置。
-2. 切换到 `防火墙`，选择模式、强度和适用站点。
+1. 先保存站点配置（站点页或配置管理页均可）。
+2. 在「WAF 设置」卡片选择模式、强度和适用站点。
 3. 点 `预览变更` 查看生成的 directives 与候选 Caddyfile。
 4. 点 `应用到 Caddy`，后端执行 `/adapt + /load` 并写入配置历史。
 5. 若出现异常，可在 Caddy 配置历史中回滚。
@@ -226,15 +227,16 @@ active/rules/@owasp_crs/*.data
 - 落库失败时会尝试回滚到 `last_good` Caddy 配置。
 - 会记录 `simple_waf_last_good` / `simple_waf_apply` 配置历史动作。
 
-### 5.8 高级安全管理（默认隐藏）
+### 5.8 WAF 更新管理入口
 
-高级安全管理页面仍保留代码与路由，但默认不显示在侧边菜单中。它包含：
+WAF 规则更新的全部入口都在「全局设置」页内的两张卡片，没有独立的「安全管理」页面：
 
-- 更新源管理、上传、激活、回滚
-- 多策略、规则例外、策略绑定
-- 策略观测、误报反馈与任务审计
+| 卡片 | 能力 |
+|---|---|
+| WAF 设置（`SettingsWafCard`） | 运行模式、强度、审计、请求体限制、站点绑定 |
+| WAF 来源（`WafSourcesCard`） | 源增删改、检查新版本、同步下载、手动上传、Coraza 引擎版本检查 |
 
-默认使用路径优先采用 `Caddy配置 -> 防火墙`，避免把简单 WAF 设置拆散到多个页面。
+> 早期版本的「高级安全管理」页面（多策略、规则例外、策略绑定、误报反馈、发布/回滚）已在 2026-06 随对应接口一起删除。若在旧文档或旧截图中看到该入口，以本节为准。
 
 ## 6. 配置文件示例（WAF 段）
 
@@ -276,16 +278,17 @@ Waf:
 
 ### 8.1 证书中心与 DNS-01 签发（CF_API_TOKEN）
 
-LogFlux 证书中心（`Caddy管理 -> 证书中心`）只做**声明与展示**，不做签发编排：
-签发与自动续期一律由 Caddy 完成。库存来自两个来源合并：
+LogFlux 证书中心（菜单 `证书中心`，路由 `/caddy/certificates`）只做**声明与展示**，不做签发编排：
+签发与自动续期一律由 Caddy 完成。库存由两个来源合并：
 
-- 本机服务器：扫描 Caddy 证书存储目录（默认 `/data/caddy/certificates`，可用
+- **Caddy 自动签发**：扫描 Caddy 证书存储目录（默认 `/data/caddy/certificates`，可用
   `backend/etc/config.yaml` 的 `Caddy.CertStorageDir` 覆盖），解析 PEM 得到有效期/签发者/SAN；
-- 全部服务器（含远端）：解析 Caddyfile 的站点域名与 `tls` 指令得到"应有证书"清单；
-  远端服务器只有声明行，状态显示 `pending`（远端仅声明）。
+- **Caddyfile 声明**：解析站点域名与 `tls` 指令得到「应有证书」清单；声明了 HTTPS 但卷里
+  没有对应文件时为 `missing`，有声明无真值的行保留为 `pending`。
 
-上传的证书写入 `/config/certs/<serverID>/<主域名>/`（`fullchain.pem` + `privkey.pem`，0600）。
-该目录已通过 `cert_certs` 命名卷挂载持久化（见 `docker-compose.yml`），重建容器不丢失。
+上传的证书写入 `/config/certs/<主域名>/`（`fullchain.pem` + `privkey.pem`，0600）。
+单实例后不再按节点分目录；存量 `/config/certs/<serverID>/<域名>/` 由库存的 `StoragePath` 定位，
+仍可正常删除。该目录已通过 `cert_certs` 命名卷持久化（见 `docker-compose.yml`），重建容器不丢失。
 
 **DNS-01（Cloudflare）签发的 token 注入**：在建站/站点配置里选择 DNS 签发后，
 生成的 Caddyfile 会引用环境变量占位 `{$CF_API_TOKEN}`，token 只经环境变量进入容器，
@@ -353,23 +356,23 @@ docker compose -f docker/docker-compose.yml down
 
 - `security_data:/config/security`
 
-### Q4：策略发布失败（`publish`）常见原因
+### Q4：WAF 设置应用失败（`simple-config/apply`）常见原因
 
 优先排查：
 
-1. `Caddy` 配置中缺少 `coraza_waf` 的 `directives` 块（会导致无法注入策略）。
-2. `SecAuditLogRelevantStatus` 表达式填写错误，导致 `/load` 加载失败。
+1. Caddy 配置中缺少 `coraza_waf` 的 `directives` 块（无法注入策略）。
+2. `SecAuditLogRelevantStatus` 表达式写错，导致 `/load` 加载失败。
 3. `SecRequestBodyLimit` / `SecRequestBodyNoFilesLimit` 超过上限（当前限制 1 GiB）。
 4. Caddy Admin API 无法访问（网络、鉴权或容器状态异常）。
 
 处理步骤：
 
-1. 在 UI 先执行 `校验`，定位是 `adapt` 阶段还是 `load` 阶段失败。
-2. 查看 `任务日志` 和后端返回的中文错误信息。
-3. 如发布中断，确认是否已自动回退到 `last_good`，必要时手动回滚发布记录。
+1. 在 UI 先点 `预览变更`，定位是 `adapt` 还是 `load` 阶段失败。
+2. 看后端返回的中文错误信息与容器日志。
+3. 应用中断时后端会自动回退到 `last_good`；仍异常则到 Caddy 配置历史里手动回滚。
 
 
-## 10. Docker 发现标签（Caddy 配置工作台 · 可选）
+## 12. Docker 发现标签（Caddy 配置工作台 · 可选）
 
 LogFlux 支持按容器 labels 扫描会话候选草稿（**不**建平行 discovery DB，**不**自动 `/load`）。
 

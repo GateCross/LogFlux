@@ -1,79 +1,90 @@
 # LogFlux 项目上下文
 
+> 更新：2026-10-28
+> 本文件是 AI/新成员的开发约定与架构速查，描述**当前代码**。文档索引见 [`../docs/README.md`](../docs/README.md)。
+
 ## 1. 项目定位
 
-LogFlux 是一个日志流量分析、Caddy 图形化配置与 Coraza WAF 管理系统，采用前后端分离开发、一体化容器部署。
+日志流量分析、Caddy 图形化配置与 Coraza WAF 管理系统。前后端分离开发，一体化容器部署（前端静态资源 + 后端二进制 + Caddy 同一镜像）。
 
 核心能力：
 
-- Caddy 反向代理配置管理、预览、热加载、历史记录与回滚。
-- Caddy 访问日志与运行日志采集、查询、统计与归档。
-- Coraza + OWASP CRS 的简单防火墙配置、策略发布、版本管理、任务审计与误报反馈。
-- 用户管理与登录认证（无角色、无动态菜单，路由为前端静态定义）。
-- 通知渠道、通知规则、模板、站内通知与通知日志。
-- 定时任务管理与日志。
-
-默认推荐入口：
-
-- 常用 WAF 配置：`Caddy管理 -> Caddy配置 -> 防火墙`。
-- 高级安全管理代码仍保留，默认入口已收敛，避免把简单 WAF 工作流拆散。
+- **站点中心**：一步建站（域名 + 上游），站点能力三态识别与定点写回，复杂站点原文只读但防护可调
+- **Caddy 配置**：预览、热加载、历史版本与回滚、全局选项/入口块/日志 snippet 单例配置
+- **站点日志**：每站点开关访问/错误日志、单文件滚动上限、采集入库后按 `level`/`logger` 分流查询
+- **证书中心**：Caddy 自动签发 + 用户上传双源合并、到期告警、缺口视图
+- **IP 区域访问控制**：基于 ip2region 的国家/省份粒度限制
+- **WAF**：Coraza + OWASP CRS，运行模式/强度/审计三档、CRS 规则在线更新与回滚、拦截事件查询
+- **通知**：渠道、规则、模板、站内通知、发送日志
+- **定时任务**：Cron 管理、脚本文件、执行日志
+- **用户**：登录、冻结/解冻、首次启动引导建管理员。**无角色、无权限码、无动态菜单**
 
 ## 2. 技术栈
 
 ### 2.1 后端
 
-- 目录：`backend/`
-- 框架：go-zero `v1.9.4`
-- Go 版本：`go 1.26.0`
-- 数据库：PostgreSQL + GORM
-- 缓存：Redis 可选
-- 认证：JWT
-- 日志：go-zero `logx` + `internal/utils/logger` + 数据库异步写入
-- 后台能力：日志摄入、归档任务、Cron 调度、WAF 调度、通知管理器
+| 项 | 值 |
+|---|---|
+| 目录 | `backend/` |
+| 框架 | go-zero `v1.9.4` |
+| Go | `1.27.0` |
+| 数据库 | PostgreSQL + GORM |
+| 缓存 | Redis（**可选**，连接失败不中断启动） |
+| 认证 | JWT（`userId` + `tokenType`） |
+| 日志 | go-zero `logx` + `internal/utils/logger` + 入库异步写入 |
+| 后台 | 日志摄入、日志清理、证书同步、Cron 调度、WAF 调度、通知管理器 |
 
 ### 2.2 前端
 
-- 目录：`frontend/`
-- 基底：Soybean Admin
-- 技术：Vue 3、Vite 7、TypeScript、Naive UI、Pinia、UnoCSS、Elegant Router
-- 请求：`frontend/src/service/request/index.ts`
-- 路由模式：动态路由，后端通过 `/api/route/*` 提供用户路由
+| 项 | 值 |
+|---|---|
+| 目录 | `frontend/`（pnpm + Turborepo monorepo） |
+| 基底 | vue-vben-admin v5 |
+| 技术 | Vue 3.5、Vite 8、TypeScript 6、antdv-next（Ant Design Vue）、Pinia 3、Vue Router 5、Tailwind 4、Vue Query |
+| 应用代码 | `frontend/apps/src/` |
+| 共享包 | `frontend/packages/`（stores、hooks、utils、styles、types 等） |
+| 路由 | **静态定义**，`frontend/apps/src/router/routes/modules/`，无后端下发菜单 |
+| 请求层 | `frontend/apps/src/api/request.ts` |
+
+> 历史遗留：早期基于 Soybean Admin + Naive UI + 动态路由。**这些描述已全部过时**，若在文档或注释里看到 Soybean / Naive UI / `frontend/src/` / `service/request` / 后端 `/api/route/*`，一律按本节纠正。
 
 ### 2.3 部署
 
-- Docker 一体化容器包含：前端静态资源、后端二进制、Caddy。
-- 默认入口：`http://localhost`
-- 容器内链路：`Client -> Caddy(:80) -> Frontend + Backend(:8888) -> PostgreSQL / Redis`
-- `/api/health` 由后端应答，数据库探测失败时返回 503。
-- WAF 工作目录固定为 `/config/security`，包含 `packages` 与 `releases` 子目录。
+- 单容器：前端静态资源 + 后端二进制 + 定制 Caddy（含 Coraza/CRS 模块）
+- 默认入口 `http://localhost`（`LOGFLUX_HTTP_PORT` 可调）
+- 链路：`Client → Caddy(:80) → 前端静态资源 / 后端(:8888) → PostgreSQL / Redis(可选)`
+- `/api/health` 由后端应答，数据库探测失败返回 503
+- WAF 工作目录固定 `/config/security`；证书上传目录 `/config/certs`
 
 ## 3. 仓库结构
 
 ```text
 LogFlux/
 ├── backend/                 # go-zero 后端
-│   ├── api/                 # goctl API 定义
-│   ├── common/              # 公共能力：GORM、Redis、响应、日志写入等
-│   ├── etc/config.yaml      # 后端本地配置
+│   ├── api/                 # .api 定义（唯一接口真相源）
+│   ├── common/              # 公共能力：cron、gorm、ingest、logging、password、redis、result
+│   ├── etc/                 # 本地配置（gitignore，仓库只有模板）
 │   ├── internal/
-│   │   ├── config/          # 配置结构
-│   │   ├── handler/         # goctl 生成 Handler，薄封装
-│   │   ├── logic/           # goctl 生成 Logic，轻量编排
-│   │   ├── middleware/      # 权限与响应中间件
-│   │   ├── notification/    # 通知系统
+│   │   ├── config/          # 配置结构体
+│   │   ├── handler/         # goctl 生成，薄封装
+│   │   ├── logic/           # goctl 生成 + 轻量编排
+│   │   ├── middleware/      # 登录态、限流、IP 区域、响应包装
+│   │   ├── notification/    # 通知系统（providers/ 下 7 种渠道）
 │   │   ├── response/        # 统一响应结构
 │   │   ├── service/         # 业务服务层
-│   │   ├── svc/             # ServiceContext 依赖注入
-│   │   ├── tasks/           # 后台任务与调度器
-│   │   ├── types/           # goctl 生成类型，禁止手改
-│   │   ├── utils/           # logger、safego、时间工具
-│   │   ├── waf/             # WAF 包获取、验证、激活、存储
+│   │   ├── svc/             # ServiceContext 依赖注入 + AutoMigrate
+│   │   ├── tasks/           # 调度器与后台任务
+│   │   ├── types/           # goctl 生成，禁止手改
+│   │   ├── utils/           # logger、safego、timeparse
+│   │   ├── waf/             # WAF 包获取、校验、解压、激活、CRS 布局
 │   │   └── xerr/            # 统一错误码
-│   └── model/               # GORM 模型与 Model 接口
-├── frontend/                # Soybean Admin 前端
-├── docker/                  # 镜像、Compose、运行时 Caddyfile 与配置模板
-├── docs/                    # 设计、计划、部署与运维文档
-├── contexts/context.md      # 当前项目核心上下文
+│   ├── model/               # GORM 模型与 Model 接口（caddy/common/cron/ingest/notification/system/user/waf）
+│   └── scripts/             # gen-api.sh、download-xdb.sh
+├── frontend/                # vue-vben-admin 前端
+│   └── apps/src/            # 业务代码（api、router、store、views、locales）
+├── docker/                  # Dockerfile、Compose、运行时 Caddyfile、配置模板
+├── docs/                    # 当前文档（caddy-architecture、waf、telegram）
+├── contexts/context.md      # 本文件
 └── Makefile                 # 常用部署命令
 ```
 
@@ -86,64 +97,47 @@ api/*.api
   -> goctl 生成 internal/types/types.go 与 internal/handler/routes.go
   -> internal/handler/*
   -> internal/logic/*
-  -> internal/service/*
-  -> model / internal/waf / internal/notification / internal/ingest / internal/tasks
+  -> internal/service/* 或 internal/logic/caddy/*
+  -> model / internal/waf / internal/notification / common/ingest / internal/tasks
   -> PostgreSQL / Redis / Caddy Admin API / 外部服务
 ```
 
 ### 4.2 分层职责
 
-- `.api` 是接口唯一事实来源；新增或修改接口必须先改 `backend/api/*.api`。
-- `internal/types/types.go` 与 `internal/handler/routes.go` 是生成文件，禁止手动修改。
-- `handler` 只做 `httpx.Parse`、调用 logic、统一响应。
-- `logic` 保持薄层，做轻量校验和编排；复杂业务下沉到 `service`。
-- `service` 承载业务流程、缓存、锁、通知、任务、Caddy/WAF 编排。
-- `model` 只做 GORM 数据访问；数据库操作优先经过 `Model interface`。
-- 长生命周期能力放在 `internal/tasks`、`internal/notification`、`internal/ingest`、`internal/waf`。
-- 基础设施依赖统一从 `svc.ServiceContext` 获取，禁止在业务层自行新建 DB、Redis 或第二套 logger。
+- `.api` 是接口唯一真相源；改接口**必须先改** `backend/api/*.api`
+- `internal/types/types.go` 与 `internal/handler/routes.go` 是生成文件，**禁止手改**
+- `handler` 只做 `httpx.Parse` → 调 Logic → `result.HttpResult`
+- `logic` 保持薄层，做校验与编排
+- **Caddy/WAF 域例外**：`internal/logic/caddy/` 承担大量业务逻辑（Caddyfile 手术、策略渲染、WAF 激活），不再额外下沉 `service`——该域没有 `internal/service/caddy`。这是历史形成且当前有效的约定
+- `model` 只做 GORM 数据访问，方法接收 `context.Context` 并用 `db.WithContext(ctx)`
+- 长生命周期能力放 `internal/tasks`、`internal/notification`、`common/ingest`、`internal/waf`
+- 基础设施依赖统一从 `svc.ServiceContext` 获取，**禁止**在业务层自建 DB、Redis 或第二套 logger
 
-### 4.3 ServiceContext 当前职责
+### 4.3 ServiceContext 当前字段
 
-`backend/internal/svc/service_context.go` 当前集中初始化：
+`backend/internal/svc/service_context.go`：
 
-- `Config`
-- `DB`
-- `Redis`
-- `Ingestor`
-- `ArchiveTask`
-- `CronScheduler`
-- `WafScheduler`
-- `NotificationMgr`
-- `Permission`
-- `UserModel`
-- `CronTaskModel`
-- `LogSourceModel`
-- `CaddyLogModel`
-- `SystemLogModel`
+| 分组 | 字段 |
+|---|---|
+| 配置与基础设施 | `Config`、`DB`、`Redis` |
+| 后台任务 | `LogCleanupTask`、`CronScheduler`、`WafScheduler`、`CertSyncScheduler`、`IngestMgr`、`NotificationMgr` |
+| 中间件 | `ActiveUser`、`RateLimit`、`IPRegionCheck`、`IPRegionMgr` |
+| Model | `SystemConfigModel`、`UserModel`、`CronTaskModel`、`CronTaskFileModel`、`CaddyLogModel`、`CertificateModel`、`SystemLogModel`、`WafEventModel` |
 
-启动时会执行 GORM `AutoMigrate`，初始化默认管理员、默认 WAF 源、默认 WAF 策略，并启动日志摄入、归档任务、Cron 调度和通知管理器。
+启动流程：`AutoMigrate` → 破坏性列清理（如 `notification_rules.event_type`）→ 单例配置迁移/补齐 → 默认账号、默认 WAF 源、默认策略播种 → 注册日志目录源 → 启动各调度器。
 
 ## 5. API 与 goctl 规范
 
 ### 5.1 API 文件
 
-主入口：`backend/api/logflux.api`
+主入口 `backend/api/logflux.api`，当前 import：
 
-当前导入：
+```
+base / auth / user / dashboard / caddy_server / caddy_certificate
+caddy_global_options / caddy_ip_region / caddy_log / waf / notification / system_log / cron
+```
 
-- `base.api`
-- `auth.api`
-- `user.api`
-- `dashboard.api`
-- `caddy_server.api`
-- `caddy_ip_region.api`
-- `caddy_log.api`
-- `waf.api`
-- `notification.api`
-- `system_log.api`
-- `cron.api`
-
-路由统一使用 `/api` 前缀。除登录与刷新 Token 外，所有接口使用：
+所有业务路由前缀 `/api`，除登录/刷新/初始化外统一：
 
 ```api
 @server (
@@ -154,279 +148,225 @@ api/*.api
 )
 ```
 
+`/api/health`、`/api/internal/geo-check` 在 `logflux.go` 直接注册（不走 goctl 分组），供 Caddy 健康检查与 `forward_auth` 调用。
+
 ### 5.2 生成命令
 
-涉及 API 变更时执行：
+优先用脚本（会处理 goctl 脚手架噪声）：
 
 ```bash
 cd backend
-goctl api go -api api/logflux.api -dir . -style go_zero
+bash scripts/gen-api.sh
 ```
 
-约束：
+等价手动命令：
 
-- 必须使用 `-style go_zero`，保持 snake_case 文件名。
-- 不要手改 `internal/types/types.go`。
-- 不要手改 `internal/handler/routes.go`。
-- goctl 生成后只补齐非生成业务实现。
+```bash
+goctl api go -api api/logflux.api -dir . --style go_zero
+```
 
-### 5.3 命名与标签
+- **必须** `--style go_zero`，保持 snake_case 文件名（默认 `gozero` 风格生成 camelCase，会与既有文件重复声明）
+- 脚本会删掉重复的 `activeuser_middleware.go`、还原 `routes.go`、固定 `types.go` 版本注释
+- 生成后只补齐业务实现，不手改生成文件
 
-- 文件名：snake_case，例如 `get_user_list_logic.go`。
-- 类型名：PascalCase，例如 `GetUserListLogic`。
-- JSON/Form 字段：小驼峰。
-- 请求/响应类型优先使用 `Req` / `Resp` 后缀。
-- 查询参数使用 `form:"xxx"`。
-- 路径参数使用 `path:"id"`。
-- JSON Body 使用 `json:"xxx"`。
-- 保留 `.api` 中的 `optional`、`default`、`range`、`options` 等 DSL 标记。
+### 5.3 命名
+
+| 对象 | 规则 | 示例 |
+|---|---|---|
+| 文件名 | snake_case | `get_user_list_logic.go` |
+| 类型名 | PascalCase | `GetUserListLogic` |
+| JSON/Form 字段 | 小驼峰 | `pageSize` |
+| 请求/响应 | `Req` / `Resp` 后缀 | `CaddyLogReq` |
+
+标签：查询参数 `form:"xxx"`、路径参数 `path:"id"`、Body `json:"xxx"`。保留 `.api` 的 `optional`、`default`、`range`、`options`。
 
 ## 6. 统一响应与错误
 
-### 6.1 当前统一响应结构
+### 6.1 响应结构
 
-后端统一响应定义在 `backend/internal/response/result.go`：
+`backend/internal/response/result.go`：
 
 ```json
-{
-  "code": 0,
-  "message": "成功",
-  "msg": "成功",
-  "data": {}
-}
+{ "code": 0, "message": "成功", "msg": "成功", "data": {} }
 ```
 
-说明：
+- 成功码 `xerr.OK = 0`；`message` 是推荐字段，`msg` 仅供旧前端兼容
+- 前端 `.env` 的 `VITE_SERVICE_SUCCESS_CODE=0`，与实际一致
+- HTTP 状态恒为 200，业务状态由 `code` 表达
 
-- 当前业务成功码为 `xerr.OK = 0`。
-- `message` 是当前推荐字段。
-- `msg` 用于兼容旧前端。
-- 前端请求层同时接受 `VITE_SERVICE_SUCCESS_CODE`、`0`、`200`，但新后端代码以 `0` 为准。
-
-### 6.2 Handler 响应规则
-
-推荐 Handler 模式：
+### 6.2 Handler 模板
 
 ```go
 if err := httpx.Parse(r, &req); err != nil {
     httpx.ErrorCtx(r.Context(), w, err)
     return
 }
-
 l := xxx.NewXxxLogic(r.Context(), svcCtx)
 resp, err := l.Xxx(&req)
 result.HttpResult(r, w, resp, err)
 ```
 
-`result.HttpResult` 位于 `backend/common/result/http_result.go`：
-
-- 成功：`httpx.OkJsonCtx(r.Context(), w, response.Success(resp))`
-- 失败：记录中文错误日志后交给 `httpx.ErrorCtx`
-
-全局 `httpx.SetErrorHandler` 会把错误转换为 `response.ErrorFromErr(err)`，HTTP 状态仍返回 `200`，业务状态由 `code` 表达。
+`result.HttpResult`（`backend/common/result/http_result.go`）：成功走 `response.Success`，失败记中文日志后交 `httpx.ErrorCtx`。全局 `httpx.SetErrorHandler` 统一转成 `response.Result`。
 
 ### 6.3 错误体系
 
-错误码定义在 `backend/internal/xerr/xerr.go`：
+`backend/internal/xerr/xerr.go`：`OK=0`、`BusinessCommonError=400`、`Unauthorized=401`、`Forbidden=403`、`NotFound=404`、`ServerCommonError=500`。
 
-- `xerr.OK = 0`
-- `xerr.BusinessCommonError = 400`
-- `xerr.Unauthorized = 401`
-- `xerr.Forbidden = 403`
-- `xerr.NotFound = 404`
-- `xerr.ServerCommonError = 500`
+| 场景 | 用法 |
+|---|---|
+| 业务校验 | `xerr.NewBusinessErrorWith("中文错误信息")` |
+| 枚举类 | `xerr.NewEnumError(xerr.XXX)` |
+| 需展示的系统错误 | `xerr.NewSystemErrorWith("中文错误信息")` |
+| 需保留根因 | `xerr.NewCodeErrorWithCause(code, "中文错误信息", err)` |
+| model 层 | 返回原始错误，上层用 `errors.Is(err, gorm.ErrRecordNotFound)` 判断 |
 
-使用规则：
+## 7. 数据库与模型
 
-- 业务校验错误：`xerr.NewBusinessErrorWith("中文错误信息")`
-- 枚举类错误：`xerr.NewEnumError(xerr.XXX)`
-- 需要展示给前端的系统错误：`xerr.NewSystemErrorWith("中文错误信息")`
-- 需要保留根因：`xerr.NewCodeErrorWithCause(code, "中文错误信息", err)`
-- `model` 层优先返回原始错误，上层用 `errors.Is(err, gorm.ErrRecordNotFound)` 判断。
-
-## 7. 数据库与模型规范
-
-- 使用 PostgreSQL + GORM。
-- 模型位于 `backend/model/`。
-- 禁止在 Handler 中直接操作数据库。
-- 复杂查询和写入优先沉到 `model` 的接口方法。
-- Model 形态优先保持：
-  - `XxxModel interface`
-  - `defaultXxxModel struct`
-  - `NewXxxModel(db *gorm.DB) XxxModel`
-  - 方法接收 `context.Context` 并使用 `db.WithContext(ctx)`
-- 默认不使用软删除；用户、任务等状态通过 `Status` 或业务状态字段表达。
-- 数据库结构启动时通过 `ServiceContext` 中的 `AutoMigrate` 同步，复杂迁移或破坏性变更必须写清楚迁移步骤。
+- PostgreSQL + GORM，模型在 `backend/model/<域>/`
+- 禁止在 Handler 直接操作数据库；复杂查询沉到 model 方法
+- Model 形态：`XxxModel interface` + `defaultXxxModel` + `NewXxxModel(db *gorm.DB) XxxModel`
+- 默认不做软删除，状态用 `Status` 等业务字段表达
+- 结构变更靠 `ServiceContext` 的 `AutoMigrate`；**破坏性变更必须写清迁移顺序**，参考 `migrateCaddyConfigToSystemConfig` 的幂等写法
+- 单例配置统一存 `system_configs`（键值 + JSON），不新建单行表
 
 ## 8. 并发、任务与日志
 
 ### 8.1 Context
 
-- Handler 使用 `r.Context()`。
-- Logic、Service、Model 全链路透传 `context.Context`。
-- 只有启动流程、定时任务、消费者、后台异步流程才使用 `context.Background()`。
+- Handler 用 `r.Context()`，全链路透传
+- 只有启动流程、定时任务、消费者、后台异步才用 `context.Background()`
 
 ### 8.2 Goroutine
 
-- 新开后台 goroutine 优先使用 `internal/utils/safego`。
-- `safego.New(ctx, "中文任务名").Go(func(){ ... })` 会统一 recover 并记录中文 panic 日志。
-- 定时任务优先复用 `internal/tasks` 中的调度器，不要另造线程池。
+- 后台 goroutine 用 `internal/utils/safego`：`safego.New(ctx, "中文任务名").Go(func(){...})`，统一 recover 并记中文 panic 日志
+- 定时任务复用 `internal/tasks` 的调度器，**不要另造线程池**
+- Caddy 配置写入有全局互斥锁 `caddyConfigWriteMu`，新增写路径必须复用，不要开第二把锁
 
 ### 8.3 日志
 
-- 业务服务优先使用 `internal/utils/logger`。
-- 常用模块包括：`ModuleSystem`、`ModuleCaddy`、`ModuleLog`、`ModuleCron`、`ModuleNotification`、`ModuleUser`。
-- 日志文案使用中文，并带上关键业务上下文。
-- 不要在业务代码中使用 `fmt.Print` 或标准库 `log` 输出运行日志。
+- 业务代码用 `internal/utils/logger`，模块常量：`ModuleSystem`、`ModuleCaddy`、`ModuleLog`、`ModuleCron`、`ModuleNotification`、`ModuleUser`
+- 日志文案中文，带关键业务上下文
+- 禁止 `fmt.Print` 和标准库 `log` 输出运行日志
 
 ## 9. 认证与路由
 
-当前权限模型：**已删除 RBAC**。只有「是否登录」与「账号是否启用」两个判断，没有角色、权限码与动态菜单。
+**无 RBAC**。只有「是否登录」与「账号是否启用」两个判断。
 
-- 认证：JWT（`userId` + `tokenType`），登录与刷新令牌由 `backend/internal/service/auth_service.go` 签发。
-- 登录态校验：`backend/internal/middleware/active_user_middleware.go`，只检查用户存在且 `status=1`。
-- 前端路由：`frontend/apps/src/router/routes/modules/` 下的静态路由，`accessMode` 为 `frontend`。
-- 用户管理仅支持用户名、密码、冻结/解冻、删除；系统会阻止删除或禁用最后一个启用账号。
-- 首个账号：库里没有任何账号时，Web 会引导到 `/auth/setup` 创建管理员（`GET /api/setup/status` + `POST /api/setup`）。初始化入口在创建成功后自动关闭，不存在抢注风险。
-- 密码能力统一在 `backend/common/password`（8–72 位且含字母与数字），HTTP 与 CLI 共用。
-- 忘记密码：`logflux-api reset-password -f <config> -u <username>`，生成随机密码打印一次并解除禁用。这是唯一不依赖数据库 SQL 的恢复路径。
+| 能力 | 实现 |
+|---|---|
+| 签发 | `internal/service/auth_service.go`（JWT：`userId` + `tokenType`） |
+| 登录态校验 | `internal/middleware/active_user_middleware.go`，检查用户存在且 `status=1` |
+| 前端路由 | `frontend/apps/src/router/routes/modules/` 静态定义 |
+| 初始化 | 库中无账号时前端引导到 `/auth/setup`（`GET /api/setup/status` + `POST /api/setup`），创建成功后入口自动关闭 |
+| 密码规则 | `backend/common/password`（8–72 位且含字母与数字），HTTP 与 CLI 共用 |
+| 忘记密码 | `logflux-api reset-password -f <config> -u <username>`，生成随机密码打印一次并解除禁用 |
 
-历史 RBAC 代码（`permission_middleware.go`、`role` / `menu` / `route` 的 handler、logic、service、model 与 `role.api`、`menu.api`、`route.api`）已移除，不要重新引入。
+历史 RBAC 代码（`permission_middleware.go`、role/menu/route 的 handler/logic/model/api）已移除，**不要重新引入**。
 
 ## 10. 前端开发规则
 
-### 10.1 请求响应
+### 10.1 请求与响应
 
-前端请求封装位于 `frontend/src/service/request/index.ts`。
+`frontend/apps/src/api/request.ts`：
 
-当前 `transform` 已返回 `response.data.data`：
-
-```ts
-const res = await request({ url: '/api/xxx' });
-// res 已经是后端 data 字段
-```
-
-因此业务代码不要再写 `res.data.xxx`。
-
-错误文案优先读取 `message`，兼容 `msg`。
+- 响应 `transform` 已返回 `response.data.data`
+- 业务代码 **不要再写** `res.data.xxx`
+- 错误文案统一用 `frontend/apps/src/utils/api-error-message.ts` 的 `apiErrorMessage`，不要各处手写解析
+- 错误 toast 至多一次；需要自行处理的场景用 suppress-global-toast
 
 ### 10.2 API 模块
 
-前端 API 位于 `frontend/src/service/api/`，按后端领域拆分：
+`frontend/apps/src/api/` 按域拆分：
 
-- `auth.ts`
-- `dashboard.ts`
-- `route.ts`
-- `role.ts`
-- `notification.ts`
-- `cron.ts`
-- `caddy*.ts`
-- `system-log.ts`
-- `log-source.ts`
+| 目录/文件 | 内容 |
+|---|---|
+| `core/` | `auth.ts`、`user.ts` |
+| `caddy/` | `server.ts`、`certificate.ts`、`global-options.ts`、`ip-region.ts`、`log-retention.ts`、`log-snippet.ts`、`simple-waf.ts`、`source.ts`、`waf-event.ts` |
+| `system/` | `log.ts`、`user.ts` |
+| 根级 | `cron.ts`、`dashboard.ts`、`notification.ts`、`query-keys.ts`、`list-detail.ts` |
 
-新增接口时前后端路径、方法、请求字段必须与 `.api` 对齐。
+- 列表响应结构不统一时用 `_utils.ts` 的 `listOf` 归一
+- 新增接口必须与 `.api` 的路径、方法、字段对齐
+- 远程数据优先 Vue Query；query key 集中在 `query-keys.ts`
 
 ### 10.3 路由与页面
 
-- 业务页面位于 `frontend/src/views/`。
-- 自动生成路由位于 `frontend/src/router/elegant/routes.ts`。
-- 新页面通常需要配合 Soybean Admin 的路由生成流程，避免只手写生成文件。
-- 用户可见文案必须中文化。
-- 表格、表单、弹窗、按钮状态需要处理 loading、空数据与错误态。
+- 业务页面在 `frontend/apps/src/views/`：`caddy/`、`cron/`、`dashboard/`、`logs/`、`notification/`、`system/`、`user/`、`_core/`
+- 路由文件在 `router/routes/modules/`，`hideInMenu: true` 表示路由保留但不出现在菜单
+- 用户可见文案**必须中文化**
+- 表格/表单/弹窗/按钮必须处理 loading、空数据、错误态
+- 巨型页面拆分：纯逻辑抽到 `*-utils.ts` 或 `composables/`，并配单测
 
-## 11. WAF 与 Caddy 开发注意事项
+## 11. Caddy 与 WAF 开发红线
 
-- Caddy 配置热加载通过 Caddy Admin API 的 `/adapt` 与 `/load` 完成。
-- 应用配置前必须先校验候选 Caddyfile，失败时不落库或明确回滚。
-- 简单 WAF 配置接口前缀：`/api/caddy/waf/simple-config`。
-- WAF 更新管理涉及：
-  - 源：`WafSource`
-  - Release：`WafRelease`
-  - Job：`WafUpdateJob`
-  - Policy：`WafPolicy`
-  - Revision：`WafPolicyRevision`
-  - Rule Exclusion：`WafRuleExclusion`
-  - Binding：`WafPolicyBinding`
-  - False Positive Feedback：`WafPolicyFalsePositiveFeedback`
-- Coraza 引擎当前只做版本检查，不做在线替换。
-- CRS 支持远端同步、上传、验证、激活、回滚。
-- `Waf.WorkDir` 运行时会被收敛到 `/config/security`。
+详细实现见 [`../docs/caddy-architecture.md`](../docs/caddy-architecture.md) 与 [`../docs/waf.md`](../docs/waf.md)。硬约束：
+
+1. **Caddyfile 文本是唯一真相源**，结构化模型只用于展示
+2. 站点改动**只能定点替换**，不做整体重渲染；无法识别的块原样保留
+3. Caddy 配置写入必经 `caddyConfigApplyService.Apply`（adapt → load → persist），带 `baseHash` 乐观并发检查
+4. 校验失败时运行态滚动回退、库不变，两侧都要有测试
+5. **不要重新引入「节点」概念**：单实例，无 `serverId`，无节点选择器，无 remote
+6. CRS 策略的 PL 必须用 `tx.blocking_paranoia_level` / `tx.detection_paranoia_level`，**不能**用裸 `tx.paranoia_level`
+7. **不要**给 `/api/` 或 Host 为 IP 的请求注入 `ctl:ruleEngine=Off`（历史绕过漏洞，已修）
+8. WAF 工作目录固定 `/config/security`，不要改到别处
+9. Coraza 引擎不做在线替换，只做版本检查
+10. `PUT /caddy/waf/simple-config` 只落库；`POST .../apply` 才改运行态
 
 ## 12. 开发工作流
 
-### 12.1 新增或修改后端 API
+### 12.1 改后端 API
 
-1. 定位并修改 `backend/api/*.api`。
-2. 执行 goctl 生成命令。
-3. 检查生成的 Handler/Logic 文件名是否为 snake_case。
-4. Handler 保持薄封装，使用 `result.HttpResult`。
-5. Logic 做轻量编排。
-6. 复杂业务写入 `internal/service/`。
-7. DB 读写经 `model/` 与 `svcCtx.XxxModel`。
-8. 错误统一走 `xerr`。
-9. 最小验证优先做编译级检查；除非明确要求，不默认跑全量测试。
+1. 改 `backend/api/*.api`
+2. `bash scripts/gen-api.sh`
+3. 确认生成文件是 snake_case
+4. Handler 保持薄封装用 `result.HttpResult`
+5. 业务写 `internal/logic/<域>/`，DB 经 `svcCtx.XxxModel`
+6. 错误统一走 `xerr`
+7. 最小验证优先编译级：`go build ./... && go vet ./...`
 
-### 12.2 修改前端功能
+### 12.2 改前端
 
-1. 确认后端响应的真实 `data` 结构。
-2. 更新 `frontend/src/service/api/` 中对应接口。
-3. 页面只使用 `request` 返回的 data，不再访问额外 `.data`。
-4. 保持 Soybean Admin 现有组件、路由和状态管理风格。
-5. 用户可见文本全部中文化。
-6. 补齐 loading、空数据、错误处理。
+1. 确认后端真实 `data` 结构
+2. 更新 `frontend/apps/src/api/` 对应接口
+3. 页面只用 `request` 返回的 data
+4. 沿用现有组件与状态管理风格
+5. 用户可见文本全中文
+6. 补齐 loading / 空态 / 错误处理
+7. 验证：`cd frontend && pnpm -F logflux-web run typecheck`
 
-### 12.3 数据库变更
+### 12.3 改数据库
 
-1. 修改 `backend/model/`。
-2. 更新 `ServiceContext` 的 `AutoMigrate` 或明确迁移 SQL。
-3. 对删除字段、重命名字段等破坏性变更写清迁移顺序。
-4. 确认相关 Model 接口和 Service 调用闭合。
+1. 改 `backend/model/<域>/`
+2. 更新 `ServiceContext` 的 `AutoMigrate`
+3. 破坏性变更（删列、改名、加唯一索引）写清迁移顺序与幂等条件
+4. 确认 Model 接口与调用方闭合
 
 ## 13. 常用命令
 
-### 13.1 后端本地启动
-
 ```bash
-cd backend
-go mod download
+# 后端本地
+cd backend && go mod download && bash scripts/download-xdb.sh
 go run logflux.go -f etc/config.yaml
+
+# 前端本地
+cd frontend && pnpm install && pnpm run dev:antd
+
+# 构建与部署
+make download-xdb      # 下载 ip2region xdb
+make build-backend     # 带 embed_ipregion 标签构建
+make build-frontend
+make up / down / restart / logs / status
 ```
 
-### 13.2 前端本地启动
+`ip2region` 的 `.xdb` 不提交仓库。首次启动或编译前先 `bash backend/scripts/download-xdb.sh`（或 `make download-xdb`）。
 
-```bash
-cd frontend
-pnpm install
-pnpm run dev
-```
+## 14. 高风险约束
 
-### 13.3 Docker 部署
-
-```bash
-cp docker/.env.example docker/.env
-cp docker/config.example.yaml backend/etc/config.yaml
-docker compose -f docker/docker-compose.yml up -d
-```
-
-也可以使用：
-
-```bash
-make up
-make status
-make logs
-make restart
-make down
-```
-
-## 14. 当前高风险约束
-
-- 不要把旧文档中的 `code=200/msg=success` 当成后端新代码的唯一标准；当前后端标准成功码是 `0`，前端兼容 `200`。
-- 不要绕开 `result.HttpResult`、`response.Result`、`xerr` 新增第二套响应结构。
-- 不要手改 goctl 生成文件。
-- 不要在 Handler 中写业务逻辑或数据库操作。
-- 不要在 Logic 中堆大段复杂业务。
-- 不要覆盖用户已在数据库里配置过的菜单、权限、通知渠道等运行时数据。
-- 不要把 WAF 工作目录改到 `/config/security` 之外。
-- 不要假设 Redis 必然可用；当前 Redis 连接失败不会中断启动。
-- 不要把前端 `request` 返回值再包一层 `.data`。
-
+- **不要**把旧文档的 `code=200/msg=success` 当标准——成功码是 `0`
+- **不要**绕开 `result.HttpResult` / `response.Result` / `xerr` 造第二套响应结构
+- **不要**手改 `types.go`、`routes.go`
+- **不要**在 Handler 写业务或直接操作 DB
+- **不要**假设 Redis 必然可用
+- **不要**把前端 `request` 返回值再包 `.data`
+- **不要**覆盖用户在数据库里配置过的通知渠道、定时任务等运行时数据
+- **不要**重新引入 `/security` 页面、策略版本、规则例外、策略绑定、误报反馈——这些能力与其接口已整体删除

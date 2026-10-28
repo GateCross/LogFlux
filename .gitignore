@@ -1,17 +1,17 @@
-# IDEs
+# IDEs / OS
 .vscode
 .idea
 .claude
 .DS_Store
+.gemini
+.codegraph/*
 
-# Frontend
-frontend/node_modules
-frontend/dist
-frontend/.env.local
-frontend/*.log
+# 注：frontend/ 有独立 .gitignore（覆盖 node_modules、dist、.turbo、.stylelintcache 等），
+# 此处只维护仓库根级与后端条目。
 
 # Backend
 backend/logflux
+backend/logflux-api
 backend/logs
 backend/etc/*.yaml
 !backend/etc/*.sample.yaml
@@ -19,9 +19,3 @@ backend/internal/middleware/data/*.xdb
 
 # Docker
 docker/.env
-
-# System
-.gemini
-
-.kiro/*
-.codegraph/*

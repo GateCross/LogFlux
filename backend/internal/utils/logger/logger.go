@@ -9,16 +9,10 @@ import (
 
 type Module string
 
+// 业务模块标识，用于给日志打上 module 字段做分流。
+// 只保留 LogFlux 实际使用的模块，不要从其他项目复制。
 const (
 	ModuleSystem       Module = "system"
-	ModuleMedia        Module = "media"
-	ModuleSite         Module = "site"
-	ModuleTorrent      Module = "torrent"
-	ModuleSubscribe    Module = "subscribe"
-	ModuleTransfer     Module = "transfer"
-	ModuleCloudStorage Module = "cloud_storage"
-	ModulePlugin       Module = "plugin"
-	ModuleMlist        Module = "mlist"
 	ModuleCaddy        Module = "caddy"
 	ModuleLog          Module = "log"
 	ModuleCron         Module = "cron"
