@@ -99,9 +99,10 @@ export function parseCaddyfileToBlocks(config: string): CaddyBlockDraft {
   for (const site of modules.sites) {
     const raw = siteBlockTexts.get(site.domains[0] ?? '') ?? buildSiteRaw(site);
 
-    // 原始 Caddyfile 中有 parser 未识别的 directive，必须整体保留以防丢失
+    // 原始 Caddyfile 中有 parser 未识别的 directive，必须整体保留以防丢失。
+    // 这是解析器的自保措施，不是用户需要处理的错误：reason 留空，界面不再提示。
     if (siteHasUnknownDirectives(raw)) {
-      preservedBlocks.push(createPreservedBlock(raw, '包含 parser 未识别的指令，整体保留', 'site'));
+      preservedBlocks.push(createPreservedBlock(raw, '', 'site'));
       continue;
     }
 

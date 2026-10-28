@@ -135,6 +135,17 @@ complex.example.com {
     expect(merged).toContain('10.0.0.1:9000');
   });
 
+  it('未识别指令保留站点不产生面向用户的原因文案', () => {
+    const source = `unknown.example.com {
+  rate_limit 10r/s
+  reverse_proxy 127.0.0.1:8080
+}`;
+    const draft = parseCaddyfileToBlocks(source);
+    const block = draft.preservedBlocks.find(b => b.raw.includes('unknown.example.com'));
+    expect(block).toBeTruthy();
+    expect(block!.reason).toBe('');
+  });
+
   it('非法 path 不以 / 开头返回中文字段错误', () => {
     const errs = validateHealthCheckFields({ path: 'healthz', interval: '10s' }, '健康检查');
     expect(errs.some(e => e.includes('路径') && e.includes('/'))).toBe(true);

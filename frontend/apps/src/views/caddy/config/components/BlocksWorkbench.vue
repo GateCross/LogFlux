@@ -402,7 +402,7 @@ const emit = defineEmits<{
                   <span>{{ item.block.title }}</span>
                 </div>
               </template>
-              <div class="text-muted mb-2">原因：{{ item.block.reason || '复杂配置，只读保留原文' }}</div>
+              <div v-if="item.block.reason" class="text-muted mb-2">原因：{{ item.block.reason }}</div>
               <Input.TextArea
                 :value="item.block.raw"
                 :auto-size="{ minRows: 5, maxRows: 14 }"

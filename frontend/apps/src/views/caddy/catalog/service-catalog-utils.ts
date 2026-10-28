@@ -349,7 +349,8 @@ export function buildCatalogSitesFromModel(
       kind: 'complex',
       mode: 'complex',
       enabled: true,
-      reasons: [block.reason || '复杂配置，只读保留原文'],
+      // 无 reason 表示解析器自保（如未识别指令），不对用户提示
+      reasons: block.reason ? [block.reason] : [],
     });
     for (const d of domains) knownDomainKeys.add(d.toLowerCase());
   }
