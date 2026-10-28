@@ -125,7 +125,9 @@ describe('service-catalog-utils', () => {
     const complex = cards.find((c) => c.id === 's2');
     expect(complex?.kind).toBe('complex');
     expect(complex?.mode).toBe('complex');
-    expect(complex?.reasons?.some((r) => r.includes('import'))).toBe(true);
+    // s2 唯一的复杂特征是 import 'shared'：仍判 complex（保存会丢行），
+    // 但不向用户提示这条内部约束
+    expect(complex?.reasons?.some((r) => r.includes('import'))).toBe(false);
   });
 
   it('回归：线上 snippet 风格站点（import 能力挂载 + https 上游跳过验证）判 simple', () => {

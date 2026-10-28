@@ -291,11 +291,6 @@ function blockRate(site: CatalogSiteCard): string {
             <div v-if="site.upstream" class="site-upstream text-muted" :title="site.upstream">
               {{ site.upstream }}
             </div>
-
-            <div v-if="site.reasons?.length" class="site-reasons text-muted">
-              {{ site.reasons[0] }}
-              <span v-if="site.reasons.length > 1"> 等 {{ site.reasons.length }} 条原因</span>
-            </div>
           </Card>
         </Col>
       </Row>
@@ -484,12 +479,6 @@ function blockRate(site: CatalogSiteCard): string {
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.site-reasons {
-  margin-top: 6px;
-  font-size: 12px;
-  line-height: 1.4;
 }
 
 .sidebar-empty {

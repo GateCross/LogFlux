@@ -236,8 +236,28 @@ describe('quick-config-utils simple classification & draft round-trip', () => {
     const analyzed = analyzeSiteForQuickConfig(site, new Set());
     expect(analyzed.kind).toBe('complex');
     if (analyzed.kind === 'complex') {
-      expect(analyzed.summary.reasons.some(r => r.includes('import'))).toBe(true);
+      // 不可归类 import 让站点保持 complex（简单模式保存会写 imports: [] 丢行），
+      // 但它是内部约束，不写进 reasons 提示用户
+      expect(analyzed.summary.reasons.some(r => r.includes('import'))).toBe(false);
       expect(analyzed.summary.reasons.some(r => r.includes('传输协议'))).toBe(true);
+    }
+  });
+
+  it('unit: 仅含不可归类 import 的站点仍判 complex，但不给用户任何原因文案', () => {
+    const site = baseSimpleReverseProxySite({
+      id: 'c3',
+      name: 'custom-snippet-site',
+      domains: ['d.example.com'],
+      upstream: '127.0.0.1:8080'
+    });
+    // 唯一"复杂"特征：一个系统不认识的 snippet
+    site.imports = ['my_own_snippet'];
+
+    const analyzed = analyzeSiteForQuickConfig(site, new Set());
+    // 必须保持 complex：简单模式保存会写 imports: []，这些行会丢
+    expect(analyzed.kind).toBe('complex');
+    if (analyzed.kind === 'complex') {
+      expect(analyzed.summary.reasons).toEqual([]);
     }
   });
 

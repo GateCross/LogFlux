@@ -210,10 +210,13 @@ export function analyzeSiteForQuickConfig(site: Site, upstreamNames: Set<string>
   // 已归类 snippet 的 import（waf_protect/cloudflare/geo_auth 等能力挂载行）是
   // 系统自己生成的写法，且基本信息保存走外科编辑不会破坏它们，不算复杂；
   // 只有无法归类的 import 才降级为复杂站点。
+  //
+  // 这类 import 不进 reasons：它是"简单模式保存会写进 imports: []、从而丢行"的
+  // 内部约束，不是用户需要读的说明。单独用标志位降级，界面不提示。
   const unclassifiedImports = (site.imports ?? []).filter(
     (name) => !CLASSIFIED_IMPORTS.has(name),
   );
-  if (!isEmptyArray(unclassifiedImports)) reasons.add('站点包含无法归类的 import');
+  const hasUnclassifiedImport = !isEmptyArray(unclassifiedImports);
 
   // dns（cloudflare DNS 签发）由 import cloudflare 表达，同样不算高级模式。
   if (!isEmptyArray(site.geoip2Vars)) reasons.add('站点包含 GeoIP2 变量');
@@ -253,7 +256,9 @@ export function analyzeSiteForQuickConfig(site: Site, upstreamNames: Set<string>
     } else {
       if (!handle.enabled) reasons.add('主处理器已禁用');
       const mode = analyzeHandleMode(handle, upstreamNames, reasons);
-      if (reasons.size === 0 && mode) {
+      // 有不可归类 import 时即使其余检查全过也不能进简单模式：
+      // buildSiteFromQuickDraft 会写 imports: []，保存即丢掉那些 import 行。
+      if (reasons.size === 0 && mode && !hasUnclassifiedImport) {
         return {
           kind: 'simple' as const,
           draft: buildQuickDraftFromSite(site, handle, mode)

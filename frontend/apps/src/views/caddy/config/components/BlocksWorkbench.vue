@@ -375,12 +375,15 @@ function metricDisplay(domains: string[] | undefined, kind: '4xx' | '5xx'): stri
                   查看日志
                 </Button>
               </div>
-              <div class="text-muted mb-1">无法在简单模式编辑，原因：</div>
-              <ul class="complex-reason-list">
-                <li v-for="(reason, rIndex) in item.reasons" :key="rIndex">
-                  {{ reason }}
-                </li>
-              </ul>
+              <template v-if="item.reasons.length">
+                <div class="text-muted mb-1">无法在简单模式编辑，原因：</div>
+                <ul class="complex-reason-list">
+                  <li v-for="(reason, rIndex) in item.reasons" :key="rIndex">
+                    {{ reason }}
+                  </li>
+                </ul>
+              </template>
+              <div v-else class="text-muted">该站点含自定义片段，简单模式保存会丢失，已保持只读。</div>
             </div>
           </div>
 
