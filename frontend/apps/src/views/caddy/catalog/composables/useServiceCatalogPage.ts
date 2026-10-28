@@ -3,7 +3,6 @@ import { useRouter } from 'vue-router';
 import { message } from 'antdv-next';
 
 import { getCaddyConfigApi } from '#/api/caddy/server';
-import { getSimpleWafConfigApi } from '#/api/caddy/simple-waf';
 import { getCertificateListApi } from '#/api/caddy/certificate';
 import { withListDetailErrorMode } from '#/api/list-detail';
 import { qk } from '#/api/query-keys';
@@ -72,14 +71,6 @@ export function useServiceCatalogPage() {
     errorFallback: '获取证书列表失败',
   });
   const certList = computed(() => certData.value ?? []);
-
-  /** 全局 WAF 状态（key 与 useSimpleWaf 一致，共享缓存）：卡片防护模式徽章数据源 */
-  const { data: wafStatusData } = useListDetailQuery({
-    queryKey: [...qk.caddy.config(), 'simple-waf'],
-    queryFn: () => getSimpleWafConfigApi(withListDetailErrorMode()),
-    errorFallback: '获取 WAF 状态失败',
-  });
-  const wafStatus = computed(() => wafStatusData.value ?? null);
 
   const filteredSites = computed(() => {
     const q = keyword.value.trim().toLowerCase();
@@ -176,7 +167,6 @@ export function useServiceCatalogPage() {
     siteMetricsLoaded,
     certList,
     loadingCerts,
-    wafStatus,
     filteredSites,
     fetchConfigSites,
     handleRefreshSiteMetrics,

@@ -3,9 +3,11 @@ import { describe, expect, it } from 'vitest';
 import {
   applyCapabilityToSiteBlock,
   applySiteLogToSiteBlock,
+  applyWafModeToSiteBlock,
   describeSiteCapabilities,
   extractSiteCapabilities,
   renderCapabilityLines,
+  WAF_DETECT_IMPORT,
 } from './site-capabilities';
 import type { SiteLogSettings } from './site-log-settings';
 import { DEFAULT_SITE_LOG_SETTINGS } from './site-log-settings';
@@ -125,9 +127,10 @@ describe('extractSiteCapabilities', () => {
     expect(caps.tls.status).toBe('on');
   });
 
-  it('徽章描述覆盖六个能力', () => {
+  it('徽章描述覆盖全部能力', () => {
     const badges = describeSiteCapabilities(extractSiteCapabilities(PVE_SITE));
     expect(badges.map(item => item.label)).toEqual([
+      '维护',
       'WAF',
       'IP 限制',
       '安全头',
@@ -222,6 +225,26 @@ describe('applyCapabilityToSiteBlock', () => {
     );
     expect(next).toContain('\r\n');
     expect(next.split('\r\n')[1]).toBe('  import waf_protect');
+  });
+
+  it('维护模式开启、重复开启幂等与完全还原', () => {
+    const onLines = renderCapabilityLines('maintenance', { enabled: true });
+    const withMaint = applyCapabilityToSiteBlock(PVE_SITE, 'maintenance', onLines);
+    expect(withMaint).toContain('@maintenance path *');
+    expect(withMaint).toContain('respond "站点维护中，请稍后再试。" 503');
+    const caps = extractSiteCapabilities(withMaint);
+    expect(caps.maintenance.status).toBe('on');
+
+    // 重复开启幂等（字节级不变）
+    const twice = applyCapabilityToSiteBlock(withMaint, 'maintenance', onLines);
+    expect(twice).toBe(withMaint);
+
+    // 关闭维护模式：必须完全还原为原始字节
+    const restored = applyCapabilityToSiteBlock(withMaint, 'maintenance', []);
+    expect(restored).not.toContain('@maintenance');
+    expect(restored).not.toContain('503');
+    expect(extractSiteCapabilities(restored).maintenance.status).toBe('off');
+    expect(restored).toBe(PVE_SITE);
   });
 
   it('无块头的文本原样返回', () => {
@@ -353,5 +376,52 @@ describe('applySiteLogToSiteBlock', () => {
   it('无块头或空文本原样返回', () => {
     expect(applySiteLogToSiteBlock('just text', makeLog(), 'x')).toBe('just text');
     expect(applySiteLogToSiteBlock('', makeLog(), 'x')).toBe('');
+  });
+});
+
+describe('站点级 WAF 引擎模式', () => {
+  it('挂哪个 snippet 就是哪个模式', () => {
+    expect(extractSiteCapabilities(PVE_SITE).waf.mode).toBe('protect');
+    const detectSite = PVE_SITE.replace('import waf_protect', `import ${WAF_DETECT_IMPORT}`);
+    expect(extractSiteCapabilities(detectSite).waf.mode).toBe('detect');
+    const bare = 'a.example.com {\n  reverse_proxy localhost:3000\n}';
+    expect(extractSiteCapabilities(bare).waf.mode).toBe('off');
+  });
+
+  it('内联 coraza_waf 认不出模式时判 unknown，不猜测', () => {
+    const inline = `a.example.com {\n  coraza_waf {\n    directives \`\n    SecRuleEngine On\n    \`\n  }\n}`;
+    expect(extractSiteCapabilities(inline).waf.mode).toBe('unknown');
+  });
+
+  it('切模式只替换那一行 import，其余字节不动', () => {
+    const detect = applyWafModeToSiteBlock(PVE_SITE, 'detect');
+    expect(detect).toContain(`  import ${WAF_DETECT_IMPORT}`);
+    expect(detect).not.toContain('import waf_protect\n');
+    // 其它能力行、缩进、块体一律保留
+    for (const keep of ['import deny_403_redirect', 'import cloudflare', 'import geo_auth', 'tls_insecure_skip_verify']) {
+      expect(detect).toContain(keep);
+    }
+
+    // 切回拦截正好还原原文
+    expect(applyWafModeToSiteBlock(detect, 'protect')).toBe(PVE_SITE);
+
+    // 关闭：两种挂载都不留
+    const off = applyWafModeToSiteBlock(PVE_SITE, 'off');
+    expect(off).not.toContain('waf_protect');
+    expect(extractSiteCapabilities(off).waf.mode).toBe('off');
+  });
+
+  it('连续应用幂等', () => {
+    const once = applyWafModeToSiteBlock(PVE_SITE, 'detect');
+    expect(applyWafModeToSiteBlock(once, 'detect')).toBe(once);
+  });
+
+  it('一个站点的模式改写不影响相邻站点', () => {
+    const siteA = 'a.example.com {\n  import waf_protect\n}';
+    const siteB = 'b.example.com {\n  import waf_protect\n}';
+    const changedA = applyWafModeToSiteBlock(siteA, 'detect');
+    // 两段文本独立处理：B 的字节完全不变
+    expect(applyWafModeToSiteBlock(siteB, 'protect')).toBe(siteB);
+    expect(changedA).not.toBe(siteA);
   });
 });

@@ -291,26 +291,41 @@ www.demo.com {
     expect(siteCertDaysLeft(certs, [])).toBeNull();
   });
 
-  it('siteProtectBadge 组合站点挂载与全局引擎状态', () => {
-    const mountOn = { capabilities: { waf: { status: 'on' as const } } };
-    const mountOff = { capabilities: { waf: { status: 'off' as const } } };
-    const mountUnknown = { capabilities: { waf: { status: 'unknown' as const } } };
+  it('siteProtectBadge 只看站点自己的引擎模式，与全局策略无关', () => {
+    const off = { capabilities: { waf: { status: 'off' as const, mode: 'off' as const } } };
+    const unknown = {
+      capabilities: { waf: { status: 'unknown' as const, mode: 'unknown' as const } },
+    };
+    const protect = {
+      capabilities: { waf: { status: 'on' as const, mode: 'protect' as const } },
+    };
+    const detect = { capabilities: { waf: { status: 'on' as const, mode: 'detect' as const } } };
 
-    expect(siteProtectBadge(mountOff, null)).toMatchObject({ label: '未防护' });
-    expect(siteProtectBadge(mountUnknown, null)).toMatchObject({ label: 'WAF?' });
-    // 无全局快照：挂载未知引擎状态
-    expect(siteProtectBadge(mountOn, null)).toMatchObject({ label: '防护中' });
-    // 全局引擎关闭
-    expect(siteProtectBadge(mountOn, { enabled: false, mode: 'off' })).toMatchObject({
-      label: '未生效',
+    expect(siteProtectBadge(off)).toMatchObject({ label: '未防护' });
+    expect(siteProtectBadge(unknown)).toMatchObject({ label: 'WAF?' });
+    expect(siteProtectBadge(protect)).toMatchObject({
+      label: '防护模式',
+      color: 'green',
+      title: '发现攻击后将自动拦截，并记录攻击事件',
     });
-    // 阻断 / 检测
-    expect(siteProtectBadge(mountOn, { enabled: true, mode: 'on' })).toMatchObject({
-      label: '阻断',
+    expect(siteProtectBadge(detect)).toMatchObject({
+      label: '观察模式',
+      color: 'orange',
+      title: '发现攻击后仅记录攻击事件，不拦截',
     });
-    expect(
-      siteProtectBadge(mountOn, { enabled: true, mode: 'detectiononly' }),
-    ).toMatchObject({ label: '检测' });
+
+    // 维护模式优先级最高：即使另一个站点是拦截模式，本站也只显示维护
+    const maintOn = {
+      capabilities: {
+        maintenance: { status: 'on' as const },
+        waf: { status: 'on' as const, mode: 'protect' as const },
+      },
+    };
+    expect(siteProtectBadge(maintOn)).toMatchObject({
+      label: '维护模式',
+      color: 'red',
+      title: '展示维护页面，任何人都将无法访问您的应用',
+    });
   });
 
   it('指标展示格式与颜色', () => {

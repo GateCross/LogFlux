@@ -84,6 +84,14 @@ type (
 		HistoryId uint   `json:"historyId"`
 		BaseHash  string `json:"baseHash,optional"` // 回滚起点配置哈希；不一致说明他人已改
 	}
+	// 站点图标：由后端代为抓取域名自带的 favicon，避免前端受混合内容与 CSP 限制
+	SiteIconReq {
+		Host string `form:"host"` // 站点域名，可带端口
+	}
+	SiteIconResp {
+		// Icon 为 data:image/...;base64 内容；未抓到时为空，前端回落字母头像
+		Icon string `json:"icon,optional"`
+	}
 )
 
 @server (
@@ -95,6 +103,9 @@ type (
 service logflux-api {
 	@handler DiscoverDockerServices
 	get /caddy/discovery/docker returns (DockerDiscoveryResp)
+
+	@handler GetSiteIcon
+	get /caddy/site-icon (SiteIconReq) returns (SiteIconResp)
 
 	@handler GetCaddyConfig
 	get /caddy/config returns (CaddyConfigResp)

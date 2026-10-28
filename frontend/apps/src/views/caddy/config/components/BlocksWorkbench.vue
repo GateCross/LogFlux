@@ -16,6 +16,7 @@ import {
 import type { CaddyFormModel, HealthCheck, PreservedCaddyBlock } from '../types';
 import type { ComplexSiteSummary, QuickSiteDraft } from '../quick-config-utils';
 import { SITE_METRICS_RECENT_MINUTES } from '../../shared/composables/useSiteMetricsQuery';
+import SiteAvatar from '../../shared/components/SiteAvatar.vue';
 import SiteEditorPanel from './SiteEditorPanel.vue';
 
 type PreservedItem = { block: PreservedCaddyBlock; index: number };
@@ -59,12 +60,6 @@ const emit = defineEmits<{
   duplicateSite: [site: QuickSiteDraft];
   removeSite: [id: string];
 }>();
-
-/** 卡片头像：取站点名首个可见字符 */
-function avatarText(site: QuickSiteDraft): string {
-  const source = (site.name || site.domains[0] || '?').trim();
-  return (source[0] ?? '?').toUpperCase();
-}
 
 /** 卡片色条：停用=灰、出现 5xx=红、正常=绿，与目录卡片同一套语义 */
 function siteAccent(site: QuickSiteDraft): string {
@@ -257,7 +252,11 @@ function metricDisplay(domains: string[] | undefined, kind: '4xx' | '5xx'): stri
             >
               <span class="site-item-accent" :style="{ background: siteAccent(site) }"></span>
               <div class="site-item-head">
-                <span class="site-avatar">{{ avatarText(site) }}</span>
+                <SiteAvatar
+                  :host="props.sitePrimaryHost(site.domains)"
+                  :name="site.name"
+                  :size="30"
+                />
                 <div class="site-title">
                   <span class="site-name">{{ site.name || '未命名站点' }}</span>
                   <span class="site-domain">{{ site.domains[0] || '未配置域名' }}</span>
@@ -548,20 +547,6 @@ function metricDisplay(domains: string[] | undefined, kind: '4xx' | '5xx'): stri
   display: flex;
   align-items: center;
   gap: 10px;
-}
-
-.site-avatar {
-  display: flex;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  font-size: 14px;
-  font-weight: 600;
-  color: hsl(var(--primary));
-  background: hsl(var(--primary) / 10%);
-  border-radius: 8px;
 }
 
 .site-title {

@@ -3,14 +3,14 @@
  * 站点详情整页（对齐雷池防护应用，取代早期的抽屉形态）：
  * 大头部（站点名 + 域名 + 防护模式开关组 + 今日请求/拦截）
  * + 横向 Tab（基本信息 / 防护 / 高级），每 Tab 独立保存，走既有 diff 确认制。
- * 防护模式开关组写全局 simple-waf 配置（waf_policies），改动前提示对全部站点生效。
+ * 防护模式与维护模式都是站点级的，由页头弹窗登记目标值后走同一条定点改写链路。
  */
 import { computed, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { useQueryClient } from '@tanstack/vue-query';
-import { message, Modal } from 'antdv-next';
+
 import { Page } from '@vben/common-ui';
 
+import { message, Modal } from 'antdv-next';
 import {
   Alert,
   Button,
@@ -32,17 +32,10 @@ import {
   Tooltip,
 } from 'antdv-next';
 
-import {
-  applySimpleWafConfigApi,
-  getSimpleWafConfigApi,
-  type CaddySimpleWafApi,
-} from '#/api/caddy/simple-waf';
 import { getCaddyConfigApi } from '#/api/caddy/server';
 import { withListDetailErrorMode } from '#/api/list-detail';
-import { invalidateListDetailQueryKeys } from '#/api/list-detail-mutation';
 import { qk } from '#/api/query-keys';
 import { useListDetailQuery } from '#/composables/use-list-detail-query';
-import { apiErrorMessage } from '#/utils/api-error-message';
 
 import {
   buildCatalogSitesFromConfigPayload,
@@ -52,23 +45,28 @@ import {
   normalizeSiteHost,
   siteMetricsForDomains,
 } from '../catalog/service-catalog-utils';
+import ProtectModeModal from '../shared/components/ProtectModeModal.vue';
+import SiteAvatar from '../shared/components/SiteAvatar.vue';
 import {
   SITE_METRICS_TODAY_MINUTES,
   useSiteMetricsQuery,
 } from '../shared/composables/useSiteMetricsQuery';
 import {
+  protectModeOption,
+  type SiteProtectMode,
+} from '../shared/protect-mode';
+import SiteLogPanel from './components/SiteLogPanel.vue';
+import {
   ADVANCED_CAPABILITY_ITEMS,
   PROTECT_CAPABILITY_ITEMS,
-  useSiteDetailEdit,
   type SiteDetailTab,
+  useSiteDetailEdit,
 } from './use-site-detail-edit';
-import SiteLogPanel from './components/SiteLogPanel.vue';
 
 defineOptions({ name: 'CaddySiteDetail' });
 
 const route = useRoute();
 const router = useRouter();
-const queryClient = useQueryClient();
 
 // ---------- 路由参数：query 携带 host（主域名作为站点查找键） ----------
 const host = computed(() => String(route.query.host ?? '').trim().toLowerCase());
@@ -138,82 +136,50 @@ const serverErrorDanger = computed(() => Number(siteMetrics.value?.count5xx ?? 0
 /** 4xx 用警告色而非危险色：客户端错误通常不是站点故障，与 5xx 区分开 */
 const clientErrorDanger = computed(() => Number(siteMetrics.value?.count4xx ?? 0) > 0);
 
-// ---------- 防护模式开关组：读全局 simple-waf，改动经确认后 apply（对全部站点生效） ----------
-const {
-  data: wafData,
-  errorMessage: wafErrorMessage,
-  refetch: refetchWaf,
-} = useListDetailQuery({
-  queryKey: [...qk.caddy.config(), 'simple-waf'],
-  queryFn: () => getSimpleWafConfigApi(withListDetailErrorMode()),
-  errorFallback: '获取 WAF 状态失败',
-});
-const wafStatus = computed(() => wafData.value ?? null);
-
+// ---------- 防护模式：站点级，由站点块里挂的 snippet 决定，不再读全局策略 ----------
 const applyingMode = ref(false);
 
-const wafModeValue = computed<'detectiononly' | 'off' | 'on'>(() => {
-  const status = wafStatus.value;
-  if (!status || !status.enabled) return 'off';
-  return status.mode === 'on' ? 'on' : 'detectiononly';
+/** 模式弹窗：打开时把待确认值对齐当前生效值，避免上次残留的选择 */
+const modeModalOpen = ref(false);
+const pendingMode = ref<SiteProtectMode>('off');
+/** 当前 Tab；弹窗确认后需要它定位到对应 Tab */
+const activeTab = ref<SiteDetailTab>('basic');
+
+/**
+ * 当前站点自己的防护模式：完全由站点块文本推出，与其他站点无关。
+ * 维护模式优先级最高——整站 503 时再说拦截已无意义。
+ */
+const siteProtectMode = computed<SiteProtectMode>(() => {
+  if (capabilities.value?.maintenance?.status === 'on') return 'maintenance';
+  const waf = capabilities.value?.waf;
+  if (waf?.mode === 'detect') return 'detect';
+  if (waf?.mode === 'protect') return 'protect';
+  return 'off';
 });
 
-function handleWafModeChangeEvent(event: unknown) {
-  const value = (event as { target?: { value?: unknown } } | null)?.target?.value;
-  handleWafModeChange(value);
-}
+/** 页头徽章文案 */
+const wafModeBadge = computed(() => protectModeOption(siteProtectMode.value));
 
-function handleWafModeChange(value: unknown) {
-  if (value !== 'on' && value !== 'detectiononly' && value !== 'off') return;
-  if (value === wafModeValue.value) return;
-  const status = wafStatus.value;
-  if (!status) {
-    message.warning('WAF 全局状态未加载，无法修改防护模式');
+function openModeModal() {
+  if (!site.value?.raw) {
+    message.warning('未取到站点块原文，无法修改防护模式');
     return;
   }
-  Modal.confirm({
-    title: '防护模式将写入全局 WAF 配置',
-    content:
-      '此设置对全部站点生效：修改的是全局 WAF 引擎模式，应用后影响所有已挂载 WAF 的站点。确认继续？',
-    okText: '确认并应用',
-    cancelText: '取消',
-    async onOk() {
-      applyingMode.value = true;
-      try {
-        // 其余字段（强度/审计/请求体限制/挂载清单）保持读到的全局现状，只改模式
-        const data = await applySimpleWafConfigApi({
-          audit: (status.audit || 'relevantonly') as CaddySimpleWafApi.SimpleWafAudit,
-          enabled: value !== 'off',
-          mode: value === 'off' ? 'off' : value,
-          requestBodyAccess: status.requestBodyAccess ?? true,
-          requestBodyLimit: status.requestBodyLimit || 10 * 1024 * 1024,
-          requestBodyNoFilesLimit: status.requestBodyNoFilesLimit || 1024 * 1024,
-          siteAddresses: Array.isArray(status.siteAddresses)
-            ? [...status.siteAddresses]
-            : [],
-          strength: (status.strength || 'balanced') as CaddySimpleWafApi.SimpleWafStrength,
-          baseHash: configHash.value || undefined,
-        });
-        message.success(data?.message || '防护模式已应用，对全部站点生效');
-        // 应用会改写运行中配置：连带失效配置/目录/指标缓存并重取 WAF 状态
-        await invalidateListDetailQueryKeys(queryClient, [
-          qk.caddy.config(),
-          qk.caddy.catalog(),
-          ['caddy', 'metrics'],
-        ]);
-        await refetchWaf();
-        await refetchConfig();
-      } catch (error) {
-        message.error(apiErrorMessage(error, '应用防护模式失败'));
-      } finally {
-        applyingMode.value = false;
-      }
-    },
-  });
+  pendingMode.value = siteProtectMode.value;
+  modeModalOpen.value = true;
+}
+
+/** 选完模式后交给站点级 diff 确认链路，不再直接改全局策略 */
+function handleWafModeChange(value: SiteProtectMode) {
+  if (value === siteProtectMode.value) {
+    modeModalOpen.value = false;
+    return;
+  }
+  modeModalOpen.value = false;
+  requestProtectMode(value);
 }
 
 // ---------- 三 Tab 编辑：解析/定点替换/diff 确认全部复用既有链路 ----------
-const activeTab = ref<SiteDetailTab>('basic');
 
 const {
   basic,
@@ -240,6 +206,7 @@ const {
   changedLineCount,
   unchangedLineCount,
   requestSave,
+  requestProtectMode,
   confirmSave,
   cancelSave,
 } = useSiteDetailEdit({
@@ -298,9 +265,16 @@ const sitePrimaryHost = computed(() => site.value?.primaryHost || host.value);
         <Spin :spinning="loadingConfig && !site">
           <div v-if="site" class="detail-header">
             <div class="header-main">
-              <div class="header-titles">
-                <span class="site-name">{{ site.name || '未命名站点' }}</span>
-                <Tag>{{ catalogModeLabel(site.mode) }}</Tag>
+              <div class="header-identity">
+                <SiteAvatar
+                  :host="site.primaryHost"
+                  :name="site.name"
+                  :size="44"
+                />
+                <div class="header-titles">
+                  <span class="site-name">{{ site.name || '未命名站点' }}</span>
+                  <Tag>{{ catalogModeLabel(site.mode) }}</Tag>
+                </div>
               </div>
               <div class="header-domains" :title="site.domains.join('、')">
                 {{ site.domains.join('、') || '未配置域名' }}
@@ -336,23 +310,18 @@ const sitePrimaryHost = computed(() => site.value?.primaryHost || host.value);
 
             <div class="header-mode">
               <span class="mode-label">防护模式</span>
-              <Tooltip
-                :title="
-                  wafErrorMessage
-                    ? `WAF 状态加载失败：${wafErrorMessage}`
-                    : '此设置对全部站点生效（写入全局 WAF 配置）'
-                "
-              >
-                <RadioGroup
-                  :value="wafModeValue"
-                  size="small"
-                  :disabled="!wafStatus || applyingMode"
-                  @change="handleWafModeChangeEvent"
+              <Tooltip :title="`${wafModeBadge.description}（点击切换，只作用于当前站点）`">
+                <button
+                  type="button"
+                  class="mode-trigger"
+                  :class="wafModeBadge.tone"
+                  :disabled="applyingMode || !site.raw"
+                  @click="openModeModal"
                 >
-                  <RadioButton value="on">阻断</RadioButton>
-                  <RadioButton value="detectiononly">仅检测</RadioButton>
-                  <RadioButton value="off">关闭</RadioButton>
-                </RadioGroup>
+                  <span class="mode-dot"></span>
+                  {{ wafModeBadge.label }}
+                  <span class="mode-caret">›</span>
+                </button>
               </Tooltip>
             </div>
           </div>
@@ -497,7 +466,7 @@ const sitePrimaryHost = computed(() => site.value?.primaryHost || host.value);
                 class="mb-3"
                 type="info"
                 show-icon
-                message="防护模式（阻断/仅检测/关闭）在页头调整，写入全局 WAF 配置并对全部站点生效；以下开关仅控制当前站点的挂载项。"
+                message="防护模式与维护模式在页头切换，只作用于当前站点；以下开关同样只控制本站点的挂载项。"
               />
               <div
                 v-for="item in PROTECT_CAPABILITY_ITEMS"
@@ -688,6 +657,14 @@ const sitePrimaryHost = computed(() => site.value?.primaryHost || host.value);
         </div>
       </div>
     </Modal>
+
+    <!-- 防护模式：卡片式选择，选中后走站点级 diff 确认再改写站点块 -->
+    <ProtectModeModal
+      v-model:open="modeModalOpen"
+      v-model:selected="pendingMode"
+      :current="siteProtectMode"
+      @confirm="handleWafModeChange"
+    />
   </Page>
 </template>
 
@@ -717,6 +694,12 @@ const sitePrimaryHost = computed(() => site.value?.primaryHost || host.value);
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  align-items: center;
+}
+
+.header-identity {
+  display: flex;
+  gap: 12px;
   align-items: center;
 }
 
@@ -777,6 +760,71 @@ const sitePrimaryHost = computed(() => site.value?.primaryHost || host.value);
 .mode-label {
   font-size: 12px;
   color: hsl(var(--muted-foreground));
+}
+
+/* 页头模式触发器：与卡片徽章同一视觉语言，点击打开卡片式选择弹窗 */
+.mode-trigger {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 4px 10px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  background: hsl(var(--muted) / 50%);
+  border: 1px solid hsl(var(--border));
+  border-radius: 7px;
+  transition:
+    border-color 0.16s ease,
+    background-color 0.16s ease;
+}
+
+.mode-trigger:hover:not(:disabled) {
+  border-color: hsl(var(--foreground) / 30%);
+}
+
+.mode-trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.mode-trigger.success {
+  color: hsl(var(--success));
+  background: hsl(var(--success) / 12%);
+  border-color: hsl(var(--success) / 40%);
+}
+
+.mode-trigger.warning {
+  color: hsl(var(--warning));
+  background: hsl(var(--warning) / 14%);
+  border-color: hsl(var(--warning) / 42%);
+}
+
+.mode-trigger.muted {
+  color: hsl(var(--muted-foreground));
+}
+
+/* 维护模式：站点级状态，红色提示当前整站返回 503 */
+.mode-trigger.danger {
+  color: hsl(var(--destructive));
+  background: hsl(var(--destructive) / 12%);
+  border-color: hsl(var(--destructive) / 45%);
+}
+
+.mode-dot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  background: currentcolor;
+  border-radius: 50%;
+}
+
+.mode-caret {
+  font-size: 15px;
+  line-height: 1;
+  opacity: 0.7;
 }
 
 .field {

@@ -84,6 +84,11 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					Path:    "/caddy/config/rollback",
 					Handler: caddy.RollbackCaddyConfigHandler(serverCtx),
 				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/caddy/site-icon",
+					Handler: caddy.GetSiteIconHandler(serverCtx),
+				},
 			}...,
 		),
 		rest.WithJwt(serverCtx.Config.Auth.AccessSecret),

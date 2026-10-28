@@ -84,6 +84,82 @@ func TestApplyWafPolicyUpdatesAllBlocks(t *testing.T) {
 	}
 }
 
+// 站点级引擎模式：拦截 snippet 写策略模式，观察 snippet 强制 DetectionOnly。
+//
+// 这是"防护模式只作用于单站点"的核心保证。曾经所有站点共用一份 waf_protect，
+// SecRuleEngine 只有一处，切换一个站点等于切换全部站点。
+func TestApplyWafPolicyRespectsPerSiteEngineMode(t *testing.T) {
+	config := renderWafProtectSnippet("\n") + "\n" +
+		renderWafDetectSnippet("\n") + "\n" +
+		"pve.example.com {\n  import waf_protect\n}\n\n" +
+		"blog.example.com {\n  import waf_protect_detect\n}\n"
+
+	policy := testWafPolicy()
+	policy.EngineMode = "on"
+	directives, err := buildWafPolicyDirectives(policy)
+	if err != nil {
+		t.Fatalf("buildWafPolicyDirectives() error = %v", err)
+	}
+
+	updated, err := applyWafPolicyToCaddyConfig(config, directives)
+	if err != nil {
+		t.Fatalf("applyWafPolicyToCaddyConfig() error = %v", err)
+	}
+
+	protectBody := snippetBody(t, updated, "waf_protect")
+	detectBody := snippetBody(t, updated, "waf_protect_detect")
+
+	if !strings.Contains(protectBody, "SecRuleEngine On") {
+		t.Fatalf("拦截 snippet 应为 On，实际=\n%s", protectBody)
+	}
+	if strings.Contains(protectBody, "SecRuleEngine DetectionOnly") {
+		t.Fatalf("拦截 snippet 不应被降级为 DetectionOnly，实际=\n%s", protectBody)
+	}
+	if !strings.Contains(detectBody, "SecRuleEngine DetectionOnly") {
+		t.Fatalf("观察 snippet 必须固定 DetectionOnly，实际=\n%s", detectBody)
+	}
+	if strings.Contains(detectBody, "SecRuleEngine On") {
+		t.Fatalf("观察 snippet 不应被执行模式覆盖，实际=\n%s", detectBody)
+	}
+}
+
+// 观察模式 snippet 即使策略是 Off，也必须保持 DetectionOnly：
+// 站点选了这个挂载方式，就不该被全局开关改掉检测行为。
+func TestApplyWafPolicyKeepsDetectSnippetWhenPolicyOff(t *testing.T) {
+	config := renderWafDetectSnippet("\n") + "\nblog.example.com {\n  import waf_protect_detect\n}\n"
+
+	policy := testWafPolicy()
+	policy.EngineMode = "off"
+	directives, err := buildWafPolicyDirectives(policy)
+	if err != nil {
+		t.Fatalf("buildWafPolicyDirectives() error = %v", err)
+	}
+
+	updated, err := applyWafPolicyToCaddyConfig(config, directives)
+	if err != nil {
+		t.Fatalf("applyWafPolicyToCaddyConfig() error = %v", err)
+	}
+	if body := snippetBody(t, updated, "waf_protect_detect"); !strings.Contains(body, "SecRuleEngine DetectionOnly") {
+		t.Fatalf("观察 snippet 不应变成 Off，实际=\n%s", body)
+	}
+}
+
+// snippetBody 取出指定 snippet 的块文本，避免跨块误判。
+func snippetBody(t *testing.T, config, name string) string {
+	t.Helper()
+	blocks, lines, err := parseTopLevelCaddyBlocks(config)
+	if err != nil {
+		t.Fatalf("parseTopLevelCaddyBlocks() error = %v", err)
+	}
+	for _, block := range blocks {
+		if block.Kind == "snippet" && block.Name == name {
+			return joinBlockLines(lines, block)
+		}
+	}
+	t.Fatalf("未找到 snippet %s，配置=\n%s", name, config)
+	return ""
+}
+
 func testWafPolicy() *wafmodel.WafPolicy {
 	return &wafmodel.WafPolicy{
 		EngineMode:                  "on",

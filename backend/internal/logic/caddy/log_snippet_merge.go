@@ -123,21 +123,14 @@ func logSnippetInsertIndex(lines []string) int {
 	if start < 0 {
 		return len(lines)
 	}
-	for start > 0 {
-		prev := strings.TrimSpace(lines[start-1])
-		if prev == "" || !strings.HasPrefix(prev, "#") {
-			break
-		}
-		start--
-	}
-	return start
+	return commentBlockStart(lines, start)
 }
 
-// logSnippetHeaderStart 从块头向上扩展，把紧贴块头的连续注释行算进替换范围。
+// commentBlockStart 从块头向上扩展，把紧贴块头的连续注释行算进替换/插入范围。
 //
-// 注释紧贴块头时视为该定义的一部分（与插入时"注释留在所属块"同一规则）；
-// 不这样做的话，每次应用都会把定义自带的注释再叠一份上去，配置越合越长。
-func logSnippetHeaderStart(lines []string, start int) int {
+// 注释紧贴块头时视为该定义的一部分；不这样做的话，每次合并都会把模板自带的
+// 注释再叠一份上去，配置越合越长。
+func commentBlockStart(lines []string, start int) int {
 	for start > 0 {
 		prev := strings.TrimSpace(lines[start-1])
 		if prev == "" || !strings.HasPrefix(prev, "#") {
@@ -195,7 +188,7 @@ func mergeCaddyLogSnippet(config, snippet string) (string, error) {
 	case start >= 0 && end < 0:
 		return "", fmt.Errorf("配置中的 %s 块缺少收尾 }", caddyLogSnippetHead)
 	case start >= 0:
-		out = append(out, lines[:logSnippetHeaderStart(lines, start)]...)
+		out = append(out, lines[:commentBlockStart(lines, start)]...)
 		out = append(out, snippetLines...)
 		out = append(out, lines[end+1:]...)
 	default:

@@ -5,7 +5,7 @@
  *   外科编辑复用 site-block-edit（块头/reverse_proxy/tls 定点替换）与
  *   site-capabilities（能力行定点写回），不重建全文。
  * - 保存沿用既有确认制：diff 确认 → /adapt 校验 → /load 应用 → 落库（baseHash 乐观并发）。
- * - 防护模式（阻断/仅检测/关闭）是全局 WAF 配置，不在此处编辑，由详情页头部直写 simple-waf。
+ * - 防护模式与维护模式都是站点级的，均由详情页头部弹窗登记目标值后走本文件的定点改写。
  */
 import { computed, reactive, ref, watch, type Ref } from 'vue';
 import { message } from 'antdv-next';
@@ -16,9 +16,11 @@ import { apiErrorMessage } from '#/utils/api-error-message';
 import { buildLineDiff, type DiffRow } from '../config/caddy-config-diff';
 import { useUploadedCertOptions } from '../certificates/use-uploaded-certs';
 import type { CatalogSiteCard } from '../catalog/service-catalog-utils';
+import type { SiteProtectMode } from '../shared/protect-mode';
 import {
   applyCapabilityToSiteBlock,
   applySiteLogToSiteBlock,
+  applyWafModeToSiteBlock,
   extractSiteCapabilities,
   renderCapabilityLines,
   type SiteCapabilityKey,
@@ -57,7 +59,7 @@ export const PROTECT_CAPABILITY_ITEMS: Array<{
   {
     key: 'waf',
     label: 'WAF 防护挂载',
-    hint: '挂载 import waf_protect；防护模式跟随全局策略（页头可改，对全部站点生效）',
+    hint: '挂载 import waf_protect；具体模式（防护/观察）在页头切换，只影响本站点',
   },
   {
     key: 'geo',
@@ -156,6 +158,7 @@ export function useSiteDetailEdit(options: SiteDetailEditOptions) {
   const confirmError = ref('');
 
   const toggles = reactive<CapabilityToggles>({
+    maintenance: false,
     waf: false,
     geo: false,
     compression: false,
@@ -287,6 +290,18 @@ export function useSiteDetailEdit(options: SiteDetailEditOptions) {
     return basic.upstreamHttps ? `https://${addr}` : addr;
   }
 
+  /** 站点级防护模式的目标值；非空时由 buildNextForScope 一并写回 */
+  const pendingProtectMode = ref<SiteProtectMode | null>(null);
+
+  /**
+   * 请求切换站点防护模式：只登记目标值并打开 diff 确认，
+   * 真正的站点块改写发生在 buildNextForScope，与其它能力同一条链路。
+   */
+  function requestProtectMode(mode: SiteProtectMode) {
+    pendingProtectMode.value = mode;
+    requestSave('protect');
+  }
+
   /**
    * 按 Tab 收集改动并生成下一站点块与整份配置；无变化返回 null。
    * 改动判定沿用抽屉语义：与现状一致的重复保存保持字节不变。
@@ -367,6 +382,27 @@ export function useSiteDetailEdit(options: SiteDetailEditOptions) {
       const currentLog = readSiteLogSettings(nextBlock).settings;
       if (!isSameSiteLogSettings(desiredLog, currentLog)) {
         nextBlock = applySiteLogToSiteBlock(nextBlock, desiredLog, logName.value);
+      }
+    }
+
+    // 站点级防护模式：与维护模式同一条定点改写链路，只换站点块内的那一处
+    if (scope === 'protect' && pendingProtectMode.value) {
+      const mode = pendingProtectMode.value;
+      if (mode === 'maintenance') {
+        nextBlock = applyCapabilityToSiteBlock(
+          nextBlock,
+          'maintenance',
+          renderCapabilityLines('maintenance', { enabled: true }),
+        );
+        // 维护模式接管整站，WAF 挂载同时摘掉，避免 503 之外还跑一套规则
+        nextBlock = applyWafModeToSiteBlock(nextBlock, 'off');
+      } else {
+        // 切到其它模式时先撤掉维护配置，再换 WAF 挂载行
+        nextBlock = applyCapabilityToSiteBlock(nextBlock, 'maintenance', []);
+        nextBlock = applyWafModeToSiteBlock(
+          nextBlock,
+          mode === 'off' ? 'off' : mode,
+        );
       }
     }
 
@@ -457,6 +493,7 @@ export function useSiteDetailEdit(options: SiteDetailEditOptions) {
     }
     const next = buildNextForScope(scope);
     if (!next) {
+      pendingProtectMode.value = null;
       message.info('没有需要保存的修改');
       return;
     }
@@ -486,6 +523,7 @@ export function useSiteDetailEdit(options: SiteDetailEditOptions) {
       );
       message.success('站点配置已更新');
       pendingDiff.value = null;
+      pendingProtectMode.value = null;
       await options.onSaved?.({ scope: next.scope, nextHost: next.nextHost });
     } catch (error) {
       confirmError.value = apiErrorMessage(error, '保存失败');
@@ -497,6 +535,7 @@ export function useSiteDetailEdit(options: SiteDetailEditOptions) {
   /** 返回修改：不丢弃表单状态，仅撤下 diff 确认 */
   function cancelSave() {
     pendingDiff.value = null;
+    pendingProtectMode.value = null;
     confirmError.value = '';
   }
 
@@ -527,6 +566,7 @@ export function useSiteDetailEdit(options: SiteDetailEditOptions) {
     changedLineCount,
     unchangedLineCount,
     requestSave,
+    requestProtectMode,
     confirmSave,
     cancelSave,
     resetState,

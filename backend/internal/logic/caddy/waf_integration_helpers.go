@@ -5,7 +5,15 @@ import (
 	"strings"
 )
 
-const wafProtectImportLine = "import waf_protect"
+const (
+	wafProtectImportLine = "import waf_protect"
+	// wafDetectSnippetName 是「观察模式」专用 snippet：同样加载 CRS，但只记录不拦截。
+	// 站点选哪个 snippet 就决定了它的引擎模式，模式因此完全落在 Caddyfile 里，
+	// 不需要额外的状态表，也不会被全局策略改回来。
+	wafDetectSnippetName = "waf_protect_detect"
+	// wafDetectImportLine 是观察模式的站点级挂载行。
+	wafDetectImportLine = "import " + wafDetectSnippetName
+)
 
 type caddyTopLevelBlock struct {
 	Kind      string
@@ -58,7 +66,9 @@ func inspectWafIntegration(config string) (*wafIntegrationSnapshot, error) {
 				continue
 			}
 			snapshot.AvailableSites = append(snapshot.AvailableSites, address)
-			if blockContainsExactLine(lines, block, wafProtectImportLine) {
+			// 两种挂载方式都算「已接入 WAF」，否则观察模式站点会被当成未挂载。
+			if blockContainsExactLine(lines, block, wafProtectImportLine) ||
+				blockContainsExactLine(lines, block, wafDetectImportLine) {
 				snapshot.ImportedSites = append(snapshot.ImportedSites, address)
 			}
 		}
@@ -245,7 +255,9 @@ func ensureSiteImport(config, siteAddress string) (string, bool, error) {
 	if err != nil {
 		return "", false, err
 	}
-	if blockContainsExactLine(lines, *block, wafProtectImportLine) {
+	// 已挂任一种都算接入：再补一行会让站点同时挂两个 snippet，引擎模式失去意义
+	if blockContainsExactLine(lines, *block, wafProtectImportLine) ||
+		blockContainsExactLine(lines, *block, wafDetectImportLine) {
 		return config, false, nil
 	}
 	indent := detectBlockChildIndent(lines, *block, "  ")
@@ -263,9 +275,13 @@ func removeSiteImport(config, siteAddress string) (string, bool, error) {
 	removed := false
 	nextLines := make([]string, 0, len(lines))
 	for idx, line := range lines {
-		if idx > block.StartLine && idx <= block.EndLine && strings.TrimSpace(strings.TrimRight(line, "\r\n")) == wafProtectImportLine {
-			removed = true
-			continue
+		if idx > block.StartLine && idx <= block.EndLine {
+			trimmed := strings.TrimSpace(strings.TrimRight(line, "\r\n"))
+			// 两种挂载行都要收回，否则观察模式站点在全局关闭后仍挂着
+			if trimmed == wafProtectImportLine || trimmed == wafDetectImportLine {
+				removed = true
+				continue
+			}
 		}
 		nextLines = append(nextLines, line)
 	}
@@ -455,8 +471,24 @@ func replaceLineRange(lines []string, start, end int, replacement []string) []st
 }
 
 func renderWafProtectSnippet(newline string) string {
-	defaultDirectives := strings.Join([]string{
-		"SecRuleEngine DetectionOnly",
+	return strings.ReplaceAll(renderManagedWafSnippet(wafSnippetDefaults("SecRuleEngine DetectionOnly"), managedCaddyDefaultWafAuditLog), "\n", newline)
+}
+
+// renderWafDetectSnippet 渲染观察模式专用 snippet：强制 DetectionOnly。
+//
+// 与 waf_protect 分开定义，是为了让"只看不拦"成为站点自己的选择——
+// 只要站点 import 的是这一份，全局策略怎么写都改不掉它的引擎模式。
+func renderWafDetectSnippet(newline string) string {
+	return strings.ReplaceAll(
+		renderManagedWafSnippetNamed(wafDetectSnippetName, wafSnippetDefaults("SecRuleEngine DetectionOnly"), managedCaddyDefaultWafAuditLog),
+		"\n", newline,
+	)
+}
+
+// wafSnippetDefaults 生成 snippet 的基础指令行，首行为引擎模式。
+func wafSnippetDefaults(engineLine string) string {
+	return strings.Join([]string{
+		engineLine,
 		"SecAuditEngine RelevantOnly",
 		"SecAuditLogFormat JSON",
 		"SecAuditLogRelevantStatus " + wafPolicyDefaultAuditRelevantStatus,
@@ -464,5 +496,4 @@ func renderWafProtectSnippet(newline string) string {
 		"SecRequestBodyLimit 10485760",
 		"SecRequestBodyNoFilesLimit 1048576",
 	}, "\n")
-	return strings.ReplaceAll(renderManagedWafSnippet(defaultDirectives, managedCaddyDefaultWafAuditLog), "\n", newline)
 }

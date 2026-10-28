@@ -28,25 +28,37 @@ export interface SiteTlsSnapshot {
   note?: string;
 }
 
+export interface SiteWafSnapshot {
+  status: SiteCapabilityStatus;
+  /**
+   * 站点级引擎模式：由站点 import 的 snippet 决定。
+   * protect=拦截、detect=只记录、off=未挂载、unknown=内联写法认不出。
+   */
+  mode: 'detect' | 'off' | 'protect' | 'unknown';
+  note?: string;
+}
+
 export interface SiteCapabilitiesSnapshot {
-  waf: SiteCapabilitySnapshot;
+  waf: SiteWafSnapshot;
   geo: SiteCapabilitySnapshot;
   compression: SiteCapabilitySnapshot;
   securityHeaders: SiteCapabilitySnapshot;
   accessLog: SiteCapabilitySnapshot;
   errorPage: SiteCapabilitySnapshot;
+  maintenance: SiteCapabilitySnapshot;
   tls: SiteTlsSnapshot;
   /** 未归类到任何能力的站点级 import（health_check / api_proxy 等业务片段） */
   otherImports: string[];
 }
 
 export type SiteCapabilityKey =
-  | 'waf'
-  | 'geo'
-  | 'compression'
-  | 'securityHeaders'
   | 'accessLog'
-  | 'errorPage';
+  | 'compression'
+  | 'errorPage'
+  | 'geo'
+  | 'maintenance'
+  | 'securityHeaders'
+  | 'waf';
 
 interface CapabilityAnchor {
   importName: string;
@@ -67,11 +79,27 @@ const CAPABILITY_ANCHORS: Record<SiteCapabilityKey, CapabilityAnchor> = {
   securityHeaders: { importName: 'security_headers', inlineUnknown: [/^[ \t]*header\s/m] },
   accessLog: { importName: 'subdomain-log', inlineOn: [/^[ \t]*log\s*\{/m] },
   errorPage: { importName: 'deny_403_redirect', inlineUnknown: [/^[ \t]*handle_errors/m] },
+  maintenance: {
+    importName: 'maintenance',
+    inlineOn: [/^[ \t]*handle\s+@maintenance\b/m],
+    inlineUnknown: [/@maintenance\b/],
+  },
 };
+
+/**
+ * 观察模式专用 snippet 名。
+ * 站点挂哪个 snippet 就是哪个模式——这是防护模式能做到站点级的原因，
+ * 因此这里必须与后端 wafDetectSnippetName 保持一致。
+ */
+export const WAF_DETECT_IMPORT = 'waf_protect_detect';
+
+/** 拦截模式 snippet 名 */
+export const WAF_PROTECT_IMPORT = 'waf_protect';
 
 /** 已归类的 snippet 名；import 行按此分派到能力（quick-config 分类器也用它排除误判） */
 export const CLASSIFIED_IMPORTS = new Set([
   ...Object.values(CAPABILITY_ANCHORS).map(item => item.importName),
+  WAF_DETECT_IMPORT,
   'cloudflare',
 ]);
 
@@ -84,7 +112,7 @@ function detectImport(block: string, name: string): boolean {
   return importLineRegex(name).test(`${block}\n`);
 }
 
-function detectCapability(block: string, key: SiteCapabilityKey): SiteCapabilitySnapshot {
+export function detectCapability(block: string, key: SiteCapabilityKey): SiteCapabilitySnapshot {
   const anchor = CAPABILITY_ANCHORS[key];
   if (detectImport(block, anchor.importName)) {
     return { status: 'on' };
@@ -100,6 +128,30 @@ function detectCapability(block: string, key: SiteCapabilityKey): SiteCapability
     }
   }
   return { status: 'off' };
+}
+
+/**
+ * 识别站点级 WAF 引擎模式。
+ *
+ * 只看站点自己 import 了哪个 snippet：挂 waf_protect 就是拦截，挂
+ * waf_protect_detect 就是只记录。不认识的内联 coraza_waf 判 unknown，
+ * 宁可让用户去原文确认，也不猜它是哪种模式。
+ */
+function detectWaf(block: string): SiteWafSnapshot {
+  if (detectImport(block, WAF_PROTECT_IMPORT)) {
+    return { status: 'on', mode: 'protect' };
+  }
+  if (detectImport(block, WAF_DETECT_IMPORT)) {
+    return { status: 'on', mode: 'detect', note: '观察模式：只记录攻击事件，不拦截' };
+  }
+  if (/coraza_waf/.test(block)) {
+    return {
+      status: 'unknown',
+      mode: 'unknown',
+      note: '检测到内联 coraza_waf，无法判断引擎模式，请使用原文模式',
+    };
+  }
+  return { status: 'off', mode: 'off' };
 }
 
 function detectTls(block: string): SiteTlsSnapshot {
@@ -136,12 +188,13 @@ function collectOtherImports(block: string): string[] {
 export function extractSiteCapabilities(siteBlock: string): SiteCapabilitiesSnapshot {
   const block = siteBlock ?? '';
   return {
-    waf: detectCapability(block, 'waf'),
+    waf: detectWaf(block),
     geo: detectCapability(block, 'geo'),
     compression: detectCapability(block, 'compression'),
     securityHeaders: detectCapability(block, 'securityHeaders'),
     accessLog: detectCapability(block, 'accessLog'),
     errorPage: detectCapability(block, 'errorPage'),
+    maintenance: detectCapability(block, 'maintenance'),
     tls: detectTls(block),
     otherImports: collectOtherImports(block),
   };
@@ -152,6 +205,7 @@ export function describeSiteCapabilities(
   snapshot: SiteCapabilitiesSnapshot,
 ): Array<{ key: string; label: string; status: SiteCapabilityStatus }> {
   return [
+    { key: 'maintenance', label: '维护', status: snapshot.maintenance.status },
     { key: 'waf', label: 'WAF', status: snapshot.waf.status },
     { key: 'geo', label: 'IP 限制', status: snapshot.geo.status },
     { key: 'securityHeaders', label: '安全头', status: snapshot.securityHeaders.status },
@@ -166,6 +220,28 @@ function buildRemovePatterns(key: SiteCapabilityKey): RegExp[] {
   const patterns = [importLineRegex(anchor.importName)];
   if (key === 'compression') patterns.push(/^[ \t]*encode\s/);
   return patterns;
+}
+
+/** 摘掉站点块里的维护模式配置（@maintenance 匹配器与紧贴的 handle @maintenance 块） */
+function stripMaintenanceLines(elements: string[]): string[] {
+  const kept: string[] = [];
+  for (let idx = 0; idx < elements.length; idx += 1) {
+    const line = elements[idx] ?? '';
+    const trimmed = line.trim();
+    if (trimmed.startsWith('@maintenance')) {
+      continue;
+    }
+    if (trimmed.startsWith('handle @maintenance')) {
+      let depth = countBraces(line);
+      while (depth > 0 && idx + 1 < elements.length) {
+        idx += 1;
+        depth += countBraces(elements[idx] ?? '');
+      }
+      continue;
+    }
+    kept.push(line);
+  }
+  return kept;
 }
 
 /**
@@ -196,6 +272,22 @@ export function applyCapabilityToSiteBlock(
     return siteBlock;
   }
 
+  if (key === 'maintenance') {
+    const stripped = stripMaintenanceLines(elements);
+    const unchanged = stripped.length === elements.length;
+    if (unchanged && desired.length === 0) {
+      return siteBlock;
+    }
+    const base = unchanged ? elements : stripped;
+    const targetIdx = unchanged ? headerIdx : findHeaderLine(base);
+    if (targetIdx < 0) return siteBlock;
+    const parts = base.slice();
+    if (desired.length > 0) {
+      parts.splice(targetIdx + 1, 0, ...desired);
+    }
+    return parts.join('\n');
+  }
+
   const removePatterns = buildRemovePatterns(key);
   const parts: string[] = [];
   for (let idx = 0; idx < elements.length; idx += 1) {
@@ -217,13 +309,77 @@ export function renderCapabilityLines(
   key: SiteCapabilityKey,
   value: { enabled?: boolean; name?: string } | undefined,
 ): string[] {
-  const anchor = CAPABILITY_ANCHORS[key];
   if (!value?.enabled) return [];
+  if (key === 'maintenance') {
+    return [
+      '@maintenance path *',
+      'handle @maintenance {',
+      '  respond "站点维护中，请稍后再试。" 503',
+      '}',
+    ];
+  }
+  const anchor = CAPABILITY_ANCHORS[key];
   if (key === 'accessLog') {
     const name = value.name?.trim() || 'site';
     return [`import ${anchor.importName} ${name}`];
   }
   return [`import ${anchor.importName}`];
+}
+
+/**
+ * 把站点级 WAF 引擎模式写回站点块：只动那一行 import。
+ *
+ * 已有挂载行时就地改写，保持它原来的位置与缩进；只有原本没有时才插到块头之后。
+ * 这样「切到观察再切回拦截」是字节级还原，不会把行挪到别处。
+ */
+export function applyWafModeToSiteBlock(
+  siteBlock: string,
+  mode: 'detect' | 'off' | 'protect',
+): string {
+  if (!siteBlock) return siteBlock;
+
+  const elements = siteBlock.split('\n');
+  const headerIdx = findHeaderLine(elements);
+  if (headerIdx < 0) return siteBlock;
+
+  const indent = detectChildIndent(elements, headerIdx);
+  const crlfSuffix = siteBlock.includes('\r\n') ? '\r' : '';
+  const importName = mode === 'detect' ? WAF_DETECT_IMPORT : WAF_PROTECT_IMPORT;
+
+  const isWafLine = (line: string): boolean => {
+    const probe = `${line}\n`;
+    return (
+      importLineRegex(WAF_PROTECT_IMPORT).test(probe) ||
+      importLineRegex(WAF_DETECT_IMPORT).test(probe)
+    );
+  };
+
+  const firstWafIdx = elements.findIndex((line) => isWafLine(line));
+
+  if (mode === 'off') {
+    return elements.filter((line) => !isWafLine(line)).join('\n');
+  }
+
+  if (firstWafIdx >= 0) {
+    const parts: string[] = [];
+    for (let idx = 0; idx < elements.length; idx += 1) {
+      const line = elements[idx] ?? '';
+      if (!isWafLine(line)) {
+        parts.push(line);
+        continue;
+      }
+      // 第一处就地改成目标 import（沿用该行原有缩进），其余重复行丢弃
+      if (idx === firstWafIdx) {
+        const lead = line.match(/^[ \t]*/)?.[0] ?? indent;
+        parts.push(`${lead}import ${importName}${crlfSuffix}`);
+      }
+    }
+    return parts.join('\n');
+  }
+
+  const parts = elements.slice();
+  parts.splice(headerIdx + 1, 0, `${indent}import ${importName}${crlfSuffix}`);
+  return parts.join('\n');
 }
 
 /** 站点块头里的第一个 host token 取域名前缀，作为日志文件名兜底 */

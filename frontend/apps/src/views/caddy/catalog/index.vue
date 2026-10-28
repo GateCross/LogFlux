@@ -1,6 +1,8 @@
 <script lang="ts" setup>
 import { ref } from 'vue';
+
 import { Page } from '@vben/common-ui';
+
 import { Alert, Card } from 'antdv-next';
 
 import SiteCreateModal from '../sites/SiteCreateModal.vue';
@@ -21,7 +23,6 @@ const {
   siteMetricsMap,
   siteMetricsError,
   certList,
-  wafStatus,
   filteredSites,
   fetchConfigSites,
   handleRefreshSites,
@@ -53,7 +54,6 @@ const {
         :site-metrics-error="siteMetricsError"
         :site-metrics-map="siteMetricsMap"
         :cert-list="certList"
-        :waf-status="wafStatus"
         :today-display="todayDisplay"
         @update:keyword="setKeyword"
         @refresh="handleRefreshSites"

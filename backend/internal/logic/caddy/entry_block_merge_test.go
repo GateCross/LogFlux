@@ -56,6 +56,27 @@ func TestMergeEntryBlockIdempotent(t *testing.T) {
 	}
 }
 
+// 带注释的默认模板连续合并必须幂等，不能每次合并都把头部注释再叠一份上去。
+func TestMergeEntryBlockWithCommentsIdempotent(t *testing.T) {
+	block := defaultCaddyEntryBlockNormalized()
+	base := "pve.example.com {\n  respond ok\n}\n"
+	once, err := mergeEntryBlock(base, block)
+	if err != nil {
+		t.Fatal(err)
+	}
+	twice, err := mergeEntryBlock(once, block)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if once != twice {
+		t.Fatalf("带注释的入口模板连续合并应幂等:\nonce=\n%s\ntwice=\n%s", once, twice)
+	}
+	count := strings.Count(twice, "# :80")
+	if count != 1 {
+		t.Fatalf("头部注释应仅保留 1 份，实际有 %d 份", count)
+	}
+}
+
 func TestMergeEntryBlockAppendsWhenMissing(t *testing.T) {
 	config := "example.com {\n  respond \"hi\"\n}\n"
 	got, err := mergeEntryBlock(config, ":80 {\n  respond \"entry\"\n}")

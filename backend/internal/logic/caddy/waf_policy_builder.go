@@ -342,6 +342,10 @@ func buildWafPolicyDirectives(policy *wafmodel.WafPolicy) (string, error) {
 // 块内容由 composeManagedCorazaDirectives 统一产出，与首次生成配置时完全一致：
 // 三条 CRS Include 必须保留，否则 load_owasp_crs 仍为 true 但一条规则都不会加载。
 //
+// 引擎模式按块所属 snippet 区分：观察模式块（waf_protect_detect）固定写
+// DetectionOnly，拦截块写策略里的模式。这是防护模式能做到站点级的关键——
+// 否则所有站点共用一份 SecRuleEngine，切一处等于切全部。
+//
 // 逐块替换而不是只改第一块：站点各自内联 coraza_waf 时，只更新第一处会让其余
 // 站点继续跑旧策略。从后往前改，前面块的下标不受影响。
 func applyWafPolicyToCaddyConfig(caddyConfig, directives string) (string, error) {
@@ -359,15 +363,20 @@ func applyWafPolicyToCaddyConfig(caddyConfig, directives string) (string, error)
 		return "", fmt.Errorf("Caddy 配置中未找到 Coraza 指令块")
 	}
 
-	renderedLines := strings.Split(
-		composeManagedCorazaDirectives(rawDirectives, managedCaddyDefaultWafAuditLog), "\n",
-	)
-
 	patched := caddyConfig
 	for idx := len(blocks) - 1; idx >= 0; idx-- {
 		block := blocks[idx]
 		innerIndent := block.Indent + "  "
 
+		// 观察模式块只换引擎模式为 DetectionOnly，其余指令与拦截块一致
+		blockDirectives := rawDirectives
+		if isDetectSnippetBlock(caddyConfig, block.StartTick) {
+			blockDirectives = forceDetectionOnly(rawDirectives)
+		}
+
+		renderedLines := strings.Split(
+			composeManagedCorazaDirectives(blockDirectives, managedCaddyDefaultWafAuditLog), "\n",
+		)
 		lines := make([]string, len(renderedLines))
 		for i, line := range renderedLines {
 			if strings.TrimSpace(line) == "" {
@@ -381,6 +390,49 @@ func applyWafPolicyToCaddyConfig(caddyConfig, directives string) (string, error)
 		patched = patched[:block.StartTick+1] + "\n" + rendered + "\n" + block.Indent + patched[block.EndTick:]
 	}
 	return patched, nil
+}
+
+// isDetectSnippetBlock 判断某个 directives 块是否属于观察模式 snippet。
+//
+// 从块位置向上找最近的 snippet 块头即可：directives 一定嵌在某个
+// (name) { coraza_waf { ... } } 里，先遇到哪个块头就归属哪个。
+func isDetectSnippetBlock(config string, tickIndex int) bool {
+	head := config[:tickIndex]
+	lineStart := strings.LastIndex(head, "\n")
+	if lineStart < 0 {
+		return false
+	}
+	for {
+		next := strings.LastIndex(head[:lineStart], "\n")
+		line := strings.TrimSpace(head[next+1 : lineStart])
+		if strings.HasPrefix(line, "(") && strings.Contains(line, ")") {
+			name := strings.TrimSpace(line[1:strings.Index(line, ")")])
+			return name == wafDetectSnippetName
+		}
+		if next < 0 {
+			return false
+		}
+		lineStart = next
+	}
+}
+
+// forceDetectionOnly 把指令里的 SecRuleEngine 改成 DetectionOnly，没有该行时补一行。
+//
+// 观察模式是站点自己的选择，不能被全局策略里的 On 覆盖。
+func forceDetectionOnly(directives string) string {
+	lines := strings.Split(directives, "\n")
+	replaced := false
+	for i, line := range lines {
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(line)), "secruleengine") {
+			lines[i] = "SecRuleEngine DetectionOnly"
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		lines = append([]string{"SecRuleEngine DetectionOnly"}, lines...)
+	}
+	return strings.Join(lines, "\n")
 }
 
 // corazaDirectiveBlock 记录一个 directives 反引号块的位置。

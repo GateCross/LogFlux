@@ -232,37 +232,41 @@ export interface SiteProtectBadge {
 }
 
 /**
- * 从站点能力快照与全局 simple-waf 状态推导防护徽章：
- * 未取到原文 → 未知；未挂载 → 未防护；挂载后按全局引擎模式标注 阻断/检测/未生效。
- * 能力入参只依赖 waf 快照（完整 CatalogSiteCard 与测试桩均可传入）。
+ * 从站点能力快照推导防护徽章。
+ *
+ * 引擎模式是站点级的：由站点挂的 snippet（waf_protect / waf_protect_detect）决定，
+ * 不看全局策略。维护模式优先级最高。
  */
 export function siteProtectBadge(
-  site: { capabilities?: Pick<SiteCapabilitiesSnapshot, 'waf'> | null },
-  wafStatus?: { enabled?: boolean; mode?: string } | null,
+  site: { capabilities?: Partial<Pick<SiteCapabilitiesSnapshot, 'maintenance' | 'waf'>> | null },
 ): SiteProtectBadge {
   const caps = site.capabilities;
   if (!caps) {
     return { label: '未知', color: 'default', title: '未取到站点块原文，能力未知，进入详情查看' };
   }
-  if (caps.waf.status === 'unknown') {
-    return { label: 'WAF?', color: 'default', title: '检测到无法识别的 WAF 配置，请在详情查看' };
+  // 维护模式优先级最高：整站返回 503，其余防护状态都不再是本站在做的事
+  if (caps.maintenance?.status === 'on') {
+    return {
+      label: '维护模式',
+      color: 'red',
+      title: '展示维护页面，任何人都将无法访问您的应用',
+    };
   }
-  if (caps.waf.status !== 'on') {
-    return { label: '未防护', color: 'default' };
+  const waf = caps.waf;
+  if (!waf || waf.mode === 'off') {
+    return { label: '未防护', color: 'default', title: '该站点未开启 WAF 防护' };
   }
-  if (!wafStatus) {
-    return { label: '防护中', color: 'geekblue', title: '已挂载 WAF，全局引擎状态未知' };
+  if (waf.mode === 'unknown') {
+    return {
+      label: 'WAF?',
+      color: 'default',
+      title: '检测到内联 coraza_waf，无法判断引擎模式，请在详情查看',
+    };
   }
-  if (!wafStatus.enabled) {
-    return { label: '未生效', color: 'orange', title: '已挂载 WAF，但全局引擎关闭' };
+  if (waf.mode === 'detect') {
+    return { label: '观察模式', color: 'orange', title: '发现攻击后仅记录攻击事件，不拦截' };
   }
-  if (wafStatus.mode === 'on') {
-    return { label: '阻断', color: 'green' };
-  }
-  if (wafStatus.mode === 'detectiononly') {
-    return { label: '检测', color: 'orange' };
-  }
-  return { label: '防护中', color: 'geekblue' };
+  return { label: '防护模式', color: 'green', title: '发现攻击后将自动拦截，并记录攻击事件' };
 }
 
 function modeLabel(mode: CatalogSiteMode): string {

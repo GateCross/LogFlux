@@ -64,9 +64,15 @@ export function bytesToMB(value: number, fallback: number) {
   return Math.max(1, Math.round(value / 1024 / 1024));
 }
 
+/**
+ * 全局 WAF 策略的引擎模式选项。
+ *
+ * 注意这与站点级模式（shared/protect-mode）不是一回事：这里是策略库里
+ * 那条全局策略的执行模式，站点级模式由各站点挂的 snippet 决定。
+ */
 export const wafModeOptions: Array<{ label: string; value: SimpleWafMode }> = [
-  { label: '仅检测', value: 'detectiononly' },
-  { label: '阻断', value: 'on' },
+  { label: '防护模式', value: 'on' },
+  { label: '观察模式', value: 'detectiononly' },
   { label: '关闭', value: 'off' },
 ];
 
@@ -174,11 +180,12 @@ export function useSimpleWaf(options: UseSimpleWafOptions) {
     return !wafLoaded.value;
   }
 
+  /** 全局策略的状态文案：站点级模式由各站点自己决定，这里只反映策略库状态 */
   const wafStatusText = computed(() => {
     if (!wafStatus.value) return '未加载';
     if (!wafStatus.value.enabled) return '关闭';
-    if (wafStatus.value.mode === 'on') return '阻断';
-    if (wafStatus.value.mode === 'detectiononly') return '仅检测';
+    if (wafStatus.value.mode === 'on') return '防护模式';
+    if (wafStatus.value.mode === 'detectiononly') return '观察模式';
     return '关闭';
   });
 

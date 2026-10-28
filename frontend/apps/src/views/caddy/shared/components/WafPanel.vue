@@ -90,14 +90,23 @@ const siteStateMeta: Record<SiteState, { color: string; label: string }> = {
 
 /** 强度直接决定启用的 CRS 规则层数与误报面，必须把代价说清楚。 */
 const strengthHints: Record<string, string> = {
-  low_fp: '仅启用 PL1 规则（约 213 条），误报最少，适合直接上阻断。',
+  low_fp: '仅启用 PL1 规则（约 213 条），误报最少，适合直接开启防护模式。',
   balanced: '启用 PL1~PL2（约 302 条），拦截更全，误报会明显增加。',
-  high_blocking: '启用 PL1~PL3（约 332 条），拦截最严，建议先「仅检测」观察。',
+  high_blocking: '启用 PL1~PL3（约 332 条），拦截最严，建议先在「观察模式」下观察。',
 };
 
 const strengthHint = computed(
   () => strengthHints[props.wafForm.strength] ?? '',
 );
+
+/** 全局策略引擎模式的说明：这里改的是策略库，不改变各站点已挂的模式 */
+const modeHints: Record<string, string> = {
+  on: '策略按拦截执行：已挂 waf_protect 的站点会被拦截。',
+  detectiononly: '策略按只记录执行：已挂 waf_protect 的站点只记录不拦截。',
+  off: '策略关闭：已挂载的站点不检测也不拦截。',
+};
+
+const modeHint = computed(() => modeHints[props.wafForm.mode] ?? '');
 
 /** 差异行数（不含未变化行），用于抽屉标题提示改动规模。 */
 const previewChangeCount = computed(
@@ -220,6 +229,7 @@ const ruleColumns = [
                   :disabled="props.wafActionsDisabled || !props.wafForm.enabled"
                   :options="props.wafModeOptions"
                 />
+                <div v-if="modeHint" class="hint-text">{{ modeHint }}</div>
               </FormItem>
             </Col>
             <Col :xs="24" :md="8">

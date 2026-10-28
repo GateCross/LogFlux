@@ -616,6 +616,14 @@ type SimpleWafConfigUpdateReq struct {
 	BaseHash                string   `json:"baseHash,optional"`      // 编辑起点配置哈希；不一致说明他人已改
 }
 
+type SiteIconReq struct {
+	Host string `form:"host"` // 站点域名，可带端口
+}
+
+type SiteIconResp struct {
+	Icon string `json:"icon,optional"`
+}
+
 type SiteMetricsItem struct {
 	Host     string `json:"host"`
 	Total    int64  `json:"total"` // 窗内总请求数（不过滤状态）

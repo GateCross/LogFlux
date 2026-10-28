@@ -72,7 +72,8 @@ func mergeEntryBlock(config, entryBlock string) (string, error) {
 		}
 		out = append(out, strings.Split(entryBlock, "\n")...)
 	} else {
-		out = append(out, lines[:start]...)
+		replaceStart := commentBlockStart(lines, start)
+		out = append(out, lines[:replaceStart]...)
 		out = append(out, strings.Split(entryBlock, "\n")...)
 		out = append(out, lines[end+1:]...)
 	}

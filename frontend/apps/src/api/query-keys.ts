@@ -31,6 +31,8 @@ export const qk = {
       windowMinutes == null
         ? (['caddy', 'metrics', siteKey] as const)
         : (['caddy', 'metrics', siteKey, windowMinutes] as const),
+    /** 站点自带图标；按 host 隔离，抓空也缓存（避免每次进页重试） */
+    siteIcon: (host: string) => ['caddy', 'site-icon', host] as const,
     systemLog: (params: object) => ['caddy', 'system-log', params] as const,
   },
   cron: {

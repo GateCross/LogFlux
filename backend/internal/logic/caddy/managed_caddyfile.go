@@ -125,8 +125,14 @@ func normalizeManagedCaddyfileOptions(options managedCaddyfileOptions) managedCa
 }
 
 func renderManagedWafSnippet(directives, auditLogPath string) string {
+	return renderManagedWafSnippetNamed("waf_protect", directives, auditLogPath)
+}
+
+// renderManagedWafSnippetNamed 按指定 snippet 名渲染 Coraza 块定义。
+// 站点导入哪个 snippet 就决定它的引擎模式，因此观察模式需要单独一份定义。
+func renderManagedWafSnippetNamed(name, directives, auditLogPath string) string {
 	return strings.Join([]string{
-		"(waf_protect) {",
+		"(" + name + ") {",
 		"  coraza_waf {",
 		"    load_owasp_crs",
 		"    directives `",

@@ -252,6 +252,21 @@ export async function clearCaddyLogsApi() {
   return requestClient.post<void>('/caddy/logs/clear');
 }
 
+/**
+ * 站点自带图标 — GET /caddy/site-icon
+ * 由后端代为抓取，返回 data URL；抓不到时 icon 为空，前端回落字母头像。
+ */
+export async function getSiteIconApi(
+  host: string,
+  config?: RequestClientConfig,
+) {
+  const resp = await requestClient.get<{ icon?: string }>(
+    '/caddy/site-icon',
+    { params: { host }, ...config },
+  );
+  return resp?.icon ?? '';
+}
+
 /** Docker 发现候选项 — GET /caddy/discovery/docker（会话候选，不落库、不 /load） */
 export interface DockerDiscoveryCandidate {
   candidateId: string;

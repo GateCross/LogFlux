@@ -245,7 +245,13 @@ func mergeCaddyManagedBlocks(config string, opts CaddyGlobalOptionsValue, entryB
 	// 仅在确实应用了入口块模板时补定义：空模板表示不接管入口块，
 	// 此时配置里没有本层引入的 import，也就不该往配置里塞东西。
 	if strings.TrimSpace(entryBlock) != "" {
-		merged, _, err = ensureSnippetDefinition(merged, "waf_protect", renderWafProtectSnippet(detectCaddyNewline(merged)))
+		newline := detectCaddyNewline(merged)
+		merged, _, err = ensureSnippetDefinition(merged, "waf_protect", renderWafProtectSnippet(newline))
+		if err != nil {
+			return "", err
+		}
+		// 观察模式 snippet 同样要按需补定义：站点可能已 import 它但定义被删。
+		merged, _, err = ensureSnippetDefinition(merged, wafDetectSnippetName, renderWafDetectSnippet(newline))
 		if err != nil {
 			return "", err
 		}
