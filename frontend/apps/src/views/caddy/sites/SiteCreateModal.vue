@@ -1,7 +1,8 @@
 <script lang="ts" setup>
 import { computed, reactive, ref, watch } from 'vue';
-import { message } from 'antdv-next';
 import { useRouter } from 'vue-router';
+
+import { message } from 'antdv-next';
 import {
   Alert,
   Button,
@@ -9,32 +10,32 @@ import {
   CollapsePanel,
   Input,
   Modal,
-  RadioGroup,
   RadioButton,
+  RadioGroup,
   Select,
   Switch,
   Tooltip,
 } from 'antdv-next';
 
+import { previewCaddyConfigApi, pushCaddyConfigApi } from '#/api/caddy/server';
 import {
   applySimpleWafConfigApi,
-  getSimpleWafConfigApi,
   type CaddySimpleWafApi,
+  getSimpleWafConfigApi,
 } from '#/api/caddy/simple-waf';
-import { previewCaddyConfigApi, pushCaddyConfigApi } from '#/api/caddy/server';
 import { apiErrorMessage } from '#/utils/api-error-message';
 
 import { useUploadedCertOptions } from '../certificates/use-uploaded-certs';
-
+import { fetchAndStoreSiteIcon } from '../shared/components/site-icon-storage';
 import {
   appendSiteBlockToConfig,
   buildCreatedSiteBlock,
   createDefaultSiteForm,
   createdSiteAddress,
-  validateCreateSiteForm,
   type CreateLbPolicy,
   type CreateSiteForm,
   type CreateTlsMode,
+  validateCreateSiteForm,
 } from './site-create-utils';
 
 /**
@@ -44,18 +45,18 @@ import {
  * 勾选 WAF 时在站点保存成功后追加挂载（复用简单 WAF 应用链路，不静默改全局策略）。
  */
 const props = defineProps<{
-  open: boolean;
-  config: string;
   baseHash?: string;
+  config: string;
+  open: boolean;
 }>();
 
 const emit = defineEmits<{
-  'update:open': [value: boolean];
   created: [];
+  'update:open': [value: boolean];
 }>();
 
 const form = reactive<CreateSiteForm>(createDefaultSiteForm());
-const step = ref<'form' | 'confirm'>('form');
+const step = ref<'confirm' | 'form'>('form');
 const formErrors = ref<string[]>([]);
 const confirmBusy = ref(false);
 const confirmError = ref('');
@@ -70,7 +71,7 @@ const lbPolicyOptions = [
   { label: 'IP 哈希', value: 'ip_hash' },
 ];
 
-const tlsOptions: Array<{ value: CreateTlsMode; label: string; hint: string }> = [
+const tlsOptions: Array<{ hint: string; label: string; value: CreateTlsMode; }> = [
   { value: 'auto', label: '自动签发', hint: 'HTTP-01/TLS-ALPN，需公网 80/443 可达' },
   { value: 'dns', label: 'DNS 签发', hint: 'Cloudflare DNS-01，支持泛域名与内网部署' },
   { value: 'internal', label: '内部 CA', hint: 'LogFlux 本地 CA 签发，浏览器需信任' },
@@ -177,6 +178,15 @@ async function handleConfirm() {
 
     // 防护跟随全局默认：挂载前以最新配置判断全局是否启用并仅追加本站点地址
     const wafMounted = await mountSiteToWaf();
+
+    // 首次创建获取一次图片：后台尝试抓取并写入本地缓存，失败不阻塞
+    const primaryHost = form.domains
+      .map((d) => d.trim().replace(/^[a-zA-Z][\w+.-]*:\/\//, '').split('/')[0]?.split(':')[0])
+      .find(Boolean);
+    if (primaryHost) {
+      fetchAndStoreSiteIcon(primaryHost).catch(() => {});
+    }
+
     message.success(wafMounted ? '站点已上线并挂载 WAF' : '站点已上线');
     emit('created');
     closeModal();
@@ -225,7 +235,7 @@ async function mountSiteToWaf(): Promise<boolean> {
     <!-- 第一步：单表单 -->
     <div v-if="step === 'form'" class="create-form">
       <Alert
-        v-if="formErrors.length"
+        v-if="formErrors.length > 0"
         class="mb-3"
         type="error"
         show-icon

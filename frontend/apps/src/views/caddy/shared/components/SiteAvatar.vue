@@ -1,37 +1,41 @@
 <script lang="ts" setup>
 /**
- * 站点头像：优先用站点自带的 favicon，取不到回落首字母。
- *
- * 图标由后端代抓（/caddy/site-icon）：面板常以 http 暴露而站点是 https，
- * 浏览器直连会被混合内容拦下，入口块 CSP 也只放行 img-src self/data:。
+ * 站点头像：优先从本地存储读取已缓存的 favicon，未获取时回落字母。
+ * 遵循用户要求：建站时自动获取一次，平时不自动请求；用户点击头像可手动获取/刷新。
  */
 import { computed, ref, watch } from 'vue';
 
-import { useQuery } from '@tanstack/vue-query';
+import { message, Tooltip } from 'antdv-next';
 
-import { getSiteIconApi } from '#/api/caddy/server';
-import { withListDetailErrorMode } from '#/api/list-detail';
-import { qk } from '#/api/query-keys';
+import {
+  fetchAndStoreSiteIcon,
+  getStoredSiteIcon,
+} from './site-icon-storage';
 
 const props = withDefaults(
   defineProps<{
-    /** 站点主域名；为空时不发请求，直接显示字母 */
+    /** 是否允许手动点击抓取，默认 true */
+    clickable?: boolean;
+    /** 站点主域名 */
     host?: string;
     /** 站点名，字母头像取首字符 */
     name?: string;
     /** 头像边长（px） */
     size?: number;
   }>(),
-  { size: 32, host: '', name: '' },
+  { size: 32, host: '', name: '', clickable: true },
 );
 
+const host = computed(() => props.host.trim().toLowerCase());
+const fetching = ref(false);
 const failed = ref(false);
 
-const host = computed(() => props.host.trim().toLowerCase());
+// 初始化时仅从本地存储读取（建站时或此前手动抓取已存入）
+const iconUrl = ref(getStoredSiteIcon(host.value));
 
-// 同一个组件复用到别的站点时要重新给一次机会，否则失败标记会传染
-watch(host, () => {
+watch(host, (next) => {
   failed.value = false;
+  iconUrl.value = getStoredSiteIcon(next);
 });
 
 const letter = computed(() => {
@@ -45,35 +49,85 @@ const boxStyle = computed(() => ({
   fontSize: `${Math.round(props.size * 0.45)}px`,
 }));
 
-const { data: icon } = useQuery({
-  queryKey: computed(() => qk.caddy.siteIcon(host.value)),
-  queryFn: () => getSiteIconApi(host.value, withListDetailErrorMode()),
-  // 空 host 不发请求；host 变化自动按新 key 重取
-  enabled: computed(() => host.value.length > 0),
-  // 后端已按 host 缓存 6 小时，这里再留一段即可，避免切页重复拉
-  staleTime: 30 * 60_000,
-  retry: false,
+const tooltipText = computed(() => {
+  if (!props.clickable) return '';
+  if (fetching.value) return '正在抓取站点图标...';
+  if (iconUrl.value && !failed.value) return '点击刷新站点图标';
+  return '点击获取站点图标';
 });
 
-const iconUrl = computed(() => (failed.value ? '' : (icon.value ?? '')));
+async function handleClick(e: MouseEvent) {
+  if (!props.clickable) return;
+  e.stopPropagation();
+  if (!host.value) {
+    message.warning('站点未配置有效域名，无法获取图标');
+    return;
+  }
+  if (fetching.value) return;
+
+  fetching.value = true;
+  failed.value = false;
+  try {
+    const icon = await fetchAndStoreSiteIcon(host.value);
+    if (icon) {
+      iconUrl.value = icon;
+      message.success('站点图标已获取');
+    } else {
+      message.info('未找到该站点的图标');
+    }
+  } catch {
+    message.error('获取站点图标失败');
+  } finally {
+    fetching.value = false;
+  }
+}
 </script>
 
 <template>
-  <img
-    v-if="iconUrl"
-    class="site-avatar image"
-    :src="iconUrl"
-    alt=""
-    :style="boxStyle"
-    @error="failed = true"
-  />
-  <span v-else class="site-avatar" :style="boxStyle">{{ letter }}</span>
+  <Tooltip :title="tooltipText" :mouse-enter-delay="0.3">
+    <div
+      class="site-avatar-wrap"
+      :class="{ clickable: props.clickable, loading: fetching }"
+      :style="boxStyle"
+      @click="handleClick"
+    >
+      <img
+        v-if="iconUrl && !failed"
+        class="site-avatar-img"
+        :src="iconUrl"
+        alt=""
+        @error="failed = true"
+      />
+      <span v-else class="site-avatar-letter">{{ letter }}</span>
+      <div v-if="fetching" class="site-avatar-spinner"></div>
+    </div>
+  </Tooltip>
 </template>
 
 <style scoped>
-.site-avatar {
+.site-avatar-wrap {
+  position: relative;
   display: flex;
   flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  user-select: none;
+}
+
+.site-avatar-wrap.clickable {
+  cursor: pointer;
+}
+
+.site-avatar-wrap.clickable:hover {
+  filter: brightness(0.95);
+  box-shadow: 0 0 0 2px hsl(var(--primary) / 30%);
+}
+
+.site-avatar-letter {
+  display: flex;
+  width: 100%;
+  height: 100%;
   align-items: center;
   justify-content: center;
   font-weight: 600;
@@ -82,10 +136,39 @@ const iconUrl = computed(() => (failed.value ? '' : (icon.value ?? '')));
   border-radius: 9px;
 }
 
-.site-avatar.image {
+.site-avatar-img {
+  width: 100%;
+  height: 100%;
   object-fit: contain;
   padding: 2px;
   background: hsl(var(--background));
   border: 1px solid hsl(var(--border));
+  border-radius: 9px;
+}
+
+.site-avatar-spinner {
+  position: absolute;
+  inset: 0;
+  border-radius: 9px;
+  background: hsl(var(--background) / 60%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.site-avatar-spinner::after {
+  content: '';
+  width: 16px;
+  height: 16px;
+  border: 2px solid hsl(var(--primary) / 20%);
+  border-top-color: hsl(var(--primary));
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>
