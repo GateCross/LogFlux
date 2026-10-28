@@ -13,8 +13,7 @@ import {
 } from '../config/quick-config-utils';
 import type { CaddyFormModel, PreservedCaddyBlock } from '../config/types';
 
-/** 站点卡片/详情页统计窗口：今日（24h），对应 window=24h 契约（windowMinutes=1440） */
-export const SITE_METRICS_WINDOW_MINUTES = 1440;
+/** 站点指标分块大小：后端单次最多 50 个 host */
 export const SITE_METRICS_HOST_CHUNK = 50;
 
 export type CatalogSiteKind = 'simple' | 'complex';

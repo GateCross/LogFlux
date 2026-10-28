@@ -5,6 +5,7 @@ import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 import type { CaddyPageMode } from '../types';
 import { useCaddyConfigIO } from './useCaddyConfigIO';
 import { useSimpleWaf } from './useSimpleWaf';
+import { formatMetricCount } from '../../catalog/service-catalog-utils';
 import { useSiteMetrics } from './useSiteMetrics';
 import { useConfigHistory } from './useConfigHistory';
 
@@ -107,18 +108,15 @@ export function useCaddyConfigPage() {
     siteMetricsLoaded,
     sitePrimaryHost,
     siteMetricsForDomains,
-    formatMetricCount,
-    metricCountColor,
     resetSiteMetrics,
-    debouncedFetchSiteMetrics,
+    fetchSiteMetrics,
     handleRefreshSiteMetrics,
     openAccessLogs,
-    collectSiteHosts,
   } = metricsApi;
 
   metricsHooks.reset = resetSiteMetrics;
   metricsHooks.ready = () => {
-    debouncedFetchSiteMetrics();
+    void fetchSiteMetrics();
   };
 
   const wafApi = useSimpleWaf({
@@ -196,11 +194,7 @@ export function useCaddyConfigPage() {
     }
   });
 
-  /** 站点域名集合变化时 debounce 刷新近窗指标 */
-  const siteHostsKey = computed(() => collectSiteHosts().sort().join('|'));
-  watch(siteHostsKey, () => {
-    debouncedFetchSiteMetrics();
-  });
+  // 站点域名集合变化时无需手动刷新：共享 query 的 key 含 hosts，变化即自动重取
 
   onMounted(async () => {
     await fetchConfig();
@@ -252,7 +246,6 @@ export function useCaddyConfigPage() {
     siteMetricsError: siteMetricsError.value,
     siteMetricsForDomains,
     formatMetricCount,
-    metricCountColor,
     sitePrimaryHost,
     blockKindLabel,
     blockKindColor,

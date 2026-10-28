@@ -1,54 +1,22 @@
-/** 站点近窗指标；失败降级为 "—"，不阻断配置编辑 */
-
-import { ref, type Ref } from 'vue';
+/**
+ * 配置工作台视角的站点指标：近 15 分钟 4xx/5xx（运维视角，编辑配置时看抖动）。
+ *
+ * 请求、分块、并发去重全部交给 shared/composables/useSiteMetricsQuery，
+ * 这里只保留工作台专属的部分：host 收集（简单站点 + 复杂站点）、
+ * 深链跳转访问日志。
+ */
+import { computed, type Ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { useDebounceFn } from '@vueuse/core';
 import { message } from 'antdv-next';
 
-import { getSiteMetricsApi } from '#/api/caddy/server';
-import type { SiteMetricsItem } from '#/api/caddy/server';
-import { withListDetailErrorMode } from '#/api/list-detail';
-import { qk } from '#/api/query-keys';
-import { apiErrorMessage } from '#/utils/api-error-message';
-import { useQueryClient } from '@tanstack/vue-query';
-
-/** 站点卡片近窗指标（host → 计数） */
-export type SiteMetricsMap = Map<string, { count4xx: number; count5xx: number }>;
-
-export const SITE_METRICS_WINDOW_MINUTES = 15;
-export const SITE_METRICS_HOST_CHUNK = 50;
-
-/** 从站点域名中提取可用于 metrics / 日志过滤的 host（去掉端口与协议） */
-export function normalizeSiteHost(domain: string): string {
-  const raw = String(domain ?? '').trim();
-  if (!raw) return '';
-  // 监听地址如 :8080 不是 host
-  if (raw.startsWith(':')) return '';
-  try {
-    if (raw.includes('://')) {
-      const url = new URL(raw);
-      return (url.hostname || '').toLowerCase();
-    }
-  } catch {
-    // 解析失败则继续后续处理
-  }
-  // 去掉 path / query
-  const withoutPath = raw.split('/')[0] ?? raw;
-  // IPv4/域名去掉端口；罕见 IPv6 host:port 无解析时保留方括号
-  const hostPart = withoutPath.includes(']')
-    ? withoutPath
-    : (withoutPath.split(':')[0] ?? withoutPath);
-  return hostPart.trim().toLowerCase();
-}
-
-/** 站点卡片用：取第一个有效 host 对应的指标 */
-export function sitePrimaryHost(domains: string[] | undefined): string {
-  for (const domain of domains ?? []) {
-    const host = normalizeSiteHost(domain);
-    if (host) return host;
-  }
-  return '';
-}
+import {
+  SITE_METRICS_RECENT_MINUTES,
+  useSiteMetricsQuery,
+} from '../../shared/composables/useSiteMetricsQuery';
+import {
+  normalizeSiteHost,
+  sitePrimaryHost,
+} from '../../catalog/service-catalog-utils';
 
 /** 收集站点域名（简单 + 复杂），去重 */
 export function collectHostsFromSites(
@@ -56,30 +24,13 @@ export function collectHostsFromSites(
   complexSites: Array<{ domains?: string[] }>,
 ): string[] {
   const hosts = new Set<string>();
-  for (const site of simpleSites) {
-    for (const domain of site.domains ?? []) {
-      const host = normalizeSiteHost(domain);
-      if (host) hosts.add(host);
-    }
-  }
-  for (const site of complexSites) {
+  for (const site of [...simpleSites, ...complexSites]) {
     for (const domain of site.domains ?? []) {
       const host = normalizeSiteHost(domain);
       if (host) hosts.add(host);
     }
   }
   return [...hosts];
-}
-
-export function formatMetricCount(value: number | undefined | null): string {
-  if (value === undefined || value === null || Number.isNaN(Number(value))) return '—';
-  return String(Math.max(0, Math.round(Number(value))));
-}
-
-export function metricCountColor(count: number | undefined | null, kind: '4xx' | '5xx') {
-  if (count === undefined || count === null) return 'default';
-  if (Number(count) <= 0) return 'default';
-  return kind === '5xx' ? 'error' : 'warning';
 }
 
 export interface UseSiteMetricsOptions {
@@ -89,19 +40,25 @@ export interface UseSiteMetricsOptions {
   complexSiteSummaries: Ref<Array<{ domains?: string[] }>>;
 }
 
+/** 工作台指标：近 15 分钟窗口，失败降级为 "—"，不阻断配置编辑 */
 export function useSiteMetrics(options: UseSiteMetricsOptions) {
   const { quickSiteDrafts, complexSiteSummaries } = options;
   const router = useRouter();
-  const queryClient = useQueryClient();
 
-  const siteMetricsMap = ref<SiteMetricsMap>(new Map());
-  const loadingSiteMetrics = ref(false);
-  const siteMetricsError = ref('');
-  const siteMetricsLoaded = ref(false);
+  const metricsHosts = computed(() =>
+    collectHostsFromSites(quickSiteDrafts.value, complexSiteSummaries.value),
+  );
 
-  function collectSiteHosts(): string[] {
-    return collectHostsFromSites(quickSiteDrafts.value, complexSiteSummaries.value);
-  }
+  const {
+    metricsMap: siteMetricsMap,
+    loading: loadingSiteMetrics,
+    loaded: siteMetricsLoaded,
+    errorMessage: siteMetricsError,
+    refetch: refetchSiteMetrics,
+  } = useSiteMetricsQuery({
+    hosts: metricsHosts,
+    windowMinutes: SITE_METRICS_RECENT_MINUTES,
+  });
 
   function siteMetricsForDomains(domains: string[] | undefined) {
     const host = sitePrimaryHost(domains);
@@ -109,76 +66,18 @@ export function useSiteMetrics(options: UseSiteMetricsOptions) {
     return siteMetricsMap.value.get(host) ?? null;
   }
 
+  /** 配置重载时由调用方触发；hosts 变化后共享 query 会自行重取 */
   function resetSiteMetrics() {
-    siteMetricsMap.value = new Map();
-    siteMetricsError.value = '';
-    siteMetricsLoaded.value = false;
+    void refetchSiteMetrics();
   }
 
-  /**
-   * 批量拉取站点近窗 4xx/5xx。
-   * 失败时仅记录错误并清空/保留上次数据展示 "—"，绝不阻断配置编辑。
-   */
   async function fetchSiteMetrics() {
-    if (loadingSiteMetrics.value) return;
-    const hosts = collectSiteHosts();
-    if (hosts.length === 0) {
-      siteMetricsMap.value = new Map();
-      siteMetricsError.value = '';
-      siteMetricsLoaded.value = true;
-      return;
-    }
-
-    loadingSiteMetrics.value = true;
-    siteMetricsError.value = '';
-    try {
-      const next = new Map<string, { count4xx: number; count5xx: number }>();
-      // 后端单次最多 50 hosts，分块请求
-      for (let i = 0; i < hosts.length; i += SITE_METRICS_HOST_CHUNK) {
-        const chunk = hosts.slice(i, i + SITE_METRICS_HOST_CHUNK);
-        const list = await queryClient.fetchQuery({
-          queryKey: qk.caddy.metrics(chunk.join(',')),
-          queryFn: () =>
-            getSiteMetricsApi(
-              {
-                hosts: chunk,
-                windowMinutes: SITE_METRICS_WINDOW_MINUTES,
-              },
-              withListDetailErrorMode(),
-            ),
-        });
-        for (const item of list as SiteMetricsItem[]) {
-          const host = normalizeSiteHost(item.host) || String(item.host ?? '').trim().toLowerCase();
-          if (!host) continue;
-          next.set(host, {
-            count4xx: Number(item.count4xx) || 0,
-            count5xx: Number(item.count5xx) || 0,
-          });
-        }
-      }
-      // 无日志 host 后端可能省略，补 0
-      for (const host of hosts) {
-        if (!next.has(host)) {
-          next.set(host, { count4xx: 0, count5xx: 0 });
-        }
-      }
-      siteMetricsMap.value = next;
-      siteMetricsLoaded.value = true;
-    } catch (error) {
-      // 降级：不阻塞编辑；展示 "—" 与可选中文提示
-      siteMetricsError.value = apiErrorMessage(error, '获取站点近窗指标失败');
-      siteMetricsMap.value = new Map();
-      siteMetricsLoaded.value = true;
-    } finally {
-      loadingSiteMetrics.value = false;
-    }
+    if (metricsHosts.value.length === 0) return;
+    await refetchSiteMetrics();
   }
-
-  /** 配置/站点变更后 debounce 拉取，避免每个键入 thrash */
-  const debouncedFetchSiteMetrics = useDebounceFn(fetchSiteMetrics, 600);
 
   function handleRefreshSiteMetrics() {
-    debouncedFetchSiteMetrics();
+    void fetchSiteMetrics();
   }
 
   /** 深链到访问日志并带 host 过滤 */
@@ -201,15 +100,10 @@ export function useSiteMetrics(options: UseSiteMetricsOptions) {
     loadingSiteMetrics,
     siteMetricsError,
     siteMetricsLoaded,
-    SITE_METRICS_WINDOW_MINUTES,
-    collectSiteHosts,
     sitePrimaryHost,
     siteMetricsForDomains,
-    formatMetricCount,
-    metricCountColor,
     resetSiteMetrics,
     fetchSiteMetrics,
-    debouncedFetchSiteMetrics,
     handleRefreshSiteMetrics,
     openAccessLogs,
   };

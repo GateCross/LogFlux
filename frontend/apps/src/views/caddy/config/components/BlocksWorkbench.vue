@@ -15,7 +15,7 @@ import {
 
 import type { CaddyFormModel, HealthCheck, PreservedCaddyBlock } from '../types';
 import type { ComplexSiteSummary, QuickSiteDraft } from '../quick-config-utils';
-import { SITE_METRICS_WINDOW_MINUTES } from '../composables/useSiteMetrics';
+import { SITE_METRICS_RECENT_MINUTES } from '../../shared/composables/useSiteMetricsQuery';
 import SiteEditorPanel from './SiteEditorPanel.vue';
 
 type PreservedItem = { block: PreservedCaddyBlock; index: number };
@@ -37,7 +37,6 @@ const props = defineProps<{
   siteMetricsError: string;
   siteMetricsForDomains: (domains: string[] | undefined) => { count4xx: number; count5xx: number } | null | undefined;
   formatMetricCount: (value: number | undefined | null) => string;
-  metricCountColor: (count: number | undefined | null, kind: '4xx' | '5xx') => string;
   sitePrimaryHost: (domains: string[] | undefined) => string;
   blockKindLabel: (kind: PreservedCaddyBlock['kind']) => string;
   blockKindColor: (kind: PreservedCaddyBlock['kind']) => string;
@@ -60,6 +59,32 @@ const emit = defineEmits<{
   duplicateSite: [site: QuickSiteDraft];
   removeSite: [id: string];
 }>();
+
+/** 卡片头像：取站点名首个可见字符 */
+function avatarText(site: QuickSiteDraft): string {
+  const source = (site.name || site.domains[0] || '?').trim();
+  return (source[0] ?? '?').toUpperCase();
+}
+
+/** 卡片色条：停用=灰、出现 5xx=红、正常=绿，与目录卡片同一套语义 */
+function siteAccent(site: QuickSiteDraft): string {
+  if (!site.enabled) return 'hsl(var(--border))';
+  if (metricValue(site.domains, '5xx') > 0) return 'hsl(var(--destructive))';
+  return 'hsl(var(--success))';
+}
+
+/** 近窗指标原始值；未知按 0，避免模板里到处写可选链 */
+function metricValue(domains: string[] | undefined, kind: '4xx' | '5xx'): number {
+  const metrics = props.siteMetricsForDomains(domains);
+  return (kind === '5xx' ? metrics?.count5xx : metrics?.count4xx) ?? 0;
+}
+
+/** 近窗指标展示值：加载中 …、失败 —、正常数字 */
+function metricDisplay(domains: string[] | undefined, kind: '4xx' | '5xx'): string {
+  if (props.loadingSiteMetrics && !props.siteMetricsLoaded) return '…';
+  if (props.siteMetricsError) return '—';
+  return props.formatMetricCount(metricValue(domains, kind));
+}
 </script>
 
 <template>
@@ -204,7 +229,7 @@ const emit = defineEmits<{
             </div>
           </template>
           <div class="panel-subtitle mb-3">
-            右侧只维护站点能力；global 和 snippet 在左侧。卡片展示近 {{ SITE_METRICS_WINDOW_MINUTES }} 分钟 5xx/4xx。
+            右侧只维护站点能力；global 和 snippet 在左侧。卡片展示近 {{ SITE_METRICS_RECENT_MINUTES }} 分钟 5xx/4xx。
           </div>
           <Alert
             v-if="props.siteMetricsError"
@@ -230,39 +255,31 @@ const emit = defineEmits<{
               :class="{ active: site.id === props.activeQuickSiteId }"
               @click="emit('update:activeQuickSiteId', site.id)"
             >
-              <span class="site-name">{{ site.name || '未命名站点' }}</span>
-              <span class="site-domain">{{ site.domains[0] || '未配置域名' }}</span>
+              <span class="site-item-accent" :style="{ background: siteAccent(site) }"></span>
+              <div class="site-item-head">
+                <span class="site-avatar">{{ avatarText(site) }}</span>
+                <div class="site-title">
+                  <span class="site-name">{{ site.name || '未命名站点' }}</span>
+                  <span class="site-domain">{{ site.domains[0] || '未配置域名' }}</span>
+                </div>
+                <Tag class="site-state" :color="site.enabled ? 'green' : 'default'">
+                  {{ site.enabled ? '启用' : '停用' }}
+                </Tag>
+              </div>
               <div class="site-metrics">
-                <span class="site-metric">
+                <div class="site-metric">
+                  <span class="site-metric-value" :class="{ danger: metricValue(site.domains, '5xx') > 0 }">
+                    {{ metricDisplay(site.domains, '5xx') }}
+                  </span>
                   <span class="meta-label">近窗 5xx</span>
-                  <Tag
-                    class="site-metric-tag"
-                    :color="props.metricCountColor(props.siteMetricsForDomains(site.domains)?.count5xx, '5xx')"
-                  >
-                    {{
-                      props.loadingSiteMetrics && !props.siteMetricsLoaded
-                        ? '…'
-                        : props.siteMetricsError
-                          ? '—'
-                          : props.formatMetricCount(props.siteMetricsForDomains(site.domains)?.count5xx)
-                    }}
-                  </Tag>
-                </span>
-                <span class="site-metric">
+                </div>
+                <div class="site-metric-divider"></div>
+                <div class="site-metric">
+                  <span class="site-metric-value" :class="{ warn: metricValue(site.domains, '4xx') > 0 }">
+                    {{ metricDisplay(site.domains, '4xx') }}
+                  </span>
                   <span class="meta-label">近窗 4xx</span>
-                  <Tag
-                    class="site-metric-tag"
-                    :color="props.metricCountColor(props.siteMetricsForDomains(site.domains)?.count4xx, '4xx')"
-                  >
-                    {{
-                      props.loadingSiteMetrics && !props.siteMetricsLoaded
-                        ? '…'
-                        : props.siteMetricsError
-                          ? '—'
-                          : props.formatMetricCount(props.siteMetricsForDomains(site.domains)?.count4xx)
-                    }}
-                  </Tag>
-                </span>
+                </div>
                 <Button
                   v-if="props.sitePrimaryHost(site.domains)"
                   size="small"
@@ -273,9 +290,6 @@ const emit = defineEmits<{
                   查看日志
                 </Button>
               </div>
-              <Tag class="site-state" :color="site.enabled ? 'green' : 'default'">
-                {{ site.enabled ? '启用' : '停用' }}
-              </Tag>
             </button>
           </div>
 
@@ -338,36 +352,19 @@ const emit = defineEmits<{
                 {{ item.domains.join(', ') || '未配置域名' }}
               </div>
               <div class="site-metrics complex-site-metrics mb-2">
-                <span class="site-metric">
+                <div class="site-metric">
+                  <span class="site-metric-value" :class="{ danger: metricValue(item.domains, '5xx') > 0 }">
+                    {{ metricDisplay(item.domains, '5xx') }}
+                  </span>
                   <span class="meta-label">近窗 5xx</span>
-                  <Tag
-                    class="site-metric-tag"
-                    :color="props.metricCountColor(props.siteMetricsForDomains(item.domains)?.count5xx, '5xx')"
-                  >
-                    {{
-                      props.loadingSiteMetrics && !props.siteMetricsLoaded
-                        ? '…'
-                        : props.siteMetricsError
-                          ? '—'
-                          : props.formatMetricCount(props.siteMetricsForDomains(item.domains)?.count5xx)
-                    }}
-                  </Tag>
-                </span>
-                <span class="site-metric">
+                </div>
+                <div class="site-metric-divider"></div>
+                <div class="site-metric">
+                  <span class="site-metric-value" :class="{ warn: metricValue(item.domains, '4xx') > 0 }">
+                    {{ metricDisplay(item.domains, '4xx') }}
+                  </span>
                   <span class="meta-label">近窗 4xx</span>
-                  <Tag
-                    class="site-metric-tag"
-                    :color="props.metricCountColor(props.siteMetricsForDomains(item.domains)?.count4xx, '4xx')"
-                  >
-                    {{
-                      props.loadingSiteMetrics && !props.siteMetricsLoaded
-                        ? '…'
-                        : props.siteMetricsError
-                          ? '—'
-                          : props.formatMetricCount(props.siteMetricsForDomains(item.domains)?.count4xx)
-                    }}
-                  </Tag>
-                </span>
+                </div>
                 <Button
                   v-if="props.sitePrimaryHost(item.domains)"
                   size="small"
@@ -509,17 +506,24 @@ const emit = defineEmits<{
 .site-item {
   position: relative;
   width: 100%;
-  min-height: 96px;
-  padding: 12px 72px 12px 12px;
+  padding: 12px;
+  overflow: hidden;
   text-align: left;
   cursor: pointer;
   background: hsl(var(--muted) / 40%);
   border: 1px solid hsl(var(--border));
-  border-radius: 6px;
+  border-radius: 10px;
   transition:
     border-color 0.16s ease,
     box-shadow 0.16s ease,
-    background 0.16s ease;
+    background 0.16s ease,
+    transform 0.16s ease;
+}
+
+.site-item:hover {
+  border-color: hsl(var(--primary) / 35%);
+  box-shadow: 0 6px 20px hsl(var(--foreground) / 8%);
+  transform: translateY(-1px);
 }
 
 .site-item.active {
@@ -528,10 +532,47 @@ const emit = defineEmits<{
   box-shadow: 0 0 0 2px hsl(var(--primary) / 8%);
 }
 
-.site-state {
+/* 顶部状态色条：正常=绿、出现 5xx=红、停用=灰 */
+.site-item-accent {
   position: absolute;
-  top: 12px;
-  right: 12px;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 3px;
+}
+
+.site-item-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.site-avatar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  font-size: 14px;
+  font-weight: 600;
+  color: hsl(var(--primary));
+  background: hsl(var(--primary) / 10%);
+  border-radius: 8px;
+}
+
+.site-title {
+  display: flex;
+  overflow: hidden;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.35;
+}
+
+.site-state {
+  flex-shrink: 0;
+  margin-inline-end: 0;
 }
 
 .site-name,
@@ -543,33 +584,51 @@ const emit = defineEmits<{
 }
 
 .site-name {
+  font-size: 13px;
   font-weight: 600;
 }
 
 .site-domain {
-  margin-top: 4px;
   color: hsl(var(--muted-foreground));
   font-size: 12px;
 }
 
 .site-metrics {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 8px 10px;
-  margin-top: 8px;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 8px 10px;
+  background: hsl(var(--card) / 60%);
+  border-radius: 8px;
 }
 
 .site-metric {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
 }
 
-.site-metric-tag {
-  margin-inline-end: 0;
-  line-height: 18px;
+.site-metric-divider {
+  align-self: stretch;
+  width: 1px;
+  background: hsl(var(--border));
+}
+
+.site-metric-value {
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.site-metric-value.danger {
+  color: hsl(var(--destructive));
+}
+
+.site-metric-value.warn {
+  color: hsl(var(--warning));
 }
 
 .site-log-link {

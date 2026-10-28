@@ -1,47 +1,33 @@
-import { computed, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { useDebounceFn } from '@vueuse/core';
-import { useQueryClient } from '@tanstack/vue-query';
 import { message } from 'antdv-next';
 
-import {
-  getCaddyConfigApi,
-  getSiteMetricsApi,
-  type SiteMetricsItem,
-} from '#/api/caddy/server';
+import { getCaddyConfigApi } from '#/api/caddy/server';
 import { getSimpleWafConfigApi } from '#/api/caddy/simple-waf';
 import { getCertificateListApi } from '#/api/caddy/certificate';
 import { withListDetailErrorMode } from '#/api/list-detail';
 import { qk } from '#/api/query-keys';
 import { useListDetailQuery } from '#/composables/use-list-detail-query';
-import { apiErrorMessage } from '#/utils/api-error-message';
 
 import {
-  SITE_METRICS_HOST_CHUNK,
-  SITE_METRICS_WINDOW_MINUTES,
   buildAccessLogQuery,
   buildCatalogSitesFromConfigPayload,
   buildConfigWorkbenchQuery,
-  buildSiteMetricsMap,
   collectCatalogHosts,
   formatMetricCount,
   siteMetricsForDomains,
   sitePrimaryHost,
   type CatalogSiteCard,
-  type SiteMetricsMap,
 } from '../service-catalog-utils';
+import {
+  SITE_METRICS_TODAY_MINUTES,
+  useSiteMetricsQuery,
+} from '../../shared/composables/useSiteMetricsQuery';
 
 export function useServiceCatalogPage() {
   const router = useRouter();
-  const queryClient = useQueryClient();
 
   const keyword = ref('');
-
-  /** 近窗指标：失败降级，不阻塞目录浏览 */
-  const siteMetricsMap = ref<SiteMetricsMap>(new Map());
-  const loadingSiteMetrics = ref(false);
-  const siteMetricsError = ref('');
-  const siteMetricsLoaded = ref(false);
 
   const {
     data: configData,
@@ -57,6 +43,19 @@ export function useServiceCatalogPage() {
   const siteCards = computed(() => {
     if (!configData.value) return [] as CatalogSiteCard[];
     return buildCatalogSitesFromConfigPayload(configData.value);
+  });
+
+  // 指标统一走共享 query（今日 24h 视角）；hosts 由站点卡片派生
+  const metricsHosts = computed(() => collectCatalogHosts(siteCards.value));
+  const {
+    metricsMap: siteMetricsMap,
+    loading: loadingSiteMetrics,
+    loaded: siteMetricsLoaded,
+    errorMessage: siteMetricsError,
+    refetch: refetchSiteMetrics,
+  } = useSiteMetricsQuery({
+    hosts: metricsHosts,
+    windowMinutes: SITE_METRICS_TODAY_MINUTES,
   });
 
   /** 当前配置原文与哈希，供一步建站弹窗做追加保存与乐观并发 */
@@ -82,13 +81,6 @@ export function useServiceCatalogPage() {
   });
   const wafStatus = computed(() => wafStatusData.value ?? null);
 
-  watch(siteCards, () => {
-    siteMetricsMap.value = new Map();
-    siteMetricsError.value = '';
-    siteMetricsLoaded.value = false;
-    debouncedFetchSiteMetrics();
-  });
-
   const filteredSites = computed(() => {
     const q = keyword.value.trim().toLowerCase();
     return siteCards.value.filter((site) => {
@@ -104,54 +96,14 @@ export function useServiceCatalogPage() {
     await refetchConfig();
   }
 
+  /** 手动刷新指标：共享 query 自带去重，直接 refetch 即可 */
   async function fetchSiteMetrics() {
-    if (loadingSiteMetrics.value) return;
-    const hosts = collectCatalogHosts(siteCards.value);
-    if (hosts.length === 0) {
-      siteMetricsMap.value = new Map();
-      siteMetricsError.value = '';
-      siteMetricsLoaded.value = true;
-      return;
-    }
-
-    loadingSiteMetrics.value = true;
-    siteMetricsError.value = '';
-    try {
-      const items: SiteMetricsItem[] = [];
-      for (let i = 0; i < hosts.length; i += SITE_METRICS_HOST_CHUNK) {
-        const chunk = hosts.slice(i, i + SITE_METRICS_HOST_CHUNK);
-        // window=24h 契约：windowMinutes=1440 进 query key，与旧 15 分钟窗缓存隔离
-        const list = await queryClient.fetchQuery({
-          queryKey: qk.caddy.metrics(
-            chunk.join(','),
-            SITE_METRICS_WINDOW_MINUTES,
-          ),
-          queryFn: () =>
-            getSiteMetricsApi(
-              {
-                hosts: chunk,
-                windowMinutes: SITE_METRICS_WINDOW_MINUTES,
-              },
-              withListDetailErrorMode(),
-            ),
-        });
-        items.push(...((list as SiteMetricsItem[]) ?? []));
-      }
-      siteMetricsMap.value = buildSiteMetricsMap(items, hosts);
-      siteMetricsLoaded.value = true;
-    } catch (error) {
-      siteMetricsError.value = apiErrorMessage(error, '获取站点近窗指标失败');
-      siteMetricsMap.value = new Map();
-      siteMetricsLoaded.value = true;
-    } finally {
-      loadingSiteMetrics.value = false;
-    }
+    if (metricsHosts.value.length === 0) return;
+    await refetchSiteMetrics();
   }
 
-  const debouncedFetchSiteMetrics = useDebounceFn(fetchSiteMetrics, 600);
-
   function handleRefreshSiteMetrics() {
-    debouncedFetchSiteMetrics();
+    void fetchSiteMetrics();
   }
 
   function openConfigWorkbench(mode?: 'blocks' | 'waf' | 'raw' | 'preview') {

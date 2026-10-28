@@ -22,6 +22,7 @@ import {
 import type { CaddyCertificateApi } from '#/api/caddy/certificate';
 
 import {
+  catalogModeLabel,
   siteCertDaysLeft,
   siteMetricsForDomains,
   siteProtectBadge,
@@ -112,6 +113,31 @@ function blockedCount(site: CatalogSiteCard): number {
 function serverErrorCount(site: CatalogSiteCard): number {
   return siteMetricsForDomains(props.siteMetricsMap, site.domains)?.count5xx ?? 0;
 }
+
+/** 卡片左上角字母头像：取站点名首个可见字符 */
+function avatarText(site: CatalogSiteCard): string {
+  const source = (site.name || sitePrimaryHost(site.domains) || '?').trim();
+  return (source[0] ?? '?').toUpperCase();
+}
+
+/** 卡片顶部色条：与防护徽章同语义，让整列卡片的防护状态可以一眼扫过 */
+function accentColor(site: CatalogSiteCard): string {
+  const badge = protectBadge(site);
+  if (badge.label === '阻断') return 'hsl(var(--success))';
+  if (badge.label === '检测' || badge.label === '未生效') return 'hsl(var(--warning))';
+  if (badge.label === '未防护' || badge.label === 'WAF?') return 'hsl(var(--destructive))';
+  return 'hsl(var(--border))';
+}
+
+/** 拦截占比：正文小字，请求为 0 时不显示，避免 0/0 噪音 */
+function blockRate(site: CatalogSiteCard): string {
+  const metrics = siteMetricsForDomains(props.siteMetricsMap, site.domains);
+  const total = metrics?.total ?? 0;
+  const blocked = metrics?.blocked ?? 0;
+  if (total <= 0 || blocked <= 0) return '';
+  const rate = (blocked / total) * 100;
+  return rate < 0.1 ? '<0.1%' : `${rate.toFixed(rate < 10 ? 1 : 0)}%`;
+}
 </script>
 
 <template>
@@ -166,10 +192,25 @@ function serverErrorCount(site: CatalogSiteCard): number {
             hoverable
             @click="emit('openSite', site)"
           >
+            <span class="site-card-accent" :style="{ background: accentColor(site) }"></span>
+
             <div class="site-card-header">
-              <span class="site-name" :title="site.name">
-                {{ site.name || '未命名站点' }}
-              </span>
+              <span class="site-avatar">{{ avatarText(site) }}</span>
+              <div class="site-title">
+                <span class="site-name" :title="site.name">
+                  {{ site.name || '未命名站点' }}
+                </span>
+                <span
+                  v-if="sitePrimaryHost(site.domains) !== site.name"
+                  class="site-domain"
+                  :title="site.domains.join('、')"
+                >
+                  {{ site.domains[0] || site.primaryHost || '未配置域名' }}
+                  <span v-if="site.domains.length > 1">
+                    +{{ site.domains.length - 1 }}
+                  </span>
+                </span>
+              </div>
               <div class="site-more" @click.stop>
                 <Dropdown
                   :trigger="['click']"
@@ -191,17 +232,10 @@ function serverErrorCount(site: CatalogSiteCard): number {
                   {{ protectBadge(site).label }}
                 </Tag>
               </Tooltip>
-            </div>
-
-            <div
-              v-if="sitePrimaryHost(site.domains) !== site.name"
-              class="site-domain"
-              :title="site.domains.join('、')"
-            >
-              {{ site.domains[0] || site.primaryHost || '未配置域名' }}
-              <span v-if="site.domains.length > 1">
-                +{{ site.domains.length - 1 }}
-              </span>
+              <Tag class="cap-tag">{{ catalogModeLabel(site.mode) }}</Tag>
+              <Tooltip v-if="serverErrorCount(site) > 0" title="近 24 小时站点返回 5xx 的次数，通常意味着上游不可用">
+                <Tag class="cap-tag" color="error">5xx {{ serverErrorCount(site) }}</Tag>
+              </Tooltip>
             </div>
 
             <div class="site-stats">
@@ -209,6 +243,7 @@ function serverErrorCount(site: CatalogSiteCard): number {
                 <span class="stat-value">{{ props.todayDisplay(site, 'total') }}</span>
                 <span class="stat-label">今日请求</span>
               </div>
+              <div class="stat-divider"></div>
               <div class="stat">
                 <span
                   class="stat-value"
@@ -216,14 +251,11 @@ function serverErrorCount(site: CatalogSiteCard): number {
                 >
                   {{ props.todayDisplay(site, 'blocked') }}
                 </span>
-                <span class="stat-label">今日拦截</span>
+                <span class="stat-label">
+                  今日拦截
+                  <span v-if="blockRate(site)" class="stat-rate">{{ blockRate(site) }}</span>
+                </span>
               </div>
-              <!-- 5xx 只在出现时显示：上游异常的强信号，常态不占版面 -->
-              <Tooltip v-if="serverErrorCount(site) > 0" title="近 24 小时站点返回 5xx 的次数，通常意味着上游不可用">
-                <Tag class="stat-alert" color="error">
-                  5xx {{ serverErrorCount(site) }}
-                </Tag>
-              </Tooltip>
             </div>
 
             <div
@@ -301,26 +333,65 @@ function serverErrorCount(site: CatalogSiteCard): number {
 }
 
 .site-card {
+  position: relative;
   height: 100%;
-  border-radius: 10px;
-  transition: border-color 0.16s ease;
+  padding-top: 4px;
+  overflow: hidden;
+  border-radius: 12px;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+.site-card:hover {
+  border-color: hsl(var(--primary) / 35%);
+  box-shadow: 0 6px 20px hsl(var(--foreground) / 8%);
+  transform: translateY(-1px);
 }
 
 .site-card.complex {
   border-color: hsl(var(--warning) / 50%);
 }
 
+/* 顶部分状态色条：阻断=绿、检测/未生效=橙、未防护=红、未知=灰 */
+.site-card-accent {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 3px;
+}
+
 .site-card-header {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   align-items: center;
-  justify-content: space-between;
+}
+
+.site-avatar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  font-size: 15px;
+  font-weight: 600;
+  color: hsl(var(--primary));
+  background: hsl(var(--primary) / 10%);
+  border-radius: 9px;
+}
+
+.site-title {
+  display: flex;
+  overflow: hidden;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.35;
 }
 
 .site-name {
   overflow: hidden;
-  flex: 1;
-  min-width: 0;
+  font-size: 14px;
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -331,13 +402,16 @@ function serverErrorCount(site: CatalogSiteCard): number {
 }
 
 .site-badges {
-  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  margin-top: 10px;
 }
 
 .site-domain {
   overflow: hidden;
-  margin-top: 2px;
-  font-size: 13px;
+  font-size: 12px;
   /* muted-foreground 在浅色主题下过淡（截图反馈），改用主前景色 72% 透明度保证可读 */
   color: hsl(var(--foreground) / 72%);
   text-overflow: ellipsis;
@@ -346,27 +420,32 @@ function serverErrorCount(site: CatalogSiteCard): number {
 
 .site-stats {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px 24px;
+  gap: 16px;
   align-items: center;
-  margin-top: 10px;
-}
-
-.stat-alert {
-  margin-inline-end: 0;
-  font-size: 11px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: hsl(var(--muted) / 45%);
+  border-radius: 10px;
 }
 
 .stat {
   display: flex;
+  flex: 1;
   flex-direction: column;
-  min-width: 56px;
+  min-width: 0;
+}
+
+.stat-divider {
+  align-self: stretch;
+  width: 1px;
+  background: hsl(var(--border));
 }
 
 .stat-value {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 600;
-  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
 }
 
 .stat-value.danger {
@@ -374,8 +453,16 @@ function serverErrorCount(site: CatalogSiteCard): number {
 }
 
 .stat-label {
+  display: flex;
+  gap: 4px;
+  align-items: baseline;
   font-size: 12px;
   color: hsl(var(--muted-foreground));
+}
+
+.stat-rate {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
 }
 
 .site-caps {
@@ -392,7 +479,8 @@ function serverErrorCount(site: CatalogSiteCard): number {
 
 .site-upstream {
   overflow: hidden;
-  margin-top: 6px;
+  margin-top: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;

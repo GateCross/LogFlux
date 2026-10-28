@@ -37,11 +37,7 @@ import {
   getSimpleWafConfigApi,
   type CaddySimpleWafApi,
 } from '#/api/caddy/simple-waf';
-import {
-  getCaddyConfigApi,
-  getSiteMetricsApi,
-  type SiteMetricsItem,
-} from '#/api/caddy/server';
+import { getCaddyConfigApi } from '#/api/caddy/server';
 import { withListDetailErrorMode } from '#/api/list-detail';
 import { invalidateListDetailQueryKeys } from '#/api/list-detail-mutation';
 import { qk } from '#/api/query-keys';
@@ -49,14 +45,17 @@ import { useListDetailQuery } from '#/composables/use-list-detail-query';
 import { apiErrorMessage } from '#/utils/api-error-message';
 
 import {
-  SITE_METRICS_WINDOW_MINUTES,
   buildCatalogSitesFromConfigPayload,
   buildConfigWorkbenchQuery,
-  buildSiteMetricsMap,
   catalogModeLabel,
   formatMetricCount,
+  normalizeSiteHost,
   siteMetricsForDomains,
 } from '../catalog/service-catalog-utils';
+import {
+  SITE_METRICS_TODAY_MINUTES,
+  useSiteMetricsQuery,
+} from '../shared/composables/useSiteMetricsQuery';
 import {
   ADVANCED_CAPABILITY_ITEMS,
   PROTECT_CAPABILITY_ITEMS,
@@ -100,30 +99,27 @@ const site = computed(() => {
   );
 });
 
-// ---------- 今日统计：window=24h 契约（windowMinutes=1440），total/blocked 由后端返回 ----------
-const {
-  data: metricsData,
-  loading: loadingMetrics,
-} = useListDetailQuery({
-  queryKey: computed(() =>
-    qk.caddy.metrics(host.value, SITE_METRICS_WINDOW_MINUTES),
-  ),
-  queryFn: () =>
-    getSiteMetricsApi(
-      { hosts: [host.value], windowMinutes: SITE_METRICS_WINDOW_MINUTES },
-      withListDetailErrorMode(),
-    ),
-  errorFallback: '获取站点今日指标失败',
-  enabled: computed(() => Boolean(host.value)),
+// ---------- 今日统计：与目录页/工作台同一套共享 query（今日 24h 视角） ----------
+const metricsHosts = computed(() => {
+  const hosts = new Set<string>();
+  for (const domain of site.value?.domains ?? [host.value]) {
+    const h = normalizeSiteHost(domain);
+    if (h) hosts.add(h);
+  }
+  return [...hosts];
 });
 
-const siteMetrics = computed(() => {
-  const list = (metricsData.value as SiteMetricsItem[] | undefined) ?? [];
-  if (list.length === 0) return null;
-  // 详情页按当前站点聚合全部域名：只查了主域名会漏掉其它域名的流量
-  const map = buildSiteMetricsMap(list, host.value ? [host.value] : []);
-  return siteMetricsForDomains(map, site.value?.domains ?? [host.value]);
+const {
+  metricsMap,
+  loading: loadingMetrics,
+} = useSiteMetricsQuery({
+  hosts: metricsHosts,
+  windowMinutes: SITE_METRICS_TODAY_MINUTES,
 });
+
+const siteMetrics = computed(() =>
+  siteMetricsForDomains(metricsMap.value, site.value?.domains ?? [host.value]),
+);
 
 const todayTotal = computed(() =>
   loadingMetrics.value ? '…' : formatMetricCount(siteMetrics.value?.total),
@@ -139,6 +135,8 @@ const today5xx = computed(() =>
 );
 const blockedDanger = computed(() => Number(siteMetrics.value?.blocked ?? 0) > 0);
 const serverErrorDanger = computed(() => Number(siteMetrics.value?.count5xx ?? 0) > 0);
+/** 4xx 用警告色而非危险色：客户端错误通常不是站点故障，与 5xx 区分开 */
+const clientErrorDanger = computed(() => Number(siteMetrics.value?.count4xx ?? 0) > 0);
 
 // ---------- 防护模式开关组：读全局 simple-waf，改动经确认后 apply（对全部站点生效） ----------
 const {
@@ -322,7 +320,7 @@ const sitePrimaryHost = computed(() => site.value?.primaryHost || host.value);
               </div>
               <Tooltip title="近 24 小时客户端错误（4xx），大量出现通常意味着接口或链接失效">
                 <div class="stat">
-                  <span class="stat-value">{{ today4xx }}</span>
+                  <span class="stat-value" :class="{ warn: clientErrorDanger }">{{ today4xx }}</span>
                   <span class="stat-label">4xx</span>
                 </div>
               </Tooltip>
@@ -751,11 +749,18 @@ const sitePrimaryHost = computed(() => site.value?.primaryHost || host.value);
 .stat-value {
   font-size: 22px;
   font-weight: 600;
+  /* 等宽数字：与目录卡片、工作台一致，数值变化时不会横向抖动 */
+  font-variant-numeric: tabular-nums;
   line-height: 1.3;
 }
 
 .stat-value.danger {
   color: hsl(var(--destructive));
+}
+
+/* 4xx 用警告色、5xx 用危险色：与工作台卡片同一套语义 */
+.stat-value.warn {
+  color: hsl(var(--warning));
 }
 
 .stat-label {
