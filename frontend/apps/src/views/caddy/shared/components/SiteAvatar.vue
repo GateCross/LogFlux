@@ -56,9 +56,8 @@ const tooltipText = computed(() => {
   return '点击获取站点图标';
 });
 
-async function handleClick(e: MouseEvent) {
+async function handleClick() {
   if (!props.clickable) return;
-  e.stopPropagation();
   if (!host.value) {
     message.warning('站点未配置有效域名，无法获取图标');
     return;
@@ -73,7 +72,7 @@ async function handleClick(e: MouseEvent) {
       iconUrl.value = icon;
       message.success('站点图标已获取');
     } else {
-      message.info('未找到该站点的图标');
+      message.info('未获取到该站点的图标');
     }
   } catch {
     message.error('获取站点图标失败');
@@ -89,7 +88,7 @@ async function handleClick(e: MouseEvent) {
       class="site-avatar-wrap"
       :class="{ clickable: props.clickable, loading: fetching }"
       :style="boxStyle"
-      @click="handleClick"
+      @click.stop="handleClick"
     >
       <img
         v-if="iconUrl && !failed"
