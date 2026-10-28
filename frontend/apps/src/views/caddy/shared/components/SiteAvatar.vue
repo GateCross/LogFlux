@@ -1,11 +1,18 @@
 <script lang="ts" setup>
 /**
- * 站点头像：优先从本地存储读取已缓存的 favicon，未获取时回落字母。
- * 遵循用户要求：建站时自动获取一次，平时不自动请求；用户点击头像可手动获取/刷新。
+ * 站点头像：优先显示本地已缓存的 favicon，没有就显示首字母。
+ *
+ * 抓取时机只有两处，渲染本身从不发请求：
+ *   1. 建站成功时抓一次（SiteCreateModal）
+ *   2. 用户点击头像时手动抓
+ * 这样进目录页不会对每个站点发一轮外网请求，站点再多也不会拖慢首屏。
+ *
+ * 图标由后端代抓（/caddy/site-icon）：面板常以 http 暴露而站点是 https，
+ * 浏览器直连会被混合内容拦下，入口块 CSP 也只放行 img-src self/data:。
  */
 import { computed, ref, watch } from 'vue';
 
-import { message, Tooltip } from 'antdv-next';
+import { Tooltip } from 'antdv-next';
 
 import {
   fetchAndStoreSiteIcon,
@@ -30,7 +37,7 @@ const host = computed(() => props.host.trim().toLowerCase());
 const fetching = ref(false);
 const failed = ref(false);
 
-// 初始化时仅从本地存储读取（建站时或此前手动抓取已存入）
+/** 只读本地缓存；没有就是没有，不在这里发请求 */
 const iconUrl = ref(getStoredSiteIcon(host.value));
 
 watch(host, (next) => {
@@ -52,16 +59,16 @@ const boxStyle = computed(() => ({
 const tooltipText = computed(() => {
   if (!props.clickable) return '';
   if (fetching.value) return '正在抓取站点图标...';
-  if (iconUrl.value && !failed.value) return '点击刷新站点图标';
-  return '点击获取站点图标';
+  if (iconUrl.value && !failed.value) return '点击重新抓取站点图标';
+  return '点击抓取站点图标';
 });
 
+/**
+ * 手动抓取：渲染不发请求，只有这里会主动拉一次。
+ * 建站那次没抓到（DNS 未生效、站点刚起）时，用户点一下就能补上。
+ */
 async function handleClick() {
-  if (!props.clickable) return;
-  if (!host.value) {
-    message.warning('站点未配置有效域名，无法获取图标');
-    return;
-  }
+  if (!props.clickable || !host.value) return;
   if (fetching.value) return;
 
   fetching.value = true;
@@ -70,12 +77,7 @@ async function handleClick() {
     const icon = await fetchAndStoreSiteIcon(host.value);
     if (icon) {
       iconUrl.value = icon;
-      message.success('站点图标已获取');
-    } else {
-      message.info('未获取到该站点的图标');
     }
-  } catch {
-    message.error('获取站点图标失败');
   } finally {
     fetching.value = false;
   }
