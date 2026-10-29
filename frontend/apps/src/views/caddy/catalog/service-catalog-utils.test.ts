@@ -9,6 +9,7 @@ import {
   buildSiteMetricsMap,
   collectCatalogHosts,
   formatMetricCount,
+  isSystemEntrySite,
   metricCountColor,
   normalizeSiteHost,
   siteCertDaysLeft,
@@ -340,5 +341,32 @@ www.demo.com {
     expect(buildConfigWorkbenchQuery({ mode: 'waf' })).toEqual({ mode: 'waf' });
     expect(buildAccessLogQuery([':8080', 'log.example.com'])).toEqual({ host: 'log.example.com' });
     expect(buildAccessLogQuery([':8080'])).toEqual({});
+  });
+
+  it('isSystemEntrySite 正确识别系统 :80 入口站点', () => {
+    expect(isSystemEntrySite({ name: ':80', domains: [':80'] })).toBe(true);
+    expect(isSystemEntrySite({ name: 'http://:80', domains: [':80'] })).toBe(true);
+    expect(isSystemEntrySite({ name: '保留站点', domains: [':80'] })).toBe(true);
+    expect(isSystemEntrySite({ name: '', domains: [':80'] })).toBe(true);
+
+    // 正常业务站点不应被误判
+    expect(isSystemEntrySite({ name: 'app', domains: ['app.example.com'] })).toBe(false);
+    expect(isSystemEntrySite({ name: 'demo', domains: ['demo.com:80'] })).toBe(false);
+    expect(isSystemEntrySite({ name: 'localhost', domains: [':8080'] })).toBe(false);
+  });
+
+  it('buildCatalogSitesFromConfigPayload 自动过滤系统 :80 入口站点', () => {
+    const config = `
+:80 {
+  respond "system entry"
+}
+
+www.demo.com {
+  reverse_proxy 10.0.0.1:8080
+}
+`;
+    const cards = buildCatalogSitesFromConfigPayload({ config });
+    expect(cards.some((c) => c.domains.includes(':80') || c.name === ':80')).toBe(false);
+    expect(cards.some((c) => c.primaryHost === 'www.demo.com')).toBe(true);
   });
 });

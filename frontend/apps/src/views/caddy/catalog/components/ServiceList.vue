@@ -117,14 +117,20 @@ function modeStyle(site: CatalogSiteCard): Record<string, string> {
   };
 }
 
-/** 卡片顶部色条：与防护徽章同语义，让整列卡片的防护状态可以一眼扫过 */
+/** 防护标签 → 色条色调；未命中（如「未知」「WAF?」）走中性灰 */
+const ACCENT_TONES: Record<string, string> = {
+  维护模式: 'destructive',
+  防护模式: 'success',
+  观察模式: 'warning',
+  未生效: 'warning',
+  未防护: 'destructive',
+};
+
+/** 卡片顶部色条：与防护徽章同语义，微光渐变让整列卡片更高级柔和 */
 function accentColor(site: CatalogSiteCard): string {
-  const { label } = protectBadge(site);
-  if (label === '维护模式') return 'hsl(var(--destructive))';
-  if (label === '防护模式') return 'hsl(var(--success))';
-  if (label === '观察模式' || label === '未生效') return 'hsl(var(--warning))';
-  if (label === '未防护') return 'hsl(var(--destructive))';
-  return 'hsl(var(--border))';
+  const tone = ACCENT_TONES[protectBadge(site).label];
+  if (!tone) return 'hsl(var(--border) / 40%)';
+  return `linear-gradient(90deg, hsl(var(--${tone})) 0%, hsl(var(--${tone}) / 80%) 50%, hsl(var(--${tone}) / 25%) 100%)`;
 }
 
 function certDaysLeft(site: CatalogSiteCard) {
@@ -313,7 +319,6 @@ function domainsTitle(site: CatalogSiteCard): string {
           <Card
             size="small"
             class="site-card"
-            :class="{ complex: site.kind === 'complex' }"
             hoverable
             @click="emit('openSite', site)"
           >
@@ -360,7 +365,7 @@ function domainsTitle(site: CatalogSiteCard): string {
                   <span class="site-name" :title="site.name">
                     {{ site.name || '未命名站点' }}
                   </span>
-                  <span class="site-kind">{{ catalogModeLabel(site.mode) }}</span>
+                  <span class="site-kind" :class="site.mode">{{ catalogModeLabel(site.mode) }}</span>
                 </div>
                 <div class="main-actions" @click.stop>
                   <Button type="link" size="small" class="detail-link" @click="emit('openSite', site)">
@@ -448,7 +453,10 @@ function domainsTitle(site: CatalogSiteCard): string {
   height: 100%;
   overflow: hidden;
   border-radius: 12px;
-  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+  border: 1px solid hsl(var(--border) / 80%);
+  background: hsl(var(--card));
+  box-shadow: 0 1px 3px 0 hsl(var(--foreground) / 4%);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
 .site-card :deep(.ant-card-body) {
@@ -459,63 +467,64 @@ function domainsTitle(site: CatalogSiteCard): string {
 }
 
 .site-card:hover {
-  border-color: hsl(var(--primary) / 35%);
-  box-shadow: 0 6px 20px hsl(var(--foreground) / 8%);
-  transform: translateY(-1px);
+  border-color: hsl(var(--primary) / 45%);
+  box-shadow: 0 12px 24px -6px hsl(var(--foreground) / 8%), 0 4px 8px -3px hsl(var(--foreground) / 4%);
+  transform: translateY(-2px);
 }
 
-.site-card.complex {
-  border-color: hsl(var(--warning) / 50%);
-}
-
-/* 顶部分状态色条：防护=绿、观察/未生效=橙、未防护=红、未知=灰 */
+/* 顶部分状态色条：精致微光渐变，两端圆角与卡片自然贴合，彻底告别死板纯色撞色 */
 .site-card-accent {
   position: absolute;
   top: 0;
   right: 0;
   left: 0;
-  z-index: 1;
+  z-index: 2;
   height: 3px;
+  border-top-left-radius: 11px;
+  border-top-right-radius: 11px;
 }
 
-/* 左栏：图标 + 模式徽章 + 今日数值，用虚线分隔出一条竖向「安全态势」区 */
+/* 左栏：安全态势区（图标 + 模式徽章 + 今日数值） */
 .site-rail {
   display: flex;
   flex-shrink: 0;
   flex-direction: column;
-  gap: 9px;
+  gap: 10px;
   align-items: center;
   justify-content: center;
   width: 136px;
-  padding: 18px 10px 14px;
-  background: hsl(var(--muted) / 28%);
-  border-right: 1px dashed hsl(var(--border));
+  padding: 16px 10px 14px;
+  background: hsl(var(--muted) / 20%);
+  border-right: 1px solid hsl(var(--border) / 60%);
 }
 
 .mode-badge {
   display: inline-flex;
-  gap: 5px;
+  gap: 6px;
   align-items: center;
   justify-content: center;
   width: 100%;
-  padding: 3px 6px;
+  padding: 3px 8px;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.4;
   letter-spacing: 0.02em;
   white-space: nowrap;
   cursor: help;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: 9999px;
+  transition: all 0.15s ease;
 }
 
-/* 圆点跟随徽章文字色，让「在拦 / 只看 / 没防护」在缩略尺寸下也能区分 */
+/* 圆点自带同色微光环绕，让安全指示灯质感更鲜活细腻 */
 .mode-dot {
   flex-shrink: 0;
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
   background: currentcolor;
   border-radius: 50%;
+  box-shadow: 0 0 0 2px currentcolor;
+  opacity: 0.85;
 }
 
 .rail-stats {
@@ -525,25 +534,27 @@ function domainsTitle(site: CatalogSiteCard): string {
   justify-content: center;
   width: 100%;
   margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid hsl(var(--border) / 35%);
 }
 
 .rail-stat {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
   align-items: center;
   min-width: 0;
 }
 
 .rail-divider {
   width: 1px;
-  height: 24px;
-  background: hsl(var(--border));
+  height: 22px;
+  background: hsl(var(--border) / 60%);
 }
 
 .rail-value {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   line-height: 1.2;
@@ -561,7 +572,7 @@ function domainsTitle(site: CatalogSiteCard): string {
 
 .rail-rate {
   font-variant-numeric: tabular-nums;
-  opacity: 0.8;
+  opacity: 0.85;
 }
 
 /* 右栏：名称 + 资产信息 + 能力胶囊 */
@@ -570,22 +581,22 @@ function domainsTitle(site: CatalogSiteCard): string {
   overflow: hidden;
   flex: 1;
   flex-direction: column;
-  gap: 12px;
+  gap: 11px;
   min-width: 0;
-  padding: 16px 16px 14px;
+  padding: 15px 16px 13px;
 }
 
 .main-head {
   display: flex;
   gap: 8px;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
 }
 
 .main-title {
   display: flex;
   gap: 8px;
-  align-items: baseline;
+  align-items: center;
   min-width: 0;
 }
 
@@ -595,32 +606,59 @@ function domainsTitle(site: CatalogSiteCard): string {
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
+  letter-spacing: -0.01em;
 }
 
 .site-kind {
+  display: inline-flex;
+  align-items: center;
   flex-shrink: 0;
+  padding: 1px 6px;
   font-size: 11px;
+  font-weight: 500;
+  line-height: 1.35;
   color: hsl(var(--muted-foreground));
+  background: hsl(var(--muted) / 70%);
+  border: 1px solid hsl(var(--border) / 60%);
+  border-radius: 4px;
+}
+
+.site-kind.complex {
+  color: hsl(var(--warning));
+  background: hsl(var(--warning) / 10%);
+  border-color: hsl(var(--warning) / 25%);
 }
 
 .main-actions {
   display: flex;
   flex-shrink: 0;
-  gap: 6px;
+  gap: 4px;
   align-items: center;
 }
 
 .detail-link {
-  height: auto;
-  padding: 0;
+  height: 24px;
+  padding: 0 6px;
   font-size: 12px;
+  font-weight: 500;
+  border-radius: 4px;
 }
 
 .more-btn {
-  width: 20px;
-  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
   padding: 0;
   color: hsl(var(--muted-foreground));
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.more-btn:hover {
+  color: hsl(var(--foreground));
+  background: hsl(var(--muted) / 70%);
 }
 
 .meta-list {
@@ -632,27 +670,28 @@ function domainsTitle(site: CatalogSiteCard): string {
 
 .meta-row {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   align-items: center;
   min-width: 0;
   font-size: 12px;
+  line-height: 1.4;
 }
 
 .meta-icon {
   flex-shrink: 0;
-  font-size: 13px;
-  color: hsl(var(--muted-foreground));
+  font-size: 14px;
+  color: hsl(var(--muted-foreground) / 80%);
 }
 
 .meta-label {
   flex-shrink: 0;
-  width: 30px;
+  width: 28px;
   color: hsl(var(--muted-foreground));
 }
 
 .meta-value {
   overflow: hidden;
-  color: hsl(var(--foreground) / 78%);
+  color: hsl(var(--foreground) / 85%);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -664,13 +703,17 @@ function domainsTitle(site: CatalogSiteCard): string {
 }
 
 .meta-value.mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding: 1px 5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11.5px;
+  background: hsl(var(--muted) / 45%);
+  border-radius: 4px;
 }
 
 .chip-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 5px;
   margin-top: auto;
   padding-top: 2px;
 }
@@ -678,17 +721,19 @@ function domainsTitle(site: CatalogSiteCard): string {
 .chip {
   padding: 1px 7px;
   font-size: 11px;
+  font-weight: 500;
   line-height: 1.6;
   cursor: help;
-  background: hsl(var(--muted) / 55%);
-  border: 1px solid transparent;
+  background: hsl(var(--muted) / 50%);
+  border: 1px solid hsl(var(--border) / 60%);
   border-radius: 4px;
+  transition: all 0.15s ease;
 }
 
 .chip.on {
   color: hsl(var(--success));
   background: hsl(var(--success) / 10%);
-  border-color: hsl(var(--success) / 28%);
+  border-color: hsl(var(--success) / 25%);
 }
 
 .chip.unknown {
@@ -700,13 +745,13 @@ function domainsTitle(site: CatalogSiteCard): string {
 .chip.warn {
   color: hsl(var(--warning));
   background: hsl(var(--warning) / 12%);
-  border-color: hsl(var(--warning) / 32%);
+  border-color: hsl(var(--warning) / 30%);
 }
 
 .chip.danger {
   color: hsl(var(--destructive));
   background: hsl(var(--destructive) / 10%);
-  border-color: hsl(var(--destructive) / 28%);
+  border-color: hsl(var(--destructive) / 25%);
 }
 
 .sidebar-empty {

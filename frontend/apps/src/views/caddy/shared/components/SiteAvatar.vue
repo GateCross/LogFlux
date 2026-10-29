@@ -13,7 +13,7 @@
  */
 import { computed, ref, watch } from 'vue';
 
-import { Tooltip } from 'antdv-next';
+import { message, Tooltip } from 'antdv-next';
 
 import {
   fetchAndStoreSiteIcon,
@@ -49,7 +49,9 @@ watch(host, (next) => {
 });
 
 const letter = computed(() => {
-  const source = (props.name || props.host || '?').trim();
+  // 过滤掉开头的标点符号（例如 :80 中的 :），优先取第一个英数汉字
+  const clean = (props.name || props.host || '').replace(/^[:/\\#@\-_.\s]+/, '').trim();
+  const source = clean || (props.name || props.host || '?').trim();
   return (source[0] ?? '?').toUpperCase();
 });
 
@@ -62,12 +64,18 @@ const boxStyle = computed(() => ({
 const tooltipText = computed(() => {
   if (!props.clickable) return '';
   if (fetching.value) return '正在抓取站点图标...';
-  if (iconUrl.value && !failed.value) return '点击重新抓取站点图标';
-  return '点击抓取站点图标';
+  if (!host.value) return '未配置域名，无法抓取图标';
+  if (failed.value) return '站点图标加载失败，点击重新抓取';
+  if (iconUrl.value) return '点击重新抓取站点图标';
+  return '未抓取到站点图标，点击尝试抓取';
 });
 
 async function handleClick() {
-  if (!props.clickable || !host.value) return;
+  if (!props.clickable) return;
+  if (!host.value) {
+    message.warning('未配置域名，无法抓取站点图标');
+    return;
+  }
   if (fetching.value) return;
 
   fetching.value = true;
@@ -76,6 +84,8 @@ async function handleClick() {
     const icon = await fetchAndStoreSiteIcon(host.value);
     if (icon) {
       iconUrl.value = icon;
+    } else {
+      message.info('未抓取到站点图标');
     }
   } finally {
     fetching.value = false;

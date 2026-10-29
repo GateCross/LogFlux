@@ -310,6 +310,20 @@ function domainsFromPreservedTitle(title: string): string[] {
 }
 
 /**
+ * 判断是否为系统 :80 入口站点。
+ * :80 为系统默认入口/跳转模板（可在「系统设置 -> 系统入口(:80)」中维护），不应作为业务应用站点展示在站点目录中。
+ */
+export function isSystemEntrySite(site: { domains?: string[]; name?: string }): boolean {
+  const name = site.name?.trim().toLowerCase();
+  if (name === ':80' || name === 'http://:80') return true;
+  const domains = (site.domains ?? []).map((d) => d.trim().toLowerCase()).filter(Boolean);
+  if (domains.length > 0 && domains.every((d) => d === ':80' || d === 'http://:80')) {
+    return true;
+  }
+  return false;
+}
+
+/**
  * 从工作台同源配置模型构建目录站点卡片。
  * simple + complex（含 preserved site 块）合并为一份只读目录，不复制后端数据源。
  */
@@ -359,7 +373,7 @@ export function buildCatalogSitesFromModel(
     for (const d of domains) knownDomainKeys.add(d.toLowerCase());
   }
 
-  return cards;
+  return cards.filter((card) => !isSystemEntrySite(card));
 }
 
 /**
