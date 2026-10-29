@@ -18,6 +18,7 @@ import (
 
 	caddymodel "logflux/model/caddy"
 
+	"github.com/zeromicro/go-zero/core/logx"
 	"gorm.io/gorm"
 )
 
@@ -85,7 +86,8 @@ func (t siteIconTarget) key() string {
 }
 
 // resolveSiteIcon 返回站点图标的 data URL；抓不到返回空串，由前端回落字母头像。
-func resolveSiteIcon(ctx context.Context, rawUpstream, rawHost string) string {
+// 抓到后写入 caddy_site_icons，换浏览器打开也能直接复用。
+func resolveSiteIcon(ctx context.Context, db *gorm.DB, rawUpstream, rawHost string) string {
 	target := parseSiteIconTarget(rawUpstream, rawHost)
 	if target == nil {
 		return ""
@@ -94,13 +96,43 @@ func resolveSiteIcon(ctx context.Context, rawUpstream, rawHost string) string {
 		ctx = context.Background()
 	}
 
+	icon := loadPersistedSiteIcon(db, normalizeSiteIconHost(rawHost))
+	if icon != "" {
+		return icon
+	}
+
 	if icon, ok := readSiteIconCache(target.key()); ok {
 		return icon
 	}
 
-	icon := fetchSiteIcon(ctx, target)
+	icon = fetchSiteIcon(ctx, target)
 	writeSiteIconCache(target.key(), icon)
+	if db != nil && icon != "" {
+		persistSiteIcon(db, normalizeSiteIconHost(rawHost), icon)
+	}
 	return icon
+}
+
+// loadPersistedSiteIcon 读库内已收录的图标；无库或未收录时返回空串。
+func loadPersistedSiteIcon(db *gorm.DB, host string) string {
+	if db == nil || host == "" {
+		return ""
+	}
+	row, err := caddymodel.NewSiteIconModel(db).FindByHost(context.Background(), host)
+	if err != nil || row == nil {
+		return ""
+	}
+	return row.Icon
+}
+
+// persistSiteIcon 落库；写失败只记日志，不影响本次返回。
+func persistSiteIcon(db *gorm.DB, host, icon string) {
+	if db == nil || host == "" {
+		return
+	}
+	if err := caddymodel.NewSiteIconModel(db).Upsert(context.Background(), host, icon); err != nil {
+		logx.Errorf("保存站点图标失败 host=%s: %v", host, err)
+	}
 }
 
 // findUpstreamByHost 从已接管的 Caddy 配置中查找指定 host 对应的反代上游地址。

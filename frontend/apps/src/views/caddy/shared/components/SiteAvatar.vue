@@ -40,12 +40,31 @@ const host = computed(() => props.host.trim().toLowerCase());
 const fetching = ref(false);
 const failed = ref(false);
 
-/** 只读本地缓存；没有就是没有，不在这里发请求 */
+/** 只读本地缓存；本地没有就在挂载时自动补一次 */
 const iconUrl = ref(getStoredSiteIcon(host.value));
+
+async function loadIcon(): Promise<string> {
+  const icon = await fetchAndStoreSiteIcon(host.value);
+  if (icon) {
+    iconUrl.value = icon;
+  }
+  return icon;
+}
+
+// 挂载即补：后端已落库的图标直接返回，从未抓过的站点才会真的回源探测
+if (host.value && !iconUrl.value) {
+  fetching.value = true;
+  void loadIcon().finally(() => {
+    fetching.value = false;
+  });
+}
 
 watch(host, (next) => {
   failed.value = false;
   iconUrl.value = getStoredSiteIcon(next);
+  if (next && !iconUrl.value) {
+    void loadIcon();
+  }
 });
 
 const letter = computed(() => {
@@ -81,10 +100,8 @@ async function handleClick() {
   fetching.value = true;
   failed.value = false;
   try {
-    const icon = await fetchAndStoreSiteIcon(host.value);
-    if (icon) {
-      iconUrl.value = icon;
-    } else {
+    const icon = await loadIcon();
+    if (!icon) {
       message.info('未抓取到站点图标');
     }
   } finally {

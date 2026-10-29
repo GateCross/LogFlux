@@ -75,6 +75,8 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		&caddymodel.CaddyConfigHistory{},
 		// 证书中心库存
 		&caddymodel.Certificate{},
+		// 站点图标缓存
+		&caddymodel.SiteIcon{},
 		// 通知相关表
 		&notificationmodel.NotificationChannel{},
 		&notificationmodel.NotificationRule{},
