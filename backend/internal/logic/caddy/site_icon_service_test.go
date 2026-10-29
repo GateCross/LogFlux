@@ -5,6 +5,37 @@ import (
 	"testing"
 )
 
+// 回源目标选取：上游地址优先且保留端口与协议，无上游时才落到站点域名。
+func TestParseSiteIconTarget(t *testing.T) {
+	cases := []struct {
+		name     string
+		upstream string
+		host     string
+		want     string // key() 结果，nil 目标为空串
+	}{
+		{name: "上游内网 IP 带端口", upstream: "192.168.50.100:8006", host: "example.top", want: "//192.168.50.100:8006"},
+		{name: "上游显式 HTTPS", upstream: "https://192.168.50.100:8006", host: "example.top", want: "https://192.168.50.100:8006"},
+		{name: "上游带路径剥掉路径", upstream: "http://localhost:8080/prefix", host: "test.local", want: "http://localhost:8080"},
+		{name: "多上游取第一个", upstream: "10.0.0.1:8080 10.0.0.2:8080", want: "//10.0.0.1:8080"},
+		{name: "非 http 上游退回域名", upstream: "unix//run/app.sock", host: "example.com", want: "//example.com"},
+		{name: "无上游走域名", host: "example.com", want: "//example.com"},
+		{name: "空输入", want: ""},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			target := parseSiteIconTarget(tc.upstream, tc.host)
+			got := ""
+			if target != nil {
+				got = target.key()
+			}
+			if got != tc.want {
+				t.Fatalf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 // 站点域名校验：只有能安全回源的 host 才允许发请求。
 func TestNormalizeSiteIconHost(t *testing.T) {
 	cases := []struct {
@@ -26,6 +57,31 @@ func TestNormalizeSiteIconHost(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := normalizeSiteIconHost(tc.in); got != tc.want {
 				t.Fatalf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// 上游主机校验：内网 IP、localhost 与容器名都要放行，分隔符输入要挡住。
+func TestIsValidSiteIconHost(t *testing.T) {
+	cases := []struct {
+		in   string
+		want bool
+	}{
+		{in: "192.168.50.100:8006", want: true},
+		{in: "127.0.0.1:8080", want: true},
+		{in: "localhost:8080", want: true},
+		{in: "web-app:3000", want: true},
+		{in: "[::1]:8080", want: true},
+		{in: "example.com", want: true},
+		{in: "  ", want: false},
+		{in: "invalid/path", want: false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.in, func(t *testing.T) {
+			if got := isValidSiteIconHost(tc.in); got != tc.want {
+				t.Fatalf("got %v, want %v", got, tc.want)
 			}
 		})
 	}
@@ -87,29 +143,5 @@ func TestSiteIconDataURL(t *testing.T) {
 	}
 	if got := siteIconDataURL("text/html", []byte("<html>404</html>")); got != "" {
 		t.Fatalf("expected empty for html, got %q", got)
-	}
-}
-
-// 回源地址校验：内网/回环必须挡住，否则站点域名可被用来探测内网。
-func TestIsBlockedSiteIconIP(t *testing.T) {
-	cases := []struct {
-		host string
-		want bool
-	}{
-		{host: "127.0.0.1", want: true},
-		{host: "10.0.0.5", want: true},
-		{host: "192.168.1.1", want: true},
-		{host: "172.16.0.1", want: true},
-		{host: "169.254.169.254", want: true},
-		{host: "[::1]", want: true},
-		{host: "8.8.8.8", want: false},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.host, func(t *testing.T) {
-			if got := isBlockedSiteIconIP(tc.host); got != tc.want {
-				t.Fatalf("got %v, want %v", got, tc.want)
-			}
-		})
 	}
 }

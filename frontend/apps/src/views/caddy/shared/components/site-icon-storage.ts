@@ -20,8 +20,8 @@ function getStorage(): Storage | null {
  * 从本地存储读取已缓存的站点图标 data URL。
  * 避免目录页加载时对所有站点发起大量回源探测。
  */
-export function getStoredSiteIcon(host: string): string {
-  const normalized = host.trim().toLowerCase();
+export function getStoredSiteIcon(key: string): string {
+  const normalized = key.trim().toLowerCase();
   if (!normalized) return '';
   const storage = getStorage();
   if (!storage) return '';
@@ -33,8 +33,8 @@ export function getStoredSiteIcon(host: string): string {
 }
 
 /** 写入本地站点图标缓存 */
-export function setStoredSiteIcon(host: string, icon: string): void {
-  const normalized = host.trim().toLowerCase();
+export function setStoredSiteIcon(key: string, icon: string): void {
+  const normalized = key.trim().toLowerCase();
   if (!normalized) return;
   const storage = getStorage();
   if (!storage) return;
@@ -50,16 +50,20 @@ export function setStoredSiteIcon(host: string, icon: string): void {
 }
 
 /**
- * 抓取并持久化站点图标。
- * 首次建站或用户手动点击图标时调用，抓到后写入 localStorage。
+ * 抓取并持久化站点图标：优先直连上游地址，没有上游才回落到域名。
+ * 两个键都写一份，卡片改过上游后仍能命中旧图。
  */
-export async function fetchAndStoreSiteIcon(host: string): Promise<string> {
-  const normalized = host.trim().toLowerCase();
-  if (!normalized) return '';
+export async function fetchAndStoreSiteIcon(
+  upstream: string,
+  host: string,
+): Promise<string> {
+  const target = upstream.trim() || host.trim();
+  if (!target) return '';
   try {
-    const icon = await getSiteIconApi(normalized);
+    const icon = await getSiteIconApi({ upstream: upstream.trim(), host: host.trim() });
     if (icon) {
-      setStoredSiteIcon(normalized, icon);
+      setStoredSiteIcon(upstream, icon);
+      setStoredSiteIcon(host, icon);
     }
     return icon || '';
   } catch {

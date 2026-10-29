@@ -253,6 +253,7 @@ function metricDisplay(domains: string[] | undefined, kind: '4xx' | '5xx'): stri
               <span class="site-item-accent" :style="{ background: siteAccent(site) }"></span>
               <div class="site-item-head">
                 <SiteAvatar
+                  :upstream="site.upstream"
                   :host="props.sitePrimaryHost(site.domains)"
                   :name="site.name"
                   :size="30"

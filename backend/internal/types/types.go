@@ -617,7 +617,8 @@ type SimpleWafConfigUpdateReq struct {
 }
 
 type SiteIconReq struct {
-	Host string `form:"host"` // 站点域名，可带端口
+	Upstream string `form:"upstream,optional"` // 上游地址（如 192.168.50.100:8006、localhost:8080），优先使用
+	Host     string `form:"host,optional"`     // 站点域名（仅在未指定上游时兜底）
 }
 
 type SiteIconResp struct {

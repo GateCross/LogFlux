@@ -6,6 +6,7 @@ import type { SiteMetricsItem } from '#/api/caddy/server';
 import { extractSiteBlocks, parseCaddyfileToBlocks } from '../config/caddy-config-blocks';
 import { extractSiteCapabilities, type SiteCapabilitiesSnapshot } from '../config/site-capabilities';
 import { normalizeModules } from '../config/caddy-config-utils';
+import { parseReverseProxyTarget } from '../sites/site-block-edit';
 import {
   buildQuickConfigState,
   type QuickSiteDraft,
@@ -421,6 +422,10 @@ function attachSiteBlockRaw(cards: CatalogSiteCard[], configContent: string): vo
     if (!raw) continue;
     card.raw = raw;
     card.capabilities = extractSiteCapabilities(raw);
+    // 复杂站点的上游只能从原文里认，图标抓取要靠它
+    if (!card.upstream) {
+      card.upstream = parseReverseProxyTarget(raw) ?? undefined;
+    }
   }
 }
 

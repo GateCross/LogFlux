@@ -5,9 +5,10 @@
  * 抓取时机只有两处，渲染本身从不发请求：
  *   1. 建站成功时抓一次（SiteCreateModal）
  *   2. 用户点击头像时手动抓
- * 这样进目录页不会对每个站点发一轮外网请求，站点再多也不会拖慢首屏。
+ * 这样进目录页不会对每个站点发一轮请求，站点再多也不会拖慢首屏。
  *
- * 图标由后端代抓（/caddy/site-icon）：面板常以 http 暴露而站点是 https，
+ * 抓取目标优先用上游地址：域名可能没解析或回流不通，上游才是真跑着的服务。
+ * 仍由后端代抓（/caddy/site-icon）：面板常以 http 暴露而站点是 https，
  * 浏览器直连会被混合内容拦下，入口块 CSP 也只放行 img-src self/data:。
  */
 import { computed, ref, watch } from 'vue';
@@ -23,24 +24,30 @@ const props = withDefaults(
   defineProps<{
     /** 是否允许手动点击抓取，默认 true */
     clickable?: boolean;
-    /** 站点主域名 */
+    /** 站点主域名，无上游时作为抓取目标 */
     host?: string;
     /** 站点名，字母头像取首字符 */
     name?: string;
     /** 头像边长（px） */
     size?: number;
+    /** 上游地址，优先作为抓取目标 */
+    upstream?: string;
   }>(),
-  { size: 32, host: '', name: '', clickable: true },
+  { size: 32, host: '', upstream: '', name: '', clickable: true },
 );
 
 const host = computed(() => props.host.trim().toLowerCase());
+const upstream = computed(() => props.upstream.trim());
 const fetching = ref(false);
 const failed = ref(false);
 
-/** 只读本地缓存；没有就是没有，不在这里发请求 */
-const iconUrl = ref(getStoredSiteIcon(host.value));
+/** 缓存键：上游优先，与抓取目标保持一致 */
+const cacheKey = computed(() => upstream.value || host.value);
 
-watch(host, (next) => {
+/** 只读本地缓存；没有就是没有，不在这里发请求 */
+const iconUrl = ref(getStoredSiteIcon(cacheKey.value));
+
+watch(cacheKey, (next) => {
   failed.value = false;
   iconUrl.value = getStoredSiteIcon(next);
 });
@@ -68,13 +75,13 @@ const tooltipText = computed(() => {
  * 建站那次没抓到（DNS 未生效、站点刚起）时，用户点一下就能补上。
  */
 async function handleClick() {
-  if (!props.clickable || !host.value) return;
+  if (!props.clickable || !cacheKey.value) return;
   if (fetching.value) return;
 
   fetching.value = true;
   failed.value = false;
   try {
-    const icon = await fetchAndStoreSiteIcon(host.value);
+    const icon = await fetchAndStoreSiteIcon(upstream.value, host.value);
     if (icon) {
       iconUrl.value = icon;
     }

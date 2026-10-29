@@ -154,7 +154,7 @@ function serverErrorCount(site: CatalogSiteCard): number {
   return siteMetricsForDomains(props.siteMetricsMap, site.domains)?.count5xx ?? 0;
 }
 
-/** 卡片左上角头像：域名自带图标，取不到时回落站点名首字符 */
+/** 卡片左上角头像：上游地址优先，取不到图标时回落站点名首字符 */
 function avatarHost(site: CatalogSiteCard): string {
   return sitePrimaryHost(site.domains);
 }
@@ -321,7 +321,12 @@ function domainsTitle(site: CatalogSiteCard): string {
 
             <!-- 左栏：安全态势 -->
             <div class="site-rail">
-              <SiteAvatar :host="avatarHost(site)" :name="site.name" :size="40" />
+              <SiteAvatar
+                :upstream="site.upstream"
+                :host="avatarHost(site)"
+                :name="site.name"
+                :size="40"
+              />
 
               <Tooltip :title="protectBadge(site).title">
                 <span class="mode-badge" :style="modeStyle(site)">

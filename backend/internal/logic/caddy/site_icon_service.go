@@ -3,6 +3,7 @@ package caddy
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -17,26 +18,24 @@ import (
 
 // 图标抓取走服务端而不是浏览器直连：面板常以 http 暴露而站点是 https，
 // 直连会被混合内容拦下，入口块里的 CSP 也只允许 img-src self/data:。
+// 回源目标优先用上游地址：域名可能没解析、被防火墙挡住或回流不通，上游才是真跑着的服务。
 const (
 	// 单个图标最多读 128KB：favicon 通常 4~32KB，留足未压缩 ico 的余量
 	siteIconMaxBytes = 128 * 1024
 	// 首页只读前 256KB：图标声明都在 <head> 里，读全文纯属浪费
 	siteIconHomepageMaxBytes = 256 * 1024
-	// 单次请求上限，以及一个站点走完 https/http 两轮探测的总预算
+	// 单次请求上限，以及一个目标走完 http/https 两轮探测的总预算
 	siteIconRequestTimeout = 4 * time.Second
 	siteIconTotalBudget    = 6 * time.Second
-	// 图标几乎不变，命中后不再回源，避免每次进目录页对每个站点发一轮外网请求
+	// 图标几乎不变，命中后不再回源，避免每次进目录页对每个站点发一轮请求
 	siteIconCacheTTL = 6 * time.Hour
 )
-
-// 只接受常规域名/IPv4：协议、路径、IPv6 与带分隔符的输入一律拒绝，
-// 避免把任意 URL 当站点域名回源。
-var siteIconHostPattern = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$`)
 
 var (
 	siteIconLinkTagPattern = regexp.MustCompile(`(?is)<link\b[^>]*>`)
 	siteIconHrefPattern    = regexp.MustCompile(`(?is)\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))`)
 	siteIconRelPattern     = regexp.MustCompile(`(?is)\brel\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))`)
+	siteIconHostPattern    = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$`)
 )
 
 var siteIconHTTPClient = &http.Client{
@@ -46,25 +45,11 @@ var siteIconHTTPClient = &http.Client{
 		if len(via) >= 3 {
 			return http.ErrUseLastResponse
 		}
-		// 跳转目标同样要过内网校验，否则内部域名 302 到 169.254.0.0/16 就能绕过入口检查
-		if req.URL.Hostname() == "" || isBlockedSiteIconIP(req.URL.Hostname()) {
-			return http.ErrUseLastResponse
-		}
 		return nil
 	},
-	// 连接前再校验一次解析结果，避免域名指向内网地址时被当成外网站点抓取
 	Transport: &http.Transport{
-		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			host, port, err := net.SplitHostPort(addr)
-			if err != nil {
-				return nil, err
-			}
-			if isBlockedSiteIconIP(host) {
-				return nil, fmt.Errorf("回源地址不可用: %s", host)
-			}
-			var dialer net.Dialer
-			return dialer.DialContext(ctx, network, net.JoinHostPort(host, port))
-		},
+		// 上游多是内网面板（PVE、各类管理台），自签证书是常态，只取 favicon 不涉敏感数据
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, // #nosec G402 上游自签证书
 	},
 }
 
@@ -78,23 +63,90 @@ type siteIconCacheItem struct {
 	expires time.Time
 }
 
-// resolveSiteIcon 返回站点自带图标的 data URL；抓不到返回空串，由前端回落字母头像。
-func resolveSiteIcon(ctx context.Context, rawHost string) string {
-	host := normalizeSiteIconHost(rawHost)
-	if host == "" {
+// siteIconTarget 回源目标：上游地址优先，没有才落到站点域名。
+type siteIconTarget struct {
+	// Scheme 显式声明的协议；空表示按探测顺序决定
+	Scheme string
+	// HostPort 含端口的目标地址，如 192.168.50.100:8006
+	HostPort string
+}
+
+// key 作为图标缓存键：同一目标换协议命中同一份结果没有意义，协议要进 key。
+func (t siteIconTarget) key() string {
+	if t.Scheme == "" {
+		return "//" + t.HostPort
+	}
+	return t.Scheme + "://" + t.HostPort
+}
+
+// resolveSiteIcon 返回站点图标的 data URL；抓不到返回空串，由前端回落字母头像。
+func resolveSiteIcon(ctx context.Context, rawUpstream, rawHost string) string {
+	target := parseSiteIconTarget(rawUpstream, rawHost)
+	if target == nil {
 		return ""
 	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
 
-	if icon, ok := readSiteIconCache(host); ok {
+	if icon, ok := readSiteIconCache(target.key()); ok {
 		return icon
 	}
 
-	icon := fetchSiteIcon(ctx, host)
-	writeSiteIconCache(host, icon)
+	icon := fetchSiteIcon(ctx, target)
+	writeSiteIconCache(target.key(), icon)
 	return icon
+}
+
+// parseSiteIconTarget 选出可回源的目标，取不到返回 nil。
+// 负载均衡上游是空格分隔的多个地址，取第一个即可代表站点。
+func parseSiteIconTarget(rawUpstream, rawHost string) *siteIconTarget {
+	if fields := strings.Fields(rawUpstream); len(fields) > 0 {
+		target := fields[0]
+		lower := strings.ToLower(target)
+		scheme := ""
+		if strings.HasPrefix(lower, "https://") {
+			scheme, target = "https", target[len("https://"):]
+		} else if strings.HasPrefix(lower, "http://") {
+			scheme, target = "http", target[len("http://"):]
+		}
+		// 协议前缀剥掉后斜杠就是路径（localhost:8080/prefix）
+		if idx := strings.IndexByte(target, '/'); idx >= 0 {
+			target = target[:idx]
+		}
+		// 要求带端口或带点：unix//、h2c:// 这类非 http 上游拆出来的短名在这里被挡掉
+		if strings.ContainsAny(target, ".:") && isValidSiteIconHost(target) {
+			return &siteIconTarget{Scheme: scheme, HostPort: target}
+		}
+	}
+
+	host := normalizeSiteIconHost(rawHost)
+	if host == "" {
+		return nil
+	}
+	return &siteIconTarget{HostPort: host}
+}
+
+// isValidSiteIconHost 校验主机地址：允许 IPv4/IPv6、域名与 localhost，拒绝带分隔符的输入。
+func isValidSiteIconHost(target string) bool {
+	if strings.ContainsAny(target, " \t\r\n/\\@\"'") {
+		return false
+	}
+	host := strings.Trim(target, "[]")
+	if h, port, err := net.SplitHostPort(target); err == nil {
+		// 端口不能为空：h2c://、unix// 这类非 http 上游剥完路径只剩 "h2c:"
+		if port == "" {
+			return false
+		}
+		host = strings.Trim(h, "[]")
+	}
+	if host == "" {
+		return false
+	}
+	if host == "localhost" || net.ParseIP(host) != nil {
+		return true
+	}
+	return siteIconHostPattern.MatchString(host)
 }
 
 // normalizeSiteIconHost 从站点地址里取出可回源的域名，取不到返回空串。
@@ -122,20 +174,24 @@ func normalizeSiteIconHost(rawHost string) string {
 	return value
 }
 
-// fetchSiteIcon 先按常规约定取 /favicon.ico，失败再解析首页的 <link rel="icon">。
-// 第二步不能省：SPA 站点的图标多是带 hash 的静态文件名，根路径往往 404。
-func fetchSiteIcon(ctx context.Context, host string) string {
+// fetchSiteIcon 按协议探测图标：显式声明协议的排在前面，未声明时内网多为纯 http。
+func fetchSiteIcon(ctx context.Context, target *siteIconTarget) string {
 	deadline := time.Now().Add(siteIconTotalBudget)
-	if icon, reachable := probeSiteIcon(ctx, "https://"+host, deadline); icon != "" || reachable {
-		return icon
+	schemes := [2]string{"http", "https"}
+	if target.Scheme == "https" {
+		schemes = [2]string{"https", "http"}
 	}
-	// https 完全连不上（纯 http 站点）时再降级，避免无谓地重复访问一遍
-	icon, _ := probeSiteIcon(ctx, "http://"+host, deadline)
-	return icon
+	for _, scheme := range schemes {
+		// 目标能连上就算探完了：连得上却没图标，换个协议也一样没有
+		if icon, reachable := probeSiteIcon(ctx, scheme+"://"+target.HostPort, deadline); icon != "" || reachable {
+			return icon
+		}
+	}
+	return ""
 }
 
-// probeSiteIcon 探测一个协议下的图标；reachable 表示站点本身是否可访问。
-// 三次请求共享同一个总预算，站点慢时不会把整个请求拖成超时。
+// probeSiteIcon 探测一个协议下的图标；reachable 表示目标本身是否可访问。
+// 两次请求共享同一个总预算，服务慢时不会把整个请求拖成超时。
 func probeSiteIcon(ctx context.Context, baseURL string, deadline time.Time) (string, bool) {
 	timeoutCtx, cancel := context.WithDeadline(ctx, deadline)
 	defer cancel()
@@ -143,7 +199,7 @@ func probeSiteIcon(ctx context.Context, baseURL string, deadline time.Time) (str
 	if icon := requestSiteIcon(timeoutCtx, baseURL+"/favicon.ico"); icon != "" {
 		return icon, true
 	}
-
+	// 第二步不能省：SPA 站点的图标多是带 hash 的静态文件名，根路径往往 404
 	page, ok := requestSiteText(timeoutCtx, baseURL+"/", siteIconHomepageMaxBytes)
 	if !ok {
 		return "", false
@@ -274,46 +330,25 @@ func firstRegexGroup(pattern *regexp.Regexp, s string) string {
 	return ""
 }
 
-// isBlockedSiteIconIP 拒绝回环、内网与链路本地地址。
-// 图标抓取是「按用户给的域名出网」的入口，必须挡住指向内网的解析结果，
-// 否则一个指向 127.0.0.1 的域名就能把面板变成内网探针。
-func isBlockedSiteIconIP(host string) bool {
-	trimmed := strings.Trim(host, "[]")
-	if ip := net.ParseIP(trimmed); ip != nil {
-		return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
-			ip.IsLinkLocalMulticast() || ip.IsUnspecified() || ip.IsMulticast()
-	}
-	// 主机名要解析后才能判断；解析失败交给拨号阶段报错
-	ips, err := net.LookupIP(trimmed)
-	if err != nil {
-		return false
-	}
-	for _, ip := range ips {
-		if isBlockedSiteIconIP(ip.String()) {
-			return true
-		}
-	}
-	return false
-}
-
-func readSiteIconCache(host string) (string, bool) {	siteIconCache.Lock()
+func readSiteIconCache(key string) (string, bool) {
+	siteIconCache.Lock()
 	defer siteIconCache.Unlock()
-	item, ok := siteIconCache.items[host]
+	item, ok := siteIconCache.items[key]
 	if !ok || time.Now().After(item.expires) {
 		return "", false
 	}
 	return item.icon, true
 }
 
-func writeSiteIconCache(host, icon string) {
+func writeSiteIconCache(key, icon string) {
 	siteIconCache.Lock()
 	defer siteIconCache.Unlock()
 	// 失效项按需清掉，避免地图无限增长
 	now := time.Now()
-	for key, item := range siteIconCache.items {
+	for k, item := range siteIconCache.items {
 		if now.After(item.expires) {
-			delete(siteIconCache.items, key)
+			delete(siteIconCache.items, k)
 		}
 	}
-	siteIconCache.items[host] = siteIconCacheItem{icon: icon, expires: now.Add(siteIconCacheTTL)}
+	siteIconCache.items[key] = siteIconCacheItem{icon: icon, expires: now.Add(siteIconCacheTTL)}
 }

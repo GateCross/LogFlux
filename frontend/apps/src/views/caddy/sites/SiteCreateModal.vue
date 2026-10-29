@@ -179,13 +179,11 @@ async function handleConfirm() {
     // 防护跟随全局默认：挂载前以最新配置判断全局是否启用并仅追加本站点地址
     const wafMounted = await mountSiteToWaf();
 
-    // 首次创建获取一次图片：后台尝试抓取并写入本地缓存，失败不阻塞
+    // 首次创建获取一次图片：优先直连上游地址抓取并写入本地缓存，失败不阻塞
     const primaryHost = form.domains
       .map((d) => d.trim().replace(/^[a-zA-Z][\w+.-]*:\/\//, '').split('/')[0]?.split(':')[0])
       .find(Boolean);
-    if (primaryHost) {
-      fetchAndStoreSiteIcon(primaryHost).catch(() => {});
-    }
+    fetchAndStoreSiteIcon(form.upstream ?? '', primaryHost ?? '').catch(() => {});
 
     message.success(wafMounted ? '站点已上线并挂载 WAF' : '站点已上线');
     emit('created');

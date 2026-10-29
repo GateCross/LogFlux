@@ -267,6 +267,7 @@ const sitePrimaryHost = computed(() => site.value?.primaryHost || host.value);
             <div class="header-main">
               <div class="header-identity">
                 <SiteAvatar
+                  :upstream="site.upstream"
                   :host="site.primaryHost"
                   :name="site.name"
                   :size="44"
