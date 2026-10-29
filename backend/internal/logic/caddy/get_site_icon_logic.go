@@ -24,7 +24,11 @@ func NewGetSiteIconLogic(ctx context.Context, svcCtx *svc.ServiceContext) *GetSi
 }
 
 // GetSiteIcon 返回站点自带图标（data URL）。
-// 优先直接访问上游地址抓取图标，抓不到时不视为错误，由前端回落字母头像。
+// 优先直接访问上游地址抓取图标：若未显式传上游地址，则根据 host 自动从配置中解析该站点的反代上游。
 func (l *GetSiteIconLogic) GetSiteIcon(req *types.SiteIconReq) (resp *types.SiteIconResp, err error) {
-	return &types.SiteIconResp{Icon: resolveSiteIcon(l.ctx, req.Upstream, req.Host)}, nil
+	upstream := req.Upstream
+	if upstream == "" && req.Host != "" && l.svcCtx.DB != nil {
+		upstream = findUpstreamByHost(l.svcCtx.DB.WithContext(l.ctx), req.Host)
+	}
+	return &types.SiteIconResp{Icon: resolveSiteIcon(l.ctx, upstream, req.Host)}, nil
 }

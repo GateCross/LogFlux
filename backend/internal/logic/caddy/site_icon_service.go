@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -14,6 +15,10 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	caddymodel "logflux/model/caddy"
+
+	"gorm.io/gorm"
 )
 
 // 图标抓取走服务端而不是浏览器直连：面板常以 http 暴露而站点是 https，
@@ -96,6 +101,112 @@ func resolveSiteIcon(ctx context.Context, rawUpstream, rawHost string) string {
 	icon := fetchSiteIcon(ctx, target)
 	writeSiteIconCache(target.key(), icon)
 	return icon
+}
+
+// findUpstreamByHost 从已接管的 Caddy 配置中查找指定 host 对应的反代上游地址。
+// 优先解析结构化 modules（含上游池映射）；若未命中再扫描 Caddyfile 原文站点块。
+func findUpstreamByHost(db *gorm.DB, rawHost string) string {
+	if db == nil {
+		return ""
+	}
+	host := normalizeSiteIconHost(rawHost)
+	if host == "" {
+		return ""
+	}
+
+	config, modulesRaw := caddymodel.LoadConfig(db)
+
+	// 1. 尝试从结构化 modules 查找
+	if strings.TrimSpace(modulesRaw) != "" && modulesRaw != caddymodel.EmptyModulesJSON {
+		var mod caddyFormModel
+		if err := json.Unmarshal([]byte(modulesRaw), &mod); err == nil {
+			poolMap := make(map[string]string)
+			for _, pool := range mod.Upstreams {
+				if len(pool.Targets) > 0 && strings.TrimSpace(pool.Targets[0]) != "" {
+					poolMap[pool.Name] = strings.TrimSpace(pool.Targets[0])
+				}
+			}
+
+			for _, site := range mod.Sites {
+				matched := false
+				for _, d := range site.Domains {
+					if normalizeSiteIconHost(d) == host {
+						matched = true
+						break
+					}
+				}
+				if !matched {
+					continue
+				}
+				for _, r := range site.Routes {
+					for _, h := range r.Handles {
+						if h.Type == "reverse_proxy" && strings.TrimSpace(h.Upstream) != "" {
+							up := strings.TrimSpace(h.Upstream)
+							if target, ok := poolMap[up]; ok {
+								return target
+							}
+							return up
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// 2. 尝试从 Caddyfile 原文扫描站点块
+	if strings.TrimSpace(config) != "" {
+		if up := parseUpstreamFromCaddyfile(config, host); up != "" {
+			return up
+		}
+	}
+
+	return ""
+}
+
+var reverseProxyRegex = regexp.MustCompile(`(?m)^\s*reverse_proxy\s+([^\s{]+)`)
+
+// parseUpstreamFromCaddyfile 扫描 Caddyfile 原文，提取包含 targetHost 站点块的首条 reverse_proxy 目标。
+func parseUpstreamFromCaddyfile(caddyfile, targetHost string) string {
+	lines := strings.Split(caddyfile, "\n")
+	inTargetBlock := false
+	braceDepth := 0
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+
+		if braceDepth == 0 {
+			if strings.HasSuffix(trimmed, "{") {
+				header := strings.TrimSuffix(trimmed, "{")
+				domains := strings.Fields(strings.ReplaceAll(header, ",", " "))
+				inTargetBlock = false
+				for _, d := range domains {
+					if normalizeSiteIconHost(d) == targetHost {
+						inTargetBlock = true
+						break
+					}
+				}
+				braceDepth = 1
+			}
+		} else {
+			braceDepth += strings.Count(line, "{") - strings.Count(line, "}")
+			if inTargetBlock && braceDepth >= 1 {
+				if match := reverseProxyRegex.FindStringSubmatch(line); len(match) > 1 {
+					up := strings.TrimSpace(match[1])
+					if up != "{" && up != "" {
+						return up
+					}
+				}
+			}
+			if braceDepth <= 0 {
+				braceDepth = 0
+				inTargetBlock = false
+			}
+		}
+	}
+	return ""
 }
 
 // parseSiteIconTarget 选出可回源的目标，取不到返回 nil。

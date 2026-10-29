@@ -36,6 +36,40 @@ func TestParseSiteIconTarget(t *testing.T) {
 	}
 }
 
+// Caddyfile 反代上游提取测试：根据域名定位所在站点块并提取 reverse_proxy 目标。
+func TestParseUpstreamFromCaddyfile(t *testing.T) {
+	caddyfile := `
+app.example.com {
+    reverse_proxy 192.168.50.100:8006
+}
+
+multi.example.com, other.example.com {
+    reverse_proxy https://10.0.0.5:8443 {
+        transport http {
+            tls_insecure_skip_verify
+        }
+    }
+}
+
+static.example.com {
+    file_server
+}
+`
+
+	if got := parseUpstreamFromCaddyfile(caddyfile, "app.example.com"); got != "192.168.50.100:8006" {
+		t.Fatalf("expected 192.168.50.100:8006, got %q", got)
+	}
+	if got := parseUpstreamFromCaddyfile(caddyfile, "other.example.com"); got != "https://10.0.0.5:8443" {
+		t.Fatalf("expected https://10.0.0.5:8443, got %q", got)
+	}
+	if got := parseUpstreamFromCaddyfile(caddyfile, "static.example.com"); got != "" {
+		t.Fatalf("expected empty for static site, got %q", got)
+	}
+	if got := parseUpstreamFromCaddyfile(caddyfile, "unknown.com"); got != "" {
+		t.Fatalf("expected empty for unknown site, got %q", got)
+	}
+}
+
 // 站点域名校验：只有能安全回源的 host 才允许发请求。
 func TestNormalizeSiteIconHost(t *testing.T) {
 	cases := []struct {

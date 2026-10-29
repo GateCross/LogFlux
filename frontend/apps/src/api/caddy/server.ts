@@ -254,15 +254,15 @@ export async function clearCaddyLogsApi() {
 
 /**
  * 站点自带图标 — GET /caddy/site-icon
- * 由后端代为抓取，优先直连上游地址；返回 data URL，抓不到时前端回落字母头像。
+ * 由后端代为抓取，后端自动解析该站点反代上游并直接回源探测；返回 data URL，抓不到时回落字母头像。
  */
 export async function getSiteIconApi(
-  params: { host?: string; upstream?: string },
+  host: string,
   config?: RequestClientConfig,
 ) {
   const resp = await requestClient.get<{ icon?: string }>(
     '/caddy/site-icon',
-    { params, ...config },
+    { params: { host }, ...config },
   );
   return resp?.icon ?? '';
 }

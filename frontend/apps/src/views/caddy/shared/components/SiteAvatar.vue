@@ -7,9 +7,9 @@
  *   2. 用户点击头像时手动抓
  * 这样进目录页不会对每个站点发一轮请求，站点再多也不会拖慢首屏。
  *
- * 抓取目标优先用上游地址：域名可能没解析或回流不通，上游才是真跑着的服务。
- * 仍由后端代抓（/caddy/site-icon）：面板常以 http 暴露而站点是 https，
- * 浏览器直连会被混合内容拦下，入口块 CSP 也只放行 img-src self/data:。
+ * 图标由后端代抓（/caddy/site-icon）：前端只传 host，后端自动反查该站点
+ * 配置的 reverse_proxy 上游并直连探测，既避免前端受混合内容与 CSP 限制，
+ * 也避免在 URL Query 中明文传递内网 IP 触发 WAF 的 SSRF（403）拦截。
  */
 import { computed, ref, watch } from 'vue';
 
@@ -24,30 +24,26 @@ const props = withDefaults(
   defineProps<{
     /** 是否允许手动点击抓取，默认 true */
     clickable?: boolean;
-    /** 站点主域名，无上游时作为抓取目标 */
+    /** 站点主域名 */
     host?: string;
     /** 站点名，字母头像取首字符 */
     name?: string;
     /** 头像边长（px） */
     size?: number;
-    /** 上游地址，优先作为抓取目标 */
+    /** 兼容上游字段（内部统一按 host 索引） */
     upstream?: string;
   }>(),
   { size: 32, host: '', upstream: '', name: '', clickable: true },
 );
 
 const host = computed(() => props.host.trim().toLowerCase());
-const upstream = computed(() => props.upstream.trim());
 const fetching = ref(false);
 const failed = ref(false);
 
-/** 缓存键：上游优先，与抓取目标保持一致 */
-const cacheKey = computed(() => upstream.value || host.value);
-
 /** 只读本地缓存；没有就是没有，不在这里发请求 */
-const iconUrl = ref(getStoredSiteIcon(cacheKey.value));
+const iconUrl = ref(getStoredSiteIcon(host.value));
 
-watch(cacheKey, (next) => {
+watch(host, (next) => {
   failed.value = false;
   iconUrl.value = getStoredSiteIcon(next);
 });
@@ -70,18 +66,14 @@ const tooltipText = computed(() => {
   return '点击抓取站点图标';
 });
 
-/**
- * 手动抓取：渲染不发请求，只有这里会主动拉一次。
- * 建站那次没抓到（DNS 未生效、站点刚起）时，用户点一下就能补上。
- */
 async function handleClick() {
-  if (!props.clickable || !cacheKey.value) return;
+  if (!props.clickable || !host.value) return;
   if (fetching.value) return;
 
   fetching.value = true;
   failed.value = false;
   try {
-    const icon = await fetchAndStoreSiteIcon(upstream.value, host.value);
+    const icon = await fetchAndStoreSiteIcon(host.value);
     if (icon) {
       iconUrl.value = icon;
     }
@@ -127,56 +119,40 @@ async function handleClick() {
   cursor: pointer;
 }
 
-.site-avatar-wrap.clickable:hover {
-  filter: brightness(0.95);
-  box-shadow: 0 0 0 2px hsl(var(--primary) / 30%);
+.site-avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: contain;
 }
 
 .site-avatar-letter {
   display: flex;
-  width: 100%;
-  height: 100%;
   align-items: center;
   justify-content: center;
-  font-weight: 600;
-  color: hsl(var(--primary));
-  background: hsl(var(--primary) / 10%);
-  border-radius: 9px;
-}
-
-.site-avatar-img {
   width: 100%;
   height: 100%;
-  object-fit: contain;
-  padding: 2px;
-  background: hsl(var(--background));
-  border: 1px solid hsl(var(--border));
-  border-radius: 9px;
+  color: #fff;
+  font-weight: 600;
+  border-radius: inherit;
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
 }
 
 .site-avatar-spinner {
   position: absolute;
   inset: 0;
-  border-radius: 9px;
-  background: hsl(var(--background) / 60%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  border-radius: inherit;
+  background: rgb(0 0 0 / 25%);
+  animation: site-avatar-pulse 1.2s ease-in-out infinite;
 }
 
-.site-avatar-spinner::after {
-  content: '';
-  width: 16px;
-  height: 16px;
-  border: 2px solid hsl(var(--primary) / 20%);
-  border-top-color: hsl(var(--primary));
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
+@keyframes site-avatar-pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.7;
   }
 }
 </style>
