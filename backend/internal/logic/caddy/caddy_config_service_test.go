@@ -924,6 +924,33 @@ func TestValidateCaddyHealthCheckFields(t *testing.T) {
 	}
 }
 
+// 上游地址带 path 会被 /adapt 拒绝，校验层必须先拦下；合法的 scheme:host:port 与 unix socket 放行
+func TestCaddyUpstreamPathError(t *testing.T) {
+	bad := []string{
+		"https://192.168.50.10:10000/myserver",
+		"192.168.50.10:8006/api",
+		"http://localhost:8080/a?b=1",
+	}
+	for _, addr := range bad {
+		if err := caddyUpstreamPathError(addr); !strings.Contains(err, "不支持路径") {
+			t.Fatalf("%q: expected path error, got %q", addr, err)
+		}
+	}
+	ok := []string{
+		"",
+		"localhost:8080",
+		"192.168.50.10:10000",
+		"https://192.168.50.10:10000",
+		"unix//var/run/app.sock",
+		"unix+h2c//var/run/grpc.sock",
+	}
+	for _, addr := range ok {
+		if err := caddyUpstreamPathError(addr); err != "" {
+			t.Fatalf("%q: expected no error, got %q", addr, err)
+		}
+	}
+}
+
 func TestPrepareQuickRejectsInvalidHealthCheck(t *testing.T) {
 	modules := mustCaddyModules(t, caddyFormModel{
 		SchemaVersion: 1,

@@ -20,6 +20,20 @@ export function isSiteToken(token: string): boolean {
   return siteDomainRe.test(token);
 }
 
+/**
+ * 上游地址的 path 校验错误；合法返回空串。
+ * Caddy 上游只接受 scheme + host + port，带 path/query 会在 /adapt 阶段被拒；
+ * unix/ 与 unix+h2c/ 后面的绝对路径属于合法网络地址形式，不算路径。
+ */
+export function upstreamPathError(value: string): string {
+  const addr = value.trim();
+  if (!addr || /^unix(\+h2c)?\//.test(addr)) return '';
+  const rest = addr.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '');
+  return /[/?]/.test(rest)
+    ? `上游地址不支持路径: ${addr}（Caddy 只接受 scheme://host:port，前缀请用 handle_path 单独配置）`
+    : '';
+}
+
 /** 找到以 { 结尾的块头行行号；找不到返回 -1。 */
 export function findHeaderLine(lines: string[]): number {
   for (let idx = 0; idx < lines.length; idx += 1) {

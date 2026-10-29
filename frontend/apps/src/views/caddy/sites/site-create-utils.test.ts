@@ -42,6 +42,17 @@ describe('validateCreateSiteForm', () => {
     expect(validateCreateSiteForm(form, EXISTING)).toEqual([]);
   });
 
+  it('上游带 path 被拦截（Caddy 上游不支持路径）', () => {
+    const form = {
+      ...createDefaultSiteForm(),
+      domains: ['new.example.com'],
+      upstream: 'https://192.168.50.10:10000/myserver',
+    };
+    expect(
+      validateCreateSiteForm(form, EXISTING).some((item) => item.includes('不支持路径')),
+    ).toBe(true);
+  });
+
   it('域名重复被拦截', () => {
     const form = { ...createDefaultSiteForm(), domains: ['app.example.com'] };
     const errors = validateCreateSiteForm(form, EXISTING);

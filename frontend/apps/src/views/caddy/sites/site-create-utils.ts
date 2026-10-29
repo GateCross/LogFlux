@@ -5,6 +5,8 @@
  * 与「分块工作台」的编辑路径互不影响。
  */
 
+import { upstreamPathError } from '../config/caddy-config-utils';
+
 /** manual = 已有证书：从证书库下拉选择，按 tls 双路径写入站点块 */
 export type CreateTlsMode = 'auto' | 'dns' | 'internal' | 'manual' | 'off';
 
@@ -89,6 +91,9 @@ export function validateCreateSiteForm(form: CreateSiteForm, currentConfig: stri
   }
   if (!form.upstream.trim()) {
     errors.push('上游地址不能为空');
+  } else {
+    const upstreamError = upstreamPathError(form.upstream);
+    if (upstreamError) errors.push(upstreamError);
   }
   if (form.tlsMode === 'dns' && !/^\(cloudflare\)\s*\{/m.test(currentConfig)) {
     errors.push('DNS 签发需要配置里已定义 (cloudflare) 片段');

@@ -158,6 +158,25 @@ complex.example.com {
     expect(structured.some(e => e.includes('健康检查') && e.includes('/'))).toBe(true);
   });
 
+  /** 上游地址带 path 会被 /adapt 拒绝，blocks 校验必须先拦下 */
+  it('validateStructuredConfig 拒绝带 path 的上游地址', () => {
+    const inline = validateStructuredConfig(
+      modelWithReverseProxy({ upstream: 'https://192.168.50.10:10000/myserver' })
+    );
+    expect(inline.some(e => e.includes('不支持路径'))).toBe(true);
+
+    const pool = modelWithReverseProxy({ upstream: 'pool-a' });
+    pool.upstreams = [
+      { name: 'pool-a', targets: ['10.0.0.1:8080/api'], lbPolicy: 'round_robin' }
+    ];
+    expect(validateStructuredConfig(pool).some(e => e.includes('不支持路径'))).toBe(true);
+
+    // 正常地址放行
+    expect(
+      validateStructuredConfig(modelWithReverseProxy({ upstream: 'https://10.0.0.1:8443' }))
+    ).toEqual([]);
+  });
+
   /**
    * Shared contract cases — 与后端 TestSharedHealthContractCases 同输入同指令。
    * 输入: HealthCheck + lb → 期望 Caddyfile 含 health_uri / health_interval / health_timeout / lb_policy

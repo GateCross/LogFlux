@@ -1,5 +1,5 @@
 import type { CaddyFormModel } from './types';
-import { siteDomainRe } from './caddy-config-utils';
+import { siteDomainRe, upstreamPathError } from './caddy-config-utils';
 import { validateHealthCheckFields } from './caddy-config-parser';
 
 const portOnlyRe = /^:\d+$/;
@@ -32,6 +32,10 @@ export function validateStructuredConfig(model: CaddyFormModel, hasPreservedCont
     if (upstreamNames.has(up.name)) pushError(`上游名称重复: ${up.name}`);
     upstreamNames.add(up.name);
     if (up.targets.length === 0) pushError(`上游 ${up.name} 至少配置一个目标`);
+    for (const target of up.targets) {
+      const pathError = upstreamPathError(target);
+      if (pathError) pushError(`上游 ${up.name} ${pathError}`);
+    }
     for (const err of validateHealthCheckFields(up.healthCheck, `上游 ${up.name || '未命名'} 健康检查`)) {
       pushError(err);
     }
@@ -75,6 +79,12 @@ export function validateStructuredConfig(model: CaddyFormModel, hasPreservedCont
           pushError(`路由 ${route.name || route.id} 的 reverse_proxy 未选择上游`);
         }
         if (handle.type === 'reverse_proxy') {
+          // upstream 既可能是池名也可能是内联地址；池名已在上面按 targets 校验过
+          const inline = handle.upstream?.trim() ?? '';
+          if (inline && !upstreamNames.has(inline)) {
+            const pathError = upstreamPathError(inline);
+            if (pathError) pushError(`路由 ${route.name || route.id} ${pathError}`);
+          }
           for (const err of validateHealthCheckFields(
             handle.healthCheck,
             `路由 ${route.name || route.id} 健康检查`

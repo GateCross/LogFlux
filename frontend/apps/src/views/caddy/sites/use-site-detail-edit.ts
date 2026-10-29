@@ -14,6 +14,7 @@ import { previewCaddyConfigApi, pushCaddyConfigApi } from '#/api/caddy/server';
 import { apiErrorMessage } from '#/utils/api-error-message';
 
 import { buildLineDiff, type DiffRow } from '../config/caddy-config-diff';
+import { upstreamPathError } from '../config/caddy-config-utils';
 import { useUploadedCertOptions } from '../certificates/use-uploaded-certs';
 import type { CatalogSiteCard } from '../catalog/service-catalog-utils';
 import type { SiteProtectMode } from '../shared/protect-mode';
@@ -473,6 +474,11 @@ export function useSiteDetailEdit(options: SiteDetailEditOptions) {
     if (scope === 'basic') {
       if (basic.domains.length === 0) {
         message.warning('站点至少需要保留一个域名');
+        return;
+      }
+      const upstreamError = upstreamPathError(basic.upstreamAddress);
+      if (upstreamError) {
+        message.warning(upstreamError);
         return;
       }
       if (

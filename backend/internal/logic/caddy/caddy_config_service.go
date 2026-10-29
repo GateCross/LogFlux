@@ -305,6 +305,11 @@ func validateCaddyFormModel(model *caddyFormModel) []string {
 		if len(trimStringSlice(upstream.Targets)) == 0 {
 			errors = append(errors, fmt.Sprintf("上游 %s 至少配置一个目标", name))
 		}
+		for _, target := range trimStringSlice(upstream.Targets) {
+			if err := caddyUpstreamPathError(target); err != "" {
+				errors = append(errors, fmt.Sprintf("上游 %s %s", name, err))
+			}
+		}
 		label := fmt.Sprintf("上游 %s 健康检查", firstNonEmpty(name, "未命名"))
 		errors = append(errors, validateCaddyHealthCheckFields(upstream.HealthCheck, label)...)
 	}
@@ -373,6 +378,10 @@ func validateCaddyRoute(siteName string, route caddyRoute, upstreamNames map[str
 			errors = append(errors, validateCaddyHealthCheckFields(handle.HealthCheck, label)...)
 			if _, ok := upstreamNames[strings.TrimSpace(handle.Upstream)]; ok {
 				continue
+			}
+			// 内联地址同样过不了带 path 的上游；池名已在 targets 校验过
+			if err := caddyUpstreamPathError(handle.Upstream); err != "" {
+				errors = append(errors, fmt.Sprintf("路由 %s %s", routeName, err))
 			}
 		}
 	}
@@ -886,6 +895,25 @@ func isValidCaddySiteAddress(value string) bool {
 		return host == "localhost" || caddyDomainPattern.MatchString(host)
 	}
 	return value == "localhost"
+}
+
+// caddyUpstreamPathError 校验反向代理上游：Caddy 只接受 scheme + host + port，
+// 带 path / query 的地址会在 /adapt 阶段报错，所以写配置前就在这里拦下。
+// unix/ 与 unix+h2c/ 后面的绝对路径属于合法网络地址形式，不算路径。返回空串表示合法。
+func caddyUpstreamPathError(value string) string {
+	addr := strings.TrimSpace(value)
+	if addr == "" || strings.HasPrefix(addr, "unix/") || strings.HasPrefix(addr, "unix+h2c/") {
+		return ""
+	}
+	// 去掉 scheme 只看 host[:port]，其中出现 / 或 ? 即为路径
+	host := addr
+	if idx := strings.Index(host, "://"); idx >= 0 {
+		host = host[idx+3:]
+	}
+	if strings.ContainsAny(host, "/?") {
+		return fmt.Sprintf("上游地址不支持路径: %s（Caddy 只接受 scheme://host:port，前缀请用 handle_path 单独配置）", addr)
+	}
+	return ""
 }
 
 func isValidCaddyPathPattern(value string) bool {
